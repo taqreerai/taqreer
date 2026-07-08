@@ -169,23 +169,20 @@ export function GenerateSplitButton({
   // First-deck gift: the gift TARGET (cheapest thinking preset, mirrors the
   // server's boostPresetKey) is ungated and billed at the DRAFT preset's
   // price for the user's first deck - /api/projects rewrites the charge to
-  // the draft preset and boosts the run. The picker also defaults there so
-  // the gift is the selection, not a footnote.
+  // the draft preset and boosts the run. The DISPLAYED selection is DERIVED
+  // (no set-state-in-effect, no flash): while the parent's quality sits on
+  // the draft/default preset, the gift row shows as selected - truthful,
+  // because a gift user's first deck runs at the gift tier for EITHER of
+  // those picks (the server boosts thinking-off picks regardless).
   const boostKey = presets.find((p) => p.thinking)?.key ?? null;
   const draftPreset = presets.find((p) => !p.thinking) ?? null;
   const giftKey = credits?.firstDeckBoost ? boostKey : null;
-  const giftDefaulted = useRef(false);
-  useEffect(() => {
-    // One-shot: when the credits payload reveals gift eligibility and the
-    // user hasn't picked anything beyond the server default, move the
-    // selection to the gifted tier.
-    if (giftDefaulted.current || !giftKey) return;
-    if (quality === credits?.defaultPresetKey || quality === draftPreset?.key) {
-      giftDefaulted.current = true;
-      onQualityChange(giftKey);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot sync on credits arrival; deps deliberately minimal
-  }, [giftKey]);
+  const displayQuality =
+    giftKey &&
+    (effectiveQuality === draftPreset?.key ||
+      effectiveQuality === credits?.defaultPresetKey)
+      ? giftKey
+      : effectiveQuality;
 
   return (
     <div ref={splitButtonRef} className="relative">
@@ -319,7 +316,7 @@ export function GenerateSplitButton({
                 gateTier !== null &&
                 TIER_ORDER.indexOf(userPlan) < TIER_ORDER.indexOf(gateTier);
               const affordable = credits ? cost <= credits.balance.total : true;
-              const active = effectiveQuality === preset.key;
+              const active = displayQuality === preset.key;
               return (
                 <button
                   key={preset.key}
