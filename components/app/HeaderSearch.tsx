@@ -136,7 +136,11 @@ function ResultRow({
 }: ResultRowProps) {
   const thumbnail = project.thumbnailUrls[0] ?? null;
   const thumbAspect =
-    project.format === "9:16" ? "h-12 w-[27px]" : "h-9 w-16";
+    project.format === "9:16"
+      ? "h-12 w-[27px]"
+      : project.format === "3:4"
+        ? "h-12 w-9"
+        : "h-9 w-16";
   return (
     <li role="none">
       <button

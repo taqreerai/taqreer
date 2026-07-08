@@ -11,6 +11,7 @@ import {
 } from "@/lib/config/runtime-config";
 import { prisma } from "@/lib/prisma";
 import {
+  CAROUSEL_DIRECTIVE,
   SLIDE_DIMENSIONS,
   SlideManifestSchema,
   type SlideFormat,
@@ -260,7 +261,7 @@ OUTPUT — STRICT
 - AVOID (they break the fixed-canvas contract): \`!important\`, viewport units (\`vw\`/\`vh\`/\`vmin\`/\`vmax\`), \`@media\`, \`position: fixed\` — use px values and absolute positioning inside the fixed frame.
 
 CANVAS — same as the rest of the deck
-- ${width}×${height} fixed canvas (${format}). The slide root sets width:${width}px / height:${height}px.
+- ${width}×${height} fixed canvas (${format}). The slide root sets width:${width}px / height:${height}px.${format === "3:4" ? `\n- ${CAROUSEL_DIRECTIVE}` : ""}
 - Set \`dir="rtl"\` or \`dir="ltr"\` on the slide root to match the deck's direction (the brief tells you which).
 - Use the SAME slide-level margin (inset) as the sibling slides — read it off the SIBLING SLIDE EXCERPTS in the user message and replicate.
 

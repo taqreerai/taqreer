@@ -4,7 +4,7 @@
     "create": "Create",
     "enhance": "Enhance",
     "mimic": "Mimic",
-    "fromData": "From data",
+    "fromData": "Datasheet",
     "comingSoon": "Soon",
     "projects": "My projects",
     "templates": "Templates",
@@ -375,10 +375,10 @@
   "quickActions": {
     "greeting": "Hello {name} 👋, what's the plan for today?",
     "greetingAnon": "Hello 👋, what's the plan for today?",
-    "create": { "title": "Create", "desc": "a new presentation" },
-    "enhance": { "title": "Enhance", "desc": "an existing presentation" },
-    "mimic": { "title": "Mimic", "desc": "a presentation's style" },
-    "fromData": { "title": "Datasheet", "desc": "into a presentation" }
+    "create": { "title": "Create", "desc": "from an idea or file" },
+    "enhance": { "title": "Enhance", "desc": "redesign a presentation" },
+    "mimic": { "title": "Mimic", "desc": "apply a reference design" },
+    "fromData": { "title": "Datasheet", "desc": "turn tables into a presentation" }
   },
   "contact": {
     "title": "Contact us",
@@ -626,6 +626,7 @@
       "slideSize": "Slide size",
       "landscape": "Landscape",
       "portrait": "Portrait",
+      "post": "Post",
       "slideCard": "Slide",
       "decrease": "Decrease",
       "increase": "Increase",

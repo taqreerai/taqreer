@@ -165,11 +165,13 @@ export const SlideSchema = z.object({
 
 // Slide aspect ratio. 16:9 is the legacy default (landscape PPT, what we
 // shipped at). 9:16 is the vertical / mobile-first alternative the user
-// can pick on /create/brand. Authored at:
+// can pick on /create/brand. 3:4 is the social-media carousel post size,
+// offered ONLY on /create and export-locked to PDF/PNG. Authored at:
 //   16:9 → 1920×1080 px in the browser → 10″ × 5.625″ in PPT (16:9 wide)
 //   9:16 → 1080×1920 px in the browser → 5.625″ × 10″ in PPT (vertical)
+//   3:4  → 1080×1440 px in the browser → no PPT (PDF/PNG only)
 // dom-to-pptx accepts custom layout via { width, height } in inches.
-export const SLIDE_FORMATS = ["16:9", "9:16"] as const;
+export const SLIDE_FORMATS = ["16:9", "9:16", "3:4"] as const;
 export type SlideFormat = (typeof SLIDE_FORMATS)[number];
 
 // Canonical pixel dimensions Claude authors against for each format.
@@ -178,7 +180,15 @@ export type SlideFormat = (typeof SLIDE_FORMATS)[number];
 export const SLIDE_DIMENSIONS = {
   "16:9": { width: 1920, height: 1080 },
   "9:16": { width: 1080, height: 1920 },
+  "3:4": { width: 1080, height: 1440 },
 } as const;
+
+// Prompt directive injected wherever a 3:4 deck's canvas is described
+// (initial generation + partial regen) so Claude designs social post
+// cards, not projected presentation slides. Wording is FINAL per the
+// product owner, keep both prompt sites on this exact string.
+export const CAROUSEL_DIRECTIVE =
+  "This deck is a social media carousel (1080×1440 post), generous margins, punchy hook on slide 1, swipe-friendly continuity (e.g. consistent chrome, sequence cues) across slides.";
 
 export function dimensionsForFormat(format: SlideFormat | undefined) {
   return SLIDE_DIMENSIONS[format ?? "16:9"];

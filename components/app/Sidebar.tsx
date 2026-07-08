@@ -193,7 +193,7 @@ export function Sidebar({
     { label: dict.nav.create, icon: 'add_circle', path: '/create' },
     { label: dict.nav.enhance, icon: 'auto_fix_high', path: '/enhance' },
     { label: dict.nav.mimic, icon: 'content_copy', path: '/mimic' },
-    { label: dict.nav.fromData, icon: 'dataset', path: '/datasheet', comingSoon: true },
+    { label: dict.nav.fromData, icon: 'dataset', path: '/datasheet' },
   ];
 
   const navLinks = [

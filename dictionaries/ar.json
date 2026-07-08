@@ -3,8 +3,8 @@
     "home": "الرئيسية",
     "create": "إنشاء",
     "enhance": "تحسين",
-    "mimic": "تطبيق نمط",
-    "fromData": "من البيانات",
+    "mimic": "محاكاة",
+    "fromData": "بيانات",
     "comingSoon": "قريبا",
     "projects": "مشاريعي",
     "templates": "القوالب",
@@ -375,10 +375,10 @@
   "quickActions": {
     "greeting": "أهلا {name} 👋، ماذا تريد أن تنشئ اليوم؟",
     "greetingAnon": "أهلا 👋، ماذا تريد أن تنشئ اليوم؟",
-    "create": { "title": "إنشاء عرض", "desc": "من فكرة أو ملف" },
-    "enhance": { "title": "تحسين عرض", "desc": "إعادة تصميم عرضك" },
-    "mimic": { "title": "تطبيق نمط", "desc": "طبق تصميما مرجعيا" },
-    "fromData": { "title": "من البيانات", "desc": "حول الجداول إلى عرض" }
+    "create": { "title": "إنشاء", "desc": "من فكرة أو ملف" },
+    "enhance": { "title": "تحسين", "desc": "إعادة تصميم عرض" },
+    "mimic": { "title": "محاكاة", "desc": "طبق تصميما مرجعيا" },
+    "fromData": { "title": "بيانات", "desc": "حول الجداول إلى عرض" }
   },
   "contact": {
     "title": "تواصل معنا",
@@ -626,6 +626,7 @@
       "slideSize": "حجم الشريحة",
       "landscape": "أفقي",
       "portrait": "عمودي",
+      "post": "منشور",
       "slideCard": "الشريحة",
       "decrease": "إنقاص",
       "increase": "زيادة",

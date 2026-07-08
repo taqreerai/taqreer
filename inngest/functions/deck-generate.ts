@@ -10,6 +10,7 @@ import { sourceKindToFlow } from "@/lib/project/flow";
 import {
   SlideManifestSchema,
   SLIDE_DIMENSIONS,
+  SLIDE_FORMATS,
   SLIDE_ROLE_VALUES,
   type SlideFormat,
   type SlideManifest,
@@ -175,6 +176,33 @@ Charts / graphs: inline \`<svg>\`.
 
 AVOID (these don't render in export): \`conic-gradient\`, colour-to-alpha gradients, \`mix-blend-mode\`, \`backdrop-filter\`, \`filter: blur()\` / \`drop-shadow()\`, \`-webkit-text-stroke\` (use \`<svg><text stroke fill="none">\`), \`rgba()\` for translucency on a fill (use \`opacity\` on the element). Static only — no animation / transition / :hover / :focus / JS.
 ALSO AVOID (they break the fixed-canvas contract): \`!important\`, viewport units (\`vw\`/\`vh\`/\`vmin\`/\`vmax\`), \`@media\`, \`position: fixed\` — the canvas is a fixed-size frame (dimensions in the brief); use px values and absolute positioning inside it.`;
+
+// ─── SOCIAL (3:4) authoring prompt ─────────────────────────────────────────
+// Used INSTEAD of SYSTEM_PROMPT_CREATE_HTML when the user picked the 3:4
+// social-post ratio on /create (create flow only — 3:4 is unavailable on the
+// other flows). Two deliberate departures from the deck prompt: (1) an intent-
+// first framing (design a scroll-stopping carousel, not a presentation) with the
+// coaching + AVOID lists dropped; (2) the full modern CSS toolbox is UNLOCKED —
+// gradients / blend modes / backdrop-filter / filters / text gradients / etc.
+// were only ever forbidden because they don't survive the PPTX export, and 3:4
+// exports to PDF/PNG (rendered by a real browser), so they render fine. The
+// OUTPUT contract, brand-var rule, GRAPHICS syntax, and the shared LANG_DIRECTION
+// block are kept verbatim — the renderer/parser + the RTL differentiator depend
+// on them. Composes with AUTO_PALETTE_ADDENDUM / IMG_ADDENDUM exactly like the
+// deck prompt.
+export const SYSTEM_PROMPT_SOCIAL_HTML = `You are an elite social media designer. Design an original, scroll-stopping carousel of 1080×1440 portrait cards for a phone feed — your own bold visual system, fresh for this brief, as one HTML fragment. Open with a hook that stops the scroll, give each card one clear idea at phone-readable scale, carry one cohesive look across the set with a swipe/index cue, and end on a call to action.
+
+Output exactly this, nothing else (no prose, no markdown, no \`<!DOCTYPE>\`/\`<html>\`/\`<body>\`):
+1. ONE \`<style>\` first — your design system as CSS custom properties + classes, built on the injected brand variables (reference them, don't redefine).
+2. Then the cards, each a top-level \`<section data-label="<short label>" data-role="cover|content|section|stats|quote|image|closing">\`, sized to the canvas dimensions in the brief. The cover carries \`data-deck-title="…"\` (3-8 words, the real title). The first character of your reply is \`<\`.
+
+Write every repeated item out in full — there is no template engine (no loops, \`.map()\`, or \`\${…}\`). Take the card count from the brief.
+
+This exports as a still image rendered by a real browser, so use the full modern CSS toolbox freely for impact — gradients, blend modes, backdrop-filter, filters, shadows, text gradients, translucency, transforms. Lay each card out in px, absolutely positioned within its fixed frame.
+
+Icons: inline \`<svg viewBox="0 0 24 24">\` with a real icon path (e.g. Lucide) in a brand colour. Charts: inline \`<svg>\`. Flags: \`<img src="https://flagcdn.com/<cc>.svg">\`.
+
+${LANG_DIRECTION}`;
 
 // Mimic flow's HTML system addendum. SYSTEM_PROMPT_CREATE_HTML tells the model to
 // design an ORIGINAL system; mimic needs the OPPOSITE — reproduce the attached
@@ -646,7 +674,9 @@ function resolveEffectiveQuality(data: DeckGenerateEvent): {
 function resolveFormat(event: DeckGenerateEvent): SlideFormat {
   const candidate = (event.brief as { brand?: { slideSize?: unknown } } | null)?.brand
     ?.slideSize;
-  return candidate === "9:16" ? "9:16" : "16:9";
+  return SLIDE_FORMATS.includes(candidate as SlideFormat)
+    ? (candidate as SlideFormat)
+    : "16:9";
 }
 
 // Deep-strip uploaded-font `storageUrl`s from the brief before it's dumped
@@ -802,7 +832,7 @@ function injectDeckLogo(manifest: SlideManifest, brief: unknown): void {
 function buildUserMessage(event: DeckGenerateEvent) {
   const format = resolveFormat(event);
   const { width, height } = SLIDE_DIMENSIONS[format];
-  const orientationLabel = format === "9:16" ? "vertical" : "horizontal";
+  const orientationLabel = format === "16:9" ? "horizontal" : "vertical";
 
   // Resolve the user-picked content language up-front so the
   // directive block sits at the TOP of the user message (high
@@ -827,6 +857,9 @@ function buildUserMessage(event: DeckGenerateEvent) {
     // at this exact size and the PPT export uses the matching layout.
     // Echo them up-front so Claude doesn't have to dig them out of the brief.
     `Slide canvas: ${width}×${height} px (${format} ${orientationLabel}).`,
+    // 3:4's social-carousel framing lives in SYSTEM_PROMPT_SOCIAL_HTML now,
+    // so no extra user-message directive here (regens still carry it via
+    // buildPartialSystemPrompt).
     ``,
     // LANGUAGE directive.
     //
@@ -1874,7 +1907,12 @@ export const deckGenerate = inngest.createFunction(
           htmlSourceKind !== "mimic" &&
           data.type !== "enhance";
         const htmlSystem = [
-          SYSTEM_PROMPT_CREATE_HTML,
+          // 3:4 (create only) is a social carousel, not a projected deck — swap
+          // the deck base for the social base (unlocked CSS toolbox + carousel
+          // framing). Addenda below compose identically.
+          slideFormat === "3:4"
+            ? SYSTEM_PROMPT_SOCIAL_HTML
+            : SYSTEM_PROMPT_CREATE_HTML,
           paletteAuto ? AUTO_PALETTE_ADDENDUM : null,
           // Mimic with images on recreates the reference's imagery (its own
           // addendum); every other images-on flow uses the generic reserve-a-box

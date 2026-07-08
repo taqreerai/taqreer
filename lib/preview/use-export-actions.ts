@@ -155,6 +155,13 @@ export function useExportActions({
   // ── PPTX (client-side via dom-to-pptx + BiDi post-processor) ─────
   const runPptx = () =>
     guard(async () => {
+      // 3:4 social-post decks are PDF/PNG only. The UI hides this entry
+      // (ExportMenu / ShareDialog); this is the belt-and-braces stop for
+      // any stale surface that still offers it.
+      if (exportManifest.format === "3:4") {
+        setExportPptx({ status: "error", message: "تعذر التصدير" });
+        return;
+      }
       setExportPptx({ status: "running", message: "جار التصدير..." });
       try {
         const fileName = `${baseFileName(manifest.title || projectTitle)}.pptx`;
@@ -233,6 +240,11 @@ export function useExportActions({
   // ── HTML (client-side, raw standalone bundle) ────────────────────
   const runHtml = () =>
     guard(async () => {
+      // Same 3:4 lock as runPptx above.
+      if (exportManifest.format === "3:4") {
+        setExportHtml({ status: "error", message: "تعذر التحميل" });
+        return;
+      }
       setExportHtml({ status: "running", message: "جار التحميل..." });
       try {
         const fileName = `${baseFileName(manifest.title || projectTitle)}.html`;

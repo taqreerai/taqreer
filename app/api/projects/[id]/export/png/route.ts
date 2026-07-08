@@ -31,6 +31,7 @@ import {
   SlideManifestSchema,
   dimensionsForFormat,
 } from "@/lib/schema/slide";
+import { hydrateManifestImages } from "@/lib/images/hydrate-manifest";
 import { buildHtmlDocumentServer } from "@/lib/export/html-document-server";
 
 export const runtime = "nodejs";
@@ -125,7 +126,10 @@ export async function POST(
       { status: 500 },
     );
   }
-  const manifest = parsed.data;
+  // Re-inject ready generated-image src's the durable slideJson may be
+  // missing (flatten/edit race — see hydrateManifestImages). Format- and
+  // flow-agnostic; a no-op for decks without gen-images.
+  const manifest = await hydrateManifestImages(versionId, parsed.data);
   if (manifest.slides.length === 0) {
     return NextResponse.json(
       { error: "Manifest has no slides" },

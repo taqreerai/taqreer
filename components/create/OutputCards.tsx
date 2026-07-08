@@ -23,7 +23,7 @@ import {
 } from "@/components/create/controls";
 import { useDict } from "@/components/i18n/LocaleProvider";
 
-export type SlideSize = "16:9" | "9:16";
+export type SlideSize = "16:9" | "9:16" | "3:4";
 export type SlideCountMode = "auto" | "custom";
 // File-local alias — used by LogoPlacementCard below. Not exported
 // because no external consumer uses it (callers pass `CornerPosition`
@@ -276,12 +276,15 @@ export function InlineStepper({
   const clamp = (n: number) => Math.min(max, Math.max(min, n));
   return (
     <div
-      // h-22 / w~66 (button h-5 w-5, input w-6). The 1-px
-      // border-glass token + glass-bg match the rest of the input
-      // chrome on /create + /mimic.
+      // h-29 matches the SegmentedToggle default size's rendered height
+      // (p-0.5 track + py-1 text-[10px] segments) so the stepper reads
+      // as the same control height when they share a row. Width stays
+      // ~66 px (button h-5 w-5, input w-6) — the call sites' width:66
+      // mount animation depends on it. The 1-px border-glass token +
+      // glass-bg match the rest of the input chrome on /create + /mimic.
       className="flex items-center rounded-full border"
       style={{
-        height: 22,
+        height: 29,
         background: "var(--tq-overlay-soft)",
         borderColor: "var(--tq-border-hairline)",
       }}
@@ -398,17 +401,17 @@ function SizeChoice({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className=" flex h-11 items-center justify-between gap-3 rounded-xl border px-3 transition-colors"
+      className=" flex h-11 items-center justify-between gap-3 rounded-lg border px-3 transition-colors"
       style={{
         background: "var(--tq-overlay-soft)",
         borderColor: active
-          ? "var(--tq-text-primary)"
+          ? "var(--tq-blue)"
           : "var(--tq-border-hairline)",
       }}
     >
       <span className="flex flex-col items-start leading-tight">
         <span
-          className={`text-xs font-semibold ${active ? "text-foreground" : "text-foreground/70"}`}
+          className={`text-xs font-semibold ${active ? "text-[var(--tq-blue)]" : "text-foreground/70"}`}
         >
           {label}
         </span>
@@ -417,7 +420,7 @@ function SizeChoice({
         </span>
       </span>
       <span
-        className="rounded-sm border border-foreground/30 bg-foreground/10"
+        className="rounded-xs border border-foreground/30 bg-foreground/10"
         style={{ height: 18, aspectRatio: ratio }}
       />
     </button>
@@ -453,18 +456,28 @@ export function SlideSizeFields({
   // vertical band the card can't afford. /create keeps its label
   // since the field shares space with other section headers.
   hideLabel = false,
+  // Third 3:4 "Post" tile (1080×1440 social carousel). /create only —
+  // /mimic and /datasheet omit the prop and stay at the 2-tile grid,
+  // and /enhance derives its format from the uploaded deck.
+  withPost = false,
 }: {
   slideSize: SlideSize;
   onSlideSize: (v: SlideSize) => void;
   stacked?: boolean;
   label?: string;
   hideLabel?: boolean;
+  withPost?: boolean;
 }) {
   const dict = useDict();
+  const cols = stacked
+    ? "grid grid-cols-1 gap-2"
+    : withPost
+      ? "grid grid-cols-3 gap-2"
+      : "grid grid-cols-2 gap-2";
   return (
     <div className="space-y-2">
       {hideLabel ? null : <SectionLabel>{label ?? dict.flows.output.slideSize}</SectionLabel>}
-      <div className={stacked ? "grid grid-cols-1 gap-2" : "grid grid-cols-2 gap-2"}>
+      <div className={cols}>
         <SizeChoice
           active={slideSize === "16:9"}
           onClick={() => onSlideSize("16:9")}
@@ -479,6 +492,15 @@ export function SlideSizeFields({
           sub={dict.flows.output.portrait}
           ratio="9 / 16"
         />
+        {withPost ? (
+          <SizeChoice
+            active={slideSize === "3:4"}
+            onClick={() => onSlideSize("3:4")}
+            label="3:4"
+            sub={dict.flows.output.post}
+            ratio="3 / 4"
+          />
+        ) : null}
       </div>
     </div>
   );

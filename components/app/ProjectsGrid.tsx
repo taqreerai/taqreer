@@ -31,7 +31,7 @@
 import { motion } from "framer-motion";
 import { ProjectThumbnail } from "@/components/app/ProjectThumbnail";
 import { SelectableTile } from "@/components/app/SelectableTile";
-import type { SlideFormat } from "@/lib/schema/slide";
+import { SLIDE_FORMATS, type SlideFormat } from "@/lib/schema/slide";
 
 // Fade-in cascade REMOVED 2026-05-25. The per-tile `motion.div` used
 // to mount with `initial: { opacity: 0 } → animate: { opacity: 1 }`
@@ -172,7 +172,11 @@ export function ProjectsGrid({
           <ProjectThumbnail
             projectId={project.id}
             slides={project.thumbnailUrls}
-            format={project.format === "9:16" ? "9:16" : ("16:9" as SlideFormat)}
+            format={
+              SLIDE_FORMATS.includes(project.format as SlideFormat)
+                ? (project.format as SlideFormat)
+                : "16:9"
+            }
             title={project.title}
             createdAt={project.createdAt}
             isFavorite={project.isFavorite}

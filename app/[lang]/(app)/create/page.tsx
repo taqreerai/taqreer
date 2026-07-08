@@ -978,6 +978,7 @@ export default function CreatePage() {
             <SlideSizeFields
               slideSize={slideSize}
               onSlideSize={setSlideSize}
+              withPost
             />
 
             <div className="border-t border-[var(--tq-border-hairline)] pt-3">

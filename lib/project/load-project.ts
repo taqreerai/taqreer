@@ -9,9 +9,11 @@
 import { prisma } from "@/lib/prisma";
 import {
   SlideManifestSchema,
+  SLIDE_FORMATS,
   type SlideManifest,
   type SlideFormat,
 } from "@/lib/schema/slide";
+import { hydrateManifestImages } from "@/lib/images/hydrate-manifest";
 
 // Per-slide state shared with DeckView for the pill (lock badge,
 // undo affordance, version count, cached comments). Stays a flat
@@ -250,11 +252,13 @@ function resolveInitialSlideCount(
 }
 
 // Narrow the project's stored `format` string to the
-// `SlideFormat` union. `9:16` is the only non-default — anything
-// else (including null) collapses to `16:9`. Tiny helper, but
-// matches the file's "narrowing lives in a named helper" convention.
+// `SlideFormat` union. Anything outside the union (including null)
+// collapses to `16:9`. Tiny helper, but matches the file's
+// "narrowing lives in a named helper" convention.
 function narrowFormat(value: string | null): SlideFormat {
-  return value === "9:16" ? "9:16" : "16:9";
+  return SLIDE_FORMATS.includes(value as SlideFormat)
+    ? (value as SlideFormat)
+    : "16:9";
 }
 
 // Load the version DeckView should mount on. Priority is the
@@ -432,7 +436,14 @@ export async function loadProject(
   let manifest: SlideManifest | null = null;
   if (version?.slideJson && version.status === "completed") {
     const parsed = SlideManifestSchema.safeParse(version.slideJson);
-    if (parsed.success) manifest = parsed.data;
+    // Re-inject ready generated-image src's the durable slideJson may be
+    // missing (flatten/edit race — see hydrateManifestImages). Without this
+    // a reload before `filledImages` repopulates would show a shimmer in the
+    // editor and export imageless PPTX/HTML. Mid-session the client covers it
+    // via the status route's imageFills merge.
+    if (parsed.success) {
+      manifest = await hydrateManifestImages(version.id, parsed.data);
+    }
   }
 
   const initialActiveRegen = await readActiveRegen(projectId);

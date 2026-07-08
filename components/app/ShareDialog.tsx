@@ -1185,6 +1185,9 @@ function ExportTabBody({
     manifest,
     formatFallback,
   });
+  // 3:4 social-post decks export as PDF/PNG only — mirror ExportMenu's
+  // filter so both surfaces hide PowerPoint + HTML for them.
+  const isCarousel = (manifest?.format ?? formatFallback ?? "16:9") === "3:4";
   return (
     <div className="space-y-4">
       <h3 className="text-sm font-medium text-foreground">
@@ -1203,24 +1206,28 @@ function ExportTabBody({
           disabled={actions.busy && actions.states.pdf.status !== "running"}
           onClick={actions.runPdf}
         />
-        <ExportRow
-          icon="slideshow"
-          accent="var(--tq-export-pptx)"
-          label="PowerPoint"
-          sub={dict.dialogs.share.fmtPptx}
-          running={actions.states.pptx.status === "running"}
-          disabled={actions.busy && actions.states.pptx.status !== "running"}
-          onClick={actions.runPptx}
-        />
-        <ExportRow
-          icon="code"
-          accent="var(--tq-export-html)"
-          label="HTML"
-          sub={dict.dialogs.share.fmtHtml}
-          running={actions.states.html.status === "running"}
-          disabled={actions.busy && actions.states.html.status !== "running"}
-          onClick={actions.runHtml}
-        />
+        {isCarousel ? null : (
+          <ExportRow
+            icon="slideshow"
+            accent="var(--tq-export-pptx)"
+            label="PowerPoint"
+            sub={dict.dialogs.share.fmtPptx}
+            running={actions.states.pptx.status === "running"}
+            disabled={actions.busy && actions.states.pptx.status !== "running"}
+            onClick={actions.runPptx}
+          />
+        )}
+        {isCarousel ? null : (
+          <ExportRow
+            icon="code"
+            accent="var(--tq-export-html)"
+            label="HTML"
+            sub={dict.dialogs.share.fmtHtml}
+            running={actions.states.html.status === "running"}
+            disabled={actions.busy && actions.states.html.status !== "running"}
+            onClick={actions.runHtml}
+          />
+        )}
         <ExportRow
           icon="image"
           accent="var(--tq-export-png)"

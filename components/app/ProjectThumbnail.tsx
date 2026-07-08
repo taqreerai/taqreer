@@ -157,8 +157,10 @@ export function ProjectThumbnail({
   const src = slides[scrub.displayIndex] ?? null;
   const hasSlides = slides.length > 0;
 
+  // Portrait formats (9:16, 3:4) crop from the top inside the uniform
+  // 16:9 grid tile so the slide's header/hook stays visible.
   const imgObjectClass =
-    format === "9:16" ? "object-cover object-top" : "object-cover";
+    format === "16:9" ? "object-cover" : "object-cover object-top";
 
   const relativeDate = formatDistanceToNow(new Date(createdAt), {
     addSuffix: true,

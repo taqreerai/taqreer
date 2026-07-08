@@ -66,6 +66,14 @@ export function ExportMenu({
     html: runHtml,
   };
 
+  // 3:4 social-post decks export as PDF/PNG only — PPTX has no sane 3:4
+  // layout story and the HTML doc is presentation-shaped. Hide both.
+  const effectiveFormat = manifest?.format ?? formatFallback ?? "16:9";
+  const formats =
+    effectiveFormat === "3:4"
+      ? FORMATS.filter((f) => f.kind === "pdf" || f.kind === "png")
+      : FORMATS;
+
   // Outside-click + Esc to close; own trigger excluded so its click toggles via
   // this component rather than instantly reopening (the ProjectActionsMenu bug).
   useEffect(() => {
@@ -165,7 +173,7 @@ export function ExportMenu({
                   style={{ top, bottom, left, width: MENU_WIDTH, border: "1px solid var(--tq-border-hairline)" }}
                 >
                   <ul className="flex flex-col p-1.5">
-                    {FORMATS.map((f) => {
+                    {formats.map((f) => {
                       const running = states[f.kind].status === "running";
                       return (
                         <li key={f.kind} role="none">
