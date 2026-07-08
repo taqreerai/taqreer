@@ -22,6 +22,12 @@ model User {
   // Admin ban (set by the admin console). Non-null = banned; blocks app access.
   bannedAt       DateTime?
   banReason      String?
+  // Signup forensics, stamped once at provisioning from Cloudflare headers
+  // (cf-connecting-ip / cf-ipcountry / cf-ipcity) and backfilled for older
+  // rows from the credit.grant.signup event metadata. Never updated after.
+  signupIp       String?
+  signupCountry  String? // ISO 3166-1 alpha-2
+  signupCity     String? // decoded cf-ipcity (needs the CF visitor-location Managed Transform)
   projects       Project[]
   templates      Template[]
   brandKits      BrandKit[]

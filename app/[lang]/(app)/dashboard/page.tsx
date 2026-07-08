@@ -4,10 +4,11 @@ import type { ProjectsGridProject } from "@/components/app/ProjectsGrid";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/supabase/user";
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
 import { dispatchWelcomeEmail } from "@/lib/email/send-welcome";
-import { clientIpFromHeaders } from "@/lib/api/rate-limit";
+import { signupGeoFromHeaders } from "@/lib/api/geo";
+import { deviceIdFromCookies } from "@/lib/device-cookie";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { isLocale } from "@/lib/i18n/config";
 
@@ -29,6 +30,10 @@ export default async function DashboardPage({
     redirect(`/${lang}/login?next=/${lang}/dashboard`);
   }
 
+  // Signup forensics (first-seen IP/geo) - stamped on CREATE only.
+  const hdrs = await headers();
+  const geo = signupGeoFromHeaders(hdrs);
+
   // Single round trip: the upsert IS the existence check (empty update
   // returns the existing row; a brand-new user comes back with
   // creditAccount null, which is exactly what gates the signup grant below).
@@ -41,6 +46,9 @@ export default async function DashboardPage({
       name: user.user_metadata?.name ?? user.user_metadata?.full_name ?? null,
       image: user.user_metadata?.avatar_url ?? null,
       plan: "free",
+      signupIp: geo.ip,
+      signupCountry: geo.country,
+      signupCity: geo.city,
     },
     select: {
       id: true,
@@ -57,11 +65,12 @@ export default async function DashboardPage({
   // credits. Abuse checks live in maybeGrantSignupCredits; a failure or block
   // just leaves the balance untouched (never breaks the dashboard render).
   if (!dbUser.creditAccount?.signupGrantedAt) {
-    const hdrs = await headers();
     const grant = await maybeGrantSignupCredits({
       userId: dbUser.id,
       email: dbUser.email,
-      ip: clientIpFromHeaders(hdrs),
+      ip: geo.ip,
+      deviceId: deviceIdFromCookies(await cookies()),
+      geo,
     }).catch(() => null);
     // Welcome email, once, when THIS path lands the grant - mirrors user-sync
     // and projects. A user who first materializes on the dashboard (e.g. a

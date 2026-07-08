@@ -1,5 +1,5 @@
 // Signup-grant gate (billing plan §2 / gap #1 cheap layer). Wraps
-// grantSignupCredits with the two abuse guards the ledger itself can't
+// grantSignupCredits with the three abuse guards the ledger itself can't
 // see:
 //
 //   1. EMAIL-ALIAS DEDUPE - gmail dots and +suffixes make infinite
@@ -10,10 +10,17 @@
 //   2. IP VELOCITY - more than 3 signup grants from one IP in 24h is
 //      farming, not a household; further grants from that IP are
 //      blocked (audit event, no grant).
+//   3. DEVICE DEDUPE - one grant per browser, ever, keyed on the
+//      middleware-minted `tq_did` cookie (lib/device-cookie.ts). Catches
+//      the wifi-to-mobile-data hop the IP guard can't. A grant attempt
+//      with NO device cookie is blocked fail-closed: the middleware sets
+//      the cookie on every matched request, so a cookie-less grant is a
+//      non-browser client, and a legit race self-heals because the grant
+//      re-attempts on the next sync/pageload (blocks never stamp
+//      signupGrantedAt).
 //
-// Blocked accounts still work - they just start at 0 credits. Real
-// multi-account farming defense beyond this (device fingerprints,
-// payment-method dedupe) lands with Stripe (billing plan §8/§9).
+// Blocked accounts still work - they just start at 0 credits. Payment-
+// method dedupe remains the stronger future layer (billing plan §8/§9).
 
 import { prisma } from "@/lib/prisma";
 import { grantSignupCredits } from "@/lib/credits/server";
@@ -42,10 +49,18 @@ export function normalizeEmail(email: string): string {
 export async function maybeGrantSignupCredits(args: {
   userId: string;
   email: string;
-  // Request IP (x-forwarded-for head) when available; null skips the
+  // Request IP (cf-connecting-ip chain) when available; null skips the
   // velocity guard rather than failing the signup.
   ip?: string | null;
-}): Promise<{ granted: number; blocked: "email_alias" | "ip_velocity" | null }> {
+  // Validated `tq_did` cookie (lib/device-cookie.ts). null/undefined =
+  // absent or malformed, which BLOCKS the grant (see header comment).
+  deviceId?: string | null;
+  // Audit-trail extras for the grant event metadata.
+  geo?: { country: string | null; city: string | null };
+}): Promise<{
+  granted: number;
+  blocked: "email_alias" | "ip_velocity" | "device_dup" | "device_missing" | null;
+}> {
   const normalized = normalizeEmail(args.email);
   const at = normalized.lastIndexOf("@");
   const domain = at > 0 ? normalized.slice(at + 1) : null;
@@ -109,9 +124,51 @@ export async function maybeGrantSignupCredits(args: {
     }
   }
 
+  // 3. Device dedupe - one grant per `tq_did` browser id, ever; no cookie,
+  //    no grant (fail-closed, self-healing - see header comment).
+  if (!args.deviceId) {
+    await prisma.usageEvent.create({
+      data: {
+        userId: args.userId,
+        eventType: "credit.signup.blocked",
+        amount: 0,
+        metadata: {
+          reason: "device_missing",
+          ...(args.ip ? { ip: args.ip } : {}),
+        },
+      },
+    });
+    return { granted: 0, blocked: "device_missing" };
+  }
+  const priorFromDevice = await prisma.usageEvent.count({
+    where: {
+      eventType: "credit.grant.signup",
+      metadata: { path: ["deviceId"], equals: args.deviceId },
+    },
+  });
+  if (priorFromDevice >= 1) {
+    await prisma.usageEvent.create({
+      data: {
+        userId: args.userId,
+        eventType: "credit.signup.blocked",
+        amount: 0,
+        metadata: {
+          reason: "device_dup",
+          deviceId: args.deviceId,
+          ...(args.ip ? { ip: args.ip } : {}),
+        },
+      },
+    });
+    return { granted: 0, blocked: "device_dup" };
+  }
+
   const result = await grantSignupCredits({
     userId: args.userId,
-    metadata: args.ip ? { ip: args.ip } : {},
+    metadata: {
+      deviceId: args.deviceId,
+      ...(args.ip ? { ip: args.ip } : {}),
+      ...(args.geo?.country ? { country: args.geo.country } : {}),
+    },
   });
   return { granted: result.granted, blocked: null };
 }

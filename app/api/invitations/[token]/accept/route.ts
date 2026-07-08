@@ -29,6 +29,7 @@ import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { fanOutNotification } from "@/lib/notifications/server";
 import { siteOrigin } from "@/lib/api/site-origin";
+import { signupGeoFromHeaders } from "@/lib/api/geo";
 
 export async function GET(
   request: Request,
@@ -65,10 +66,21 @@ export async function GET(
     image:
       (user.user_metadata?.avatar_url as string | undefined) ?? null,
   };
+  // Signup forensics (first-seen IP/geo) on CREATE only - this path creates
+  // users without granting credits, but a geo-less row would stay geo-less
+  // forever (the later grant via user-sync never touches these columns).
+  const geo = signupGeoFromHeaders(request.headers);
   const prismaUser = await prisma.user.upsert({
     where: { supabaseUserId: user.id },
     update: profile,
-    create: { supabaseUserId: user.id, ...profile, plan: "free" },
+    create: {
+      supabaseUserId: user.id,
+      ...profile,
+      plan: "free",
+      signupIp: geo.ip,
+      signupCountry: geo.country,
+      signupCity: geo.city,
+    },
     select: { id: true },
   });
 

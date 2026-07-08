@@ -24,7 +24,9 @@ import { detectImageRegion } from "@/lib/geo/image-region";
 import { preflightGenerate } from "@/lib/credits/preflight";
 import type { Flow as CreditFlow, SlideEstimateInput } from "@/lib/credits/cost";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
-import { clientIp, clientIpFromHeaders, rateLimited } from "@/lib/api/rate-limit";
+import { clientIp, rateLimited } from "@/lib/api/rate-limit";
+import { signupGeoFromHeaders } from "@/lib/api/geo";
+import { deviceIdFromCookies } from "@/lib/device-cookie";
 import { dispatchWelcomeEmail } from "@/lib/email/send-welcome";
 import { getDictionary, type Dictionary } from "@/lib/i18n/dictionaries";
 import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
@@ -492,6 +494,8 @@ export async function POST(request: Request) {
   if (existingUser?.bannedAt) {
     return NextResponse.json({ error: "Account suspended" }, { status: 403 });
   }
+  // Signup forensics (first-seen IP/geo) - stamped on CREATE only.
+  const geo = signupGeoFromHeaders(request.headers);
   const dbUser = await prisma.user.upsert({
     where: { supabaseUserId: user.id },
     update: {
@@ -505,6 +509,9 @@ export async function POST(request: Request) {
       name: user.user_metadata?.name ?? user.user_metadata?.full_name ?? null,
       image: user.user_metadata?.avatar_url ?? null,
       plan: "free",
+      signupIp: geo.ip,
+      signupCountry: geo.country,
+      signupCity: geo.city,
     },
   });
   // Gate on signupGrantedAt (the idempotent grant anchor), NOT row-
@@ -514,7 +521,9 @@ export async function POST(request: Request) {
     const grant = await maybeGrantSignupCredits({
       userId: dbUser.id,
       email: dbUser.email,
-      ip: clientIpFromHeaders(request.headers),
+      ip: geo.ip,
+      deviceId: deviceIdFromCookies(await cookies()),
+      geo,
     }).catch((err) => {
       // A grant hiccup must never fail project creation - the next
       // authenticated user-sync grants idempotently.

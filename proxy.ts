@@ -1,5 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/middleware";
+import {
+  DEVICE_COOKIE,
+  DEVICE_COOKIE_MAX_AGE,
+  isValidDeviceId,
+} from "@/lib/device-cookie";
 import { locales, defaultLocale, isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
 import { localeFromPathname, stripLocale } from "@/lib/i18n/navigation";
 
@@ -95,6 +100,28 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // ── Device-id cookie ─────────────────────────────────────────────────────
+  // Anonymous per-browser id backing the signup-grant device guard
+  // (lib/credits/signup.ts). Minted here so every page/API visitor carries it
+  // before any grant path can run; set only when missing or malformed. Every
+  // return below must pass through `withDeviceCookie`.
+  const existingDeviceId = request.cookies.get(DEVICE_COOKIE)?.value;
+  const deviceId = isValidDeviceId(existingDeviceId)
+    ? existingDeviceId
+    : crypto.randomUUID();
+  const withDeviceCookie = (res: NextResponse) => {
+    if (deviceId !== existingDeviceId) {
+      res.cookies.set(DEVICE_COOKIE, deviceId, {
+        path: "/",
+        maxAge: DEVICE_COOKIE_MAX_AGE,
+        httpOnly: true,
+        secure: true,
+        sameSite: "lax",
+      });
+    }
+    return res;
+  };
+
   // ── Locale gate ──────────────────────────────────────────────────────────
   // Chrome direction is URL-driven, so every page URL must carry a locale.
   // Redirect bare URLs to a locale prefix before anything else. (The slide
@@ -103,7 +130,7 @@ export async function proxy(request: NextRequest) {
     const locale = pickLocale(request);
     const url = request.nextUrl.clone();
     url.pathname = pathname === "/" ? `/${locale}` : `/${locale}${pathname}`;
-    return NextResponse.redirect(url);
+    return withDeviceCookie(NextResponse.redirect(url));
   }
 
   // ── Coming-soon gate (pre-launch) ────────────────────────────────────────
@@ -128,7 +155,7 @@ export async function proxy(request: NextRequest) {
         secure: true,
         sameSite: "lax",
       });
-      return res;
+      return withDeviceCookie(res);
     }
     // Legal pages stay public during coming-soon (Stripe expects reachable
     // Terms/Privacy/Refund; transparency too). Strip a trailing slash so the
@@ -143,7 +170,9 @@ export async function proxy(request: NextRequest) {
       normalizedGatePath === "/refund" ||
       normalizedGatePath === "/contact";
     if (!unlocked && !alwaysPublic) {
-      return NextResponse.rewrite(new URL(`/${gateLocale}/coming-soon`, request.url));
+      return withDeviceCookie(
+        NextResponse.rewrite(new URL(`/${gateLocale}/coming-soon`, request.url)),
+      );
     }
   }
 
@@ -170,7 +199,9 @@ export async function proxy(request: NextRequest) {
   if (isProtectedRoute && !session) {
     const loginUrl = new URL(`/${locale}/login`, request.url);
     loginUrl.searchParams.set("next", pathname + (searchParams.toString() ? `?${searchParams}` : ""));
-    return preserveAuthCookies(NextResponse.redirect(loginUrl), response);
+    return withDeviceCookie(
+      preserveAuthCookies(NextResponse.redirect(loginUrl), response),
+    );
   }
 
   // Redirect authenticated users away from auth pages.
@@ -182,10 +213,12 @@ export async function proxy(request: NextRequest) {
     if (template && !next) {
       redirectUrl.searchParams.set("template", template);
     }
-    return preserveAuthCookies(NextResponse.redirect(redirectUrl), response);
+    return withDeviceCookie(
+      preserveAuthCookies(NextResponse.redirect(redirectUrl), response),
+    );
   }
 
-  return response;
+  return withDeviceCookie(response);
 }
 
 export const config = {

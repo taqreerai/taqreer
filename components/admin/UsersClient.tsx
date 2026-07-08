@@ -62,14 +62,24 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
   };
   const [banTarget, setBanTarget] = useState<AdminUser | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null);
+  // Set-credits modal (absolute subscription balance, e.g. 0 to claw back
+  // a farmed signup grant).
+  const [setTarget, setSetTarget] = useState<AdminUser | null>(null);
+  const [setAmount, setSetAmount] = useState("");
+  const [setReason, setSetReason] = useState("");
   const [granting, setGranting] = useState(false);
   const [banning, setBanning] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [settingCredits, setSettingCredits] = useState(false);
 
   const filtered = users.filter((u) => {
     const q = query.trim().toLowerCase();
     const matchesQuery =
-      !q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q);
+      !q ||
+      u.name.toLowerCase().includes(q) ||
+      u.email.toLowerCase().includes(q) ||
+      // Searching an IP pulls up every account that signed up from it.
+      (u.signupIp?.toLowerCase().includes(q) ?? false);
     const matchesPlan = planFilter === "all" || u.plan === planFilter;
     const matchesStatus =
       statusFilter === "all" ||
@@ -109,6 +119,43 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
       // leave the modal open so the admin can retry
     } finally {
       setGranting(false);
+    }
+  };
+
+  const applySetCredits = async () => {
+    if (!setTarget || settingCredits) return;
+    const amount = parseInt(setAmount, 10);
+    if (!Number.isInteger(amount) || amount < 0) return;
+    setSettingCredits(true);
+    try {
+      const res = await fetch("/api/admin/credits/set", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: setTarget.id,
+          amount,
+          reason: setReason.trim() || undefined,
+        }),
+      });
+      if (!res.ok) throw new Error("set failed");
+      // The displayed credits include top-ups, so take the server's total
+      // instead of guessing client-side.
+      const json = (await res.json()) as { balance?: { total?: number } };
+      const total = json.balance?.total;
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === setTarget.id
+            ? { ...u, credits: typeof total === "number" ? total : amount }
+            : u,
+        ),
+      );
+      setSetTarget(null);
+      setSetAmount("");
+      setSetReason("");
+    } catch {
+      // leave the modal open so the admin can retry
+    } finally {
+      setSettingCredits(false);
     }
   };
 
@@ -258,10 +305,36 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
                       Banned
                     </span>
                   ) : null}
+                  {u.sharedIp ? (
+                    <span
+                      className="flex flex-shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs"
+                      style={{ color: DANGER, border: "1px solid var(--tq-border-hairline)" }}
+                      title={`Same signup IP as another account${u.signupIp ? `: ${u.signupIp}` : ""}`}
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 12 }}>
+                        share
+                      </span>
+                      Shared IP
+                    </span>
+                  ) : null}
                 </div>
-                <span className="truncate text-xs" style={{ color: MUTED }}>
+                <span className="block truncate text-xs" style={{ color: MUTED }}>
                   {u.email}
                 </span>
+                {u.signupIp || u.signupCity || u.signupCountry ? (
+                  <span
+                    className="block truncate text-xs"
+                    style={{ color: MUTED }}
+                    title={u.signupIp ?? undefined}
+                  >
+                    {[
+                      [u.signupCity, u.signupCountry].filter(Boolean).join(", "),
+                      u.signupIp,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                ) : null}
               </div>
 
               <div className="hidden w-16 sm:block">
@@ -292,6 +365,22 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
                     add_card
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSetAmount("");
+                    setSetReason("");
+                    setSetTarget(u);
+                  }}
+                  aria-label="Set credits"
+                  title="Set credits"
+                  className="grid h-8 w-8 place-items-center rounded-full transition-colors"
+                  style={{ color: MUTED, background: "var(--tq-overlay-soft)" }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                    tune
                   </span>
                 </button>
                 <button
@@ -394,6 +483,64 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
               className="btn-gradient flex-1 rounded-full px-4 py-2.5 text-sm font-medium disabled:opacity-50"
             >
               {granting ? "Granting..." : "Grant credits"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Set credits (absolute subscription balance) */}
+      <Modal
+        open={setTarget !== null}
+        title={`Set credits for ${setTarget?.name ?? ""}`}
+        onClose={() => setSetTarget(null)}
+      >
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-xs font-medium" style={{ color: MUTED }}>
+              New balance (credits)
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={setAmount}
+              onChange={(e) => setSetAmount(e.target.value)}
+              placeholder="e.g. 0"
+              className="h-10 w-full rounded-lg px-3 text-sm outline-none"
+              style={inputStyle}
+              autoFocus
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium" style={{ color: MUTED }}>
+              Reason (optional)
+            </label>
+            <input
+              value={setReason}
+              onChange={(e) => setSetReason(e.target.value)}
+              placeholder="e.g. duplicate signup-grant clawback"
+              className="h-10 w-full rounded-lg px-3 text-sm outline-none"
+              style={inputStyle}
+            />
+          </div>
+          <p className="text-xs" style={{ color: MUTED }}>
+            Sets the subscription balance to this exact value. Top-up credits
+            are not affected. Audited in the credit ledger.
+          </p>
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setSetTarget(null)}
+              className="btn-pill flex-1 px-4 py-2.5 text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={applySetCredits}
+              disabled={settingCredits}
+              className="btn-gradient flex-1 rounded-full px-4 py-2.5 text-sm font-medium disabled:opacity-50"
+            >
+              {settingCredits ? "Setting..." : "Set credits"}
             </button>
           </div>
         </div>

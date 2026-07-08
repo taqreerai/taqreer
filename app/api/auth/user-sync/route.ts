@@ -1,9 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
-import { clientIp, clientIpFromHeaders, rateLimited } from "@/lib/api/rate-limit";
+import { clientIp, rateLimited } from "@/lib/api/rate-limit";
+import { signupGeoFromHeaders } from "@/lib/api/geo";
+import { deviceIdFromCookies } from "@/lib/device-cookie";
 import { fanOutNotification } from "@/lib/notifications/server";
 import { dispatchWelcomeEmail } from "@/lib/email/send-welcome";
 import { captureServerEvent } from "@/lib/analytics/posthog-server";
@@ -44,6 +47,10 @@ export async function POST(request: Request) {
       },
     });
 
+    // Signup forensics (first-seen IP/geo) - stamped on CREATE only, never
+    // refreshed on later syncs.
+    const geo = signupGeoFromHeaders(request.headers);
+
     // `language` is intentionally NOT in `update` — a returning user keeps
     // their saved choice; a brand-new row takes the column default ("ar").
     const dbUser = await prisma.user.upsert({
@@ -53,6 +60,9 @@ export async function POST(request: Request) {
         supabaseUserId: user.id,
         ...profile,
         plan: "free",
+        signupIp: geo.ip,
+        signupCountry: geo.country,
+        signupCity: geo.city,
       },
       select: { id: true, language: true },
     });
@@ -89,7 +99,9 @@ export async function POST(request: Request) {
       const grant = await maybeGrantSignupCredits({
         userId: dbUser.id,
         email: profile.email,
-        ip: clientIpFromHeaders(request.headers),
+        ip: geo.ip,
+        deviceId: deviceIdFromCookies(await cookies()),
+        geo,
       }).catch((err) => {
         console.error(
           "[user-sync] signup grant failed:",

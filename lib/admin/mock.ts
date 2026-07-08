@@ -90,9 +90,18 @@ export type AdminUser = {
   credits: number;
   joinedAt: string; // ISO date
   banned: boolean;
+  // Signup forensics (User.signupIp/Country/City, stamped at provisioning).
+  signupIp: string | null;
+  signupCountry: string | null; // ISO alpha-2
+  signupCity: string | null;
+  // Same signupIp as at least one other listed user (multi-account signal).
+  sharedIp: boolean;
 };
 
-export const MOCK_USERS: AdminUser[] = [
+const MOCK_USERS_BASE: Omit<
+  AdminUser,
+  "signupIp" | "signupCountry" | "signupCity" | "sharedIp"
+>[] = [
   { id: "u1", name: "Noura Al-Otaibi", email: "noura@example.com", plan: "pro", credits: 4120, joinedAt: "2026-06-14", banned: false },
   { id: "u2", name: "Khalid Hassan", email: "khalid@example.com", plan: "max", credits: 11380, joinedAt: "2026-06-12", banned: false },
   { id: "u3", name: "Sami Farouk", email: "sami@example.com", plan: "free", credits: 280, joinedAt: "2026-06-16", banned: false },
@@ -104,6 +113,14 @@ export const MOCK_USERS: AdminUser[] = [
   { id: "u9", name: "Tariq Aziz", email: "tariq@example.com", plan: "max", credits: 8740, joinedAt: "2026-05-22", banned: false },
   { id: "u10", name: "Salma Rahimi", email: "salma@example.com", plan: "pro", credits: 5230, joinedAt: "2026-06-07", banned: false },
 ];
+
+export const MOCK_USERS: AdminUser[] = MOCK_USERS_BASE.map((u) => ({
+  ...u,
+  signupIp: null,
+  signupCountry: null,
+  signupCity: null,
+  sharedIp: false,
+}));
 
 // ─── Templates ────────────────────────────────────────────────────────────
 

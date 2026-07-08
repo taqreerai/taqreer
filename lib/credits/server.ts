@@ -507,6 +507,49 @@ export async function grantSignupCredits(args: {
 }
 
 /**
+ * Admin override: set the subscription bucket to an absolute value (the
+ * clawback tool for farmed signup grants - target 0 empties it). Top-up
+ * grants are untouched; zeroing those, if ever needed, is a separate
+ * action. Logs `credit.admin.set` with amount = DELTA (keeps the ledger
+ * invariant that summing UsageEvent.amount tracks balance movement);
+ * the absolute before/after live in metadata.
+ */
+export async function setSubscriptionBalance(args: {
+  userId: string;
+  target: number;
+  adminUserId: string;
+  reason?: string;
+  now?: Date;
+  notify?: boolean;
+}): Promise<BalanceSnapshot> {
+  const now = args.now ?? new Date();
+  await prisma.$transaction(async (tx) => {
+    await lockAccount(tx, args.userId);
+    const account = await tx.creditAccount.findUniqueOrThrow({
+      where: { userId: args.userId },
+    });
+    await tx.creditAccount.update({
+      where: { userId: args.userId },
+      data: { subscriptionBalance: args.target },
+    });
+    await logEvent(
+      tx,
+      args.userId,
+      "credit.admin.set",
+      args.target - account.subscriptionBalance,
+      {
+        previousSubscription: account.subscriptionBalance,
+        newSubscription: args.target,
+        adminUserId: args.adminUserId,
+        ...(args.reason ? { reason: args.reason } : {}),
+      },
+    );
+  }, SERIALIZED);
+  await notifyBalance(args.userId, now, args.notify ?? true);
+  return getBalance(args.userId, now);
+}
+
+/**
  * Apply a plan's cycle grant - used on purchase/upgrade (immediate new
  * allotment, paid now) and by the renewal path. Sets, not adds: the
  * subscription bucket becomes exactly the tier allotment (no rollover).

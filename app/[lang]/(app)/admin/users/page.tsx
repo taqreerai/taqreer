@@ -31,8 +31,18 @@ export default async function AdminUsersPage() {
       plan: true,
       createdAt: true,
       bannedAt: true,
+      signupIp: true,
+      signupCountry: true,
+      signupCity: true,
     },
   });
+
+  // Multi-account signal: users sharing a signup IP. Computed within the
+  // take-500 window above (currently the whole user base).
+  const ipCounts = new Map<string, number>();
+  for (const u of rows) {
+    if (u.signupIp) ipCounts.set(u.signupIp, (ipCounts.get(u.signupIp) ?? 0) + 1);
+  }
 
   // Spendable balance per user. N+1 is fine at admin scale; revisit with a
   // single aggregate query if the user count grows large.
@@ -47,6 +57,10 @@ export default async function AdminUsersPage() {
         credits: balance.total,
         joinedAt: u.createdAt.toISOString().slice(0, 10),
         banned: !!u.bannedAt,
+        signupIp: u.signupIp,
+        signupCountry: u.signupCountry,
+        signupCity: u.signupCity,
+        sharedIp: !!u.signupIp && (ipCounts.get(u.signupIp) ?? 0) > 1,
       };
     }),
   );
