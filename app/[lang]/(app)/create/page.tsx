@@ -305,9 +305,10 @@ export default function CreatePage() {
   const slideCap = useSlideCap();
   if (slideCountValue > slideCap) setSlideCountValue(slideCap);
   const [pagination, setPagination] = useState<boolean>(true);
-  // context/images.md — opt-in "images deck". On → deck-generate uses the
-  // photography-led system prompt + reserves generated-image boxes.
-  const [imagesMode, setImagesMode] = useState<boolean>(false);
+  // context/images.md — "images deck", ON by default (opt-out). On →
+  // deck-generate uses the photography-led system prompt + reserves
+  // generated-image boxes.
+  const [imagesMode, setImagesMode] = useState<boolean>(true);
   // Design style (Part B.3) — the chosen create-flow style, or null. Drives the
   // deck-generate DESIGN_STYLE_DIRECTIVES injection (the directive leads the
   // user message). UI-only picker for now; polished modal UX lands later.

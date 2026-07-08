@@ -255,10 +255,10 @@ export default function MimicFlow({
   const [kitOptions, setKitOptions] = useState<BrandKitOption[]>([]);
   const kitRawRef = useRef<Map<string, unknown>>(new Map());
   const [saveBrandKit, setSaveBrandKit] = useState<boolean>(false);
-  // GPT images (opt-in): when ON, Claude recreates the reference deck's imagery
-  // and fills empty placeholders with slide-relevant images (deck-generate
-  // MIMIC_IMG_ADDENDUM). Default OFF keeps the baseline mimic unchanged.
-  const [imagesMode, setImagesMode] = useState<boolean>(false);
+  // GPT images (ON by default, opt-out): when ON, Claude recreates the
+  // reference deck's imagery and fills empty placeholders with slide-relevant
+  // images (deck-generate MIMIC_IMG_ADDENDUM).
+  const [imagesMode, setImagesMode] = useState<boolean>(true);
 
   // ─── Logo (always available — own logo can ride on mimicked brand)
   const [logoFile, setLogoFile] = useState<File | null>(null);
