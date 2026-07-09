@@ -160,6 +160,101 @@ function flipCssGradientHorizontal(bg: string): string {
   );
 }
 
+// ─── CLASS-RULE scrims (the gradient lives in the deck <style>, not inline) ──
+//
+// The element-level pass above reads INLINE styles only. But Claude almost
+// always factors the scrim into a class rule — `.scrim{background:linear-
+// gradient(90deg,var(--brand-5),transparent)}` — so the <div class="scrim">
+// carries no inline background and the inline pass can't see it. That leaves the
+// most common scrim untouched: in RTL a `90deg` (dark-LEFT) scrim darkens the
+// empty side while the text sits on the bright right (user-reported 2026-07-09).
+//
+// This pass rewrites the STYLESHEET: it flips the horizontal direction of any
+// linear-gradient that is a genuine FADE (opaque end -> transparent end — the
+// semantic signature of a legibility scrim) so its dark end faces the reading
+// side (rtl -> right, ltr -> left). A decorative colour->colour gradient is NOT
+// a fade, so it is left alone. Diagonal / vertical scrims are out of scope (the
+// existing pass is horizontal-only too).
+
+// The dark side of a horizontal gradient ONLY when it is a real fade (one end
+// effectively transparent, the other effectively opaque); null otherwise.
+function horizontalFadeDarkSide(grad: string): "left" | "right" | null {
+  const side = cssGradientDarkSide(grad);
+  if (side !== "left" && side !== "right") return null;
+  const inner = /linear-gradient\(([\s\S]*)\)\s*$/i.exec(grad)?.[1];
+  if (!inner) return null;
+  const parts = splitTopLevel(inner);
+  const first = (parts[0] ?? "").toLowerCase();
+  const stops = /^(to\s+|[-\d.]+(deg|grad|rad|turn)$)/.test(first)
+    ? parts.slice(1)
+    : parts;
+  if (stops.length < 2) return null;
+  let minOp = 1;
+  let maxOp = 0;
+  for (const s of stops) {
+    const o = colorOpacity(s);
+    if (o < minOp) minOp = o;
+    if (o > maxOp) maxOp = o;
+  }
+  // A scrim fades from ~opaque to ~transparent; a decorative gradient does not.
+  if (!(minOp < 0.3 && maxOp > 0.6)) return null;
+  return side;
+}
+
+// Every `linear-gradient(...)` expression in the CSS, paren-balanced (so nested
+// rgba()/var() don't truncate the match).
+function findLinearGradients(
+  css: string,
+): { start: number; end: number; expr: string }[] {
+  const out: { start: number; end: number; expr: string }[] = [];
+  const re = /linear-gradient\(/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(css)) !== null) {
+    let i = m.index + m[0].length;
+    let depth = 1;
+    while (i < css.length && depth > 0) {
+      const ch = css[i];
+      if (ch === "(") depth++;
+      else if (ch === ")") depth--;
+      i++;
+    }
+    out.push({ start: m.index, end: i, expr: css.slice(m.index, i) });
+    re.lastIndex = i;
+  }
+  return out;
+}
+
+/**
+ * Flip every horizontal FADE gradient in a stylesheet toward the reading side
+ * (rtl -> dark on right, ltr -> dark on left). Returns the rewritten CSS and
+ * whether anything changed. Only touches opaque->transparent horizontal
+ * gradients; decorative and diagonal/vertical gradients are left as authored.
+ */
+export function rewriteScrimGradientsInCss(
+  css: string,
+  direction: "rtl" | "ltr",
+): { css: string; changed: boolean } {
+  const grads = findLinearGradients(css);
+  if (grads.length === 0) return { css, changed: false };
+  const desired: "left" | "right" = direction === "rtl" ? "right" : "left";
+  let out = "";
+  let cursor = 0;
+  let changed = false;
+  for (const g of grads) {
+    out += css.slice(cursor, g.start);
+    const side = horizontalFadeDarkSide(g.expr);
+    if (side && side !== desired) {
+      out += flipCssGradientHorizontal(g.expr);
+      changed = true;
+    } else {
+      out += g.expr;
+    }
+    cursor = g.end;
+  }
+  out += css.slice(cursor);
+  return { css: out, changed };
+}
+
 // The background that makes a full-bleed layer a *scrim* (a dark overlay), and
 // which CSS property carries it. A transparent layer (e.g. the text-content
 // container) returns null and is left untouched.

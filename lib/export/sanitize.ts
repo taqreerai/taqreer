@@ -29,7 +29,7 @@
 import DOMPurifyFactory from "dompurify";
 import type { Config } from "dompurify";
 import { ALLOWED_FONT_HOSTS } from "@/lib/schema/slide";
-import { applyScrimFixes } from "@/lib/export/scrim";
+import { applyScrimFixes, rewriteScrimGradientsInCss } from "@/lib/export/scrim";
 import { applyGridDenseFixes, gridNeedsDense } from "@/lib/export/grid-dense";
 
 export type DOMPurifyAPI = {
@@ -769,7 +769,17 @@ function rewriteImageScrim(html: string): string {
     const slideRoot = wrapper?.firstElementChild as HTMLElement | null;
     if (!slideRoot) return html;
     const dir = slideRoot.getAttribute("dir") === "ltr" ? "ltr" : "rtl";
-    const changed = applyScrimFixes(slideRoot, dir);
+    let changed = applyScrimFixes(slideRoot, dir);
+    // Class-rule scrims: the gradient lives in the deck <style> block, not
+    // inline, so applyScrimFixes (inline-only) never sees it. Flip horizontal
+    // fade gradients in the stylesheet toward the reading side.
+    for (const style of Array.from(slideRoot.querySelectorAll("style"))) {
+      const res = rewriteScrimGradientsInCss(style.textContent ?? "", dir);
+      if (res.changed) {
+        style.textContent = res.css;
+        changed = true;
+      }
+    }
     return changed ? wrapper!.innerHTML : html;
   } catch {
     return html;
