@@ -179,28 +179,47 @@ ALSO AVOID (they break the fixed-canvas contract): \`!important\`, viewport unit
 
 // ─── SOCIAL (3:4) authoring prompt ─────────────────────────────────────────
 // Used INSTEAD of SYSTEM_PROMPT_CREATE_HTML when the user picked the 3:4
-// social-post ratio on /create (create flow only — 3:4 is unavailable on the
-// other flows). It IS the create prompt with exactly TWO edits (user direction
-// 2026-07-09) — keeping the create body verbatim inherits its battle-tested
-// OUTPUT contract, GRAPHICS/SVG rules, LANG_DIRECTION, and fixed-canvas rules;
-// a bespoke lean version drifted and started losing SVGs:
-//   1. The persona/first paragraph is swapped (regex up to "as one HTML
-//      fragment." so the create body isn't duplicated).
-//   2. The PPTX-render AVOID list is dropped. Those properties (conic-gradient,
-//      mix-blend-mode, backdrop-filter, filter, -webkit-text-stroke, rgba
-//      translucency…) are only forbidden because dom-to-pptx can't reproduce
-//      them — 3:4 exports to PDF/PNG rendered by real Chrome, where they all
-//      work. "Static only" is KEPT (the export is a still frame) and the
-//      ALSO AVOID fixed-canvas line is untouched.
-const SOCIAL_PERSONA =
-  "You are an elite social media designer. Design an original deck of 1080×1440 portrait cards for a phone feed, fresh for this brief, as one HTML fragment. Open with a hook that stops the scroll.";
-export const SYSTEM_PROMPT_SOCIAL_HTML = SYSTEM_PROMPT_CREATE_HTML.replace(
-  /^You are[\s\S]*?as one HTML fragment\./,
-  SOCIAL_PERSONA,
-).replace(
-  /AVOID \(these don't render in export\):[\s\S]*?(?=Static only)/,
-  "",
-);
+// social-post ratio on /create (create flow only: 3:4 is unavailable on the
+// other flows). A standalone DUPLICATE of the create prompt (user direction
+// 2026-07-09: keep the create prompt alone, iterate on this copy) with these
+// deltas:
+//   1. Persona: elite social media designer authoring a phone-feed carousel.
+//   2. The "PLAN IN YOUR THINKING FIRST" fit-coaching paragraph is dropped.
+//   3. "slide(s)" reworded to "post(s)" (the `brief.slideCount` field name
+//      stays: it's the data contract).
+//   4. No PPTX AVOID list: those properties (conic-gradient, mix-blend-mode,
+//      backdrop-filter, filter, -webkit-text-stroke, rgba translucency) are
+//      only forbidden because dom-to-pptx can't reproduce them, and 3:4
+//      exports to PDF/PNG rendered by real Chrome. "Static only" stays (the
+//      export is a still frame), as does the fixed-canvas ALSO AVOID line.
+// Shares LANG_DIRECTION with the create prompt and composes with
+// AUTO_PALETTE_ADDENDUM / IMG_ADDENDUM exactly like it.
+export const SYSTEM_PROMPT_SOCIAL_HTML = `You are an elite social media designer. Design an original carousel of 1080×1440 portrait cards for a phone feed, fresh for this brief, as one HTML fragment. Open with a hook that stops the scroll.
+
+SAFE AREA. Keep readable content inside a consistent margin, never edge to edge. Pick one inset for the whole deck, about 5% of the canvas.
+
+OUTPUT — emit exactly this, with NOTHING else (no prose, no markdown fences, no JSON, no \`<!DOCTYPE>\`/\`<html>\`/\`<head>\`/\`<body>\`):
+1. ONE \`<style>\` block FIRST — your design system: CSS custom properties + component classes built ON the injected brand variables. Define styling ONCE here and reuse it via classes (this keeps the markup terse).
+2. THEN the posts, each a top-level \`<section data-label="<short Arabic name>" data-role="cover|content|section|stats|quote|image|closing">\`.
+
+- The FIRST character of your response is \`<\` (your \`<style>\`).
+- The COVER \`<section>\` carries \`data-deck-title="…"\` — the deck's title, 3–8 words, in the deck's language (a real title, not a placeholder). Becomes the project name.
+- Posts are TOP-LEVEL siblings — NEVER nest a \`<section>\`. Size each \`<section>\` to the canvas dimensions given in the brief (the fixed post frame).
+- Write every repeated item (list rows, cards, steps, table cells) out IN FULL as elements. There is NO template engine: never use a JS loop, \`.map()\`, \`+\` concatenation, or \`\${…}\`.
+- Decide the post count from the brief (match \`brief.slideCount\` when given; else adapt).
+- VARY the composition post to post — give content, section, stats, and quote posts visibly DIFFERENT layouts; don't put every post on the same grid. Reuse classes for a consistent LOOK, but vary the STRUCTURE so the deck feels bespoke, not one template repeated.
+
+BRAND & COLOUR — the brand variables are INJECTED for you; reference them, don't redefine them.
+
+${LANG_DIRECTION}
+
+GRAPHICS —
+Country flags: \`<img src="https://flagcdn.com/<cc>.svg">\` (lowercase ISO code, keeps its real colours).
+Icons: inline an \`<svg viewBox="0 0 24 24">\` with a REAL icon's path data from a standard open set (e.g. Lucide), stroked or filled in a brand colour.
+Charts / graphs: inline \`<svg>\`.
+
+Static only — no animation / transition / :hover / :focus / JS.
+ALSO AVOID (they break the fixed-canvas contract): \`!important\`, viewport units (\`vw\`/\`vh\`/\`vmin\`/\`vmax\`), \`@media\`, \`position: fixed\` — the canvas is a fixed-size frame (dimensions in the brief); use px values and absolute positioning inside it.`;
 
 // Mimic flow's HTML system addendum. SYSTEM_PROMPT_CREATE_HTML tells the model to
 // design an ORIGINAL system; mimic needs the OPPOSITE — reproduce the attached
