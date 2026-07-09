@@ -444,12 +444,20 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
       await new Promise<void>((r) =>
         requestAnimationFrame(() => requestAnimationFrame(() => r())),
       );
+      // FRAME decks (context/frame-architecture-2026-07-10.md) NEVER flatten
+      // in the editor: their wells are frozen to absolute boxes by the
+      // server-side deck-freeze-bake (pixel-gated, clean render). Frozen →
+      // already the editor's model; not-yet-frozen (bake in flight) → edit the
+      // flow html in the degraded-but-lossless path rather than risk the
+      // browser-environment flatten persisting damage (the white-band class).
       // (Social 3:4 used to skip flatten wholesale here - its de-nesting broke
       // pseudo-elements + descendant-selector fills. Both are handled since the
       // 2026-07-09 fidelity package (pseudo shells, atomic containers, shell
       // recursion), verified on generated 1080x1440 carousels, so posts now
       // flatten like slides; the reason-gate below covers what never can.)
-      if (flattenSkipReason(sec as HTMLElement)) {
+      if (sec.hasAttribute("data-tq-frame")) {
+        // fall through to tagging/overlays with the html as stored
+      } else if (flattenSkipReason(sec as HTMLElement)) {
         // nothing to flatten — fall through to tagging/overlays. The skip-reason gate
         // covers (a) already-flat slides: re-flattening only re-measures and
         // re-persists, and repeated passes drift the render away from the authored

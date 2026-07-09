@@ -33,6 +33,14 @@ import { fanOutNotification } from "@/lib/notifications/server";
 import { classifyFontNames } from "@/lib/extract/fonts-pptx";
 import { expandWeightAxis, googleFontUrl } from "@/lib/brand/fonts";
 import { buildSlideHtml, extractLeadingStyleCss } from "@/lib/deck/scaffold";
+import {
+  frameSystemPrompt,
+  frameSystemCss,
+  parseFrameSlide,
+  assembleFramedSlide,
+  fillFrameTotals,
+  type FrameDeckCtx,
+} from "@/lib/deck/frame";
 import { injectLogoMarkers, logoImgTag } from "@/lib/deck/logo-inject";
 import { scopeDeckCss } from "@/lib/deck/scope-css";
 import { StreamingHtmlSplitter, type ParsedSlide } from "@/lib/deck/html-stream";
@@ -275,6 +283,31 @@ export function isImagesMode(event: DeckGenerateEvent): boolean {
     (event.brief as { imagesMode?: boolean } | null)?.imagesMode === true &&
     (event.type ?? "create") === "create" &&
     sourceKind !== "enhance" &&
+    sourceKind !== "data"
+  );
+}
+
+// FRAME architecture flag (context/frame-architecture-2026-07-10.md): the
+// system owns margins/chrome/backgrounds/panels/scrims/brand/dir and Claude
+// designs FLOW-ONLY inside a clipped well; deck-freeze-bake then pins the flow
+// layout to absolute boxes for the freeform editor. Opt-in per event
+// (brief.frameGen) or globally via FRAME_GEN_ALL=1 (local testing). Phase 1
+// scope: create-flow 16:9 only — 3:4 social, enhance, mimic, and datasheet
+// keep their prompts until deliberately migrated.
+export function isFrameGen(
+  event: DeckGenerateEvent,
+  slideFormat: string,
+): boolean {
+  const optIn =
+    (event.brief as { frameGen?: boolean } | null)?.frameGen === true ||
+    process.env.FRAME_GEN_ALL === "1";
+  const sourceKind = (event.brief as { source?: { kind?: string } } | null)
+    ?.source?.kind;
+  return (
+    optIn &&
+    slideFormat === "16:9" &&
+    (event.type ?? "create") === "create" &&
+    sourceKind !== "mimic" &&
     sourceKind !== "data"
   );
 }
@@ -1782,6 +1815,9 @@ export const deckGenerate = inngest.createFunction(
     // manifest so renderer + lightbox + export all see one source of
     // truth (vs reading project.format separately downstream).
     const slideFormat = resolveFormat(data);
+    // Frame-architecture decks (flagged): shared by the prompt selection, the
+    // per-slide assembly, the finalize totals pass, and the bake dispatch.
+    const frameGen = isFrameGen(data, slideFormat);
 
     // Captured ONCE at the top of the job and persisted through every
     // writeProgress call. DeckView reads this back to seed its elapsed-time
@@ -1967,17 +2003,29 @@ export const deckGenerate = inngest.createFunction(
           htmlSourceKind !== "mimic" &&
           data.type !== "enhance";
         const htmlSystem = [
+          // FRAME decks swap the whole base: the frame prompt embeds its own
+          // image contract (declared bg/panels + in-well slots), so the
+          // generic IMG_ADDENDUM must NOT compose on top of it. isFrameGen
+          // already excludes 3:4 / enhance / mimic / data, so those branches
+          // below stay mutually exclusive with it.
+          //
           // 3:4 (create only) is a social carousel, not a projected deck — swap
           // the deck base for the social base (unlocked CSS toolbox + carousel
           // framing). Addenda below compose identically.
-          slideFormat === "3:4"
-            ? SYSTEM_PROMPT_SOCIAL_HTML
-            : SYSTEM_PROMPT_CREATE_HTML,
+          frameGen
+            ? frameSystemPrompt({
+                canvas: SLIDE_DIMENSIONS[slideFormat],
+                language: streamLanguage,
+                imagesMode: isImagesMode(data),
+              })
+            : slideFormat === "3:4"
+              ? SYSTEM_PROMPT_SOCIAL_HTML
+              : SYSTEM_PROMPT_CREATE_HTML,
           paletteAuto ? AUTO_PALETTE_ADDENDUM : null,
           // Mimic with images on recreates the reference's imagery (its own
           // addendum); every other images-on flow uses the generic reserve-a-box
           // rules.
-          isImagesMode(data)
+          !frameGen && isImagesMode(data)
             ? htmlSourceKind === "mimic"
               ? MIMIC_IMG_ADDENDUM
               : IMG_ADDENDUM
@@ -2003,6 +2051,18 @@ export const deckGenerate = inngest.createFunction(
         const slides: SlideType[] = [];
         const warmedKeys = new Set<string>();
         const warmedGenidsForCap = new Set<string>();
+        // FRAME decks: deck-level chrome context accumulated as slides stream
+        // (the cover declares title/brand; later slides render them in chrome
+        // slots). The frame CSS is per-deck constant, computed once.
+        const frameCtx: FrameDeckCtx = {
+          direction: streamDirection,
+          deckTitle: null,
+          brand: null,
+          brandSub: null,
+        };
+        const frameCss = frameGen
+          ? frameSystemCss(SLIDE_DIMENSIONS[slideFormat])
+          : "";
         let cancelObserved = false;
         // Hard slide ceiling = the credits we HELD for (the user's budget).
         // Auto slide-count lets the model decide how many slides to make,
@@ -2102,6 +2162,23 @@ export const deckGenerate = inngest.createFunction(
             parsed.role && SLIDE_ROLES.has(parsed.role as never)
               ? (parsed.role as NonNullable<SlideType["role"]>)
               : undefined;
+          // FRAME decks: parse the declared attributes + well and wrap with
+          // the system layers (bg/panels/well/chrome). Cover declarations land
+          // in frameCtx for the whole deck. slides.length is the 0-based index
+          // of THIS slide (pre-push) — pagination; the restart guard resets it.
+          let sectionHtml = parsed.html;
+          if (frameGen) {
+            const decl = parseFrameSlide(parsed.html);
+            if (decl.deckTitle) frameCtx.deckTitle = decl.deckTitle;
+            if (decl.brand) frameCtx.brand = decl.brand;
+            if (decl.brandSub) frameCtx.brandSub = decl.brandSub;
+            sectionHtml = assembleFramedSlide(
+              decl,
+              frameCtx,
+              slides.length,
+              SLIDE_DIMENSIONS[slideFormat],
+            );
+          }
           const slide: SlideType = {
             slideId: parsed.slideId,
             ...(role ? { role } : {}),
@@ -2109,8 +2186,8 @@ export const deckGenerate = inngest.createFunction(
             // canvas frame inside the section; correctly sized for EVERY consumer
             // (preview, thumbnail, PPTX/PDF export).
             html: buildSlideHtml(
-              parsed.html,
-              scopedStyle,
+              sectionHtml,
+              frameGen ? `${frameCss}\n${scopedStyle}` : scopedStyle,
               SLIDE_DIMENSIONS[slideFormat],
             ),
           };
@@ -2526,6 +2603,15 @@ export const deckGenerate = inngest.createFunction(
       // one source of truth. Overrides whatever Claude may have set
       // (the system prompt doesn't tell him about this field).
       const manifestToSave = { ...manifest, format: slideFormat };
+      // FRAME decks: pagination slots rendered a total TOKEN while streaming
+      // (the count isn't known mid-stream); fill it now the deck is final.
+      // No-op for non-frame decks (the token never appears in their html).
+      if (frameGen) {
+        manifestToSave.slides = manifestToSave.slides.map((s) => ({
+          ...s,
+          html: fillFrameTotals(s.html, manifestToSave.slides.length),
+        }));
+      }
       await prisma.presentationVersion.update({
         where: { id: versionId },
         data: {
@@ -2835,10 +2921,33 @@ export const deckGenerate = inngest.createFunction(
       await inngest
         .send({
           name: "deck.images.requested",
-          data: { projectId, versionId },
+          // freezeAfter: FRAME decks bake AFTER the image reconcile commits —
+          // the bake's read-modify-write on slideJson would otherwise race the
+          // reconcile's write on the same blob (lost update). deck-images-
+          // generate dispatches deck.freeze.bake on its way out when set.
+          data: { projectId, versionId, freezeAfter: frameGen },
         })
         .catch((err) => {
           logger.warn("deck_images_dispatch_failed", {
+            projectId,
+            versionId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+    } else if (frameGen) {
+      // FRAME deck without images: freeze bake right away (deck-freeze-bake
+      // pins the flow wells to absolute boxes in the clean render). Fire-and-
+      // forget: a bake failure leaves the deck on its flow html — the viewer
+      // renders it identically (pixel gate) and the editor takes the
+      // degraded path until a later bake succeeds.
+      await inngest
+        .send({
+          id: `freeze:${projectId}:${versionId}`,
+          name: "deck.freeze.bake",
+          data: { projectId, versionId },
+        })
+        .catch((err) => {
+          logger.warn("deck_freeze_dispatch_failed", {
             projectId,
             versionId,
             error: err instanceof Error ? err.message : String(err),
