@@ -2559,6 +2559,44 @@ export const deckGenerate = inngest.createFunction(
           manifestToSave,
         );
 
+        // Bake the per-slide EDITOR SNAPSHOT (deck-snapshot-bake): render this
+        // version server-side and flatten each slide to absolute boxes, so the
+        // editor loads a clean pre-baked snapshot instead of flattening in the
+        // browser on open. Fire-and-forget: a failed bake must never fail the
+        // generation (the editor falls back to the legacy in-browser flatten for
+        // any slide left without editorHtml). Dispatched for create AND full
+        // regen (both land here) so a regen refreshes stale snapshots. Dedup id
+        // keeps an Inngest retry of this step from double-queuing.
+        //
+        // ‼️ IMAGES-MODE decks that RESERVED boxes skip this bake: their images
+        // fill ASYNC after generation, and the bake's read-modify-write on
+        // slideJson would race the image reconcile's write on the SAME blob
+        // (lost-update: a placeholder snapshot could clobber a freshly-injected
+        // image src). For those, deck-images-generate dispatches the bake once,
+        // AFTER the reconcile commits (the only writer by then), so the snapshot
+        // renders the image-FILLED deck with no concurrent writer. A deck that
+        // is images-mode but reserved ZERO boxes has no async fill (no reconcile
+        // write), so it bakes here like a normal deck — keeping exactly one bake
+        // per deck across the two dispatch sites.
+        const reservedImageBoxes = manifestToSave.slides.some(
+          (s) => typeof s.html === "string" && scanGenImages(s.html).length > 0,
+        );
+        if (!isImagesMode(data) || !reservedImageBoxes) {
+          await inngest
+            .send({
+              id: `snapshots:${projectId}:${versionId}`,
+              name: "deck.snapshot.bake",
+              data: { projectId, versionId },
+            })
+            .catch((err) => {
+              logger.warn("snapshot_bake_dispatch_failed", {
+                projectId,
+                versionId,
+                error: err instanceof Error ? err.message : String(err),
+              });
+            });
+        }
+
         // Auto-save the first-ever completed generation so the user
         // doesn't have to click "Save Project" before the dashboard
         // tile gets a thumbnail. Previously the only way to populate

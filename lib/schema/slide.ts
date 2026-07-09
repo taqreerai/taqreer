@@ -161,6 +161,17 @@ export const SlideSchema = z.object({
   // yourself wanting to tighten this with a per-element schema, re-read
   // §18 first.
   html: z.string().min(1),
+  // The EDITOR SNAPSHOT: `html` flattened to absolute-positioned boxes,
+  // baked ONCE server-side (deck-snapshot-bake) in the export-grade
+  // puppeteer render. The editor loads THIS (already flat, freely
+  // restackable) instead of flattening `html` in-browser on open — which
+  // was the source of the flatten fidelity bugs (fractional zoom, mid-fade
+  // bakes, font races, editor CSS in the cascade). `html` stays the
+  // canonical flow design for viewing + export; a slide the user actually
+  // edits switches its presentation source to this. Optional: absent on
+  // pre-migration decks and on any slide whose bake tripped the parity net,
+  // where the editor falls back to the legacy in-browser flatten.
+  editorHtml: z.string().min(1).optional(),
 });
 
 // Slide aspect ratio. 16:9 is the legacy default (landscape PPT, what we

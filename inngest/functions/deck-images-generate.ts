@@ -397,6 +397,29 @@ export const deckImagesGenerate = inngest.createFunction(
       });
     });
 
+    // ─── Step 4: bake the EDITOR SNAPSHOT on the now-final deck ──────
+    // The generation-time bake is SKIPPED for decks that reserved image boxes
+    // (deck-generate) precisely so it can run HERE instead — after the reconcile
+    // step above has committed every ready image into slideJson, with no other
+    // writer left to race. Runs regardless of how many images actually filled
+    // (a deck whose boxes all failed still needs its snapshot); a slide left as
+    // a placeholder just bakes the placeholder, matching its flow html.
+    // Fire-and-forget: a failed dispatch must never fail the image pipeline.
+    await step.run("dispatch-editor-snapshot-bake", async () => {
+      await inngest
+        .send({
+          id: `snapshots:${projectId}:${versionId}:images`,
+          name: "deck.snapshot.bake",
+          data: { projectId, versionId },
+        })
+        .catch((err) => {
+          logger.warn("deck_images_snapshot_bake_dispatch_failed", {
+            versionId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+    });
+
     return { boxes: boxes.length, ...result };
   },
 );

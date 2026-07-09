@@ -6,6 +6,7 @@ export { brandAnalyze } from "./functions/brand-analyze";
 export { templateRender } from "./functions/template-render";
 export { templateSeoGenerate } from "./functions/template-seo-generate";
 export { thumbnailRender } from "./functions/thumbnail-render";
+export { deckSnapshotBake } from "./functions/deck-snapshot-bake";
 export { extractSource } from "./functions/extract-source";
 export { creditsMaintenance } from "./functions/credits-maintenance";
 export { notificationsCleanup } from "./functions/notifications-cleanup";
