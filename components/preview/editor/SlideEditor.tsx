@@ -19,7 +19,11 @@ import { sanitizeSlideHtml } from "@/lib/export/sanitize";
 import { themeToCssVars } from "@/lib/export/theme-css-vars";
 import { isVisualLeaf, isTextEditable, resolveSelectable, hasOwnPaint } from "@/lib/editor/leaves";
 import { serializeSlideSection } from "@/lib/editor/serialize";
-import { flattenSlideSection, type FlattenParity } from "@/lib/editor/flatten";
+import {
+  flattenSlideSection,
+  flattenSkipReason,
+  type FlattenParity,
+} from "@/lib/editor/flatten";
 import { buildDeckFontHead } from "@/lib/export/font-head";
 import { googleFontLinkTags } from "@/lib/editor/font-search";
 import { fitArtboard } from "@/lib/editor/canvas-fit";
@@ -450,8 +454,13 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
       // descendant selectors + pseudo-elements the social prompt leans on. Keep
       // the authored HTML (same lossless, degraded-editing path as parity-fail);
       // tagging + overlay wiring below still run on the nested structure.
-      if (disableFlattenRef.current) {
-        // nothing to flatten — fall through to tagging/overlays
+      if (disableFlattenRef.current || flattenSkipReason(sec as HTMLElement)) {
+        // nothing to flatten — fall through to tagging/overlays. The skip-reason gate
+        // covers (a) already-flat slides: re-flattening only re-measures and
+        // re-persists, and repeated passes drift the render away from the authored
+        // original (stress harness 2026-07-09), and (b) decks whose CSS uses
+        // :nth-child()-style ordinals that cannot survive hoisting - those keep the
+        // nested original (same lossless, degraded-editing path as parity-fail).
       } else {
       try {
         // The gen-image fade animation must NOT be live when flatten reads computed

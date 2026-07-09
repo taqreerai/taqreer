@@ -107,6 +107,12 @@ const VENDOR_KEEP = new Set([
 // `currentColor` in the probe are pruned (baking `color` carries them); a node's own inline
 // `!important` props are re-stamped so a baked value still outranks a surviving rule. This reads
 // ANY html; there is no property allowlist to maintain or outgrow.
+// The blockified equivalent of a display value (what position:absolute turns it into).
+function blockify(d: string): string {
+  if (d === "inline" || d === "inline-block") return "block";
+  return d.startsWith("inline-") ? d.slice(7) : d;
+}
+
 function diffOwnStyle(
   csIn: Map<string, string>,
   csOut: CSSStyleDeclaration,
@@ -118,14 +124,29 @@ function diffOwnStyle(
   for (const [p, v] of csIn) {
     if (ALWAYS_SKIP.has(p)) continue; // inherited + flatten-managed (white-space family)
     if (skipGeom && GEOM_SKIP.has(p)) continue; // root box: the measured `pos` owns geometry
-    // The root box is always position:absolute, which blockifies it, so its inline / inline-
-    // block / block distinction is moot. Skipping it keeps an inline-display text leaf byte-
-    // stable: its live `display` settles inline->block once `pos` is applied, which would
-    // otherwise be re-captured on the next pass. flex/grid/table/none still bake (inner layout).
-    if (skipGeom && p === "display" && (v === "inline" || v === "inline-block" || v === "block")) continue;
+    // The root box is always position:absolute, which BLOCKIFIES display: inline->block,
+    // inline-flex->flex, inline-grid->grid. Skip the bake whenever live and probe agree
+    // MODULO blockification - the positioned flat box renders the blockified form either
+    // way. Comparing pairs (not just the inline/block family) keeps an inline-flex pill
+    // byte-stable: pass 1 leaves the class's inline-flex alone, pass 2 computes flex and
+    // would otherwise bake it forever (harness: the gen-deck `.tag` oscillator). A real
+    // divergence (live flex vs probe block) still bakes.
+    if (skipGeom && p === "display" && blockify(v) === blockify(csOut.getPropertyValue(p))) continue;
     if (LOGICAL_RE.test(p)) continue;
     if (p[0] === "-" && !VENDOR_KEEP.has(p)) continue; // vendor-internal + custom (--x) props
     if (p === "text-decoration") continue; // redundant shorthand; its longhands are baked
+    // Transform pivot props are derived from the box size (e.g. auto-resolved
+    // "13px 13px" on a 26px span) and shift whenever geometry re-rounds, which made
+    // re-flatten byte-UNSTABLE on real decks (harness: 9/12 slides oscillated on
+    // exactly these). With no transform in play they are render-inert: skip them.
+    if (
+      (p === "transform-origin" || p === "perspective-origin") &&
+      (csIn.get("transform") ?? "none") === "none" &&
+      (csIn.get("rotate") ?? "none") === "none" &&
+      (csIn.get("scale") ?? "none") === "none"
+    ) {
+      continue;
+    }
     const cv = csOut.getPropertyValue(p);
     if (v === cv) continue; // unchanged by the hoist
     // currentColor follower: `p` resolves to `color` here AND would STILL follow the post-hoist
@@ -245,25 +266,54 @@ function applyDiff(
   }
 }
 
-// Net rotation (deg) from an element's OWN computed transform matrix. Translation is
-// ignored (captured by the measured centre); element-level scale is rare on slide leaves
-// and intentionally not reconstructed.
-function rotationDeg(transform: string): number {
-  if (!transform || transform === "none") return 0;
-  const m = transform.match(/matrix(?:3d)?\(([^)]+)\)/);
-  if (!m) return 0;
-  const p = m[1].split(",").map((s) => parseFloat(s.trim()));
-  if (p.length < 4 || !Number.isFinite(p[0]) || !Number.isFinite(p[1])) return 0;
-  return Math.round((Math.atan2(p[1], p[0]) * 180) / Math.PI * 100) / 100;
+// Net 2D LINEAR transform component (a,b,c,d columns; translation excluded - it is
+// captured by the measured centre) of the element's computed `transform` matrix
+// COMPOSED with the Transforms-2 `rotate`/`scale` properties, which live OUTSIDE the
+// matrix. Re-applying this matrix about the box CENTRE, with the box placed at the
+// measured transformed centre, reproduces the original render EXACTLY for any affine
+// transform (the centre is the fixed point of the recomposition): rotation, scale,
+// skew, and their combinations - not just the rotation the old reconstruction kept
+// (a skew's atan2 misread as rotation was the syn-transform-skew harness failure).
+// Returns null for identity (no inline transform emitted). matrix3d keeps its 2D
+// part; a genuine 3D transform is out of the flat model and degrades to that 2D part.
+type Mat2 = { a: number; b: number; c: number; d: number };
+function matrixOf2d(transform: string): Mat2 | null {
+  if (!transform || transform === "none") return null;
+  const m = transform.match(/matrix(3d)?\(([^)]+)\)/);
+  if (!m) return null;
+  const p = m[2].split(",").map((s) => parseFloat(s.trim()));
+  const [a, b, c, d] = m[1] ? [p[0], p[1], p[4], p[5]] : [p[0], p[1], p[2], p[3]];
+  if (![a, b, c, d].every(Number.isFinite)) return null;
+  return { a, b, c, d };
 }
-
-// Net rotation including the Transforms-2 `rotate` property, which lives OUTSIDE the transform
-// matrix, so a leaf rotated via `rotate:` instead of `transform:rotate()` is not dropped.
-function rotationOf(cs: CSSStyleDeclaration): number {
-  const r = cs.rotate; // "none" | "<angle>" | "<x> <y> <z> <angle>"
-  const m = r && r !== "none" ? r.match(/(-?[\d.]+)deg/) : null;
-  const fromProp = m ? parseFloat(m[1]) : 0; // the `rotate:` prop COMPOSES with the matrix
-  return Math.round((rotationDeg(cs.transform) + fromProp) * 100) / 100;
+function mul(m1: Mat2, m2: Mat2): Mat2 {
+  return {
+    a: m1.a * m2.a + m1.c * m2.b,
+    b: m1.b * m2.a + m1.d * m2.b,
+    c: m1.a * m2.c + m1.c * m2.d,
+    d: m1.b * m2.c + m1.d * m2.d,
+  };
+}
+function netMatrix(cs: CSSStyleDeclaration): Mat2 | null {
+  let total: Mat2 = { a: 1, b: 0, c: 0, d: 1 };
+  // Spec order (css-transforms-2): translate, rotate, scale, then transform.
+  const rm = cs.rotate && cs.rotate !== "none" ? cs.rotate.match(/(-?[\d.]+)deg/) : null;
+  if (rm) {
+    const rad = (parseFloat(rm[1]) * Math.PI) / 180;
+    total = mul(total, { a: Math.cos(rad), b: Math.sin(rad), c: -Math.sin(rad), d: Math.cos(rad) });
+  }
+  if (cs.scale && cs.scale !== "none") {
+    const sp = cs.scale.split(/\s+/).map(parseFloat);
+    const sx = Number.isFinite(sp[0]) ? sp[0] : 1;
+    const sy = Number.isFinite(sp[1]) ? sp[1] : sx;
+    total = mul(total, { a: sx, b: 0, c: 0, d: sy });
+  }
+  const mt = matrixOf2d(cs.transform);
+  if (mt) total = mul(total, mt);
+  const r4 = (v: number) => Math.round(v * 10000) / 10000;
+  const out = { a: r4(total.a), b: r4(total.b), c: r4(total.c), d: r4(total.d) };
+  if (out.a === 1 && out.b === 0 && out.c === 0 && out.d === 1) return null;
+  return out;
 }
 
 // If an element CLIPS its content (overflow hidden/clip) AND has rounded corners, it
@@ -310,21 +360,36 @@ const TEXT_INHERIT: readonly string[] = [
   "font-family", "font-size", "font-weight", "font-style", "font-variant",
   "line-height", "letter-spacing", "word-spacing", "text-align",
   "text-transform", "text-decoration", "text-indent", "direction", "unicode-bidi",
+  // Inherited and visible: a loose "Page 01" run under a glowing footer lost its glow
+  // (harness syn-loose-text-shadow).
+  "text-shadow",
 ];
-// Build an inline-style string of `${prop}:${resolved};` for every prop that resolves to a
-// non-empty value. Used by freezeInherited for the synthetic text-run boxes.
-function bakeProps(cs: CSSStyleDeclaration, props: readonly string[]): string {
+// Freeze the parent's text cascade onto a synthetic text-run box, MINIMALLY: only the
+// props whose parent-resolved value differs from what the bare box would compute as a
+// section child (probed live, mirroring the sim-diff makeBox uses). Baking the full
+// list unconditionally persisted a dozen no-op declarations per loose text run and
+// made a re-flatten re-serialize the box differently.
+function freezeInherited(
+  parentEl: HTMLElement,
+  parentCs: CSSStyleDeclaration,
+  box: HTMLElement,
+  section: HTMLElement,
+  win: Window,
+): string {
+  const kids = section.children;
+  if (kids.length >= 2) section.insertBefore(box, kids[kids.length - 1]);
+  else if (kids.length === 1) section.insertBefore(box, kids[0]);
+  else section.appendChild(box);
   let out = "";
-  for (const p of props) {
-    const v = cs.getPropertyValue(p);
-    if (v) out += `${p}:${v};`;
+  try {
+    const probeCs = win.getComputedStyle(box);
+    for (const p of ["color", ...TEXT_INHERIT]) {
+      const v = parentCs.getPropertyValue(p);
+      if (v && v !== probeCs.getPropertyValue(p)) out += `${p}:${v};`;
+    }
+  } finally {
+    section.removeChild(box);
   }
-  return out;
-}
-
-function freezeInherited(el: HTMLElement, cs: CSSStyleDeclaration): string {
-  let out = `color:${cs.color};`;
-  if ((el.textContent ?? "").trim().length > 0) out += bakeProps(cs, TEXT_INHERIT);
   return out;
 }
 
@@ -365,7 +430,7 @@ export type FlattenParity = {
 const FIDELITY_PROPS = [
   "color", "background-color", "-webkit-text-fill-color", "opacity", "visibility",
   "font-size", "font-weight", "font-family", "line-height", "letter-spacing",
-  "text-align", "text-decoration-line", "text-transform", "box-shadow",
+  "text-align", "text-decoration-line", "text-transform", "box-shadow", "text-shadow",
 ] as const;
 const HIGH_SEVERITY = new Set<string>([
   "color", "background-color", "-webkit-text-fill-color", "opacity", "visibility", "font-size",
@@ -404,11 +469,21 @@ function collectWords(root: HTMLElement, doc: Document): Map<string, number> {
   return words;
 }
 
+// Per-box snapshot captured while the source is live: the FIDELITY_PROPS values plus
+// the measured canvas-space rect, so checkParity can census STYLE and GEOMETRY drift
+// against the output box (the stress harness showed pure-geometry damage - shifted
+// text boxes, escaped clips - that a props-only census scored as perfect).
+type SrcSnapshot = {
+  props: Record<string, string>;
+  rect: { l: number; t: number; w: number; h: number };
+};
+
 function checkParity(
   section: HTMLElement,
   out: HTMLElement,
   win: Window,
-  srcFidelity: Map<number, Record<string, string>>,
+  srcFidelity: Map<number, SrcSnapshot>,
+  scale: number,
 ): FlattenParity {
   const doc = section.ownerDocument;
   const EMBED = "canvas, video, iframe, object, embed";
@@ -454,14 +529,42 @@ function checkParity(
   try {
     section.innerHTML = out.innerHTML;
     outWords = collectWords(section, doc);
+    const secRect = section.getBoundingClientRect();
     for (const box of section.querySelectorAll<HTMLElement>("[data-tq-fidx]")) {
       const fidx = Number(box.getAttribute("data-tq-fidx"));
-      const src = srcFidelity.get(fidx);
-      if (!src) continue;
+      const snap = srcFidelity.get(fidx);
+      if (!snap) continue;
+      const src = snap.props;
       leafCount++;
       const cs = win.getComputedStyle(box);
       let high = false;
       let low = false;
+      // GEOMETRY census: the output box must sit where the source rendered. Skip
+      // transformed boxes (their client rect is the transformed bounding box, not the
+      // layout box). 2px/3px slack absorbs measurement rounding; anything past it is
+      // the shifted-text / escaped-layout damage class.
+      if (!box.style.transform) {
+        const r = box.getBoundingClientRect();
+        const g = {
+          l: (r.left - secRect.left) / scale,
+          t: (r.top - secRect.top) / scale,
+          w: r.width / scale,
+          h: r.height / scale,
+        };
+        if (
+          Math.abs(g.l - snap.rect.l) > 2 || Math.abs(g.t - snap.rect.t) > 2 ||
+          Math.abs(g.w - snap.rect.w) > 3 || Math.abs(g.h - snap.rect.h) > 3
+        ) {
+          high = true;
+          drifts.push({
+            fidx,
+            prop: "geometry",
+            src: `${Math.round(snap.rect.l)},${Math.round(snap.rect.t)} ${Math.round(snap.rect.w)}x${Math.round(snap.rect.h)}`,
+            out: `${Math.round(g.l)},${Math.round(g.t)} ${Math.round(g.w)}x${Math.round(g.h)}`,
+            severity: "high",
+          });
+        }
+      }
       for (const p of FIDELITY_PROPS) {
         const o = cs.getPropertyValue(p);
         if (src[p] === o) continue;
@@ -515,6 +618,51 @@ function checkParity(
   };
 }
 
+// Caller-side gate: reasons NOT to run flatten at all. Checked by SlideEditor before
+// flattenSlideSection so the skip shares the same lossless keep-as-is path as a
+// parity failure.
+//   - "already-flat": every element child is a flatten-emitted box. The flat form IS
+//     the structural normal form; re-running only re-measures and re-rounds it. The
+//     stress harness showed repeated re-flattens WANDER (up to ~5% pixel drift from
+//     the authored render by pass 3, style-attr bloat up to ~3x) and re-persist on
+//     every editor entry. Skipping is both the fidelity and the churn fix.
+//   - "nth-selector-css": the deck styles rows via :nth-child()/:nth-of-type(); the
+//     ordinals cannot survive hoisting into one flat sibling list (documented
+//     inherent limit; harness: zebra stripes vanished, 16.7% of the canvas). Keep the
+//     nested original: degraded editing beats silent restyling.
+//   - "negative-z": a nested negative-z child paints behind its parent's background
+//     only while the parent creates NO stacking context; the flat box's explicit
+//     z-index creates one, which hoists the child above that background (atomizing
+//     the parent was tried and reproduces the same misorder, harness:
+//     syn-neg-z-child). Only the nested original renders it faithfully.
+export function flattenSkipReason(section: HTMLElement): string | null {
+  const kids = Array.from(section.children).filter(
+    (el) => !/^(?:style|script)$/i.test(el.tagName),
+  );
+  if (kids.length > 0 && kids.every((el) => el.getAttribute("data-tq-flat") === "1")) {
+    return "already-flat";
+  }
+  for (const st of Array.from(section.querySelectorAll("style"))) {
+    if (st.closest("svg")) continue;
+    if (/:nth-(?:child|of-type|last-child|last-of-type)\(/i.test(st.textContent ?? "")) {
+      return "nth-selector-css";
+    }
+  }
+  const win = section.ownerDocument.defaultView;
+  if (win) {
+    for (const el of Array.from(section.querySelectorAll<HTMLElement>("*"))) {
+      if (el.closest("svg")) continue;
+      // Negative z on a DIRECT section child is fine (the walk orders it first and
+      // the section's isolation:isolate armor matches that paint order); only a
+      // NESTED one is unrepresentable.
+      if (el.parentElement === section) continue;
+      const z = parseInt(win.getComputedStyle(el).zIndex, 10);
+      if (!Number.isNaN(z) && z < 0) return "negative-z";
+    }
+  }
+  return null;
+}
+
 export function flattenSlideSection(
   section: HTMLElement,
   opts: FlattenOptions = {},
@@ -528,16 +676,27 @@ export function flattenSlideSection(
 
   const originRect = section.getBoundingClientRect();
 
-  // Per-box snapshot of the SOURCE's visual props (keyed by paint-order rank), captured in
-  // makeBox while the source is still live; checkParity diffs it against the output box.
-  const srcFidelity = new Map<number, Record<string, string>>();
+  // Per-box snapshot of the SOURCE's visual props + measured rect (keyed by paint-order
+  // rank), captured in makeBox while the source is still live; checkParity diffs it
+  // against the output box.
+  const srcFidelity = new Map<number, SrcSnapshot>();
 
   // Geometry relative to the SECTION. offsetWidth/Height are layout (canvas) px;
   // getBoundingClientRect is on-screen (scaled) px, so its deltas are divided by `scale`.
+  // left/top round to INTEGER px: a fractional-precision experiment (0.1px) traded the
+  // <=1px placement shift for blurrier subpixel glyph rendering and measured WORSE on
+  // the stress harness; integers are crisp, stable, and what the editor's geometry UI
+  // expects. The residual <=1px shift vs the authored render is the accepted floor.
   const measure = (el: HTMLElement, cs: CSSStyleDeclaration) => {
     const rect = el.getBoundingClientRect();
-    const w = el.offsetWidth || rect.width / scale;
-    const h = el.offsetHeight || rect.height / scale;
+    const mtx = netMatrix(cs);
+    // TRUE fractional size: offsetWidth rounds to an integer, so a 261.47px flex row
+    // ceils to 261 - a box 0.47px too TIGHT whose flex children then shrink (harness:
+    // the logo-dot squeeze that broke re-flatten byte-stability). The client rect
+    // carries the fraction; it is only unusable under a transform (it measures the
+    // transformed bounding box), where the untransformed offset size is correct.
+    const w = (mtx ? 0 : rect.width / scale) || el.offsetWidth || rect.width / scale;
+    const h = (mtx ? 0 : rect.height / scale) || el.offsetHeight || rect.height / scale;
     const cx = (rect.left + rect.width / 2 - originRect.left) / scale;
     const cy = (rect.top + rect.height / 2 - originRect.top) / scale;
     return {
@@ -546,7 +705,7 @@ export function flattenSlideSection(
       // Ceil the box so a sub-pixel shave can't force single-line text to wrap.
       width: Math.ceil(w),
       height: Math.ceil(h),
-      rotateDeg: rotationOf(cs),
+      mtx,
     };
   };
 
@@ -609,7 +768,12 @@ export function flattenSlideSection(
       // size - immune to padding/border re-applied by a surviving class rule (else a
       // padded box's width would compound across re-flattens).
       `width:${m.width}px;height:${m.height}px;margin:0;box-sizing:border-box;` +
-      (m.rotateDeg ? `transform:rotate(${m.rotateDeg}deg);transform-origin:center center;` : "") +
+      // The full 2D linear component about the box centre (see netMatrix): exact for
+      // rotate AND scale/skew, where the old rotation-only bake turned a class skew
+      // into an inline rotate that overrode it.
+      (m.mtx
+        ? `transform:matrix(${m.mtx.a},${m.mtx.b},${m.mtx.c},${m.mtx.d},0,0);transform-origin:center center;`
+        : "") +
       `z-index:${z};` +
       clip +
       nowrap; // single-line text: keep it on one line (the fixed width can't shave-wrap)
@@ -624,7 +788,10 @@ export function flattenSlideSection(
     // now (it is still live). checkParity re-reads the output box by this rank in its swap; the
     // attribute is census-only, stripped before the html is returned (+ in serialize.ts).
     clone.setAttribute("data-tq-fidx", String(z));
-    srcFidelity.set(z, captureFidelity(cs));
+    srcFidelity.set(z, {
+      props: captureFidelity(cs),
+      rect: { l: m.left, t: m.top, w: m.width, h: m.height },
+    });
     return clone;
   };
 
@@ -649,11 +816,19 @@ export function flattenSlideSection(
     const top = Math.round((rect.top + rect.height / 2 - originRect.top) / scale - h / 2);
     const box = section.ownerDocument.createElement("div");
     box.textContent = (textNode.textContent ?? "").trim();
-    const frozen = freezeInherited(parentEl, parentCs);
+    const frozen = freezeInherited(parentEl, parentCs, box, section, win);
+    // nowrap only for a run that actually rendered on ONE line: forcing it on a
+    // wrapped run reflows a whole paragraph onto one overflowing line (harness
+    // syn-loose-text-multiline). Line count from the run's height vs line-height,
+    // not getClientRects() (BiDi splits one visual line into several rects).
+    const lh =
+      parseFloat(parentCs.lineHeight) || parseFloat(parentCs.fontSize) * 1.4 || rect.height;
+    const singleLine = rect.height / scale <= lh * 1.5;
     box.setAttribute(
       "style",
       `${frozen}position:absolute;left:${left}px;top:${top}px;right:auto;bottom:auto;` +
-        `width:${w}px;height:${h}px;margin:0;z-index:${z};white-space:nowrap;`,
+        `width:${w}px;height:${h}px;margin:0;box-sizing:border-box;z-index:${z};` +
+        (singleLine ? "white-space:nowrap;" : ""),
     );
     box.setAttribute("data-tq-flat", "1");
     // Style-fidelity pairing for the SYNTHETIC text-run box: its source is the parent's
@@ -663,7 +838,7 @@ export function flattenSlideSection(
     const tsrc = captureFidelity(parentCs);
     tsrc["background-color"] = "rgba(0, 0, 0, 0)";
     tsrc["box-shadow"] = "none";
-    srcFidelity.set(z, tsrc);
+    srcFidelity.set(z, { props: tsrc, rect: { l: left, t: top, w, h } });
     return box;
   };
 
@@ -675,6 +850,57 @@ export function flattenSlideSection(
   const zOf = (cs: CSSStyleDeclaration) => {
     const z = parseInt(cs.zIndex, 10);
     return Number.isNaN(z) ? 0 : z;
+  };
+
+  // UNSPLITTABLE containers: hoisting their children out breaks compositing or
+  // clipping that only exists while they are nested, so the whole subtree is emitted
+  // as ONE full-clone box (exact render, coarser per-child editability):
+  //   - clip-path / mask: no flat equivalent (harness: a diagonal clip-path panel
+  //     flattened into a straight rectangle);
+  //   - opacity < 1: GROUP opacity composites the subtree as a unit; hoisted children
+  //     re-render at full opacity (harness: both group-opacity fixtures);
+  //   - a negative-z child paints BEHIND this element's background, an order the
+  //     global flat ranking cannot express (harness: syn-neg-z-child);
+  //   - an overflow clip whose content SPILLS past its box: the rounded-mask
+  //     carry-down preserves corner radius but not the crop rectangle (harness:
+  //     syn-rect-clip-spill).
+  const isAtomic = (el: HTMLElement, cs: CSSStyleDeclaration): boolean => {
+    if (cs.clipPath && cs.clipPath !== "none") return true;
+    const mask =
+      cs.getPropertyValue("mask-image") || cs.getPropertyValue("-webkit-mask-image");
+    if (mask && mask !== "none") return true;
+    if (parseFloat(cs.opacity) < 1) return true;
+    const clips =
+      cs.overflowX === "hidden" || cs.overflowX === "clip" ||
+      cs.overflowY === "hidden" || cs.overflowY === "clip";
+    if (clips) {
+      const host = el.getBoundingClientRect();
+      const slack = 1.5 * scale;
+      for (const d of Array.from(el.querySelectorAll<HTMLElement>("*"))) {
+        if (d.closest("svg") && d.tagName.toLowerCase() !== "svg") continue; // svg internals
+        const r = d.getBoundingClientRect();
+        if (r.width === 0 && r.height === 0) continue;
+        if (
+          r.left < host.left - slack || r.top < host.top - slack ||
+          r.right > host.right + slack || r.bottom > host.bottom + slack
+        ) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  // A dissolving wrapper whose ::before/::after actually RENDERS would take that
+  // pseudo content down with it - pseudos have no standalone box to hoist (harness:
+  // syn-pseudo-dissolved-wrapper). Keeping the ELEMENT as a shell keeps them alive:
+  // its classes survive, so the scoped pseudo rules still match the pinned box.
+  const hasPseudoContent = (el: HTMLElement): boolean => {
+    for (const which of ["::before", "::after"] as const) {
+      const c = win.getComputedStyle(el, which).content;
+      if (c && c !== "none" && c !== "normal") return true;
+    }
+    return false;
   };
 
   // Walk in PAINT ORDER, emitting a standalone box for every visual element. Children of a
@@ -717,7 +943,9 @@ export function flattenSlideSection(
       const childClip = clipRadiusOf(cs) || clip;
       if (isLeaf(el)) {
         out.appendChild(makeBox(el, cs, z++, true, clip)); // text / image / graphic, whole
-      } else if (hasOwnPaint(cs)) {
+      } else if (isAtomic(el, cs)) {
+        out.appendChild(makeBox(el, cs, z++, true, clip)); // unsplittable subtree, one box
+      } else if (hasOwnPaint(cs) || hasPseudoContent(el)) {
         out.appendChild(makeBox(el, cs, z++, false, clip)); // painted shell (scrim / fill / card)
         if (hasContent(el)) collect(el, childClip); // its content paints ON TOP, as its own boxes
       } else {
@@ -737,7 +965,7 @@ export function flattenSlideSection(
   };
   collect(section, "");
 
-  const parity = checkParity(section, out, win, srcFidelity);
+  const parity = checkParity(section, out, win, srcFidelity, scale);
   // data-tq-fidx is census-only: strip it so the returned html (and the live editor DOM) never
   // carry it, which keeps re-flatten byte-stable. serialize.ts strips it too as defense.
   for (const b of Array.from(out.querySelectorAll<HTMLElement>("[data-tq-fidx]"))) {
