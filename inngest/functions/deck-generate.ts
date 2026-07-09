@@ -150,7 +150,7 @@ const IMG_ADDENDUM = `GENERATED IMAGES — images mode is ON. Reserve a box with
 // constrained field (§3.5 load-bearing rule).
 export const SYSTEM_PROMPT_CREATE_HTML = `You are a world-class presentation designer. Design a complete, ORIGINAL slide deck — your own visual system, fresh for this brief — as one HTML fragment.
 
-PLAN IN YOUR THINKING FIRST (before the opening \`<\`). For EACH slide work out: how much content actually fits the fixed frame without overflowing, and the type scale + spacing that leaves real breathing room. Design for FIT — don't pack a slide (especially lists and tables of contents), don't let blocks touch or overlap, never push content past the slide edges. A calmer, slightly emptier slide beats a crammed or clipped one. Commit only the polished result to the output.
+PLAN IN YOUR THINKING FIRST (before the opening \`<\`). For EACH slide work out: how much content actually fits the fixed frame without overflowing. Commit only the polished result to the output.
 
 SAFE AREA. Keep readable content inside a consistent margin, never edge to edge. Pick one inset for the whole deck, about 5% of the canvas.
 
