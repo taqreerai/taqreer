@@ -119,6 +119,8 @@ type EnhanceImages = { fileIds: string[]; textPerSlide: string[] };
 // the OUTPUT_CONTRACT were removed with the JSON manifest path, 2026-06-05).
 const LANG_DIRECTION = `LANGUAGE & DIRECTION
 - Set \`dir="rtl"\` (Arabic) or \`dir="ltr"\` (Latin) on the slide ROOT.
+- MIRROR THE COMPOSITION in RTL: the eye enters from the RIGHT. Any asymmetric layout you would design left-to-right must be flipped horizontally: text columns and content panels sit on the visual RIGHT, side/hero images and decorative panels anchor to the visual LEFT (\`left:0\`, NEVER \`right:0\` for a side image in an RTL deck). Example RTL split cover: image \`position:absolute;left:0;top:0;height:100%\` with a fixed px width, title and text on the right half.
+- \`left\`/\`right\` offsets are PHYSICAL: they do not flip with \`dir\`, so under RTL you must write the mirrored values yourself.
 - DO NOT set \`dir\` on a child block (\`<div>\`, \`<p>\`, \`<h1>\`–\`<h6>\`) that contains Latin letters. The block's own \`text-align: start\` would then resolve LEFT inside an RTL slide and push English headings / subtitles / labels to the visual left — wrong side. Unicode BiDi already renders contiguous Latin letters correctly inside an RTL parent without any \`dir\` attribute on the container.
 - For INLINE mixed-script runs (an Arabic line that embeds an English word, URL, email, version number, or any string with neutrals like \`@\` \`.\` \`/\` \`©\` digits), wrap the English run in a \`<span dir="ltr">\` so neutrals resolve to the correct side.
 - Digit-only chrome blocks (pagination "01 / 07", dates "26.08.2026", phone numbers) — \`dir="ltr"\` on the block IS fine, because the digits would otherwise reorder under the RTL paragraph direction.
