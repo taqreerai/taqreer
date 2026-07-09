@@ -161,6 +161,7 @@ OUTPUT — emit exactly this, with NOTHING else (no prose, no markdown fences, n
 - The FIRST character of your response is \`<\` (your \`<style>\`).
 - The COVER \`<section>\` carries \`data-deck-title="…"\` — the deck's title, 3–8 words, in the deck's language (a real title, not a placeholder). Becomes the project name.
 - Slides are TOP-LEVEL siblings — NEVER nest a \`<section>\`. Size each \`<section>\` to the canvas dimensions given in the brief (the fixed slide frame).
+- There is NO wrapper element around your output: never write CSS through an imagined container (e.g. \`.deck section\`, \`.wrapper *\`: those selectors match NOTHING). Put deck-wide tokens and base styles on \`:root\` or \`section\` directly; each \`<section>\` IS a slide's root element.
 - Write every repeated item (list rows, cards, steps, table cells) out IN FULL as elements. There is NO template engine: never use a JS loop, \`.map()\`, \`+\` concatenation, or \`\${…}\`.
 - Decide the slide count from the brief (match \`brief.slideCount\` when given; else adapt).
 - VARY the composition slide to slide — give content, section, stats, and quote slides visibly DIFFERENT layouts; don't put every slide on the same grid. Reuse classes for a consistent LOOK, but vary the STRUCTURE so the deck feels bespoke, not one template repeated.
@@ -205,6 +206,7 @@ OUTPUT — emit exactly this, with NOTHING else (no prose, no markdown fences, n
 - The FIRST character of your response is \`<\` (your \`<style>\`).
 - The COVER \`<section>\` carries \`data-deck-title="…"\` — the deck's title, 3–8 words, in the deck's language (a real title, not a placeholder). Becomes the project name.
 - Posts are TOP-LEVEL siblings — NEVER nest a \`<section>\`. Size each \`<section>\` to the canvas dimensions given in the brief (the fixed post frame).
+- There is NO wrapper element around your output: never write CSS through an imagined container (e.g. \`.deck section\`, \`.wrapper *\`: those selectors match NOTHING). Put deck-wide tokens and base styles on \`:root\` or \`section\` directly; each \`<section>\` IS a post's root element.
 - Write every repeated item (list rows, cards, steps, table cells) out IN FULL as elements. There is NO template engine: never use a JS loop, \`.map()\`, \`+\` concatenation, or \`\${…}\`.
 - Decide the post count from the brief (match \`brief.slideCount\` when given; else adapt).
 - VARY the composition post to post — give content, section, stats, and quote posts visibly DIFFERENT layouts; don't put every post on the same grid. Reuse classes for a consistent LOOK, but vary the STRUCTURE so the deck feels bespoke, not one template repeated.
