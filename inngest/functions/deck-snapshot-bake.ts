@@ -41,6 +41,18 @@ export const deckSnapshotBake = inngest.createFunction(
     retries: 2,
     concurrency: { limit: 2 },
     triggers: [{ event: "deck.snapshot.bake" }],
+    // Retries exhausted: log an app-level line so a total bake failure is
+    // visible (the editor still falls back to the legacy in-browser flatten).
+    onFailure: async ({ event, error, logger }) => {
+      const original = (event.data.event?.data ?? {}) as {
+        projectId?: string;
+        versionId?: string;
+      };
+      logger.warn("deck_snapshot_bake_failed", {
+        ...original,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    },
   },
   async ({ event, step, logger }) => {
     const { projectId, versionId } = event.data as {
