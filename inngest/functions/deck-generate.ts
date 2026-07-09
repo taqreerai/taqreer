@@ -180,17 +180,26 @@ ALSO AVOID (they break the fixed-canvas contract): \`!important\`, viewport unit
 // ─── SOCIAL (3:4) authoring prompt ─────────────────────────────────────────
 // Used INSTEAD of SYSTEM_PROMPT_CREATE_HTML when the user picked the 3:4
 // social-post ratio on /create (create flow only — 3:4 is unavailable on the
-// other flows). It IS the create prompt with ONLY the persona/first paragraph
-// swapped (user direction 2026-07-09): keeping the create body verbatim inherits
-// its battle-tested OUTPUT contract, GRAPHICS/SVG rules, LANG_DIRECTION, and
-// AVOID list — a bespoke lean version drifted and started losing SVGs. The
-// regex matches the create prompt's first paragraph (up to "as one HTML
-// fragment.") without duplicating the body or re-typing its existing em dashes.
+// other flows). It IS the create prompt with exactly TWO edits (user direction
+// 2026-07-09) — keeping the create body verbatim inherits its battle-tested
+// OUTPUT contract, GRAPHICS/SVG rules, LANG_DIRECTION, and fixed-canvas rules;
+// a bespoke lean version drifted and started losing SVGs:
+//   1. The persona/first paragraph is swapped (regex up to "as one HTML
+//      fragment." so the create body isn't duplicated).
+//   2. The PPTX-render AVOID list is dropped. Those properties (conic-gradient,
+//      mix-blend-mode, backdrop-filter, filter, -webkit-text-stroke, rgba
+//      translucency…) are only forbidden because dom-to-pptx can't reproduce
+//      them — 3:4 exports to PDF/PNG rendered by real Chrome, where they all
+//      work. "Static only" is KEPT (the export is a still frame) and the
+//      ALSO AVOID fixed-canvas line is untouched.
 const SOCIAL_PERSONA =
   "You are an elite social media designer. Design an original deck of 1080×1440 portrait cards for a phone feed, fresh for this brief, as one HTML fragment. Open with a hook that stops the scroll.";
 export const SYSTEM_PROMPT_SOCIAL_HTML = SYSTEM_PROMPT_CREATE_HTML.replace(
   /^You are[\s\S]*?as one HTML fragment\./,
   SOCIAL_PERSONA,
+).replace(
+  /AVOID \(these don't render in export\):[\s\S]*?(?=Static only)/,
+  "",
 );
 
 // Mimic flow's HTML system addendum. SYSTEM_PROMPT_CREATE_HTML tells the model to
