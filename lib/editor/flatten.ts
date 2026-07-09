@@ -844,8 +844,6 @@ export function flattenSlideSection(
 
   const isLeaf = (el: HTMLElement) =>
     el.tagName === "IMG" || el.tagName.toLowerCase() === "svg" || isTextLeaf(el);
-  const hasContent = (el: HTMLElement) =>
-    (el.textContent ?? "").trim() !== "" || !!el.querySelector("img, svg");
 
   const zOf = (cs: CSSStyleDeclaration) => {
     const z = parseInt(cs.zIndex, 10);
@@ -947,7 +945,11 @@ export function flattenSlideSection(
         out.appendChild(makeBox(el, cs, z++, true, clip)); // unsplittable subtree, one box
       } else if (hasOwnPaint(cs) || hasPseudoContent(el)) {
         out.appendChild(makeBox(el, cs, z++, false, clip)); // painted shell (scrim / fill / card)
-        if (hasContent(el)) collect(el, childClip); // its content paints ON TOP, as its own boxes
+        // ALWAYS recurse: gating on text/img content dropped painted-but-content-free
+        // children, e.g. a progress-bar FILL div inside its painted track (harness
+        // gen-en-social-s4) - invisible to the word/atom census too. Empty children
+        // are culled by the size filter above, so this is a no-op for true leaves.
+        collect(el, childClip); // its content paints ON TOP, as its own boxes
       } else {
         collect(el, childClip); // transparent wrapper → dissolve, hoist its children
       }

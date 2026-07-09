@@ -4545,9 +4545,6 @@ export function DeckView({
                 onUndo={handleLocalUndo}
                 onRedo={handleLocalRedo}
                 reloadKey={editorReloadKey}
-                // Social (3:4) posts render as authored — flatten's de-nesting
-                // would strip their descendant-selector bullets + nested fills.
-                disableFlatten={isPostFormat}
                 lockTick={lockTick}
                 inPlaceApply={inPlaceApply}
                 onDeleteSelected={deleteSelected}
