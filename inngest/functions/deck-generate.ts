@@ -180,27 +180,18 @@ ALSO AVOID (they break the fixed-canvas contract): \`!important\`, viewport unit
 // ─── SOCIAL (3:4) authoring prompt ─────────────────────────────────────────
 // Used INSTEAD of SYSTEM_PROMPT_CREATE_HTML when the user picked the 3:4
 // social-post ratio on /create (create flow only — 3:4 is unavailable on the
-// other flows). Two deliberate departures from the deck prompt: (1) an intent-
-// first framing (design a scroll-stopping carousel, not a presentation) with the
-// coaching + AVOID lists dropped; (2) the full modern CSS toolbox is UNLOCKED —
-// gradients / blend modes / backdrop-filter / filters / text gradients / etc.
-// were only ever forbidden because they don't survive the PPTX export, and 3:4
-// exports to PDF/PNG (rendered by a real browser), so they render fine. The
-// OUTPUT contract, brand-var rule, GRAPHICS syntax, and the shared LANG_DIRECTION
-// block are kept verbatim — the renderer/parser + the RTL differentiator depend
-// on them. Composes with AUTO_PALETTE_ADDENDUM / IMG_ADDENDUM exactly like the
-// deck prompt.
-export const SYSTEM_PROMPT_SOCIAL_HTML = `You are an elite social media designer. Design an original deck of 1080×1440 portrait cards for a phone feed, fresh for this brief, as one HTML fragment. Open with a hook that stops the scroll.
-
-Output exactly this, nothing else (no prose, no markdown, no \`<!DOCTYPE>\`/\`<html>\`/\`<body>\`):
-1. ONE \`<style>\` first — your design system as CSS custom properties + classes, built on the injected brand variables (reference them, don't redefine).
-2. Then the cards, each a top-level \`<section data-label="<short label>" data-role="cover|content|section|stats|quote|image|closing">\`, sized to the canvas dimensions in the brief. The cover carries \`data-deck-title="…"\` (3-8 words, the real title). The first character of your reply is \`<\`.
-
-Write every repeated item out in full — there is no template engine (no loops, \`.map()\`, or \`\${…}\`). Take the card count from the brief.
-
-Icons: inline \`<svg viewBox="0 0 24 24">\` with a real icon path (e.g. Lucide) in a brand colour. Charts: inline \`<svg>\`. Flags: \`<img src="https://flagcdn.com/<cc>.svg">\`.
-
-${LANG_DIRECTION}`;
+// other flows). It IS the create prompt with ONLY the persona/first paragraph
+// swapped (user direction 2026-07-09): keeping the create body verbatim inherits
+// its battle-tested OUTPUT contract, GRAPHICS/SVG rules, LANG_DIRECTION, and
+// AVOID list — a bespoke lean version drifted and started losing SVGs. The
+// regex matches the create prompt's first paragraph (up to "as one HTML
+// fragment.") without duplicating the body or re-typing its existing em dashes.
+const SOCIAL_PERSONA =
+  "You are an elite social media designer. Design an original deck of 1080×1440 portrait cards for a phone feed, fresh for this brief, as one HTML fragment. Open with a hook that stops the scroll.";
+export const SYSTEM_PROMPT_SOCIAL_HTML = SYSTEM_PROMPT_CREATE_HTML.replace(
+  /^You are[\s\S]*?as one HTML fragment\./,
+  SOCIAL_PERSONA,
+);
 
 // Mimic flow's HTML system addendum. SYSTEM_PROMPT_CREATE_HTML tells the model to
 // design an ORIGINAL system; mimic needs the OPPOSITE — reproduce the attached
@@ -556,6 +547,26 @@ function buildCreateHtmlTheme(brief: unknown): ThemeType {
   };
 }
 
+// Hand Claude the picker's brand colours as RAW HEXES in the user message — no
+// role labels (no "primary"/"background"/CSS-var names). Naming injected vars
+// was brittle: with a brand kit the model guessed non-existent names
+// (var(--brand-orange)) that resolved to nothing, collapsing colours to an
+// invisible/muddy fallback. Giving concrete hexes lets Claude use the real
+// colours and decide how to apply each. Shared by buildUserMessage, so it
+// reaches every flow; the auto path (no picker colours) keeps
+// AUTO_PALETTE_ADDENDUM. Returns null when the brief carries no usable hex.
+function brandColoursDirective(brief: unknown): string | null {
+  const { colors } = readBriefBrandColors(brief);
+  const valid = colors.filter((c) =>
+    /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(c),
+  );
+  if (valid.length === 0) return null;
+  return [
+    "Brand colours — build the deck around these exact colours (you decide how to apply each; introduce no other brand colours):",
+    ...valid.map((c) => c),
+  ].join("\n");
+}
+
 // Fire-and-forget the generated-image warm fill for a freshly-closed slide
 // (images mode). Mirrors the JSON path's inline dispatch: one `deck.image.warm`
 // event per reserved box, deduped on `${genid}:${promptHash}`, capped at
@@ -859,6 +870,8 @@ function buildUserMessage(event: DeckGenerateEvent) {
   // not a security boundary).
   const briefLang = resolveBriefLanguage(event.brief);
   const rules = (event.brief as { rules?: Rules } | null)?.rules ?? null;
+  // Picker brand colours as raw hexes (null when none). Reaches every flow.
+  const brandColours = brandColoursDirective(event.brief);
 
   const lines = [
     // DESIGN STYLE first — the chosen style frames the entire deck, so it
@@ -917,6 +930,7 @@ function buildUserMessage(event: DeckGenerateEvent) {
           `IMAGE CAST — when a generated image depicts PEOPLE, render them as ${(event.brief as { imageRegion: string }).imageRegion} so the imagery reflects the deck's local audience. This applies to lifestyle/photographic scenes with human subjects; images with NO people (abstract, landscape, product, texture) are unaffected, and a slide whose content is explicitly about a different place — or that genuinely calls for a global / multinational cast — should use that instead. Keep it natural and respectful: describe appearance and dress fitting the locale; never name or depict a real person.`,
         ]
       : []),
+    ...(brandColours ? [``, brandColours] : []),
     ``,
     `Brief:`,
     JSON.stringify(sanitizeBriefFonts(event.brief), null, 2),
