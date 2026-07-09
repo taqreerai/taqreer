@@ -2648,7 +2648,16 @@ export const deckGenerate = inngest.createFunction(
             },
           });
 
-          if (promoted.count === 1) {
+          // ‼️ Skip the generation-time thumbnail render for decks that
+          // RESERVED image boxes: the images fill ASYNC afterward, so this
+          // render would capture placeholder gradients, and it races the
+          // post-image re-render on Project.thumbnailUrls (a slow placeholder
+          // render finishing last clobbers the filled one — user-reported
+          // stale-image thumbnails 2026-07-09). For those decks
+          // deck-images-generate renders thumbnails ONCE after the reconcile
+          // commits, so the tile always shows the image-filled deck. A deck
+          // that reserved zero boxes has no async fill and renders here.
+          if (promoted.count === 1 && !reservedImageBoxes) {
             // Fire-and-forget thumbnail render. Dedup id matches the
             // /save route's convention so a quick user-click on Save
             // right after generation doesn't double-fire (Inngest

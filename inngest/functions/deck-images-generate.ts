@@ -366,13 +366,32 @@ export const deckImagesGenerate = inngest.createFunction(
         });
       }
 
-      // Re-render thumbnails so dashboard tiles show the filled deck, not
-      // the placeholder gradients the save-time render captured. Only when
-      // THIS version is the saved one (first generation auto-saves it);
-      // a regen of a non-saved version leaves the saved thumbnails alone.
-      // Distinct dedup id so it isn't suppressed by the save-time render.
+      logger.info("deck_images_reconciled", {
+        projectId,
+        versionId,
+        filled: rows.length,
+      });
+    });
+
+    // ─── Step 4: render thumbnails + bake the snapshot on the FINAL deck ──
+    // Both the thumbnail render and the editor-snapshot bake are SKIPPED at
+    // generation time for decks that reserved image boxes (deck-generate),
+    // precisely so they run HERE instead — after the reconcile step above has
+    // committed every ready image into slideJson. Running post-images means the
+    // dashboard tile shows the image-FILLED deck (not placeholder gradients, and
+    // with no generation-time render left to race Project.thumbnailUrls), and the
+    // snapshot bakes the filled deck with no concurrent slideJson writer. Both
+    // run regardless of how many images actually filled — a deck whose boxes all
+    // failed still needs a thumbnail + snapshot of its placeholder state.
+    // Fire-and-forget: a failed dispatch must never fail the image pipeline.
+    await step.run("dispatch-final-renders", async () => {
+      const { prisma } = await import("@/lib/prisma");
+      // Thumbnails only when THIS version is the SAVED one (first generation
+      // auto-saves it); a regen of a non-saved version must not overwrite the
+      // saved deck's tiles. Look up by projectId (Presentation.projectId is
+      // unique) — the reconcile step's presentationId local isn't in scope here.
       const presentation = await prisma.presentation.findUnique({
-        where: { id: presentationId },
+        where: { projectId },
         select: { savedVersionId: true },
       });
       if (presentation?.savedVersionId === versionId) {
@@ -389,23 +408,6 @@ export const deckImagesGenerate = inngest.createFunction(
             });
           });
       }
-
-      logger.info("deck_images_reconciled", {
-        projectId,
-        versionId,
-        filled: rows.length,
-      });
-    });
-
-    // ─── Step 4: bake the EDITOR SNAPSHOT on the now-final deck ──────
-    // The generation-time bake is SKIPPED for decks that reserved image boxes
-    // (deck-generate) precisely so it can run HERE instead — after the reconcile
-    // step above has committed every ready image into slideJson, with no other
-    // writer left to race. Runs regardless of how many images actually filled
-    // (a deck whose boxes all failed still needs its snapshot); a slide left as
-    // a placeholder just bakes the placeholder, matching its flow html.
-    // Fire-and-forget: a failed dispatch must never fail the image pipeline.
-    await step.run("dispatch-editor-snapshot-bake", async () => {
       await inngest
         .send({
           id: `snapshots:${projectId}:${versionId}:images`,
