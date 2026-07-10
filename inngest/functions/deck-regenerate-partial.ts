@@ -1123,13 +1123,9 @@ export const deckRegeneratePartial = inngest.createFunction(
         }),
       ]);
 
-      // Regen saved - capture the full held amount (per-slide × N, the
-      // exact number quoted at hold time). Idempotent per chargeKey.
-      await settleHold({
-        jobKey: regenChargeKey,
-        chargeAmount: regenAmount,
-        metadata: { status: "succeeded", slides: targetSlideIds.length },
-      });
+      // (The credit settle moved to the dispatch-and-settle step below -
+      // the held BASE pays for the freeze bake, so the charge is decided
+      // only after the bake dispatch outcome is known. CR PR #128.)
 
       // Per-slide history bookkeeping. One new SlideVersion row per
       // regenerated slide (source="partial_regen"), SlideState
@@ -1219,20 +1215,46 @@ export const deckRegeneratePartial = inngest.createFunction(
     // pending filter picks up exactly the unfrozen slides, so this is a
     // subset bake. Dedup id varies per run (partial regen mutates the SAME
     // versionId in place, so the plain freeze:version id would dedupe
-    // against the original generation's bake). Fire-and-forget.
-    await inngest
-      .send({
-        id: `freeze:${projectId}:${versionId}:regen:${data.jobId ?? event.id ?? "0"}`,
-        name: "deck.freeze.bake",
-        data: { projectId, versionId },
-      })
-      .catch((err) => {
+    // against the original generation's bake).
+    //
+    // DISPATCH THEN SETTLE (CR PR #128): the held BASE (regenBaseCredits)
+    // pays for the bake's render + vision review + freeze - so the charge
+    // is decided by the dispatch outcome: full on success, minus the base
+    // when the event could not be sent (the user pays for the regen call
+    // that ran, never for a review that will not). Send + settle are both
+    // idempotent (dedup event id / per-jobKey settle), so a step retry is
+    // safe; the step itself never throws on send failure - a failed
+    // dispatch must not fail a regen whose slides are already saved.
+    await step.run("dispatch-bake-and-settle", async () => {
+      let bakeDispatched = true;
+      try {
+        await inngest.send({
+          id: `freeze:${projectId}:${versionId}:regen:${data.jobId ?? event.id ?? "0"}`,
+          name: "deck.freeze.bake",
+          data: { projectId, versionId },
+        });
+      } catch (err) {
+        bakeDispatched = false;
         logger.warn("deck_freeze_dispatch_failed", {
           projectId,
           versionId,
           error: err instanceof Error ? err.message : String(err),
         });
+      }
+      const chargeAmount = bakeDispatched
+        ? regenAmount
+        : Math.max(0, regenAmount - getRegenBaseCredits());
+      await settleHold({
+        jobKey: regenChargeKey,
+        chargeAmount,
+        metadata: {
+          status: "succeeded",
+          slides: targetSlideIds.length,
+          bakeDispatched,
+        },
       });
+      return { bakeDispatched, chargeAmount };
+    });
 
     // Phase 16.E — bell notification per regen'd slide. The fan-out
     // helper's 10-minute group window merges N sequential slide
