@@ -20,16 +20,19 @@
 // (1080x1440): margin 36, split 432, band 504, gap 36.
 //
 // Margin history: the spike used 5% (96px at 16:9) SIZED FOR THE CHROME TEXT
-// BANDS that used to render between the well and the canvas edge. The system
-// chrome was removed 2026-07-10 (owner direction), making the band pure
-// waste; the user then cut the margin twice the same day: 96 -> 64, then
-// "still huge, reduce it by 50%" -> 32 (width/60; 18 on 3:4 portrait). The
-// well is now 1856x1016 at 16:9. Old stored decks are untouched (their
-// geometry is baked into their own <style>).
+// BANDS that used to render between the well and the canvas edge; the chrome
+// was removed 2026-07-10 (owner direction) and the margin shrank in steps.
+// The "margins are huge" report turned out to be TWO stacked gaps: the frame
+// margin PLUS the model's own .well padding - which is the model's DESIGN.
+// Final contract (owner, same day): the frame keeps a 10px SAFETY inset only
+// (clearance so content never kisses the canvas edge; overflow is already
+// impossible via the clipped well) and the model owns ALL visual margins -
+// the prompt says nothing about spacing. Old stored decks are untouched
+// (their geometry is baked into their own <style>).
 export type FrameCanvas = { width: number; height: number };
 
 export function frameGeometry(canvas: FrameCanvas) {
-  const margin = Math.round(canvas.width / 60); // safe-area inset
+  const margin = 10; // SAFETY inset only - the model designs its own margins
   const splitW = Math.round(canvas.width * 0.4); // tier-2 split panel width
   const bandH = Math.round(canvas.height * 0.35); // tier-2 band height
   const gap = Math.round(canvas.width / 30); // panel-to-well gap
@@ -105,7 +108,7 @@ BACKGROUND KINDS - "color" only for this deck: a flat or gradient ground via dat
 
 THE FRAME IS SYSTEM-OWNED. Each slide has two layers; you author only what is declared here:
 1. BACKGROUND - you DECLARE it per slide via section attributes (below); the system renders it. You never draw backgrounds or edge-to-edge imagery yourself.
-2. CONTENT WELL - your canvas. Inside each <section>, emit EXACTLY ONE <div class="well">…</div> and design everything in it. The well is already inset from the slide edges; treat its edges as the canvas edges. Content outside it is clipped. Its size depends on the background you declare:
+2. CONTENT WELL - your canvas. Inside each <section>, emit EXACTLY ONE <div class="well">…</div> and design everything in it. Treat the well's edges as the slide edges. Content outside it is clipped. Its size depends on the background you declare:
 ${wellSizes}
 
 ${langBlock}
