@@ -174,17 +174,38 @@ SlideVersion v1 rows) - the dual-store rule.
   effect). Live path = deck.genchat broadcasts; fallbacks = the generation
   poll, the apply-poller, and the bakePending poller (all length-monotonic).
 
-## Partial regen x frame (2026-07-10 fixes, both caught live)
+## Partial regen x frame (2026-07-10, rebuilt on the frame contract)
 
-- The regen model copies root attributes off its references - a regen'd
-  slide arriving pre-stamped data-tq-frozen/audited is FALSE-frozen (the
-  bake sees nothing pending: no vision review, geometry never pinned).
-  deck-regenerate-partial strips the bake markers; the bake re-earns them.
-- The regen model rebuilds its <style> from scratch and drops the .tq-well
-  geometry rule - the well collapses to an unstyled 0px static div and the
-  Layers walk (sub-1px skip) lists the slide EMPTY. The regen path now
-  re-injects frameSystemCss as the section's first style block (generation
-  parity: frame css first, model rules keep cascade priority).
+Frame decks regen through the FRAME contract now (owner-caught drift: the
+legacy pre-frame prompt fed frozen abs-pinned output back to the model and
+asked for absolute positioning - each regen degraded further, dropping the
+.well class the deck font + the 96/110px well padding hang on):
+
+- system = frameSystemPrompt VERBATIM (prompt cache shared with generation
+  and the bake's vision pass); user message = frameRegenUserMessage
+  (lib/deck/frame.ts): declared section attrs + the current well labeled
+  FROZEN machine output (content + look reference only) + the deck css in
+  authoring view + the comments / redesign intent. Reply = ONE section in
+  the generation contract, no deck <style>.
+- Ingest = the same path as the bake's vision revisions: parseFrameSlide ->
+  assembleFramedSlide -> buildSlideHtml(frameSystemCss + deck css from
+  slide 1 + any defensively-collected model css). ONE first-child style
+  block (the bake's revision re-wrap reads the FIRST block as "the slide's
+  css"); .well and layer structure guaranteed by construction; bake markers
+  stripped (a pre-stamped regen is FALSE-frozen - the bake would see
+  nothing pending and skip review + freeze); system bg/panel image srcs
+  re-injected from the source slide (they live outside the well, so the
+  reply never carries them). Legacy pre-frame decks keep the old prompt.
+- Verified live: two consecutive regens of the same slide came back
+  structurally identical (font, padding, layers, one style block) - the
+  compounding-drift class is closed.
+- Revision milestones in GenChat are TEXT ONLY (owner: no before/after
+  thumb pairs bloating the manifest); the review-ask entry keeps its sent
+  screenshots.
+- OPEN (owner report, needs design round): a painted card containing text
+  selects as one unit on canvas, and its shape has no own Layers row - the
+  freeze would need to lift painted-container children to siblings +
+  data-tq-group them for shape-alone selection.
 
 ## Rollout
 

@@ -30,7 +30,17 @@ import {
   canvasFrameCss,
   enforceCanvasFrame,
 } from "@/lib/deck/scaffold";
-import { frameSystemCss } from "@/lib/deck/frame";
+import {
+  assembleFramedSlide,
+  extractStoredSectionTag,
+  extractStoredWell,
+  frameCtxFromStoredCover,
+  frameRegenUserMessage,
+  frameSystemCss,
+  frameSystemPrompt,
+  parseFrameSlide,
+} from "@/lib/deck/frame";
+import { injectImgSrc } from "@/lib/images/slide-images";
 import { findInjectedLogoInner, injectLogoMarkers } from "@/lib/deck/logo-inject";
 import { recordSlidePartialRegen } from "@/lib/db/slide-versioning";
 import { appendGenChat } from "@/lib/deck/genchat-store";
@@ -734,6 +744,36 @@ export const deckRegeneratePartial = inngest.createFunction(
       .split(frameSystemCss(SLIDE_DIMENSIONS[sourceFormat]))
       .join("")
       .trim();
+    // FRAME decks regen through the FRAME contract (2026-07-10, owner-caught
+    // drift: the legacy pre-frame prompt fed pinned machine output back to
+    // the model and asked for absolute positioning - each regen degraded
+    // further, dropping the .well class the deck font + padding hang on).
+    // system = frameSystemPrompt VERBATIM, so the prompt cache is shared
+    // with generation and the bake's vision pass; the reply is one section
+    // in the generation contract, assembled through the same path the
+    // vision revisions use.
+    const isFrameDeck = source.slides.some((s) =>
+      s.html.includes("data-tq-frame"),
+    );
+    const frameRegenSystemPrompt = isFrameDeck
+      ? frameSystemPrompt({
+          canvas: SLIDE_DIMENSIONS[sourceFormat],
+          language: source.language === "en" ? "en" : "ar",
+          imagesMode: source.slides.some((s) =>
+            s.html.includes("data-genimage"),
+          ),
+          kind: sourceFormat === "3:4" ? "social" : "deck",
+        })
+      : null;
+    const frameCtx = isFrameDeck
+      ? frameCtxFromStoredCover(
+          (
+            source.slides.find((s) => s.html.includes('data-role="cover"')) ??
+            source.slides[0]
+          ).html,
+          source.direction === "ltr" ? "ltr" : "rtl",
+        )
+      : null;
     // Pre-build BOTH system prompts once so per-slide steps just pick
     // by mode. Two ephemeral caches max (one per mode) instead of a
     // fresh compile per slide. The mode is decided per-slide inside
@@ -767,14 +807,50 @@ export const deckRegeneratePartial = inngest.createFunction(
       targetSlideIds.map((slideId) =>
         step.run(`regen-slide-${slideId}`, async () => {
           const client = getClient();
-          const userMessage = buildPartialUserMessage(source, slideId, comments);
+          const slideIndex = source.slides.findIndex(
+            (s) => s.slideId === slideId,
+          );
+          const sourceSlide =
+            slideIndex >= 0 ? source.slides[slideIndex] : undefined;
+          // FRAME slides regen through the frame contract; legacy pre-frame
+          // decks keep the historical prompt pair untouched.
+          const isFrame =
+            frameRegenSystemPrompt !== null &&
+            (sourceSlide?.html.includes("data-tq-frame") ?? false);
+          const userMessage = isFrame
+            ? frameRegenUserMessage(
+                {
+                  position: slideIndex + 1,
+                  total: source.slides.length,
+                  sectionTag: extractStoredSectionTag(sourceSlide!.html),
+                  // Same corrupt-slide fallback the bake's vision pass uses:
+                  // when the well boundary can't be found, hand the model the
+                  // raw DOM part - the rebuild heals the structure.
+                  wellHtml:
+                    extractStoredWell(sourceSlide!.html) ??
+                    sourceSlide!.html
+                      .slice(sourceSlide!.html.indexOf("</style>") + 8)
+                      .slice(0, 12_000),
+                  comments: comments
+                    .filter((c) => c.slideId === slideId)
+                    .map((c) => ({
+                      content: c.content,
+                      box: c.boundsJson
+                        ? `x=${Math.round(c.boundsJson.x)} y=${Math.round(c.boundsJson.y)} w=${Math.round(c.boundsJson.w)} h=${Math.round(c.boundsJson.h)}`
+                        : null,
+                    })),
+                },
+                sourceDeckCss,
+              )
+            : buildPartialUserMessage(source, slideId, comments);
           // Mode mirrors what buildPartialUserMessage picks internally:
           // a slide with comments → apply-comments (strict preservation);
           // a slide without → redesign (variation required). Keeps the
           // system prompt in sync with the user-message branch.
           // Single source of truth shared with `buildPartialUserMessage`.
-          const systemPromptText =
-            pickRegenMode(comments, slideId) === "apply-comments"
+          const systemPromptText = isFrame
+            ? frameRegenSystemPrompt!
+            : pickRegenMode(comments, slideId) === "apply-comments"
               ? applyCommentsSystemPrompt
               : redesignSystemPrompt;
           // Use the original deck's quality preset — paramsForQuality
@@ -822,35 +898,55 @@ export const deckRegeneratePartial = inngest.createFunction(
             /\sdata-tq-(?:frozen|audited)(?:=(?:"[^"]*"|'[^']*'|[^\s>]+))?/g,
             "",
           );
-          const sourceSlide = source.slides.find((s) => s.slideId === slideId);
           let html: string;
-          if (sourceSlide?.html.includes("data-tq-frame")) {
-            // FRAME slides: rebuild the EXACT stored shape generation
-            // produces - ONE style block (frame css + model css + armor) as
-            // the section's first child, via the same buildSlideHtml. The
-            // model's css is COLLECTED out of the body and rescoped through
-            // the canonical scoper (FIX A: unscope -> scope rebuilds both
-            // selector forms, idempotent on correct CSS). Two invariants
-            // hang on that single first-child block (both broken live
-            // 2026-07-10 on regen'd slides):
-            //   - the .tq-well geometry rule must be present, or the well
-            //     collapses to an unstyled 0px static div and the Layers
-            //     walk (sub-1px skip) lists the slide EMPTY;
-            //   - the bake's vision-revision re-wrap reads the FIRST style
-            //     block as "the slide's css" - a second block is silently
-            //     dropped on revision (the revised slide lost its fonts and
-            //     every model class rule).
-            const cssParts: string[] = [];
-            const bodyOnly = noMarkers.replace(
+          if (isFrame) {
+            // FRAME reply: one section in the generation contract. Parse +
+            // assemble through the SAME path the bake's vision revisions
+            // use, then rebuild the EXACT stored shape generation produces:
+            // ONE first-child style block (frame css + deck css + any
+            // defensively-collected model css + armor) via buildSlideHtml.
+            // The single block matters: the bake's revision re-wrap reads
+            // the FIRST style block as "the slide's css", and the .tq-well
+            // geometry rule must be present or the well collapses to a 0px
+            // static div and the Layers panel lists the slide empty (both
+            // caught live 2026-07-10).
+            const extraCss: string[] = [];
+            const noStyles = noMarkers.replace(
               /<style\b[^>]*>([\s\S]*?)<\/style>/gi,
               (_m, css: string) => {
-                cssParts.push(scopeDeckCss(unscopeDeckCss(css)));
+                // The contract forbids a <style> block; if the model emits
+                // one anyway, keep its rules (scoped) instead of dropping.
+                extraCss.push(scopeDeckCss(unscopeDeckCss(css)));
                 return "";
               },
             );
+            const decl = parseFrameSlide(noStyles);
+            let assembled = assembleFramedSlide(
+              decl,
+              frameCtx!,
+              slideIndex,
+              SLIDE_DIMENSIONS[sourceFormat],
+            );
+            // System bg/panel image layers live OUTSIDE the well, so the
+            // model's reply never carries their reconciled src - assembly
+            // recreates the box as a placeholder. Re-inject the src the
+            // SOURCE slide already holds for the deterministic bg genid.
+            const bgGenid = `tqframe-bg-${slideIndex + 1}`;
+            if (assembled.includes(`data-genid="${bgGenid}"`)) {
+              const srcTag = new RegExp(
+                `<img[^>]*data-genid="${bgGenid}"[^>]*>`,
+                "i",
+              ).exec(sourceSlide!.html)?.[0];
+              const src = srcTag ? /\ssrc="([^"]+)"/.exec(srcTag)?.[1] : null;
+              if (src && !src.startsWith("data:")) {
+                assembled = injectImgSrc(assembled, bgGenid, src);
+              }
+            }
             html = buildSlideHtml(
-              bodyOnly,
-              `${frameSystemCss(SLIDE_DIMENSIONS[sourceFormat])}\n${sourceDeckCss}\n${cssParts.join("\n")}`,
+              assembled,
+              `${frameSystemCss(SLIDE_DIMENSIONS[sourceFormat])}\n${sourceDeckCss}${
+                extraCss.length ? `\n${extraCss.join("\n")}` : ""
+              }`,
               SLIDE_DIMENSIONS[sourceFormat],
             );
           } else {

@@ -369,6 +369,63 @@ export function frameCtxFromStoredCover(
   };
 }
 
+// ── PARTIAL REGEN (single slide, frame decks) ───────────────────────────────
+// The studio's redesign / apply-comments call for ONE slide of an existing
+// frame deck. system = frameSystemPrompt verbatim (prompt cache shared with
+// generation + the vision pass); this user message overrides the output
+// shape: exactly ONE corrected section, no deck <style>. The stored well is
+// FROZEN machine output (the bake pinned every element to absolute
+// coordinates), so the message frames it as content + look reference and
+// demands a pure-flow rebuild. Feeding pinned code back through the legacy
+// pre-frame prompt was the regen DRIFT class (caught live 2026-07-10: the
+// .well class dropped, so the deck font and the 96/110px well padding
+// matched nothing; every repeat regen degraded further).
+export type FrameRegenComment = { content: string; box: string | null };
+export type FrameRegenInput = {
+  position: number; // 1-based deck position
+  total: number; // deck size
+  sectionTag: string; // stored open tag (carries the declared attrs)
+  wellHtml: string; // current well - frozen machine output
+  comments: FrameRegenComment[]; // empty = redesign mode
+};
+
+export function frameRegenUserMessage(
+  input: FrameRegenInput,
+  deckCss: string,
+): string {
+  const intent = input.comments.length
+    ? `USER COMMENTS - apply faithfully, minimally
+Rebuild the SAME visual design in pure flow, changing ONLY what the comments ask. Every element a comment does not reference keeps its content, styling, and place in the composition. If a comment is ambiguous, prefer the conservative interpretation; if comments conflict, the later one wins.
+${input.comments
+  .map(
+    (c, i) =>
+      `  ${i + 1}. ${c.box ? `Region (slide-space): ${c.box}\n     ` : ""}"${c.content.replace(/"/g, '\\"')}"`,
+  )
+  .join("\n")}`
+    : `REDESIGN BRIEF - variation REQUIRED
+The user hit "redesign this slide" wanting a fresh visual approach. Keep every piece of content VERBATIM (headlines, body text, lists, labels, statistics, captions) - change the composition. Pick a distinctly different flow structure than the current slide; a result that reads the same at a glance is a failure.`;
+
+  return `PARTIAL REGEN - redesign ONE slide of an EXISTING deck (slide ${input.position} of ${input.total}). The rest of the deck is fixed.
+
+CURRENT SLIDE - section attributes:
+${input.sectionTag}
+
+CURRENT WELL CODE - FROZEN machine output: the export pipeline pinned every element to absolute coordinates. It is a CONTENT and look reference ONLY, never a layout to copy - your reply must be authored in pure flow per the system rules.
+${input.wellHtml}
+
+Shared deck stylesheet (FIXED - you cannot change it; reuse its classes or use inline styles, and do NOT emit a <style> block):
+${deckCss}
+
+${intent}
+
+RULES:
+- Reply with EXACTLY ONE corrected <section> in the generation contract: keep the declared data attributes from the section tag above (change data-bg-css only if your design needs it; keep data-label and data-role), containing exactly one <div class="well"> in PURE FLOW. No <style> block, no data-revises, no prose, no fences - the FIRST character of your reply is the < of the section.
+- Never copy position:absolute, left/top offsets, or fixed pixel insets from the current code - they are machine output, not design.
+- Keep the message and text content as written${input.comments.length ? " except where a comment asks otherwise" : ""}.
+- Preserve every <img> src EXACTLY. Keep data-genimage boxes exactly as they are (same data-genimage and data-genaspect values, no new image slots).
+- Numerals in RTL decks: a digit block with dir="ltr" renders text-align:start as LEFT - keep dir=ltr, set text-align explicitly to place the numerals where the composition needs them.`;
+}
+
 // ── VISION QUALITY PASS (the bake's revision call) ──────────────────────────
 // The deck is rendered in the real export browser and every pending slide is
 // handed back as [rendered image + current code + measured findings] so the
