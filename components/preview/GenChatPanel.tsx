@@ -27,10 +27,13 @@ import type { GenChatEntry } from "@/lib/schema/slide";
 export function GenChatPanel({
   entries,
   language,
+  isPost = false,
   collapsed = false,
 }: {
   entries: GenChatEntry[];
   language: "ar" | "en";
+  // 3:4 social decks are POSTS, not slides - the milestone labels follow.
+  isPost?: boolean;
   collapsed?: boolean;
 }) {
   const dict = useDict();
@@ -51,10 +54,16 @@ export function GenChatPanel({
   const eventLabel = (e: GenChatEntry): string => {
     switch (e.kind) {
       case "slide":
-        return t.slideDone.replace("{n}", String(e.n ?? ""));
+        return (isPost ? t.postDone : t.slideDone).replace(
+          "{n}",
+          String(e.n ?? ""),
+        );
       case "revise":
       case "reviseSlide":
-        return t.revised.replace("{n}", String(e.n ?? ""));
+        return (isPost ? t.revisedPost : t.revised).replace(
+          "{n}",
+          String(e.n ?? ""),
+        );
       case "reviewDone":
         return (e.n ?? 0) > 0
           ? t.reviewImproved.replace("{n}", String(e.n))
@@ -124,6 +133,18 @@ export function GenChatPanel({
                   ) : null}
                 </div>
               </div>
+            );
+          }
+          if (e.role === "assistant") {
+            // The reviewer's verdict lines, verbatim - one per slide.
+            return (
+              <pre
+                key={i}
+                dir="auto"
+                className="whitespace-pre-wrap rounded-2xl bg-foreground/[0.04] px-3 py-2 font-sans text-[11px] leading-relaxed text-foreground/70"
+              >
+                {e.text}
+              </pre>
             );
           }
           if (e.role === "thinking") {

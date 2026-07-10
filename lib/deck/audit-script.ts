@@ -139,6 +139,54 @@ function __tqAuditWell(well, dir) {
     });
   }
 
+  // ── anchor, digit-block variant (RTL only) ── the prompt allows dir=ltr
+  // on digit-only blocks (stops BiDi reordering "01 / 05" -> "05 / 01"),
+  // but dir=ltr flips text-align:start to the LEFT - a full-width digit row
+  // then renders its numerals on the LEFT edge of an RTL slide (user-caught
+  // on the first 10-post deck: step numbers 01..07 all sat left). Exempt
+  // when the design aligns it explicitly (right/center) or the block is
+  // shrink-wrapped (its POSITION is the designer's choice, not a default).
+  if (readingRight) {
+    var dCount = 0;
+    var dSample = "";
+    var dEls = well.querySelectorAll('[dir="ltr"]');
+    for (var di = 0; di < dEls.length; di++) {
+      var del = dEls[di];
+      var dTxt = (del.textContent || "").trim();
+      if (dTxt.length < 2) continue;
+      // digits + separators only (a Latin URL/email block is legit LTR).
+      // Escape-free char test - this file also runs from raw source in
+      // harnesses, where string escapes would diverge.
+      var okChars = "0123456789+%.,/:-";
+      var foreign = 0;
+      for (var dc = 0; dc < dTxt.length; dc++) {
+        var ch = dTxt.charAt(dc);
+        if (okChars.indexOf(ch) === -1 && ch.charCodeAt(0) > 32) foreign++;
+      }
+      if (foreign > 0) continue;
+      var dcs = view.getComputedStyle(del);
+      if (dcs.display === "none" || dcs.display.indexOf("inline") === 0) continue;
+      var dr = del.getBoundingClientRect();
+      var dpr = del.parentElement.getBoundingClientRect();
+      if (dr.width < dpr.width * 0.6) continue; // shrink-wrapped = placed deliberately
+      var dta = dcs.textAlign;
+      // under dir=ltr: start/left/justify all render the digits at the LEFT
+      if (dta === "right" || dta === "center" || dta === "end") continue;
+      dCount++;
+      if (!dSample) dSample = del.tagName + ' "' + dTxt.slice(0, 16) + '"';
+    }
+    if (dCount > 0) {
+      findings.push({
+        type: "anchor",
+        detail:
+          dCount +
+          ' full-width dir="ltr" digit block(s) render their numerals on the LEFT edge of this RTL slide (dir=ltr makes text-align:start mean LEFT), e.g. ' +
+          dSample +
+          " - keep dir=ltr but set text-align:right (or center) explicitly on the block",
+      });
+    }
+  }
+
   // ── contrast: text near-invisible against its effective background ──
   // FRAME-AWARE adaptation of lib/deck/contrast-check.ts (detect-only in
   // thumbnail-render since 2026-06-12; the frame moved backgrounds to
@@ -183,6 +231,13 @@ function __tqAuditWell(well, dir) {
     var cEls = well.querySelectorAll("*");
     for (var ci = 0; ci < cEls.length; ci++) {
       var cel = cEls[ci];
+      // HTML elements only: svg internals (a <style> inside an inline icon
+      // carries CSS TEXT and inherits colors) false-positived as invisible
+      // text on the first 10-post deck - same svg trap as the phantom
+      // overflow, same cure.
+      if (cel.namespaceURI !== "http://www.w3.org/1999/xhtml") continue;
+      var ctn = cel.tagName.toUpperCase();
+      if (ctn === "STYLE" || ctn === "SCRIPT") continue;
       var direct = "";
       for (var cn = 0; cn < cel.childNodes.length; cn++) {
         var nd = cel.childNodes[cn];

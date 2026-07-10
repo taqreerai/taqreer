@@ -201,11 +201,14 @@ export function dimensionsForFormat(format: SlideFormat | undefined) {
 //   role "thinking" - the model's LIVE summarized reasoning (the API's
 //                     thinking display:"summarized" stream); ONE entry per
 //                     call, updated in place as deltas arrive.
+//   role "assistant" - the model's REPLY text worth showing verbatim (the
+//                     review's per-slide verdict lines: "SLIDE 3: REVISING -
+//                     numerals anchored left").
 //   role "event"    - a localizable milestone: the CLIENT renders `kind`
 //                     (+ optional slide number `n`) through the dictionary,
 //                     so the feed reads right in both languages.
 export const GenChatEntrySchema = z.object({
-  role: z.enum(["user", "thinking", "event"]),
+  role: z.enum(["user", "thinking", "assistant", "event"]),
   // Bounded hard: thinking summaries + briefs are truncated by the writers,
   // but the schema is the backstop against a runaway blob.
   text: z.string().max(2000).optional(),

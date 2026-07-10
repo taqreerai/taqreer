@@ -4254,6 +4254,7 @@ export function DeckView({
                   ? "en"
                   : "ar"
               }
+              isPost={isPostFormat}
               collapsed={layersCollapsed}
             />
           </motion.div>

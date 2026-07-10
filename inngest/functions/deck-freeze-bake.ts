@@ -476,8 +476,17 @@ export const deckFreezeBake = inngest.createFunction(
               cache_write: finalMsg.usage.cache_creation_input_tokens,
               stop_reason: finalMsg.stop_reason,
             });
-            // Per-slide outcomes ("how the api revised each one" - owner
-            // spec), then the summary. Single write.
+            // The reviewer's PER-SLIDE VERDICT lines (the rules demand one
+            // per slide - the discipline that stops rubber-stamp reviews of
+            // big decks), shown verbatim in the feed, then per-slide
+            // outcomes + the summary. Single write.
+            const verdictText = raw
+              .replace(/<section\b[\s\S]*$/i, "")
+              .split("\n")
+              .map((l) => l.trim())
+              .filter((l) => /^SLIDE\s+\d+\s*:/i.test(l))
+              .join("\n")
+              .slice(0, 1900);
             const revisedPositions = Object.keys(revisions)
               .map(
                 (sid) =>
@@ -485,6 +494,13 @@ export const deckFreezeBake = inngest.createFunction(
               )
               .sort((a, b) => a - b);
             await chatWrite((chat) => {
+              if (verdictText) {
+                chat.push({
+                  role: "assistant",
+                  text: verdictText,
+                  at: Date.now(),
+                });
+              }
               for (const pos of revisedPositions) {
                 chat.push({
                   role: "event",
