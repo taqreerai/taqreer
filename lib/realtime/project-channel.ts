@@ -83,7 +83,13 @@ export type ProjectBroadcastEvent =
   // gpt-image-2. Fired per image by deck-image-warm DURING generation
   // (and by regenerate later), so the client swaps the box's placeholder
   // → the real image live, while the deck is still streaming.
-  | "slide.image.ready";
+  | "slide.image.ready"
+  // Frame decks (context/frame-architecture-2026-07-10.md): the freeze
+  // bake finished - vision revisions applied, wells frozen, bake markers
+  // stamped. Pointer-only: clients fat-sync the manifest, which swaps any
+  // revised slides in place and clears the draft chips (they derive from
+  // the markers).
+  | "deck.baked";
 
 const BROADCAST_EVENTS: readonly ProjectBroadcastEvent[] = [
   "comment.created",
@@ -95,6 +101,7 @@ const BROADCAST_EVENTS: readonly ProjectBroadcastEvent[] = [
   "slide.lock.changed",
   "slides.locks.bulk-changed",
   "slide.image.ready",
+  "deck.baked",
 ];
 
 // Wire payload shapes. Server-broadcast helper enforces the same shapes.
@@ -149,6 +156,13 @@ export type ProjectBroadcastPayloadMap = {
     genid: string;
     // Permanent public URL of the generated image.
     url: string;
+  };
+  "deck.baked": {
+    // The PresentationVersion the bake wrote.
+    versionId: string;
+    // Slides the vision pass revised (visuals changed). Informational —
+    // the fat-sync refetch is what actually swaps the content.
+    revisedSlideIds: string[];
   };
 };
 
@@ -279,6 +293,7 @@ export async function openProjectChannel(
     "slide.lock.changed": [],
     "slides.locks.bulk-changed": [],
     "slide.image.ready": [],
+    "deck.baked": [],
   };
   const presenceSubscribers: Array<(state: ViewerPresence) => void> = [];
 

@@ -1505,6 +1505,27 @@ export function DeckView({
     return Array.from(ids).sort().join(",");
   }, [manifest, streamingPreview]);
 
+  // FRAME decks: slides still awaiting their bake outcome. The freeze bake
+  // stamps every slide it settles - data-tq-frozen (pinned) or
+  // data-tq-audited (kept-flow) - so "draft" is DERIVED, never tracked: a
+  // frame slide with no marker can still be revised by the bake's vision
+  // pass. Derivation makes every sync path converge for free: initial load,
+  // the deck.baked fat-sync, the visibility-regain refetch. Legacy non-frame
+  // decks have no data-tq-frame and never chip.
+  const bakePendingIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const s of manifest?.slides ?? []) {
+      if (
+        s.html.includes("data-tq-frame") &&
+        !s.html.includes("data-tq-frozen") &&
+        !s.html.includes("data-tq-audited")
+      ) {
+        ids.add(s.slideId);
+      }
+    }
+    return ids;
+  }, [manifest]);
+
   // Images-mode hydration + self-heal (context/images.md). The live swap
   // is driven by `slide.image.ready` broadcasts, but broadcasts have no
   // replay: one can land in the `/preview`→`/project` navigation gap
@@ -1966,6 +1987,16 @@ export function DeckView({
         ) {
           return;
         }
+        void fetchAndSwapState();
+      });
+      // FRAME decks: the freeze bake finished - vision revisions applied and
+      // bake markers stamped. Pointer-only event: the fat-sync pulls the
+      // updated manifest, which swaps any revised slides in place (editor
+      // bump handled inside for the focused slide) and clears the draft
+      // chips by derivation (bakePendingIds reads the markers). Fires for
+      // everyone including the actor - the bake has no meaningful actor.
+      localHandle.on("deck.baked", () => {
+        if (cancelled) return;
         void fetchAndSwapState();
       });
       // Images mode (context/images.md): a reserved image box was filled
@@ -3802,6 +3833,12 @@ export function DeckView({
           index: idx,
           slide: previewSlide,
           commentCount: 0,
+          // Every streamed slide is a DRAFT until the deck lands: the
+          // model can still swap it via a data-revises correction (the
+          // forced revision pass runs after the last slide streams).
+          // The chip clears deck-wide when `generating` flips and the
+          // manifest branch below takes over.
+          draft: true,
         };
       }
       const isNextSlot = idx === streamingPreview.length;
@@ -3865,6 +3902,8 @@ export function DeckView({
           !!applying?.targetSlideIds.includes(slide.slideId) ||
           peerRegenInProgress.has(slide.slideId),
         locked: slideStates[slide.slideId]?.lockedAt != null,
+        // Still awaiting its bake outcome - the vision pass may revise it.
+        draft: bakePendingIds.has(slide.slideId),
       }));
   // Peer/own regen overlay for the focused slide (completed only — no focused
   // slide identity to key on while generating).
@@ -3874,9 +3913,16 @@ export function DeckView({
       peerRegenInProgress.has(focusedSlide.slideId));
   const isFocusedLocked =
     !!focusedSlide && slideStates[focusedSlide.slideId]?.lockedAt != null;
+  // DRAFT = the freeze bake's vision review is still in flight for this
+  // slide: the bake may swap its html any moment, so editing is disabled
+  // (belt to the bake's write guard's braces - an edit mid-bake would be
+  // discarded by the stale check anyway, this makes it impossible instead).
+  const isFocusedDraft =
+    !!focusedSlide && bakePendingIds.has(focusedSlide.slideId);
   // Editing is disabled while generating (controls aren't live yet), or when
-  // the focused slide is mid-regen / locked.
-  const editingDisabled = generating || isFocusedRegenerating || isFocusedLocked;
+  // the focused slide is mid-regen / locked / still a draft.
+  const editingDisabled =
+    generating || isFocusedRegenerating || isFocusedLocked || isFocusedDraft;
 
   // Undo / redo enabled-state for the toolbar buttons — driven by the focused
   // slide's LOCAL stack (the same one ⌘Z / ⌘⇧Z + handleLocalUndo/Redo drive).
@@ -4542,6 +4588,42 @@ export function DeckView({
             ) : null}
           </div>
 
+
+          {/* Draft chip — the focused slide's bake outcome hasn't landed:
+              while generating every streamed slide is revisable, and after
+              completion the freeze bake's vision pass can still revise it
+              (bakePendingIds derives from the missing bake markers, so the
+              chip clears the moment the deck.baked fat-sync lands). Same
+              recipe as the nav-tile chip; anchored to the artboard corner
+              via the artboardFit rect in edit mode (the wrapper there is
+              the whole workspace, not the artboard). */}
+          {(generating
+            ? previewHeroSlide != null
+            : focusedSlide != null && bakePendingIds.has(focusedSlide.slideId)) ? (
+            <span
+              className="pointer-events-none absolute z-10 flex items-center gap-1.5 rounded-md bg-black/70 px-2 py-1 text-xs font-semibold leading-none"
+              style={{
+                color: "var(--tq-status-warn-dot)",
+                ...(artboardFit
+                  ? {
+                      insetInlineStart: artboardFit.offsetX + 12,
+                      top: artboardFit.offsetY + 12,
+                    }
+                  : { insetInlineStart: 12, top: 12 }),
+              }}
+            >
+              {/* Spinning ring: draft = the bake's vision review is in
+                  flight, an active state (same recipe as the nav chip). */}
+              <span
+                className="spinner h-3 w-3 shrink-0 rounded-full border"
+                style={{
+                  borderColor: "color-mix(in srgb, var(--tq-status-warn-dot) 30%, transparent)",
+                  borderTopColor: "var(--tq-status-warn-dot)",
+                }}
+              />
+              {dict.editor.nav.draftChip}
+            </span>
+          ) : null}
 
           {/* Regenerating overlay — full-canvas dim + clean spinner.
               The dim layer uses `var(--tq-bg-dim)` (the same 55 %

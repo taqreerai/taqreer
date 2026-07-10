@@ -985,6 +985,27 @@ export const deckRegeneratePartial = inngest.createFunction(
         }),
     );
 
+    // FRAME decks (context/frame-architecture-2026-07-10.md): the regen'd
+    // slides are fresh unfrozen model output - run them through the same
+    // vision-revise + freeze bake every generated slide gets. The bake's
+    // pending filter picks up exactly the unfrozen slides, so this is a
+    // subset bake. Dedup id varies per run (partial regen mutates the SAME
+    // versionId in place, so the plain freeze:version id would dedupe
+    // against the original generation's bake). Fire-and-forget.
+    await inngest
+      .send({
+        id: `freeze:${projectId}:${versionId}:regen:${data.jobId ?? event.id ?? "0"}`,
+        name: "deck.freeze.bake",
+        data: { projectId, versionId },
+      })
+      .catch((err) => {
+        logger.warn("deck_freeze_dispatch_failed", {
+          projectId,
+          versionId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+
     // Phase 16.E — bell notification per regen'd slide. The fan-out
     // helper's 10-minute group window merges N sequential slide
     // regens by the same actor into one bell row, so a partial regen

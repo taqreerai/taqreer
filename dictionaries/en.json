@@ -963,6 +963,7 @@
       "slideOf": "Slide {n} of {total}",
       "slideSelected": " · selected",
       "slideLocked": " · locked",
+      "draftChip": "Draft",
       "unlockAll": "Unlock all",
       "lockAll": "Lock all",
       "cancelling": "Cancelling…",

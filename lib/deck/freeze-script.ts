@@ -84,6 +84,17 @@ function __tqFreezeWell(well) {
     s.setProperty("position", "absolute");
     s.setProperty("left", job.left.toFixed(2) + "px");
     s.setProperty("top", job.top.toFixed(2) + "px");
+    // right/bottom:auto - a flow element may carry inert inset declarations
+    // (right:0, inset-inline-*) that ACTIVATE once it turns absolute; in an
+    // over-constrained RTL box the stylesheet right would beat our left.
+    s.setProperty("right", "auto");
+    s.setProperty("bottom", "auto");
+    // grid-area:auto - an abspos child of a GRID container with placement
+    // props resolves left/top against its GRID AREA, not the parent padding
+    // box, shifting the pin by the area offset (first prod deck 2026-07-10:
+    // got.left = 2x want.left on every 12-col .main item). Auto placement
+    // restores the padding box as containing block. Harmless off-grid.
+    s.setProperty("grid-area", "auto");
     s.setProperty("width", job.w.toFixed(2) + "px");
     // TEXT boxes keep height:auto so an editor text edit grows the box (the
     // editor's resize semantics); the measured height equals auto height at

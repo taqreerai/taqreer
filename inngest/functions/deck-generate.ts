@@ -2391,6 +2391,13 @@ export const deckGenerate = inngest.createFunction(
           );
         }
 
+        // NOTE (2026-07-10): a post-stream "forced revision" turn lived here
+        // for a few hours and was superseded the same day - it reviewed CODE
+        // blind. The forced revision now runs inside deck-freeze-bake as a
+        // VISION pass: the bake renders every slide, photographs it, and the
+        // model reviews the rendered deck (with the audit's measurements)
+        // before anything freezes. See context/frame-architecture-2026-07-10.md.
+
         // Claude tags the COVER <section> with data-deck-title (3–8 words, the
         // deck's language). Title extraction + language/direction resolution +
         // schema validation live in `assembleManifest` above (shared with the

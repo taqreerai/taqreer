@@ -63,17 +63,59 @@ prompt per bg kind.
   images, 0 dir attrs, 0 abs-in-well across every run.
 - Text over photos ONLY via tier-1/tier-2 with the system scrim.
 
-## Freeze bake (the only flattener)
+## Freeze bake (the only flattener) + THE VISION LOOP (2026-07-10 rework)
 
-lib/deck/freeze-script.ts + inngest deck-freeze-bake. Freeze-in-place: keep
-the DOM tree as authored; pin each well element (position:absolute + measured
-parent-relative left/top/width/height; text blocks atomic w/ height:auto;
-img/svg leaves). NO hoisting, NO style re-serialization - classes, pseudo
+lib/deck/freeze-script.ts + inngest deck-freeze-bake. The bake is now the
+product's fidelity core - a 4-step loop, terminates in ONE run (no afterfix
+event chain):
+
+1. load-manifest: pending = frame slides with NO bake marker (data-tq-frozen
+   / data-tq-audited are both terminal; event flag `force:true` re-opens
+   audited slides - the ops rescue hatch).
+2. observe-and-revise: ONE clean render → per pending slide: AUDIT (overflow,
+   anchor, underfill advisory, STRUCTURE = system layers missing from the
+   parsed DOM, i.e. a malformed model attribute swallowed the well/chrome
+   boundary) + a downscaled screenshot (<=1152px JPEG, ~1k tokens). Browser
+   closes, then ONE vision call: Claude reviews the RENDERED slides (its own
+   eyes) + well code + measured findings, re-emits corrections via
+   data-revises. Anti-churn rules + an "OK" fast path. Failure of any kind
+   degrades to plain freezing - the bake never depends on the model call.
+3. freeze-and-write: render the corrected deck once → regression guard
+   (re-audit revised slides; measurably worse than the original = revert) →
+   freeze-in-place + self-verify + pixel gate → ONE dual-store write with the
+   bake-vs-edit guard (slide whose stored html changed since step 1 is
+   skipped - never clobber a user edit). Every pending slide leaves FINAL:
+   frozen html or flow html stamped data-tq-audited.
+4. finalize: thumbnails re-dispatch when revisions landed (only if this
+   version is the promoted one) + `deck.baked` broadcast (pointer-only;
+   clients fat-sync and the DRAFT CHIPS clear by derivation).
+
+Freeze-in-place: keep the DOM tree as authored; pin each well element
+(position:absolute + measured parent-relative left/top/width/height + right/
+bottom:auto + grid-area:auto; text blocks atomic w/ height:auto; img/svg
+leaves). right/bottom:auto neutralizes inert inset declarations that would
+ACTIVATE on pinning; grid-area:auto restores the parent padding box as the
+containing block (abspos grid children otherwise resolve insets against
+their GRID AREA - first prod deck shifted every 12-col item by exactly its
+column offset). NO hoisting, NO style re-serialization - classes, pseudo
 elements, descendant selectors keep working untouched. Self-verifies
 (re-measures after mutation) and PIXEL-GATES (renders flow vs frozen,
 refuses above threshold; failed slides stay flow = degraded-editing path).
 Spike numbers: worst slide 0.014% pixels vs old flattener's 0.57% mean;
 serialize-reload roundtrip 0.000%.
+
+DRAFT CHIPS (client): a frame slide with no bake marker is a DRAFT - chip
+with spinner on nav tiles + hero, editor INERT for it (locked-slide
+vocabulary). Derived purely from the markers (no tracked state), so load /
+fat-sync / visibility-regain all converge; the deck.baked broadcast clears
+them live. Vision shots can never contain the chips - they render the raw
+deck document, the chips are app UI.
+
+Vision-loop economics (measured 2026-07-10 local): clean 5-slide deck
+asked=5 revised=0, 12.5k in / 165 out (~$0.07); 6-slide deck with 2 real
+defects asked=6 revised=2, 30k in / 8.3k out (~$0.36); 1-slide subset bake
+(regen aftermath) 8.6k in. System prompt = the generation prompt verbatim →
+prompt cache shared across calls AND decks (cache_read observed cross-deck).
 
 Runs in the clean export-grade render. ‼️ Headless font race: Chrome defers
 remote font fetches until FIRST PAINT; fonts.ready resolves vacuously (0
@@ -85,7 +127,13 @@ save; images decks bake AFTER the images reconcile commits (the bake's
 read-modify-write on slideJson would otherwise race the reconcile's write -
 lost update). Image fill never changes geometry (slots have explicit sizes),
 so baking after reconcile only orders the WRITES, and reconcile's src
-injection targets data-genid attrs the freeze preserves.
+injection targets data-genid attrs the freeze preserves. A vision revision
+of an image slide keeps srcs by prompt rule + the injectImgSrc backstop
+(ready GeneratedImage rows re-injected by genid). deck-regenerate-partial
+also dispatches the bake after its write (per-run dedup id - partial regen
+mutates the SAME versionId in place), so regen slides get the same
+vision-review + freeze as generated ones; the pending filter makes it a
+subset bake automatically.
 
 Bake writes BOTH stores (PresentationVersion.slideJson + the seeded
 SlideVersion v1 rows) - the dual-store rule.

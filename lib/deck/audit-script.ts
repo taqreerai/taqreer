@@ -18,7 +18,11 @@
 // own slides); nothing here rewrites anything.
 
 export type FrameAuditFinding = {
-  type: "overflow" | "anchor" | "underfill";
+  // "structure" is emitted by the bake's DOM-shape check (not this script):
+  // a malformed slide (e.g. an unterminated attribute quote in model output
+  // swallowing the well/chrome boundary at parse time) loses its system
+  // layers - fix-worthy, the vision pass re-emits the slide cleanly.
+  type: "overflow" | "anchor" | "underfill" | "structure";
   detail: string;
 };
 
@@ -44,11 +48,18 @@ function __tqAuditWell(well, dir) {
   var els = well.querySelectorAll("*");
   for (var i = 0; i < els.length; i++) {
     var el = els[i];
-    if (el.tagName === "STYLE" || el.tagName === "SCRIPT") continue;
+    // toUpperCase: svg-namespaced tag names are LOWERCASE, so a <style>
+    // inside an inline <svg> icon dodged the guard; its zero rect at the
+    // page origin read as phantom overflow growing 1080px per slide
+    // (first prod deck 2026-07-10).
+    var tn = el.tagName.toUpperCase();
+    if (tn === "STYLE" || tn === "SCRIPT") continue;
     var cs = view.getComputedStyle(el);
     if (cs.display === "none" || cs.visibility === "hidden") continue;
     if (!hasInk(el)) continue;
     var r = el.getBoundingClientRect();
+    // a box with no rendered size cannot be clipped visible content
+    if (r.width < 1 && r.height < 1) continue;
     var out = Math.max(
       wr.left - r.left,
       r.right - wr.right,
@@ -82,6 +93,15 @@ function __tqAuditWell(well, dir) {
     var bcs = view.getComputedStyle(b);
     if (bcs.display === "none" || bcs.display.indexOf("inline") === 0) continue;
     if (!hasInk(b)) continue;
+    // space-between/around/evenly rows PLACE items at the far edge on
+    // purpose - the far item of every header/footer bar matched the drift
+    // signature (SPAN.idx x2 on all 6 first-prod-deck slides). Distributed
+    // justification is intent, not an anchoring mistake.
+    var pj = view.getComputedStyle(b.parentElement);
+    if (
+      (pj.display.indexOf("flex") !== -1 || pj.display.indexOf("grid") !== -1) &&
+      pj.justifyContent.indexOf("space-") === 0
+    ) continue;
     var ta = bcs.textAlign;
     var alignedToReading = readingRight
       ? ta === "right" || ta === "start"

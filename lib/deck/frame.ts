@@ -425,31 +425,85 @@ export function frameCtxFromStoredCover(
   };
 }
 
-// The user message for the ONE-round self-fix call (system = frameSystemPrompt,
-// so the corrected sections follow the same contract). Each flawed slide is
-// handed back in the model's own authoring format with its measured findings;
-// the response re-uses the data-revises revision semantics for mapping.
-export function frameFixUserText(
-  flawed: {
-    position: number; // 1-based deck position
-    sectionTag: string; // stored open tag (carries the declared attrs)
-    wellHtml: string; // Claude's well div, current state
-    findings: string[];
-  }[],
-): string {
-  const blocks = flawed
-    .map(
-      (f) => `SLIDE ${f.position} - measured flaws:
-${f.findings.map((x) => `  • ${x}`).join("\n")}
-Current section attributes: ${f.sectionTag}
-Current well:
-${f.wellHtml}`,
-    )
-    .join("\n\n");
-  return `QUALITY PASS - the deck you designed was rendered and MEASURED; the slides below have concrete flaws. Fix ONLY these slides.
+// ── VISION QUALITY PASS (the bake's revision call) ──────────────────────────
+// The deck is rendered in the real export browser and every pending slide is
+// handed back as [rendered image + current code + measured findings] so the
+// model reviews what the USER actually sees, not what it imagines its code
+// renders as. system = frameSystemPrompt (same string as generation, so the
+// prompt cache is shared cross-call and the corrected sections follow the
+// exact same contract). The response reuses the data-revises semantics.
+//
+// Content-block layout: intro, then per slide IMAGE immediately followed by
+// its text block (interleaved image+caption is the layout the vision docs
+// recommend for multi-image prompts), the shared deck stylesheet once, and
+// the rules last.
+export type FrameVisionSlideInput = {
+  position: number; // 1-based deck position
+  total: number; // deck size (positions are deck-wide, pending may be a subset)
+  sectionTag: string; // stored open tag (carries the declared attrs)
+  wellHtml: string; // Claude's well div, current state
+  findings: string[]; // measured audit findings, may be empty
+  imageBase64: string; // downscaled JPEG of the rendered slide
+};
 
-${blocks}
+type VisionBlock =
+  | { type: "text"; text: string }
+  | {
+      type: "image";
+      source: { type: "base64"; media_type: "image/jpeg"; data: string };
+    };
 
-Re-emit each slide as a complete corrected <section> in the exact same output contract (same declared attributes unless a flaw requires changing one; exactly one <div class="well">), PLUS data-revises="<the slide's position number>" on each <section> so the system swaps it in place. Keep the same content and visual system - fix the measured flaws, don't redesign. If an <img> carries a src attribute, preserve that src EXACTLY. Emit ONLY the corrected <section> elements, nothing else.`;
+export function frameVisionUserBlocks(
+  slides: FrameVisionSlideInput[],
+  deckCss: string,
+): VisionBlock[] {
+  const blocks: VisionBlock[] = [
+    {
+      type: "text",
+      text: `VISION QUALITY PASS - the deck you designed was rendered in the real export browser. Each slide below appears as its actual rendered image, followed by its current code and any MEASURED findings from the render audit.
+
+Review each slide the way a design director reviews a printed proof:
+- clipping and overflow: content cut by the well edge or cramped against it
+- anchoring: a block sitting on the wrong side for the reading direction
+- hierarchy and balance: type scale, spacing rhythm, dead zones, lopsided or underfilled compositions
+- legibility: text over photography or low-contrast fills
+- deck consistency: type scale and spacing language coherent from slide to slide`,
+    },
+  ];
+  for (const s of slides) {
+    blocks.push({
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: "image/jpeg",
+        data: s.imageBase64,
+      },
+    });
+    blocks.push({
+      type: "text",
+      text: `SLIDE ${s.position} of ${s.total} - rendered above.
+Section attributes: ${s.sectionTag}
+Well code:
+${s.wellHtml}
+Measured findings:${
+        s.findings.length
+          ? "\n" + s.findings.map((x) => `  - ${x}`).join("\n")
+          : " none"
+      }`,
+    });
+  }
+  blocks.push({
+    type: "text",
+    text: `Shared deck stylesheet (FIXED - you cannot change it; reuse its classes or use inline styles, and do NOT emit a <style> block):
+${deckCss}
+
+RULES:
+- Re-emit ONLY the slides a correction genuinely improves: a real defect or a clear visual upgrade. Never re-emit a slide for a minor taste difference; every re-emission costs the user time.
+- Keep the message and text content as written (trim or rewrap text only when the defect demands it).
+- Preserve every <img> src EXACTLY. Keep data-genimage boxes exactly as they are (same data-genimage and data-genaspect values, no new image slots).
+- Each corrected slide: the complete <section> in the exact generation contract (same declared attributes unless the fix requires changing one, exactly one <div class="well">) PLUS data-revises="<the slide's position number>".
+- Emit ONLY corrected <section> elements. If every slide holds up, reply with the single word OK.`,
+  });
+  return blocks;
 }
 

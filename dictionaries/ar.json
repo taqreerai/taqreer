@@ -963,6 +963,7 @@
       "slideOf": "الشريحة {n} من {total}",
       "slideSelected": " · مختارة",
       "slideLocked": " · مقفلة",
+      "draftChip": "مسودة",
       "unlockAll": "إلغاء قفل الكل",
       "lockAll": "قفل الكل",
       "cancelling": "جار الإلغاء…",
