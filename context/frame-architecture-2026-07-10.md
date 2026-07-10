@@ -105,16 +105,23 @@ SlideVersion v1 rows) - the dual-store rule.
 
 ## Rollout
 
-Phase 1 (this change, FLAGGED): brief.frameGen === true or FRAME_GEN_ALL=1
-env. Create flow 16:9 only (3:4 social keeps its prompt; enhance/mimic/data
-keep theirs until migrated). Prompt + assembly + freeze bake + editor skip.
-Phase 2: flag on for create; migrate 3:4 social (same frame, portrait
-geometry), then enhance/mimic (their addenda compose on the frame base).
-Phase 3 (cutover + deletion ledger): remove SlideEditor flatten-on-enter +
+Phase 1+2 DONE (2026-07-10, all FLAGGED via brief.frameGen / FRAME_GEN_ALL=1,
+commits d7b92a2..4aeb45e): create 16:9 + 3:4 social (portrait geometry via
+frameGeometry, social prompt kind) + enhance/mimic/datasheet (their addenda
+compose on the frame base). Also landed: thinking-mode self-corrections
+(data-revises swap-in-place), render audit + one-round self-fix, chrome from
+the flow variables with FREE positions (owner direction: pagination +
+persistent text hand off to Claude with no position words; the system renders
+identity chrome only - brand mark, kicker, running title - geometry armored,
+slot classes as silent style hooks).
+Phase 3 (cutover + deletion ledger, PENDING OWNER CALL): flip the flag
+default on, deploy, then remove SlideEditor flatten-on-enter +
 flattenSkipReason + onNormalize adoption + parity net + onFlattenResult
 observatory wiring; delete lib/editor/flatten.ts (~976 lines); RTL rewriter
 family in sanitize goes inert for frame decks (kept only for legacy); the
-canvas-frame-armor stays (cheap, still correct).
+canvas-frame-armor stays (cheap, still correct). Open polish: wide frozen
+text boxes (flex-stretch width) shrink-wrap; enhance/mimic live e2es with
+real uploads; layers-panel restack semantics on nested wells.
 
 ## Costs / risks (honest)
 
