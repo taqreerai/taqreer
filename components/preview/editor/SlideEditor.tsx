@@ -19,11 +19,6 @@ import { sanitizeSlideHtml } from "@/lib/export/sanitize";
 import { themeToCssVars } from "@/lib/export/theme-css-vars";
 import { isVisualLeaf, isTextEditable, resolveSelectable, hasOwnPaint } from "@/lib/editor/leaves";
 import { serializeSlideSection } from "@/lib/editor/serialize";
-import {
-  flattenSlideSection,
-  flattenSkipReason,
-  type FlattenParity,
-} from "@/lib/editor/flatten";
 import { buildDeckFontHead } from "@/lib/export/font-head";
 import { googleFontLinkTags } from "@/lib/editor/font-search";
 import { fitArtboard } from "@/lib/editor/canvas-fit";
@@ -46,14 +41,6 @@ type Props = {
   // parent persists it. Carries the slide's id (so a save lands on the right
   // slide even if focus moved) + the serialized section HTML.
   onEdit?: (slideId: string, html: string) => void;
-  // Fired once on enter after the slide is FLATTENED (every element hoisted to a
-  // standalone absolute box). The parent adopts the flat html as the slide's
-  // baseline (manifest + persist) so the saved source, the undo baseline, and the
-  // live DOM all agree on the flat structure. A no-op when already flat.
-  onNormalize?: (slideId: string, html: string) => void;
-  // Fired once per flatten with the parity report, for the fidelity observatory.
-  // Advisory only (DeckView logs sub-threshold cases); never affects the swap.
-  onFlattenResult?: (slideId: string, parity: FlattenParity) => void;
   // Slide-level undo / redo (⌘Z / ⌘⇧Z). The parent's window keydown listener
   // never sees keys pressed while focus is INSIDE the iframe, so the editor
   // forwards them out to the parent's local history stack. While a text box is
@@ -65,13 +52,6 @@ type Props = {
   // self-save — which updates `slide.html` — never blows away the live DOM the
   // user is editing. See the bodyHtml effect.
   reloadKey?: number;
-  // When true, SKIP the flatten-on-enter pass and keep the slide's original
-  // authored HTML. Social (3:4) carousels use the full CSS toolbox — descendant
-  // selectors (`.list li::before` bullets), pseudo-element decoration, and
-  // nested fills (`.progress i`) — which flatten's de-nesting silently breaks
-  // (the selectors stop matching once every node becomes a flat sibling). For
-  // those decks fidelity beats flat-layer editing, so we render as authored
-  // (editing runs in the same degraded-but-lossless mode as a parity-fail).
   // When true (slide locked / mid-regen) the editor renders IDENTICALLY but is
   // inert — no hover box, no click-to-select, no edit mode, no selection box.
   // Kept mounted (rather than swapped for SlideRenderer) so disabling never
@@ -142,7 +122,7 @@ function applyResize(el: HTMLElement, width: number, height: number, transform: 
 
 export function SlideEditor({
   slide, theme, direction, language, width, height, scale,
-  selected, onSelect, onDocReady, onEdit, onNormalize, onFlattenResult, onUndo, onRedo, reloadKey = 0, disabled = false,
+  selected, onSelect, onDocReady, onEdit, onUndo, onRedo, reloadKey = 0, disabled = false,
   lockTick = 0, onDeleteSelected, onGroup, onUngroup, inPlaceApply = null,
 }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -191,14 +171,6 @@ export function SlideEditor({
   useEffect(() => {
     onEditRef.current = onEdit;
   }, [onEdit]);
-  const onNormalizeRef = useRef(onNormalize);
-  useEffect(() => {
-    onNormalizeRef.current = onNormalize;
-  }, [onNormalize]);
-  const onFlattenResultRef = useRef(onFlattenResult);
-  useEffect(() => {
-    onFlattenResultRef.current = onFlattenResult;
-  }, [onFlattenResult]);
   // Same pattern for the undo/redo callbacks (read by the once-attached iframe
   // keydown bridge).
   const onUndoRef = useRef(onUndo);
@@ -429,74 +401,14 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
       if (doc.__tqWired) return;
       doc.__tqWired = true;
 
-      // ── FULL FLATTEN on enter ──────────────────────────────────────────────
-      // Wait for fonts + layout (geometry must be font-accurate), then replace the
-      // section's content with the fully-flat structure: every element becomes a
-      // standalone absolute box, a DIRECT child of the section, in ONE stacking
-      // context. This is what makes global z-order / restack / layer-drag / grouping
-      // actually work. `sec` stays the SAME element (innerHTML swap), so the wiring
-      // below binds to it unchanged. Idempotent: re-entering a flat slide reproduces
-      // it. The flat html is adopted as the slide's baseline (onNormalize) so the
-      // manifest, the undo baseline, and the live DOM all agree.
-      try {
-        if (doc.fonts?.ready) await doc.fonts.ready;
-      } catch { /* fonts API absent */ }
-      await new Promise<void>((r) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => r())),
-      );
-      // (Social 3:4 used to skip flatten wholesale here - its de-nesting broke
-      // pseudo-elements + descendant-selector fills. Both are handled since the
-      // 2026-07-09 fidelity package (pseudo shells, atomic containers, shell
-      // recursion), verified on generated 1080x1440 carousels, so posts now
-      // flatten like slides; the reason-gate below covers what never can.)
-      if (flattenSkipReason(sec as HTMLElement)) {
-        // nothing to flatten — fall through to tagging/overlays. The skip-reason gate
-        // covers (a) already-flat slides: re-flattening only re-measures and
-        // re-persists, and repeated passes drift the render away from the authored
-        // original (stress harness 2026-07-09), and (b) decks whose CSS uses
-        // :nth-child()-style ordinals that cannot survive hoisting - those keep the
-        // nested original (same lossless, degraded-editing path as parity-fail).
-      } else {
-      try {
-        // The gen-image fade animation must NOT be live when flatten reads computed
-        // styles: mid-fade the class .tq-genimg-in holds opacity below 1, and flatten
-        // bakes whatever getComputedStyle returns inline (undo later replays that stale
-        // fractional value). Neutralize the class synchronously here, in the same tick
-        // as the flatten, so getComputedStyle returns the resting opacity (1, or a
-        // user-set inline value). Class-only: do not touch style.opacity. DeckView
-        // re-adds the class on the next URL land, so the fade still plays for users.
-        for (const img of sec.querySelectorAll<HTMLImageElement>(
-          "img[data-genimage][src]",
-        )) {
-          img.classList.remove("tq-genimg-in");
-        }
-        const flat = flattenSlideSection(sec as HTMLElement, { scale: scaleRef.current });
-        // Observatory: report the parity result once per flatten (both branches), so the
-        // fidelity loop can log a content shortfall (and, once Phase 1 lands, style drift).
-        onFlattenResultRef.current?.(slide.slideId, flat.parity);
-        if (!flat.parity.ok) {
-          // SAFETY NET: the flatten lost visible text or a visual atom (img/svg/
-          // embed). Do NOT swap or persist - leave the slide on its original AI
-          // HTML so editing is degraded (nested stacking) but content is never
-          // silently dropped from the deck or the export.
-          console.warn("[flatten] parity mismatch, keeping slide unflattened", {
-            slide: slide.slideId,
-            missingWords: flat.parity.missingWords,
-            census: { src: flat.parity.srcCensus, out: flat.parity.outCensus },
-          });
-        } else {
-          const tmp = doc.createElement("div");
-          tmp.innerHTML = flat.html;
-          const flatSec = tmp.querySelector("section");
-          if (flatSec && flatSec.innerHTML !== sec.innerHTML) {
-            sec.innerHTML = flatSec.innerHTML;
-            onNormalizeRef.current?.(slide.slideId, serializeSlideSection(sec));
-          }
-        }
-      } catch (err) {
-        console.error("flatten on enter failed", err);
-      }
-      }
+      // The editor NEVER flattens (2026-07-10 frame cutover): frame decks
+      // arrive pre-frozen by the server-side deck-freeze-bake (pixel-gated,
+      // clean render): already the editor's absolute model. A not-yet-frozen
+      // frame deck (bake in flight) and any LEGACY pre-frame deck open as
+      // stored in the degraded-but-lossless path (select/text/style work;
+      // free drag is limited by nesting). The in-browser flatten and its
+      // whole bug family (dirty-environment measurement persisted via
+      // onNormalize) were deleted with lib/editor/flatten.ts.
 
       // Normalize FILLED gen-images saved with their transient streaming
       // state (2026-06-12): the placeholder's inline opacity:0 and the

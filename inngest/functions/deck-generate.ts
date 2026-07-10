@@ -33,6 +33,14 @@ import { fanOutNotification } from "@/lib/notifications/server";
 import { classifyFontNames } from "@/lib/extract/fonts-pptx";
 import { expandWeightAxis, googleFontUrl } from "@/lib/brand/fonts";
 import { buildSlideHtml, extractLeadingStyleCss } from "@/lib/deck/scaffold";
+import {
+  frameSystemPrompt,
+  frameSystemCss,
+  parseFrameSlide,
+  parseFrameRevises,
+  assembleFramedSlide,
+  type FrameDeckCtx,
+} from "@/lib/deck/frame";
 import { injectLogoMarkers, logoImgTag } from "@/lib/deck/logo-inject";
 import { scopeDeckCss } from "@/lib/deck/scope-css";
 import { StreamingHtmlSplitter, type ParsedSlide } from "@/lib/deck/html-stream";
@@ -114,120 +122,15 @@ async function flushSlideImages(fileIds: string[]): Promise<number> {
 type EnhanceImages = { fileIds: string[]; textPerSlide: string[] };
 
 // ─── Shared prompt fragments (DRY) ───────────────────────────────────
-// The RTL/BiDi reinforcement block, interpolated into SYSTEM_PROMPT_CREATE_HTML
-// (the only system prompt now — the JSON-era SYSTEM_PROMPT / _IMAGES / _MIMIC and
-// the OUTPUT_CONTRACT were removed with the JSON manifest path, 2026-06-05).
-const LANG_DIRECTION = `LANGUAGE & DIRECTION
-- Set \`dir="rtl"\` (Arabic) or \`dir="ltr"\` (Latin) on the slide ROOT.
-- MIRROR THE COMPOSITION in RTL: the eye enters from the RIGHT. Any asymmetric layout you would design left-to-right must be flipped horizontally: text columns and content panels sit on the visual RIGHT, side/hero images and decorative panels anchor to the visual LEFT (\`left:0\`, NEVER \`right:0\` for a side image in an RTL deck). Example RTL split cover: image \`position:absolute;left:0;top:0;height:100%\` with a fixed px width, title and text on the right half.
-- \`left\`/\`right\` offsets are PHYSICAL: they do not flip with \`dir\`, so under RTL you must write the mirrored values yourself.
-- DO NOT set \`dir\` on a child block (\`<div>\`, \`<p>\`, \`<h1>\`–\`<h6>\`) that contains Latin letters. The block's own \`text-align: start\` would then resolve LEFT inside an RTL slide and push English headings / subtitles / labels to the visual left — wrong side. Unicode BiDi already renders contiguous Latin letters correctly inside an RTL parent without any \`dir\` attribute on the container.
-- For INLINE mixed-script runs (an Arabic line that embeds an English word, URL, email, version number, or any string with neutrals like \`@\` \`.\` \`/\` \`©\` digits), wrap the English run in a \`<span dir="ltr">\` so neutrals resolve to the correct side.
-- Digit-only chrome blocks (pagination "01 / 07", dates "26.08.2026", phone numbers) — \`dir="ltr"\` on the block IS fine, because the digits would otherwise reorder under the RTL paragraph direction.
-- Numbers are ALWAYS Latin digits (0-9), never Arabic-Indic (٠-٩) — even inside Arabic text; BiDi orders them correctly.
-- \`letter-spacing\` on Arabic-bearing elements is stripped at export.`;
+// The legacy authoring prompts (SYSTEM_PROMPT_CREATE_HTML / _SOCIAL_HTML,
+// LANG_DIRECTION, IMG_ADDENDUM) were DELETED at the 2026-07-10 frame cutover -
+// lib/deck/frame.ts frameSystemPrompt() is the only generation contract now
+// (context/frame-architecture-2026-07-10.md). The flow addenda below survive:
+// they compose on the frame base.
 
-// ─── IMAGES-DECK direction (context/images.md) ───────────────────────
-// Images mode = the lean base prompt + this addendum, appended. The addendum
-// only adds the generated-image reservation contract the warm/reconcile
-// pipeline scans for (data-genimage / -genrole / -genaspect / -genid).
-// MAX_GENERATED_IMAGES is enforced server-side by the warm dispatch +
-// reconcile (used below), so it's no longer stated in the prompt.
-const IMG_ADDENDUM = `GENERATED IMAGES — images mode is ON. Reserve a box with NO src + a prompt where the slide genuinely calls for imagery, and gpt-image generates the artwork while the system fills the box. Don't hand-draw imagery in SVG or fake a photo / texture in CSS — reserve a box instead.
-  <img data-genimage="<prompt>" data-genid="<unique-id>" alt="" style="width:…px;height:…px;object-fit:cover;display:block;background:<a brand-tinted placeholder gradient>;"/>
-  • Two attributes only: data-genimage (the prompt) + data-genid (unique per box). Size and place the box however the slide needs — the system reads your width/height to request the right image shape, so set them in px.
-  • data-genimage — describe what you want concretely: a real scene / object / texture / abstract treatment, one consistent medium + mood across the whole deck. SUBJECT / SCENE / MOOD only — never request text, letters, numbers, logos, signage, charts, or UI inside the image (stripped server-side); keep it trademark-safe (no real brand / person / team / character names).
-  • Only these stay CSS / SVG: brand-colour fills + the type system, flat shapes, concept icons, the brand logo. Stats / data / charts stay CSS + inline SVG (an image can't show exact numbers). When text sits on a generated image, add ONE scrim layer for legibility (the system orients it).`;
-
-// ─── CREATE → HTML authoring prompt (context/plan-create-agent-pivot.md) ───
-// CLAUDE-AUTHORED DESIGN (2026-06-04, Phase 2): we do NOT ship a fixed scaffold.
-// The model designs its OWN system — it streams ONE \`<style>\` (CSS vars +
-// component classes, built on the injected brand vars) then the \`<section>\`
-// slides. We give it only the brand colours, the style direction (user message),
-// and the technical rules (RTL / icons / SVG / AVOID). The corruption never
-// returns: a factored \`<style>\` (classes defined once) is the OPPOSITE of the
-// repeated-inline-styles that broke JSON. We then SCOPE Claude's \`<style>\` under
-// \`.tq-canvas\` (lib/deck/scope-css) so it can't leak, and enforce the canvas
-// frame (lib/deck/scaffold buildSlideHtml). The slide HTML is never put in a
-// constrained field (§3.5 load-bearing rule).
-export const SYSTEM_PROMPT_CREATE_HTML = `You are a world-class presentation designer. Design a complete, ORIGINAL slide deck — your own visual system, fresh for this brief — as one HTML fragment.
-
-PLAN IN YOUR THINKING FIRST (before the opening \`<\`). For EACH slide work out: how much content actually fits the fixed frame without overflowing. Commit only the polished result to the output.
-
-SAFE AREA. Keep readable content inside a consistent margin, never edge to edge. Pick one inset for the whole deck, about 5% of the canvas.
-
-OUTPUT — emit exactly this, with NOTHING else (no prose, no markdown fences, no JSON, no \`<!DOCTYPE>\`/\`<html>\`/\`<head>\`/\`<body>\`):
-1. ONE \`<style>\` block FIRST — your design system: CSS custom properties + component classes built ON the injected brand variables. Define styling ONCE here and reuse it via classes (this keeps the markup terse).
-2. THEN the slides, each a top-level \`<section data-label="<short Arabic name>" data-role="cover|content|section|stats|quote|image|closing">\`.
-
-- The FIRST character of your response is \`<\` (your \`<style>\`).
-- The COVER \`<section>\` carries \`data-deck-title="…"\` — the deck's title, 3–8 words, in the deck's language (a real title, not a placeholder). Becomes the project name.
-- Slides are TOP-LEVEL siblings — NEVER nest a \`<section>\`. Size each \`<section>\` to the canvas dimensions given in the brief (the fixed slide frame).
-- There is NO wrapper element around your output: never write CSS through an imagined container (e.g. \`.deck section\`, \`.wrapper *\`: those selectors match NOTHING). Put deck-wide tokens and base styles on \`:root\` or \`section\` directly; each \`<section>\` IS a slide's root element.
-- Write every repeated item (list rows, cards, steps, table cells) out IN FULL as elements. There is NO template engine: never use a JS loop, \`.map()\`, \`+\` concatenation, or \`\${…}\`.
-- Decide the slide count from the brief (match \`brief.slideCount\` when given; else adapt).
-- VARY the composition slide to slide — give content, section, stats, and quote slides visibly DIFFERENT layouts; don't put every slide on the same grid. Reuse classes for a consistent LOOK, but vary the STRUCTURE so the deck feels bespoke, not one template repeated.
-
-BRAND & COLOUR — the brand variables are INJECTED for you; reference them, don't redefine them.
-
-${LANG_DIRECTION}
-
-GRAPHICS —
-Country flags: \`<img src="https://flagcdn.com/<cc>.svg">\` (lowercase ISO code, keeps its real colours).
-Icons: inline an \`<svg viewBox="0 0 24 24">\` with a REAL icon's path data from a standard open set (e.g. Lucide), stroked or filled in a brand colour.
-Charts / graphs: inline \`<svg>\`.
-
-AVOID (these don't render in export): \`conic-gradient\`, colour-to-alpha gradients, \`mix-blend-mode\`, \`backdrop-filter\`, \`filter: blur()\` / \`drop-shadow()\`, \`-webkit-text-stroke\` (use \`<svg><text stroke fill="none">\`), \`rgba()\` for translucency on a fill (use \`opacity\` on the element). Static only — no animation / transition / :hover / :focus / JS.
-ALSO AVOID (they break the fixed-canvas contract): \`!important\`, viewport units (\`vw\`/\`vh\`/\`vmin\`/\`vmax\`), \`@media\`, \`position: fixed\` — the canvas is a fixed-size frame (dimensions in the brief); use px values and absolute positioning inside it.`;
-
-// ─── SOCIAL (3:4) authoring prompt ─────────────────────────────────────────
-// Used INSTEAD of SYSTEM_PROMPT_CREATE_HTML when the user picked the 3:4
-// social-post ratio on /create (create flow only: 3:4 is unavailable on the
-// other flows). A standalone DUPLICATE of the create prompt (user direction
-// 2026-07-09: keep the create prompt alone, iterate on this copy) with these
-// deltas:
-//   1. Persona: elite social media designer authoring a phone-feed carousel.
-//   2. The "PLAN IN YOUR THINKING FIRST" fit-coaching paragraph is dropped.
-//   3. "slide(s)" reworded to "post(s)" (the `brief.slideCount` field name
-//      stays: it's the data contract).
-//   4. No PPTX AVOID list: those properties (conic-gradient, mix-blend-mode,
-//      backdrop-filter, filter, -webkit-text-stroke, rgba translucency) are
-//      only forbidden because dom-to-pptx can't reproduce them, and 3:4
-//      exports to PDF/PNG rendered by real Chrome. "Static only" stays (the
-//      export is a still frame), as does the fixed-canvas ALSO AVOID line.
-// Shares LANG_DIRECTION with the create prompt and composes with
-// AUTO_PALETTE_ADDENDUM / IMG_ADDENDUM exactly like it.
-export const SYSTEM_PROMPT_SOCIAL_HTML = `You are an elite social media designer. Design an original carousel of 1080×1440 portrait cards for a phone feed, fresh for this brief, as one HTML fragment. Open with a hook that stops the scroll.
-
-SAFE AREA. Keep readable content inside a consistent margin, never edge to edge. Pick one inset for the whole deck, about 5% of the canvas.
-
-OUTPUT — emit exactly this, with NOTHING else (no prose, no markdown fences, no JSON, no \`<!DOCTYPE>\`/\`<html>\`/\`<head>\`/\`<body>\`):
-1. ONE \`<style>\` block FIRST — your design system: CSS custom properties + component classes built ON the injected brand variables. Define styling ONCE here and reuse it via classes (this keeps the markup terse).
-2. THEN the posts, each a top-level \`<section data-label="<short Arabic name>" data-role="cover|content|section|stats|quote|image|closing">\`.
-
-- The FIRST character of your response is \`<\` (your \`<style>\`).
-- The COVER \`<section>\` carries \`data-deck-title="…"\` — the deck's title, 3–8 words, in the deck's language (a real title, not a placeholder). Becomes the project name.
-- Posts are TOP-LEVEL siblings — NEVER nest a \`<section>\`. Size each \`<section>\` to the canvas dimensions given in the brief (the fixed post frame).
-- There is NO wrapper element around your output: never write CSS through an imagined container (e.g. \`.deck section\`, \`.wrapper *\`: those selectors match NOTHING). Put deck-wide tokens and base styles on \`:root\` or \`section\` directly; each \`<section>\` IS a post's root element.
-- Write every repeated item (list rows, cards, steps, table cells) out IN FULL as elements. There is NO template engine: never use a JS loop, \`.map()\`, \`+\` concatenation, or \`\${…}\`.
-- Decide the post count from the brief (match \`brief.slideCount\` when given; else adapt).
-- VARY the composition post to post — give content, section, stats, and quote posts visibly DIFFERENT layouts; don't put every post on the same grid. Reuse classes for a consistent LOOK, but vary the STRUCTURE so the deck feels bespoke, not one template repeated.
-
-BRAND & COLOUR — the brand variables are INJECTED for you; reference them, don't redefine them.
-
-${LANG_DIRECTION}
-
-GRAPHICS —
-Country flags: \`<img src="https://flagcdn.com/<cc>.svg">\` (lowercase ISO code, keeps its real colours).
-Icons: inline an \`<svg viewBox="0 0 24 24">\` with a REAL icon's path data from a standard open set (e.g. Lucide), stroked or filled in a brand colour.
-Charts / graphs: inline \`<svg>\`.
-
-Static only — no animation / transition / :hover / :focus / JS.
-ALSO AVOID (they break the fixed-canvas contract): \`!important\`, viewport units (\`vw\`/\`vh\`/\`vmin\`/\`vmax\`), \`@media\`, \`position: fixed\` — the canvas is a fixed-size frame (dimensions in the brief); use px values and absolute positioning inside it.`;
-
-// Mimic flow's HTML system addendum. SYSTEM_PROMPT_CREATE_HTML tells the model to
+// Mimic flow's HTML system addendum. The frame base prompt tells the model to
 // design an ORIGINAL system; mimic needs the OPPOSITE — reproduce the attached
-// design reference. Appended AFTER the create prompt so this override wins (later
+// design reference. Appended AFTER the frame base so this override wins (later
 // instructions outrank earlier ones). The OUTPUT contract is untouched.
 const MIMIC_HTML_ADDENDUM = `MIMIC MODE — this is NOT an original-design task. Override "Design a complete, ORIGINAL slide deck — your own visual system" above: instead REPRODUCE the visual language of the attached DESIGN reference as faithfully as you can — its layout system, type hierarchy, spacing rhythm, shapes, grids, and decorative motifs — applied to this deck's content and recoloured to the injected brand variables (\`var(--brand-1)\`…, \`var(--font-heading)\`/\`var(--font-body)\`). Match the reference's look; don't invent a new one. (Output format is unchanged: one \`<style>\` then the \`<section>\` slides.)`;
 
@@ -381,10 +284,12 @@ const DESIGN_STYLE_DIRECTIVES: Record<string, string> = {
 
 function ruleLines(rules: Rules): string[] {
   if (!rules) return [];
-  // Bare info, ONE line per AVAILABLE option — no chrome/layout how-to. An option
-  // that's off says nothing, EXCEPT pagination (its absence is stated in 2 words
-  // so "no page numbers" is explicit). `data-anchor` is the one functional marker
-  // kept — sanitize.ts's rewriteChromeOnTop reads it to lift chrome above images.
+  // Bare info, ONE line per AVAILABLE option - no chrome/layout how-to (owner
+  // direction 2026-07-10: the chrome variables hand off with NO position
+  // words; Claude places them). An option that's off says nothing, EXCEPT
+  // pagination (its absence is stated in 2 words so "no page numbers" is
+  // explicit). `data-anchor` is the one functional marker kept -
+  // sanitize.ts's rewriteChromeOnTop reads it to lift chrome above images.
   const lines: string[] = [""];
   lines.push(
     rules.pagination
@@ -1967,20 +1872,22 @@ export const deckGenerate = inngest.createFunction(
           htmlSourceKind !== "mimic" &&
           data.type !== "enhance";
         const htmlSystem = [
-          // 3:4 (create only) is a social carousel, not a projected deck — swap
-          // the deck base for the social base (unlocked CSS toolbox + carousel
-          // framing). Addenda below compose identically.
-          slideFormat === "3:4"
-            ? SYSTEM_PROMPT_SOCIAL_HTML
-            : SYSTEM_PROMPT_CREATE_HTML,
+          // The FRAME base (context/frame-architecture-2026-07-10.md) is the
+          // ONLY generation contract since the 2026-07-10 cutover. It embeds
+          // its own image contract (declared bg/panels + in-well slots). The
+          // flow addenda compose on it - they redirect design intent
+          // (reproduce/preserve) and leave the output contract alone.
+          frameSystemPrompt({
+            canvas: SLIDE_DIMENSIONS[slideFormat],
+            language: streamLanguage,
+            imagesMode: isImagesMode(data),
+            kind: slideFormat === "3:4" ? "social" : "deck",
+          }),
           paletteAuto ? AUTO_PALETTE_ADDENDUM : null,
-          // Mimic with images on recreates the reference's imagery (its own
-          // addendum); every other images-on flow uses the generic reserve-a-box
-          // rules.
-          isImagesMode(data)
-            ? htmlSourceKind === "mimic"
-              ? MIMIC_IMG_ADDENDUM
-              : IMG_ADDENDUM
+          // Mimic with images on recreates the reference's imagery (its box
+          // contract matches the frame's tier-3 in-well slots).
+          isImagesMode(data) && htmlSourceKind === "mimic"
+            ? MIMIC_IMG_ADDENDUM
             : null,
           htmlSourceKind === "mimic" ? MIMIC_HTML_ADDENDUM : null,
           data.type === "enhance" ? ENHANCE_HTML_ADDENDUM : null,
@@ -2003,6 +1910,16 @@ export const deckGenerate = inngest.createFunction(
         const slides: SlideType[] = [];
         const warmedKeys = new Set<string>();
         const warmedGenidsForCap = new Set<string>();
+        // FRAME decks: deck-level chrome context accumulated as slides stream
+        // (the cover declares title/brand; later slides render them in chrome
+        // slots). The frame CSS is per-deck constant, computed once.
+        const frameCtx: FrameDeckCtx = {
+          direction: streamDirection,
+          deckTitle: null,
+          brand: null,
+          brandSub: null,
+        };
+        const frameCss = frameSystemCss(SLIDE_DIMENSIONS[slideFormat]);
         let cancelObserved = false;
         // Hard slide ceiling = the credits we HELD for (the user's budget).
         // Auto slide-count lets the model decide how many slides to make,
@@ -2043,6 +1960,61 @@ export const deckGenerate = inngest.createFunction(
         let rawCssSeen = "";
 
         const ingestSlide = (parsed: ParsedSlide) => {
+          // ── FRAME self-correction (data-revises) ── thinking mode re-emits
+          // improved slides; the frame prompt's revision contract marks them
+          // with data-revises="N" and this swaps the corrected slide IN PLACE
+          // (same slideId, same deck position). MUST run BEFORE the cap guard:
+          // a correction that arrives after the deck already hit its slide
+          // count would otherwise abort the stream and be dropped - the exact
+          // first-draft lock-in this feature removes. Revisions never grow the
+          // deck, so the budget ceiling is not in play. An invalid/oversized
+          // index falls through to the normal (append + cap) path.
+          {
+            const revises = parseFrameRevises(parsed.html);
+            if (revises !== null && revises < slides.length) {
+              const target = slides[revises];
+              const decl = parseFrameSlide(parsed.html);
+              if (decl.deckTitle) frameCtx.deckTitle = decl.deckTitle;
+              if (decl.brand) frameCtx.brand = decl.brand;
+              if (decl.brandSub) frameCtx.brandSub = decl.brandSub;
+              const revised: SlideType = {
+                ...target,
+                html: buildSlideHtml(
+                  assembleFramedSlide(
+                    decl,
+                    frameCtx,
+                    revises,
+                    SLIDE_DIMENSIONS[slideFormat],
+                  ),
+                  `${frameCss}\n${scopedStyle}`,
+                  SLIDE_DIMENSIONS[slideFormat],
+                ),
+              };
+              slides[revises] = revised;
+              const previewIdx = streamingPreview.findIndex(
+                (s) => s.slideId === target.slideId,
+              );
+              if (previewIdx >= 0) streamingPreview[previewIdx] = revised;
+              logger.info("deck_slide_revised", {
+                position: revises + 1,
+                slideId: target.slideId,
+                jobId,
+              });
+              // Changed image boxes warm here; unchanged ones dedupe away
+              // (warm keys are genid:content-hash, not per-slide).
+              if (isImagesMode(data)) {
+                dispatchImageWarm(
+                  revised.slideId,
+                  revised.html,
+                  projectId,
+                  warmedKeys,
+                  warmedGenidsForCap,
+                  logger,
+                );
+              }
+              return;
+            }
+          }
           // Budget ceiling reached: drop every further section (covers
           // flush() too) and abort the stream once, below. Charge stays
           // == hold == authored.
@@ -2102,6 +2074,20 @@ export const deckGenerate = inngest.createFunction(
             parsed.role && SLIDE_ROLES.has(parsed.role as never)
               ? (parsed.role as NonNullable<SlideType["role"]>)
               : undefined;
+          // FRAME decks: parse the declared attributes + well and wrap with
+          // the system layers (bg/panels/well/chrome). Cover declarations land
+          // in frameCtx for the whole deck. slides.length is the 0-based index
+          // of THIS slide (pre-push) - pagination; the restart guard resets it.
+          const decl = parseFrameSlide(parsed.html);
+          if (decl.deckTitle) frameCtx.deckTitle = decl.deckTitle;
+          if (decl.brand) frameCtx.brand = decl.brand;
+          if (decl.brandSub) frameCtx.brandSub = decl.brandSub;
+          const sectionHtml = assembleFramedSlide(
+            decl,
+            frameCtx,
+            slides.length,
+            SLIDE_DIMENSIONS[slideFormat],
+          );
           const slide: SlideType = {
             slideId: parsed.slideId,
             ...(role ? { role } : {}),
@@ -2109,8 +2095,8 @@ export const deckGenerate = inngest.createFunction(
             // canvas frame inside the section; correctly sized for EVERY consumer
             // (preview, thumbnail, PPTX/PDF export).
             html: buildSlideHtml(
-              parsed.html,
-              scopedStyle,
+              sectionHtml,
+              `${frameCss}\n${scopedStyle}`,
               SLIDE_DIMENSIONS[slideFormat],
             ),
           };
@@ -2835,10 +2821,33 @@ export const deckGenerate = inngest.createFunction(
       await inngest
         .send({
           name: "deck.images.requested",
-          data: { projectId, versionId },
+          // freezeAfter: FRAME decks bake AFTER the image reconcile commits -
+          // the bake's read-modify-write on slideJson would otherwise race the
+          // reconcile's write on the same blob (lost update). deck-images-
+          // generate dispatches deck.freeze.bake on its way out when set.
+          data: { projectId, versionId, freezeAfter: true },
         })
         .catch((err) => {
           logger.warn("deck_images_dispatch_failed", {
+            projectId,
+            versionId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+    } else {
+      // FRAME deck without images: freeze bake right away (deck-freeze-bake
+      // pins the flow wells to absolute boxes in the clean render). Fire-and-
+      // forget: a bake failure leaves the deck on its flow html - the viewer
+      // renders it identically (pixel gate) and the editor takes the
+      // degraded path until a later bake succeeds.
+      await inngest
+        .send({
+          id: `freeze:${projectId}:${versionId}`,
+          name: "deck.freeze.bake",
+          data: { projectId, versionId },
+        })
+        .catch((err) => {
+          logger.warn("deck_freeze_dispatch_failed", {
             projectId,
             versionId,
             error: err instanceof Error ? err.message : String(err),

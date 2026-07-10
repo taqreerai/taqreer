@@ -29,7 +29,6 @@ import { StylePill } from "@/components/preview/editor/StylePill";
 import { LayersPanel } from "@/components/preview/editor/LayersPanel";
 import { serializeSlideSection } from "@/lib/editor/serialize";
 import { fitArtboard } from "@/lib/editor/canvas-fit";
-import type { FlattenParity } from "@/lib/editor/flatten";
 import { TopUtilityBar } from "@/components/app/TopUtilityBar";
 import { UserMenu } from "@/components/app/UserMenu";
 import {
@@ -1017,49 +1016,6 @@ export function DeckView({
       applyContentLocally(slideKey, html, { reload: false });
     },
     [pushUndo, applyContentLocally],
-  );
-
-  // The editor flattened the slide on enter. Adopt the flat html as the baseline:
-  // update the manifest + persist (so thumbnails / export / a later reload all see
-  // the flat structure), but DON'T push undo — it's a structural normalization, not
-  // a user edit. Idempotent: a slide that's already flat round-trips to itself, so
-  // the equality guard makes this a no-op on every subsequent enter.
-  const handleNormalize = useCallback(
-    (slideKey: string, html: string) => {
-      const prevHtml = manifestRef.current?.slides.find(
-        (s) => s.slideId === slideKey,
-      )?.html;
-      if (prevHtml === html) return;
-      applyContentLocally(slideKey, html, { reload: false });
-    },
-    [applyContentLocally],
-  );
-
-  // Flatten fidelity observatory: fire-and-forget log of a flatten that lost content OR style
-  // fidelity. Advisory only, it never blocks editing and swallows every error. Sends a COUNT
-  // (never the dropped words) + the structural style-drift list, never user HTML.
-  const handleFlattenResult = useCallback(
-    (slideKey: string, parity: FlattenParity) => {
-      const highDrift = parity.styleDrifts.filter((d) => d.severity === "high").length;
-      // Log on a content shortfall, any HIGH-severity style drift, or enough low-severity drift.
-      if (parity.ok && highDrift === 0 && parity.fidelityScore >= 0.95) return;
-      void fetch(
-        `/api/projects/${projectId}/slides/${encodeURIComponent(slideKey)}/flatten-event`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            parityOk: parity.ok,
-            missingCount: parity.missingWords.length,
-            fidelityScore: parity.fidelityScore,
-            leafCount: parity.leafCount,
-            highDrift,
-            styleDrifts: parity.styleDrifts,
-          }),
-        },
-      ).catch(() => {}); // a telemetry hiccup must never disrupt editing
-    },
-    [projectId],
   );
 
   // Undo / redo over the focused slide's LOCAL stack. The focused slide is read
@@ -4537,8 +4493,6 @@ export function DeckView({
                 onDocReady={setEditorDoc}
                 /* selected/onSelect are now the multi-select SET (§20). */
                 onEdit={handleSlideEdit}
-                onNormalize={handleNormalize}
-                onFlattenResult={handleFlattenResult}
                 // ⌘Z / ⌘⇧Z pressed while focus is inside the editor iframe never
                 // reaches the window listener above, the editor forwards them
                 // to the same local history stack.

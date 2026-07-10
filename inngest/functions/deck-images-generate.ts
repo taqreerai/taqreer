@@ -72,15 +72,41 @@ export const deckImagesGenerate = inngest.createFunction(
     // run leaves placeholder gradients + regenerable boxes (Phase 4).
   },
   async ({ event, step, logger }) => {
-    const { projectId, versionId } = event.data as {
+    const { projectId, versionId, freezeAfter } = event.data as {
       projectId: string;
       versionId: string;
+      // FRAME decks (context/frame-architecture-2026-07-10.md): the freeze
+      // bake must run AFTER this function's reconcile commits — the bake's
+      // read-modify-write on slideJson would race the reconcile's write on
+      // the same blob (lost update). deck-generate sets this flag instead of
+      // dispatching the bake itself; we dispatch on every exit path.
+      freezeAfter?: boolean;
     };
     if (!projectId || !versionId) {
       throw new Error(
         "deck-images-generate: event missing projectId / versionId",
       );
     }
+
+    // Dispatch the freeze bake for FRAME decks — called on every exit path
+    // (zero boxes / after reconcile). Fire-and-forget: a dispatch failure
+    // leaves the deck on its flow html (viewer identical; editor degraded).
+    const dispatchFreeze = async () => {
+      if (!freezeAfter) return;
+      await inngest
+        .send({
+          id: `freeze:${projectId}:${versionId}`,
+          name: "deck.freeze.bake",
+          data: { projectId, versionId },
+        })
+        .catch((err) => {
+          logger.warn("deck_freeze_dispatch_failed", {
+            projectId,
+            versionId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+    };
 
     // ─── Step 1: load + scan + seed rows ────────────────────────────
     const boxes = await step.run("scan-and-seed", async () => {
@@ -148,6 +174,7 @@ export const deckImagesGenerate = inngest.createFunction(
     });
 
     if (boxes.length === 0) {
+      await dispatchFreeze();
       return { boxes: 0, generated: 0, failed: 0, skipped: 0 };
     }
 
@@ -396,6 +423,9 @@ export const deckImagesGenerate = inngest.createFunction(
         filled: rows.length,
       });
     });
+
+    // FRAME decks: the reconcile is committed — safe to bake now.
+    await dispatchFreeze();
 
     return { boxes: boxes.length, ...result };
   },
