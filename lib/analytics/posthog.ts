@@ -15,7 +15,14 @@ const HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST;
 const PROJECT_ID = process.env.POSTHOG_PROJECT_ID;
 const PERSONAL_KEY = process.env.POSTHOG_PERSONAL_API_KEY;
 
-export type ChannelRow = { label: string; visitors: number; pct: number };
+export type ChannelRow = {
+  label: string;
+  // PostHog channel classification (Paid Search, Organic Social...) shown as a
+  // muted suffix; empty for Direct (self-explanatory).
+  channel: string;
+  visitors: number;
+  pct: number;
+};
 export type DeviceBreakdowns = {
   device: Breakdown[];
   browser: Breakdown[];
@@ -62,31 +69,57 @@ function memo<T>(fn: () => Promise<T>, ttlMs = 60_000): () => Promise<T> {
 const NOT_LOCALHOST = `NOT startsWith(coalesce(properties.$host, ''), 'localhost')
   AND NOT startsWith(coalesce(properties.$host, ''), '127.0.0.1')`;
 
-// ─── Sources by channel ─────────────────────────────────────────────────────
-// PostHog auto-classifies each session's entry channel into $channel_type
-// (Direct, Organic Search, Paid Search, Organic Social, Referral, Email, ...).
-// It is a SESSION property (session.*), not an event property - reading
-// properties.$channel_type returns null for every event and buckets all
-// traffic under "Unknown".
-const CHANNEL_HOGQL = `
-SELECT session.$channel_type AS channel, count(distinct person_id) AS visitors
+// ─── Traffic sources ────────────────────────────────────────────────────────
+// Named source per session entry: utm_source when the link was tagged (Google
+// Ads suffix, tagged banners), else the referring domain. The channel column is
+// PostHog's session classification ($channel_type: Paid Search, Organic
+// Social...) kept as a display suffix. Both are SESSION properties (session.*),
+// not event properties - reading properties.$channel_type returns null for
+// every event and buckets all traffic under "Unknown". Sessionless rows
+// (server-side captures) are dropped: they are not visits.
+const SOURCE_HOGQL = `
+SELECT coalesce(nullIf(session.$entry_utm_source, ''), session.$entry_referring_domain) AS src,
+       session.$channel_type AS channel,
+       count(distinct person_id) AS visitors
 FROM events
 WHERE timestamp > now() - interval 30 day
   AND ${NOT_LOCALHOST}
-  AND session.$channel_type != ''
-GROUP BY channel
+  AND coalesce(nullIf(session.$entry_utm_source, ''), session.$entry_referring_domain) != ''
+GROUP BY src, channel
 ORDER BY visitors DESC
-LIMIT 12`;
+LIMIT 24`;
+
+// Collapse raw sources into readable names. Self-referrals and OAuth bounces
+// (accounts.google.*) are session re-entries, not acquisition sources - they
+// fold into Direct. Instagram arrives as "ig" (our own utm tag) or
+// l.instagram.com (the in-app browser's link shim) - one label for all.
+function prettySource(raw: string): string {
+  if (raw === "$direct" || raw === "taqreer.ai") return "Direct";
+  if (raw.startsWith("accounts.google")) return "Direct";
+  if (raw === "com.google.android.gm") return "gmail";
+  if (raw === "ig" || raw === "instagram.com" || raw === "l.instagram.com")
+    return "instagram";
+  return raw.replace(/^www\./, "");
+}
 
 async function fetchChannels(): Promise<ChannelRow[] | null> {
-  const rows = await posthogQuery(CHANNEL_HOGQL);
+  const rows = await posthogQuery(SOURCE_HOGQL);
   if (!rows) return null;
-  const parsed = rows
-    .map((r) => ({
-      label: typeof r[0] === "string" && r[0] ? r[0] : "Unknown",
-      visitors: Number(r[1]) || 0,
-    }))
-    .filter((r) => r.visitors > 0);
+  // Merge post-normalization duplicates (e.g. ig + l.instagram.com). Direct
+  // merges regardless of channel - "Direct · Referral" for an OAuth bounce
+  // would be noise, not signal.
+  const merged = new Map<string, { label: string; channel: string; visitors: number }>();
+  for (const r of rows) {
+    const visitors = Number(r[2]) || 0;
+    if (!visitors || typeof r[0] !== "string" || !r[0]) continue;
+    const label = prettySource(r[0]);
+    const channel = label === "Direct" || typeof r[1] !== "string" ? "" : r[1];
+    const key = `${label}|${channel}`;
+    const prev = merged.get(key);
+    if (prev) prev.visitors += visitors;
+    else merged.set(key, { label, channel, visitors });
+  }
+  const parsed = [...merged.values()].sort((a, b) => b.visitors - a.visitors).slice(0, 10);
   const total = parsed.reduce((s, r) => s + r.visitors, 0) || 1;
   return parsed.map((r) => ({ ...r, pct: Math.round((r.visitors / total) * 100) }));
 }
