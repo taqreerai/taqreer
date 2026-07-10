@@ -414,20 +414,27 @@ const DESIGN_STYLE_DIRECTIVES: Record<string, string> = {
     "Expose the structure. Box regions with thick 2–3px solid rules in the brand's darkest ink AND use heavy flat FILL blocks as region backgrounds (not ink-on-light — this is what separates it from Swiss); collapse spacing so borders touch, and align hard-left/right or collide on purpose, never centred. Heaviest brand-font weight, uppercase Latin via CSS text-transform; one harsh accent as a flat fill. Hard offset shadows (solid, no blur); zero rounded corners, zero gradients, zero soft anything. Keep the brand fonts — no monospace. Signature + frame: every region boxed + a stark fixed corner label. Density: medium-to-dense, structural. Archetypes: boxed-grid, fill-statement, stacked-rules, collision-headline. When generating images: prefer none; if any, harsh high-contrast black-and-white or halftone, flat and unretouched.",
 };
 
-function ruleLines(rules: Rules): string[] {
+function ruleLines(rules: Rules, systemChrome = false): string[] {
   if (!rules) return [];
   // Bare info, ONE line per AVAILABLE option — no chrome/layout how-to. An option
   // that's off says nothing, EXCEPT pagination (its absence is stated in 2 words
   // so "no page numbers" is explicit). `data-anchor` is the one functional marker
   // kept — sanitize.ts's rewriteChromeOnTop reads it to lift chrome above images.
+  //
+  // FRAME decks (systemChrome): pagination + the persistent footer are rendered
+  // by the SYSTEM chrome straight from these flow variables — the draw-it-
+  // yourself lines would make Claude duplicate them in the well, so they're
+  // dropped entirely (the frame prompt already forbids drawing chrome).
   const lines: string[] = [""];
-  lines.push(
-    rules.pagination
-      ? `Pagination — put a page number on every slide, marked \`data-anchor\`.`
-      : `No pagination.`,
-  );
+  if (!systemChrome) {
+    lines.push(
+      rules.pagination
+        ? `Pagination — put a page number on every slide, marked \`data-anchor\`.`
+        : `No pagination.`,
+    );
+  }
   if (rules.fixTypos) lines.push(`Fix typos silently, keeping the meaning.`);
-  if (rules.persistent && rules.persistent.text.trim()) {
+  if (!systemChrome && rules.persistent && rules.persistent.text.trim()) {
     const skip = rules.persistent.exclude.length
       ? ` (not on ${rules.persistent.exclude.join(" / ")})`
       : "";
@@ -923,6 +930,9 @@ function injectDeckLogo(manifest: SlideManifest, brief: unknown): void {
 
 function buildUserMessage(event: DeckGenerateEvent) {
   const format = resolveFormat(event);
+  // FRAME decks: pagination/footer are SYSTEM chrome (rendered from the same
+  // flow variables) — ruleLines drops their draw-it-yourself handoff.
+  const systemChrome = isFrameGen(event, format);
   const { width, height } = SLIDE_DIMENSIONS[format];
   const orientationLabel = format === "16:9" ? "horizontal" : "vertical";
 
@@ -1023,7 +1033,7 @@ function buildUserMessage(event: DeckGenerateEvent) {
     );
   }
 
-  lines.push(...ruleLines(rules));
+  lines.push(...ruleLines(rules, systemChrome));
 
   // Logo placement — brand logo, if provided, is up to Claude to compose
   // into the chrome. See `buildLogoBlock` below for the full block;
@@ -2057,11 +2067,20 @@ export const deckGenerate = inngest.createFunction(
         // FRAME decks: deck-level chrome context accumulated as slides stream
         // (the cover declares title/brand; later slides render them in chrome
         // slots). The frame CSS is per-deck constant, computed once.
+        const frameRules = (data.brief as { rules?: {
+          pagination?: boolean;
+          persistent?: { text?: string; exclude?: ("cover" | "closing")[] } | null;
+        } | null } | null)?.rules;
         const frameCtx: FrameDeckCtx = {
           direction: streamDirection,
           deckTitle: null,
           brand: null,
           brandSub: null,
+          // Chrome content = the FLOW's own variables (output-card pagination
+          // toggle + persistent text), not the model, not hardcoded.
+          pagination: frameRules?.pagination !== false,
+          brandLine: frameRules?.persistent?.text?.trim() || null,
+          brandLineExclude: frameRules?.persistent?.exclude ?? [],
         };
         const frameCss = frameGen
           ? frameSystemCss(SLIDE_DIMENSIONS[slideFormat])

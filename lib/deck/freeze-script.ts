@@ -103,11 +103,16 @@ function __tqFreezeWell(well) {
     var vpcs = getComputedStyle(jb.el.parentElement);
     var gl = vr.left - vpr.left - (parseFloat(vpcs.borderLeftWidth) || 0);
     var gt = vr.top - vpr.top - (parseFloat(vpcs.borderTopWidth) || 0);
+    // Text blocks pin with height:auto ON PURPOSE (editor text-grow), so a
+    // flow-stretched box (flex:1 / stretch) legitimately collapses to its
+    // content height — comparing height there rejected visually-perfect
+    // slides (0.029% pixel diff, 2026-07-10 chrome e2e). The pixel gate
+    // backstops any VISIBLE collapse (a stretched box with a background).
     if (
       Math.abs(gl - jb.left) > 1 ||
       Math.abs(gt - jb.top) > 1 ||
       Math.abs(vr.width - jb.w) > 1 ||
-      Math.abs(vr.height - jb.h) > 1
+      (!jb.text && Math.abs(vr.height - jb.h) > 1)
     ) {
       bad.push({
         tag: jb.el.tagName,

@@ -516,14 +516,31 @@ export const deckFreezeBake = inngest.createFunction(
           html = buildSlideHtml(html, oldCss.split(armor).join(""), dims);
           replacements.set(target.slideId, html);
         }
+        // ONE round means one ATTEMPT: flawed slides the model returned no
+        // usable section for get their EXISTING flow html stamped audited, so
+        // the afterfix bake freezes them as-is instead of leaving them
+        // permanently unfrozen (found on the 2026-07-10 chrome e2e: a
+        // marginal audit flag + an empty fix stranded a slide in the
+        // degraded path forever).
+        const stampOnly = new Map<string, string>();
+        for (const f of baked.flawed) {
+          if (replacements.has(f.slideId)) continue;
+          const slide = bySlideId.get(f.slideId);
+          if (!slide || slide.html.includes("data-tq-audited")) continue;
+          stampOnly.set(
+            f.slideId,
+            slide.html.replace("<section ", '<section data-tq-audited="1" '),
+          );
+        }
         if (replacements.size === 0) {
           logger.warn("deck_frame_fix_empty", {
             versionId,
             asked: flawedInput.length,
             gotSections: sections.length,
           });
-          return 0;
         }
+        for (const [sid, html] of stampOnly) replacements.set(sid, html);
+        if (replacements.size === 0) return 0;
 
         // Already-generated images survive the fix: re-inject ready srcs by
         // genid (the fix prompt asks to preserve them, this is the backstop).

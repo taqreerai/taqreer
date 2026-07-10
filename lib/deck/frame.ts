@@ -164,23 +164,27 @@ export function frameSystemCss(canvas: FrameCanvas): string {
     `.tq-canvas .tq-scrim.strong{background:linear-gradient(to top,rgba(10,12,16,.9) 0%,rgba(10,12,16,.62) 45%,rgba(10,12,16,.3) 100%)}` +
     `.tq-canvas .tq-well{position:absolute;top:${g.margin}px;inset-inline-start:${g.margin}px;width:${wellW}px;height:${wellH}px;z-index:1;overflow:hidden}` +
     `.tq-canvas .tq-well>.well{width:100%;height:100%}` +
-    `.tq-canvas .tq-chrome{position:absolute;inset:0;z-index:2;pointer-events:none;font-family:var(--font-body,var(--font));font-size:19px;font-weight:500}` +
-    `.tq-canvas .tq-chrome .slot{position:absolute;display:flex;align-items:center;gap:12px;line-height:1}` +
+    // Chrome GEOMETRY is armored (!important on positional props): the model is
+    // INVITED to restyle the chrome's LOOK via these stable hooks (its scoped
+    // CSS loads after this sheet, so equal-specificity visual rules win), but
+    // slot placement can never move. Defaults below are deliberately neutral.
+    `.tq-canvas .tq-chrome{position:absolute!important;inset:0!important;z-index:2!important;pointer-events:none!important;font-family:var(--font-body,var(--font));font-size:19px;font-weight:500}` +
+    `.tq-canvas .tq-chrome .slot{position:absolute!important;display:flex;align-items:center;gap:12px;line-height:1}` +
     `.tq-canvas .tq-chrome.light .slot{color:rgba(255,255,255,.92)}` +
     `.tq-canvas .tq-chrome.dark .slot{color:var(--brand-text);opacity:.75}` +
-    `.tq-canvas .tq-chrome .slot.ts{top:${g.chromeMid}px;inset-inline-start:${g.margin}px}` +
-    `.tq-canvas .tq-chrome .slot.te{top:${g.chromeMid}px;inset-inline-end:${g.margin}px}` +
-    `.tq-canvas .tq-chrome .slot.bs{bottom:${g.chromeMid}px;inset-inline-start:${g.margin}px}` +
-    `.tq-canvas .tq-chrome .slot.be{bottom:${g.chromeMid}px;inset-inline-end:${g.margin}px}` +
-    `.tq-canvas .tq-chrome .slot.tc{top:${g.chromeMid}px;inset-inline-start:50%;transform:translateX(-50%)}` +
+    `.tq-canvas .tq-chrome .slot.ts{top:${g.chromeMid}px!important;inset-inline-start:${g.margin}px!important;inset-inline-end:auto!important}` +
+    `.tq-canvas .tq-chrome .slot.te{top:${g.chromeMid}px!important;inset-inline-end:${g.margin}px!important;inset-inline-start:auto!important}` +
+    `.tq-canvas .tq-chrome .slot.bs{bottom:${g.chromeMid}px!important;inset-inline-start:${g.margin}px!important;inset-inline-end:auto!important}` +
+    `.tq-canvas .tq-chrome .slot.be{bottom:${g.chromeMid}px!important;inset-inline-end:${g.margin}px!important;inset-inline-start:auto!important}` +
+    `.tq-canvas .tq-chrome .slot.tc{top:${g.chromeMid}px!important;inset-inline-start:50%!important;transform:translateX(-50%)!important}` +
     `.tq-canvas .tq-chrome .kicker-dash{display:inline-block;width:34px;height:2px;background:var(--accent,currentColor)}` +
-    `.tq-canvas .tq-chrome .slot.brand{top:${g.brandTop}px}` +
+    `.tq-canvas .tq-chrome .slot.brand{top:${g.brandTop}px!important}` +
     `.tq-canvas .tq-chrome .slot.brand .brand-name{font-size:34px;font-weight:700;color:var(--accent,currentColor);line-height:1.2}` +
     `.tq-canvas .tq-chrome .slot.brand .brand-sub{font-size:13px;letter-spacing:4px;opacity:.8;margin-top:6px}` +
     // Slots that sit OVER a photo (full-bleed or panel) force light ink + a
-    // soft shadow — per-slot, computed from the declared geometry (a per-slide
-    // light/dark flag can't cover a slide whose panel darkens one side only).
-    `.tq-canvas .tq-chrome .slot.onpanel{color:rgba(255,255,255,.94);opacity:1;text-shadow:0 1px 14px rgba(10,12,16,.5)}`
+    // soft shadow — per-slot, computed from the declared geometry. LEGIBILITY
+    // GUARD: armored so a deck restyle can't put dark chrome on a dark photo.
+    `.tq-canvas .tq-chrome .slot.onpanel{color:rgba(255,255,255,.94)!important;opacity:1!important;text-shadow:0 1px 14px rgba(10,12,16,.5)}`
   );
 }
 
@@ -268,6 +272,17 @@ export type FrameDeckCtx = {
   deckTitle: string | null;
   brand: string | null;
   brandSub: string | null;
+  // Chrome CONTENT comes from the FLOW's own variables (brief.rules), not the
+  // model and not hardcoded: the /create output card has a pagination toggle
+  // and a persistent-text field; when applied they drive the system slots
+  // directly. Their old prompt handoff (draw-it-yourself, data-anchor) is
+  // dropped for frame decks — the system renders, nothing to teach.
+  /** rules.pagination — render the page-number slot on non-cover slides. */
+  pagination: boolean;
+  /** rules.persistent.text — the bottom-end line; null = slot omitted. */
+  brandLine: string | null;
+  /** rules.persistent.exclude — roles that skip the brand line. */
+  brandLineExclude: ("cover" | "closing")[];
 };
 
 // Genids the SYSTEM invents for bg/panel boxes must satisfy the pipeline's
@@ -345,28 +360,44 @@ export function assembleFramedSlide(
   const op = (pos: string) => (overPhoto.has(pos) ? " onpanel" : "");
   const isCover = decl.role === "cover";
   const slots: string[] = [];
+  // Cover brand mark (model-declared identity); kicker rides top-center on the
+  // cover, top-start elsewhere. Slot classes (.kicker/.title/.pagination/
+  // .brand-line + the pagination's inner spans) are stable STYLE HOOKS: the
+  // deck's own scoped CSS loads after the frame sheet, so the model's design
+  // system can restyle the chrome's look — geometry is armored and can't move.
   if (isCover && ctx.brand) {
     slots.push(
       `<div class="slot ts brand${op("ts")}"><div><div class="brand-name">${esc(ctx.brand)}</div>${ctx.brandSub ? `<div class="brand-sub">${esc(ctx.brandSub)}</div>` : ""}</div></div>`,
     );
     if (decl.kicker)
       slots.push(
-        `<div class="slot tc${op("tc")}"><span class="kicker-dash"></span><span>${esc(decl.kicker)}</span></div>`,
+        `<div class="slot tc kicker${op("tc")}"><span class="kicker-dash"></span><span>${esc(decl.kicker)}</span></div>`,
       );
   } else if (decl.kicker) {
     slots.push(
-      `<div class="slot ts${op("ts")}"><span class="kicker-dash"></span><span>${esc(decl.kicker)}</span></div>`,
+      `<div class="slot ts kicker${op("ts")}"><span class="kicker-dash"></span><span>${esc(decl.kicker)}</span></div>`,
     );
   }
   if (ctx.deckTitle && !isCover)
-    slots.push(`<div class="slot te${op("te")}">${esc(ctx.deckTitle)}</div>`);
-  // dir=ltr sits on an INNER span: on the slot itself it would flip the slot's
-  // own inset-inline-start and collide with the be slot (found 2026-07-10).
-  if (!isCover)
     slots.push(
-      `<div class="slot bs${op("bs")}"><span dir="ltr">${String(slideIndex + 1).padStart(2, "0")} / ${FRAME_TOTAL_TOKEN}</span></div>`,
+      `<div class="slot te title${op("te")}">${esc(ctx.deckTitle)}</div>`,
     );
-  slots.push(`<div class="slot be${op("be")}">taqreer.ai</div>`);
+  // Pagination: the FLOW's toggle (rules.pagination). dir=ltr sits on an INNER
+  // span: on the slot itself it would flip the slot's own inset-inline-start
+  // and collide with the be slot (found 2026-07-10).
+  if (ctx.pagination && !isCover)
+    slots.push(
+      `<div class="slot bs pagination${op("bs")}"><span dir="ltr"><span class="page-cur">${String(slideIndex + 1).padStart(2, "0")}</span><span class="page-sep"> / </span><span class="page-total">${FRAME_TOTAL_TOKEN}</span></span></div>`,
+    );
+  // Bottom-end line: the FLOW's persistent text (rules.persistent), honoring
+  // its cover/closing exclusions. No hardcoded placeholder branding.
+  const skipBrandLine =
+    (isCover && ctx.brandLineExclude.includes("cover")) ||
+    (decl.role === "closing" && ctx.brandLineExclude.includes("closing"));
+  if (ctx.brandLine && !skipBrandLine)
+    slots.push(
+      `<div class="slot be brand-line${op("be")}">${esc(ctx.brandLine)}</div>`,
+    );
   const chromeHtml = `<div class="tq-chrome ${decl.chrome}" data-tq-lock="1">${slots.join("")}</div>`;
 
   // data-tq-frame marks the deck as frame-architecture for every consumer
@@ -385,6 +416,9 @@ export function assembleFramedSlide(
     (isCover && ctx.deckTitle ? ` data-deck-title="${esc(ctx.deckTitle)}"` : "") +
     (isCover && ctx.brand ? ` data-tq-brand="${esc(ctx.brand)}"` : "") +
     (isCover && ctx.brandSub ? ` data-tq-brand-sub="${esc(ctx.brandSub)}"` : "") +
+    (isCover && !ctx.pagination ? ` data-tq-pagination="0"` : "") +
+    (isCover && ctx.brandLine ? ` data-tq-brand-line="${esc(ctx.brandLine)}"` : "") +
+    (isCover && ctx.brandLineExclude.length ? ` data-tq-brand-line-skip="${ctx.brandLineExclude.join(",")}"` : "") +
     `>${ground}${panelHtml}${wellHtml}${chromeHtml}</section>`
   );
 }
@@ -415,6 +449,11 @@ export function frameCtxFromStoredCover(
     deckTitle: attr(tag, "data-deck-title"),
     brand: attr(tag, "data-tq-brand"),
     brandSub: attr(tag, "data-tq-brand-sub"),
+    pagination: attr(tag, "data-tq-pagination") !== "0",
+    brandLine: attr(tag, "data-tq-brand-line"),
+    brandLineExclude: (attr(tag, "data-tq-brand-line-skip") ?? "")
+      .split(",")
+      .filter((x): x is "cover" | "closing" => x === "cover" || x === "closing"),
   };
 }
 
