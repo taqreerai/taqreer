@@ -32,11 +32,13 @@ chrome placement). The frame architecture splits ownership:
      [<div class="tq-panel ps|pe|bt|bb" data-tq-lock>  tier-2 photo panel]
   L1 <div class="tq-well" [style=shrunk-for-panel]>
        Claude's flow design; tier-3 in-well <img data-genimage> slots
-  L2 <div class="tq-chrome light|dark" data-tq-lock>
-       6 slots: ts/tc/te/bs/bc/be (logical CSS, auto-mirrors under RTL)
-       kicker→ts, deck-title→te, pagination→bs (LTR digits on inner span),
-       brand line→be, cover brand mark→ts (kicker→tc on cover)
-       slots over a photo get .onpanel (light ink + text shadow)
+  L2 <div class="tq-chrome" data-tq-lock>   EMPTY structure sentinel
+       (owner direction 2026-07-10, final: the system renders NOTHING the
+       user didn't choose - pagination/persistent hand off to Claude via the
+       flow variables; the identity-chrome slots were removed the same day
+       they shipped. The empty div stays as the slide's LAST layer so the
+       bake's structure check catches markup-eating corruption. Old stored
+       decks keep their rendered slots - their CSS is baked into their html.)
 </section>
 ```
 
@@ -47,10 +49,9 @@ prompt per bg kind.
 ## Generation contract (prompt)
 
 - Claude declares per section: data-bg (color|image|split-start|split-end|
-  band-top|band-bottom), data-bg-css, data-bg-prompt, data-bg-scrim,
-  data-kicker, data-chrome (light|dark); cover adds data-deck-title,
-  data-brand, data-brand-sub. Exactly ONE <div class="well"> per section
-  (modifier classes allowed).
+  band-top|band-bottom), data-bg-css, data-bg-prompt, data-bg-scrim; cover
+  adds data-deck-title (project name only - nothing renders from it).
+  Exactly ONE <div class="well"> per section (modifier classes allowed).
 - Well is FLOW ONLY: flex/grid/gap/padding/flex:1/auto margins; NEVER
   absolute/left/top/transforms/negative margins. Px sizes fine.
 - Direction NATIVE to the deck language (owner contract 2026-07-10: no

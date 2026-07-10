@@ -26,15 +26,11 @@ export function frameGeometry(canvas: FrameCanvas) {
   const splitW = Math.round(canvas.width * 0.4); // tier-2 split panel width
   const bandH = Math.round(canvas.height * 0.35); // tier-2 band height
   const gap = Math.round(canvas.width / 30); // panel-to-well gap
-  const chromeMid = Math.round(margin * (40 / 96)); // chrome text band center
-  const brandTop = Math.round(margin * (52 / 96)); // cover brand-mark top
   return {
     margin,
     splitW,
     bandH,
     gap,
-    chromeMid,
-    brandTop,
     wellW: canvas.width - margin * 2,
     wellH: canvas.height - margin * 2,
     splitWellW: canvas.width - splitW - gap - margin,
@@ -67,7 +63,7 @@ export function frameSystemPrompt(opts: {
   // authored-LTR mirroring - bg photos don't flip, so mirrored compositions
   // break against them. RTL drift is caught downstream, never guess-rewritten.
   const langBlock = ar
-    ? `‼️ LANGUAGE & DIRECTION - this deck is ARABIC: design natively RTL. The system sets dir="rtl" on every slide root (do NOT set dir yourself). The eye enters from the RIGHT: lead text blocks and columns anchor to the visual RIGHT, secondary/decorative elements to the LEFT; body text right-aligned. Flex keywords are LOGICAL under RTL: align-items/justify-content flex-START anchors to the reading side (the RIGHT) and flex-END anchors LEFT - to anchor content to the reading edge use flex-start, never flex-end. Do NOT set dir on child blocks that contain Latin letters; for an inline Latin run inside an Arabic sentence (URL, email, English word) wrap just that run in <span dir="ltr">. Digit-only chrome blocks (pagination "01 / 07", dates, phone numbers) - dir="ltr" on that block IS fine (the digits would otherwise reorder under the RTL paragraph direction). Numbers are ALWAYS Latin digits (0-9), never Arabic-Indic (٠-٩). letter-spacing on Arabic-bearing elements is stripped at export.`
+    ? `‼️ LANGUAGE & DIRECTION - this deck is ARABIC: design natively RTL. The system sets dir="rtl" on every slide root (do NOT set dir yourself). The eye enters from the RIGHT: lead text blocks and columns anchor to the visual RIGHT, secondary/decorative elements to the LEFT; body text right-aligned. Flex keywords are LOGICAL under RTL: align-items/justify-content flex-START anchors to the reading side (the RIGHT) and flex-END anchors LEFT - to anchor content to the reading edge use flex-start, never flex-end. Do NOT set dir on child blocks that contain Latin letters; for an inline Latin run inside an Arabic sentence (URL, email, English word) wrap just that run in <span dir="ltr">. Digit-only blocks (pagination "01 / 07", dates, phone numbers) - dir="ltr" on that block IS fine (the digits would otherwise reorder under the RTL paragraph direction). Numbers are ALWAYS Latin digits (0-9), never Arabic-Indic (٠-٩). letter-spacing on Arabic-bearing elements is stripped at export.`
     : `LANGUAGE & DIRECTION - this deck is ENGLISH (LTR). The system sets dir="ltr" on every slide root (do NOT set dir yourself).`;
 
   const bgKinds = imagesMode
@@ -100,11 +96,10 @@ BACKGROUND KINDS - "color" only for this deck: a flat or gradient ground via dat
 
   return `${social ? `You are an elite social media designer. Design an original carousel of ${canvas.width}x${canvas.height} portrait cards for a phone feed, fresh for this brief, as one HTML fragment. Open with a hook that stops the scroll.` : `You are a world-class presentation designer. Design a complete, ORIGINAL slide deck - your own visual system, fresh for this brief - as one HTML fragment. Bespoke and editorial, never a generic template.`}
 
-THE FRAME IS SYSTEM-OWNED. Each slide has three layers; you author only what is declared here:
+THE FRAME IS SYSTEM-OWNED. Each slide has two layers; you author only what is declared here:
 1. BACKGROUND - you DECLARE it per slide via section attributes (below); the system renders it. You never draw backgrounds or edge-to-edge imagery yourself.
 2. CONTENT WELL - your canvas. Inside each <section>, emit EXACTLY ONE <div class="well">…</div> and design everything in it. The well is already inset from the slide edges; treat its edges as the canvas edges. Content outside it is clipped. Its size depends on the background you declare:
 ${wellSizes}
-3. CHROME (deck title, kicker, brand mark) - the system renders these in fixed positions. Never draw them yourself: no running deck titles, no brand marks or logo lockups anywhere in the well. You declare the per-slide kicker text via an attribute.
 
 ${langBlock}
 
@@ -112,8 +107,6 @@ OUTPUT - emit exactly this, with NOTHING else (no prose, no fences, no JSON, no 
 1. ONE <style> block FIRST - your design system: CSS custom properties + component classes built ON the injected brand variables. Define styling ONCE and reuse via classes.
 2. THEN the slides, each:
 <section data-label="<short ${ar ? "Arabic" : ""} name>" data-role="cover|content|section|stats|quote|image|closing"
-         data-kicker="<2-4 word kicker for this slide, or omit>"
-         data-chrome="light|dark"   (light = white chrome text for dark/photo backgrounds, dark = ink chrome for light backgrounds)
          ${bgKinds}
          data-bg-css="<any CSS background value for the non-photo area, e.g. var(--brand-1) or a linear-gradient>"${imagesMode ? `
          data-bg-prompt="<for image/split/band: a concrete textless photo prompt - SUBJECT / SCENE / MOOD, no text/logos/people-brands>"
@@ -122,11 +115,10 @@ OUTPUT - emit exactly this, with NOTHING else (no prose, no fences, no JSON, no 
 </section>
 ${imageBlocks}
 - The FIRST character of your response is \`<\` (your <style>).
-- The COVER <section> also carries data-deck-title="…" (3-8 words, in the deck's language, a real title - becomes the project name), plus the deck's BRAND MARK as data: data-brand="<the brand/venture name>" and optionally data-brand-sub="<one short sub-line>". The system renders the brand mark; NEVER draw a brand mark, wordmark, or logo lockup inside the well.
+- The COVER <section> also carries data-deck-title="…" (3-8 words, in the deck's language, a real title - becomes the project name).
 - Slides are TOP-LEVEL siblings - never nest a <section>. Exactly one .well per section, nothing else inside the section.
 - There is NO wrapper element around your output: never write CSS through an imagined container (e.g. \`.deck x\`, \`.wrapper x\` - those selectors match NOTHING). Base styles go on .well or your own classes.
 - ‼️ Design the well in FLOW ONLY: flex and grid (display:flex/grid, flex-direction, gap, padding, margin, flex:1, aspect-ratio, align-items/justify-content). NEVER position:absolute/relative offsets, NEVER left/top, NEVER transforms, NEVER negative margins inside the well - the layout must be pure document flow, so nothing can ever overlap. Give .well itself display:flex;flex-direction:column (or grid) filling its box; distribute space with gap, flex:1, and auto margins. Px font sizes and fixed px sizes for images/cards are fine. Plan each slide so content FITS its well without overflowing.
-- Use left/top/right/bottom longhands, NOT the \`inset\` shorthand.
 - Write every repeated item (list rows, cards, steps, table cells) out IN FULL as elements. There is NO template engine: never use a JS loop, \`.map()\`, \`+\` concatenation, or \`\${…}\`.
 - Decide the slide count from the brief (match \`brief.slideCount\` when given; else adapt).
 - VARY the composition slide to slide: different FLOW structures, one coherent look.
@@ -159,27 +151,16 @@ export function frameSystemCss(canvas: FrameCanvas): string {
     `.tq-canvas .tq-scrim.strong{background:linear-gradient(to top,rgba(10,12,16,.9) 0%,rgba(10,12,16,.62) 45%,rgba(10,12,16,.3) 100%)}` +
     `.tq-canvas .tq-well{position:absolute;top:${g.margin}px;inset-inline-start:${g.margin}px;width:${wellW}px;height:${wellH}px;z-index:1;overflow:hidden}` +
     `.tq-canvas .tq-well>.well{width:100%;height:100%}` +
-    // Chrome GEOMETRY is armored (!important on positional props): the model is
-    // INVITED to restyle the chrome's LOOK via these stable hooks (its scoped
-    // CSS loads after this sheet, so equal-specificity visual rules win), but
-    // slot placement can never move. Defaults below are deliberately neutral.
-    `.tq-canvas .tq-chrome{position:absolute!important;inset:0!important;z-index:2!important;pointer-events:none!important;font-family:var(--font-body,var(--font));font-size:19px;font-weight:500}` +
-    `.tq-canvas .tq-chrome .slot{position:absolute!important;display:flex;align-items:center;gap:12px;line-height:1}` +
-    `.tq-canvas .tq-chrome.light .slot{color:rgba(255,255,255,.92)}` +
-    `.tq-canvas .tq-chrome.dark .slot{color:var(--brand-text);opacity:.75}` +
-    `.tq-canvas .tq-chrome .slot.ts{top:${g.chromeMid}px!important;inset-inline-start:${g.margin}px!important;inset-inline-end:auto!important}` +
-    `.tq-canvas .tq-chrome .slot.te{top:${g.chromeMid}px!important;inset-inline-end:${g.margin}px!important;inset-inline-start:auto!important}` +
-    `.tq-canvas .tq-chrome .slot.bs{bottom:${g.chromeMid}px!important;inset-inline-start:${g.margin}px!important;inset-inline-end:auto!important}` +
-    `.tq-canvas .tq-chrome .slot.be{bottom:${g.chromeMid}px!important;inset-inline-end:${g.margin}px!important;inset-inline-start:auto!important}` +
-    `.tq-canvas .tq-chrome .slot.tc{top:${g.chromeMid}px!important;inset-inline-start:50%!important;transform:translateX(-50%)!important}` +
-    `.tq-canvas .tq-chrome .kicker-dash{display:inline-block;width:34px;height:2px;background:var(--accent,currentColor)}` +
-    `.tq-canvas .tq-chrome .slot.brand{top:${g.brandTop}px!important}` +
-    `.tq-canvas .tq-chrome .slot.brand .brand-name{font-size:34px;font-weight:700;color:var(--accent,currentColor);line-height:1.2}` +
-    `.tq-canvas .tq-chrome .slot.brand .brand-sub{font-size:13px;letter-spacing:4px;opacity:.8;margin-top:6px}` +
-    // Slots that sit OVER a photo (full-bleed or panel) force light ink + a
-    // soft shadow - per-slot, computed from the declared geometry. LEGIBILITY
-    // GUARD: armored so a deck restyle can't put dark chrome on a dark photo.
-    `.tq-canvas .tq-chrome .slot.onpanel{color:rgba(255,255,255,.94)!important;opacity:1!important;text-shadow:0 1px 14px rgba(10,12,16,.5)}`
+    // The chrome layer is an EMPTY STRUCTURE SENTINEL (owner direction
+    // 2026-07-10: the system draws NOTHING the user didn't choose - the
+    // flow's pagination/persistent variables hand off to Claude, and the
+    // system stopped rendering identity chrome). The empty div stays as the
+    // slide's LAST layer so the bake's structure check can detect
+    // markup-eating corruption (an unterminated model attribute swallowing
+    // the layer boundary) - and old stored decks carry their own copy of the
+    // former slot CSS inside their baked <style>, so deleting the rules here
+    // does not affect them.
+    `.tq-canvas .tq-chrome{position:absolute!important;inset:0!important;z-index:2!important;pointer-events:none!important}`
   );
 }
 
@@ -187,15 +168,11 @@ export function frameSystemCss(canvas: FrameCanvas): string {
 export type FrameSlideDecl = {
   label: string;
   role: string;
-  kicker: string | null;
-  chrome: "light" | "dark";
   bg: string;
   bgCss: string | null;
   bgPrompt: string | null;
   bgScrim: "none" | "soft" | "strong";
   deckTitle: string | null;
-  brand: string | null;
-  brandSub: string | null;
   /** Claude's ENTIRE well div (modifier classes carry its CSS), or the section
    *  inner HTML as a fallback when the well tag is missing. */
   wellHtml: string;
@@ -241,15 +218,11 @@ export function parseFrameSlide(sectionHtml: string): FrameSlideDecl {
   return {
     label: attr(openTag, "data-label") ?? "",
     role: attr(openTag, "data-role") ?? "content",
-    kicker: attr(openTag, "data-kicker"),
-    chrome: attr(openTag, "data-chrome") === "light" ? "light" : "dark",
     bg: attr(openTag, "data-bg") ?? "color",
     bgCss: attr(openTag, "data-bg-css"),
     bgPrompt: attr(openTag, "data-bg-prompt"),
     bgScrim: scrim === "soft" || scrim === "strong" ? scrim : "none",
     deckTitle: attr(openTag, "data-deck-title"),
-    brand: attr(openTag, "data-brand"),
-    brandSub: attr(openTag, "data-brand-sub"),
     wellHtml: wellMatch
       ? wellMatch[1]
       : sectionHtml
@@ -263,14 +236,16 @@ export function parseFrameSlide(sectionHtml: string): FrameSlideDecl {
 // deck identity accumulated as slides stream (the cover declares it).
 export type FrameDeckCtx = {
   direction: "rtl" | "ltr";
+  // Cover-declared title, re-stamped on the stored cover section (it feeds
+  // the manifest/project title extraction). NOT rendered anywhere.
   deckTitle: string | null;
-  brand: string | null;
-  brandSub: string | null;
-  // NOTE (owner direction 2026-07-10): the flow's chrome VARIABLES
-  // (pagination, persistent text) are NOT system slots - they hand off to
-  // Claude via ruleLines with no position words at all, and Claude places
-  // them in its design (frozen + audited like any well content). The system
-  // renders only IDENTITY chrome: brand mark, kicker, running title.
+  // NOTE (owner direction 2026-07-10, twice): the chrome layer renders
+  // NOTHING the user didn't choose. The flow's variables (pagination,
+  // persistent text) hand off to Claude via ruleLines with no position
+  // words, and Claude places them in its design (frozen + audited like any
+  // well content). The system's identity chrome (brand mark, kicker,
+  // running title) was removed the same day it shipped - it stamped every
+  // slide with repeated titles nobody asked for.
 };
 
 // Genids the SYSTEM invents for bg/panel boxes must satisfy the pipeline's
@@ -330,51 +305,14 @@ export function assembleFramedSlide(
   // ── Layer 1: the well (Claude's flow design, verbatim) ──
   const wellHtml = `<div class="tq-well"${wellStyle}>${decl.wellHtml}</div>`;
 
-  // ── Layer 2: chrome ──
-  // Slots over a photo force light ink (.onpanel) - computed from geometry.
-  const overPhoto = new Set(
-    decl.bg === "image"
-      ? ["ts", "tc", "te", "bs", "be"]
-      : decl.bg === "split-start"
-        ? ["ts", "bs"]
-        : decl.bg === "split-end"
-          ? ["te", "be"]
-          : decl.bg === "band-top"
-            ? ["ts", "tc", "te"]
-            : decl.bg === "band-bottom"
-              ? ["bs", "be"]
-              : [],
-  );
-  const op = (pos: string) => (overPhoto.has(pos) ? " onpanel" : "");
+  // ── Layer 2: chrome = an EMPTY structure sentinel ──
+  // The system renders NOTHING here (owner direction 2026-07-10: chrome only
+  // carries what the user chose, and those variables hand off to Claude).
+  // The empty div stays as the slide's LAST layer purely so the bake's
+  // structure check can detect markup-eating corruption (an unterminated
+  // model attribute swallowing the layer boundary swallows this div).
+  const chromeHtml = `<div class="tq-chrome" data-tq-lock="1"></div>`;
   const isCover = decl.role === "cover";
-  const slots: string[] = [];
-  // Cover brand mark (model-declared identity); kicker rides top-center on the
-  // cover, top-start elsewhere. Slot classes (.kicker/.title) are stable
-  // STYLE HOOKS: the
-  // deck's own scoped CSS loads after the frame sheet, so the model's design
-  // system can restyle the chrome's look - geometry is armored and can't move.
-  if (isCover && ctx.brand) {
-    slots.push(
-      `<div class="slot ts brand${op("ts")}"><div><div class="brand-name">${esc(ctx.brand)}</div>${ctx.brandSub ? `<div class="brand-sub">${esc(ctx.brandSub)}</div>` : ""}</div></div>`,
-    );
-    if (decl.kicker)
-      slots.push(
-        `<div class="slot tc kicker${op("tc")}"><span class="kicker-dash"></span><span>${esc(decl.kicker)}</span></div>`,
-      );
-  } else if (decl.kicker) {
-    slots.push(
-      `<div class="slot ts kicker${op("ts")}"><span class="kicker-dash"></span><span>${esc(decl.kicker)}</span></div>`,
-    );
-  }
-  if (ctx.deckTitle && !isCover)
-    slots.push(
-      `<div class="slot te title${op("te")}">${esc(ctx.deckTitle)}</div>`,
-    );
-  // Pagination + persistent footer are DELIBERATELY absent here (owner
-  // direction 2026-07-10): those flow variables hand off to Claude with no
-  // position forcing - it draws them inside its design, where the freeze +
-  // audit + gate cover them like any other well content.
-  const chromeHtml = `<div class="tq-chrome ${decl.chrome}" data-tq-lock="1">${slots.join("")}</div>`;
 
   // data-tq-frame marks the deck as frame-architecture for every consumer
   // (the editor NEVER runs its flatten on frame decks - frozen or awaiting
@@ -384,14 +322,11 @@ export function assembleFramedSlide(
   // model's authoring view without the original stream.
   return (
     `<section dir="${ctx.direction}" data-tq-frame="1" data-label="${esc(decl.label)}" data-role="${esc(decl.role)}"` +
-    ` data-chrome="${decl.chrome}" data-bg="${esc(decl.bg)}"` +
-    (decl.kicker ? ` data-kicker="${esc(decl.kicker)}"` : "") +
+    ` data-bg="${esc(decl.bg)}"` +
     (decl.bgCss ? ` data-bg-css="${esc(decl.bgCss)}"` : "") +
     (decl.bgPrompt ? ` data-bg-prompt="${esc(decl.bgPrompt)}"` : "") +
     (decl.bgScrim !== "none" ? ` data-bg-scrim="${decl.bgScrim}"` : "") +
     (isCover && ctx.deckTitle ? ` data-deck-title="${esc(ctx.deckTitle)}"` : "") +
-    (isCover && ctx.brand ? ` data-tq-brand="${esc(ctx.brand)}"` : "") +
-    (isCover && ctx.brandSub ? ` data-tq-brand-sub="${esc(ctx.brandSub)}"` : "") +
     `>${ground}${panelHtml}${wellHtml}${chromeHtml}</section>`
   );
 }
@@ -420,8 +355,6 @@ export function frameCtxFromStoredCover(
   return {
     direction,
     deckTitle: attr(tag, "data-deck-title"),
-    brand: attr(tag, "data-tq-brand"),
-    brandSub: attr(tag, "data-tq-brand-sub"),
   };
 }
 

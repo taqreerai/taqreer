@@ -1910,14 +1910,13 @@ export const deckGenerate = inngest.createFunction(
         const slides: SlideType[] = [];
         const warmedKeys = new Set<string>();
         const warmedGenidsForCap = new Set<string>();
-        // FRAME decks: deck-level chrome context accumulated as slides stream
-        // (the cover declares title/brand; later slides render them in chrome
-        // slots). The frame CSS is per-deck constant, computed once.
+        // FRAME decks: deck-level context accumulated as slides stream (the
+        // cover declares data-deck-title, re-stamped on the stored cover for
+        // the manifest-title extraction; nothing renders from it). The frame
+        // CSS is per-deck constant, computed once.
         const frameCtx: FrameDeckCtx = {
           direction: streamDirection,
           deckTitle: null,
-          brand: null,
-          brandSub: null,
         };
         const frameCss = frameSystemCss(SLIDE_DIMENSIONS[slideFormat]);
         let cancelObserved = false;
@@ -1975,8 +1974,6 @@ export const deckGenerate = inngest.createFunction(
               const target = slides[revises];
               const decl = parseFrameSlide(parsed.html);
               if (decl.deckTitle) frameCtx.deckTitle = decl.deckTitle;
-              if (decl.brand) frameCtx.brand = decl.brand;
-              if (decl.brandSub) frameCtx.brandSub = decl.brandSub;
               const revised: SlideType = {
                 ...target,
                 html: buildSlideHtml(
@@ -2075,13 +2072,12 @@ export const deckGenerate = inngest.createFunction(
               ? (parsed.role as NonNullable<SlideType["role"]>)
               : undefined;
           // FRAME decks: parse the declared attributes + well and wrap with
-          // the system layers (bg/panels/well/chrome). Cover declarations land
-          // in frameCtx for the whole deck. slides.length is the 0-based index
-          // of THIS slide (pre-push) - pagination; the restart guard resets it.
+          // the system layers (bg/panels/well + the empty chrome sentinel).
+          // The cover's data-deck-title lands in frameCtx for the deck.
+          // slides.length is the 0-based index of THIS slide (pre-push);
+          // the restart guard resets it.
           const decl = parseFrameSlide(parsed.html);
           if (decl.deckTitle) frameCtx.deckTitle = decl.deckTitle;
-          if (decl.brand) frameCtx.brand = decl.brand;
-          if (decl.brandSub) frameCtx.brandSub = decl.brandSub;
           const sectionHtml = assembleFramedSlide(
             decl,
             frameCtx,
