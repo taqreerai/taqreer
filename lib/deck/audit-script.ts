@@ -347,7 +347,31 @@ function __tqAuditWell(well, dir) {
       var fs2 = parseFloat(crcs.fontSize);
       if (!fs2 || fs2 < 40) continue;
       var lh = parseFloat(crcs.lineHeight);
-      if (!lh) continue; // "normal" resolves to px in computed style; NaN = skip
+      if (!lh) {
+        // Chrome computes line-height "normal" as the literal string (CR
+        // PR #128) - a default-line-height Arabic heading (normal is a
+        // tight ~1.2x) would silently skip the law. Measure the USED
+        // baseline pitch instead: distinct line-fragment tops from a
+        // Range give first-to-last baseline distance / (lines - 1).
+        var rng = crel.ownerDocument.createRange();
+        rng.selectNodeContents(crel);
+        var frags = rng.getClientRects();
+        var tops = [];
+        for (var ri = 0; ri < frags.length; ri++) {
+          var ft = frags[ri].top;
+          if (frags[ri].height < 2) continue;
+          var seenTop = false;
+          for (var tj = 0; tj < tops.length; tj++) {
+            if (tops[tj] > ft - 2 && tops[tj] < ft + 2) { seenTop = true; break; }
+          }
+          if (!seenTop) tops.push(ft);
+        }
+        if (tops.length >= 2) {
+          tops.sort(function (a, b) { return a - b; });
+          lh = (tops[tops.length - 1] - tops[0]) / (tops.length - 1);
+        }
+      }
+      if (!lh) continue; // single-fragment or unmeasurable - cannot crowd
       var crr = crel.getBoundingClientRect();
       var lines = Math.round(crr.height / lh);
       if (lines < 2) continue; // single line cannot crowd itself
