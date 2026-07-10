@@ -1934,15 +1934,11 @@ export const deckGenerate = inngest.createFunction(
             thinkingEntry.at = Date.now();
           }
         };
-        // The ask, as the user bubble: the brief-bearing user message minus
-        // the mechanical closing directive, truncated for the wire.
-        chatPush({
-          role: "user",
-          text:
-            baseUserMessage.length > 500
-              ? `${baseUserMessage.slice(0, 500)}…`
-              : baseUserMessage,
-        });
+        // NO brief bubble (owner direction 2026-07-10: "skip user msg, start
+        // directly with the reply from api") - the feed opens with the
+        // model's live thinking. The REVIEW ask later in the bake IS shown
+        // (with the sent screenshots) because that exchange is the part the
+        // user can't otherwise see.
 
         await writeProgress("thinking", 0, estimatedTotal, {
           thinkingTokens: 0,

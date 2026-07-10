@@ -204,14 +204,13 @@ export const deckFreezeBake = inngest.createFunction(
           });
         }
       };
-      await chatWrite((chat) =>
-        chat.push({ role: "event", kind: "review", at: Date.now() }),
-      );
-
       // 2a. One clean render: audit findings + a downscaled shot per
       // pending slide. The browser closes BEFORE the model call - never
-      // hold a Chrome instance across a long network wait.
+      // hold a Chrome instance across a long network wait. Tiny thumbs of
+      // the SAME shots ride the GenChat review-ask entry so the user sees
+      // exactly what the reviewer was sent.
       const shots = new Map<string, string>();
+      const thumbs: string[] = [];
       let findings: Record<string, FrameAuditFinding[]> = {};
       {
         const browser = await launchGuardedBrowser();
@@ -230,11 +229,23 @@ export const deckFreezeBake = inngest.createFunction(
               .jpeg({ quality: 80 })
               .toBuffer();
             shots.set(sid, jpeg.toString("base64"));
+            if (thumbs.length < 12) {
+              const thumb = await sharp(png)
+                .resize({ width: 200, fit: "inside" })
+                .jpeg({ quality: 50 })
+                .toBuffer();
+              thumbs.push(`data:image/jpeg;base64,${thumb.toString("base64")}`);
+            }
           }
         } finally {
           await closeGuardedBrowser(browser);
         }
       }
+      // The review ASK, as a chat message with the sent screenshots (the
+      // client renders the localized ask copy; kind "review" carries it).
+      await chatWrite((chat) =>
+        chat.push({ role: "user", kind: "review", thumbs, at: Date.now() }),
+      );
       const fixWorthy = (fs: FrameAuditFinding[]) =>
         fs.filter(
           (f) =>
@@ -317,7 +328,13 @@ export const deckFreezeBake = inngest.createFunction(
               // summarized: the stream carries a user-readable reasoning
               // summary - relayed live into the GenChat feed below.
               thinking: { type: "adaptive", display: "summarized" },
-              output_config: { effort: "low" },
+              // medium: the review is the product's fidelity core, and at
+              // "low" it read as a glance (owner report 2026-07-10: "so
+              // fast, almost like he doesn't take time to study each
+              // slide") - and low-effort reviews DID under-fix (the
+              // contrast round-1 partial). Costs more thinking tokens,
+              // buys real per-slide study.
+              output_config: { effort: "medium" },
               system: [
                 {
                   type: "text",
@@ -443,14 +460,30 @@ export const deckFreezeBake = inngest.createFunction(
               cache_write: finalMsg.usage.cache_creation_input_tokens,
               stop_reason: finalMsg.stop_reason,
             });
-            await chatWrite((chat) =>
+            // Per-slide outcomes ("how the api revised each one" - owner
+            // spec), then the summary. Single write.
+            const revisedPositions = Object.keys(revisions)
+              .map(
+                (sid) =>
+                  manifest.slides.findIndex((x) => x.slideId === sid) + 1,
+              )
+              .sort((a, b) => a - b);
+            await chatWrite((chat) => {
+              for (const pos of revisedPositions) {
+                chat.push({
+                  role: "event",
+                  kind: "reviseSlide",
+                  n: pos,
+                  at: Date.now(),
+                });
+              }
               chat.push({
                 role: "event",
                 kind: "reviewDone",
                 n: revisedCount,
                 at: Date.now(),
-              }),
-            );
+              });
+            });
           }
         }
       } catch (err) {

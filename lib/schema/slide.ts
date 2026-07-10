@@ -213,12 +213,17 @@ export const GenChatEntrySchema = z.object({
     .enum([
       "slide", // slide n closed during the stream
       "revise", // the model swapped slide n in place (data-revises)
-      "review", // the bake's vision pass started (photographing + asking)
+      "review", // the bake's review ASK (role user, carries the sent thumbs)
+      "reviseSlide", // the review pass revised slide n
       "reviewDone", // vision pass returned: n = number of slides revised
       "baked", // freeze bake finished - the deck is final
     ])
     .optional(),
   n: z.number().optional(),
+  // TINY data-URI thumbnails of the exact screenshots sent to the review
+  // call (owner spec 2026-07-10: "see the images sent"). ~5-8KB each,
+  // bounded hard so the feed can never bloat the manifest.
+  thumbs: z.array(z.string().max(40000)).max(12).optional(),
   at: z.number(), // epoch ms, for ordering + relative timestamps
 });
 export type GenChatEntry = z.infer<typeof GenChatEntrySchema>;

@@ -53,9 +53,8 @@ export function GenChatPanel({
       case "slide":
         return t.slideDone.replace("{n}", String(e.n ?? ""));
       case "revise":
+      case "reviseSlide":
         return t.revised.replace("{n}", String(e.n ?? ""));
-      case "review":
-        return t.reviewing;
       case "reviewDone":
         return (e.n ?? 0) > 0
           ? t.reviewImproved.replace("{n}", String(e.n))
@@ -92,12 +91,7 @@ export function GenChatPanel({
       }}
     >
       <header className="border-b border-foreground/[0.08] px-1 pb-3 pt-1">
-        <p className="text-muted text-[10px] uppercase tracking-widest">
-          {t.kicker}
-        </p>
-        <h2 className="mt-1 text-sm font-semibold text-foreground">
-          {t.title}
-        </h2>
+        <h2 className="text-sm font-semibold text-foreground">{t.title}</h2>
       </header>
 
       <div
@@ -106,17 +100,29 @@ export function GenChatPanel({
       >
         {entries.map((e, i) => {
           if (e.role === "user") {
+            // The REVIEW ask: localized copy + the exact screenshots sent
+            // to the reviewer (kind "review" carries them as tiny thumbs).
             return (
-              <div key={i} className="space-y-1">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-foreground/40">
-                  {t.youAsked}
-                </p>
-                <p
+              <div key={i} className="space-y-1.5">
+                <div
                   dir="auto"
                   className="rounded-2xl bg-foreground/[0.06] px-3 py-2 text-[12px] leading-relaxed text-foreground/80"
                 >
-                  {e.text}
-                </p>
+                  {e.kind === "review" ? t.reviewAsk : e.text}
+                  {e.thumbs && e.thumbs.length > 0 ? (
+                    <span className="mt-2 flex flex-wrap gap-1.5">
+                      {e.thumbs.map((src, ti) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          key={ti}
+                          src={src}
+                          alt=""
+                          className="h-12 w-auto rounded-md border border-foreground/10"
+                        />
+                      ))}
+                    </span>
+                  ) : null}
+                </div>
               </div>
             );
           }
