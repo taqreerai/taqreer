@@ -3306,10 +3306,24 @@ export function DeckView({
   const apiActive =
     status === "generating" || bakePendingIds.size > 0 || applying != null;
   const [railTab, setRailTab] = useState<"layers" | "chat">("layers");
+  // Whether the current Chat tab was AUTO-activated (an activity edge or a
+  // manual open DURING activity) vs user-pinned while idle. Auto-activated
+  // chat returns to Layers by a LEVEL rule - any render after the activity
+  // ends corrects it - so a missed edge (batched state transitions on a
+  // page opened mid-stream, seen live 2026-07-10) still heals; a user
+  // reading history on an idle deck is never yanked away.
+  const [autoChat, setAutoChat] = useState(false);
   const [prevApiActive, setPrevApiActive] = useState(false);
   if (apiActive !== prevApiActive) {
     setPrevApiActive(apiActive);
-    setRailTab(apiActive ? "chat" : "layers");
+    if (apiActive) {
+      setAutoChat(true);
+      setRailTab("chat");
+    }
+  }
+  if (!apiActive && autoChat && railTab === "chat") {
+    setAutoChat(false);
+    setRailTab("layers");
   }
   // The Chat tab exists whenever there is (or is about to be) a feed;
   // decks with no GenChat history keep the plain Layers header.
@@ -3321,7 +3335,13 @@ export function DeckView({
         { value: "chat", label: dict.editor.genchat.title, icon: "auto_awesome" },
       ]}
       value={railTab}
-      onChange={setRailTab}
+      onChange={(v) => {
+        // A manual flip to Chat DURING activity keeps the auto-return (the
+        // user is watching the run); flipped while idle = pinned history
+        // reading, never auto-yanked back to Layers.
+        setAutoChat(v === "chat" && apiActive);
+        setRailTab(v);
+      }}
       ariaLabel={dict.editor.genchat.railTabsAria}
       size="comfortable"
       fullWidth
