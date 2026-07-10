@@ -26,7 +26,16 @@ export type FrameAuditFinding = {
   // background (the 2026-07-10 cream-on-cream deck: a deck-wide light ink
   // on slides that declared light data-bg-css grounds; the vision pass SAW
   // it but had no measured fact to anchor a real fix).
-  type: "overflow" | "anchor" | "underfill" | "structure" | "contrast";
+  // "crowding" = a multi-line Arabic headline with line-height below the
+  // script's comfortable minimum (owner-caught twice: the model "fixed" a
+  // crowded title to 1.16, still tight for Arabic ascenders/diacritics).
+  type:
+    | "overflow"
+    | "anchor"
+    | "underfill"
+    | "structure"
+    | "contrast"
+    | "crowding";
   detail: string;
 };
 
@@ -302,6 +311,63 @@ function __tqAuditWell(well, dir) {
             : "") +
           ": " + contrastSamples[cs2] +
           " - set a strongly contrasting color explicitly on this element (do not rely on the deck-wide inherited ink)",
+      });
+    }
+  }
+
+  // ── crowding: multi-line Arabic display text below the script's minimum ──
+  // Arabic ascenders/teeth/diacritics need more leading than Latin; the
+  // owner caught crowded titles twice, and a vision-only "fix" landed at
+  // 1.16 - still tight. Measured law: headline-scale (>=40px) Arabic text
+  // that WRAPS (2+ lines) must carry line-height >= 1.25.
+  {
+    var crEls = well.querySelectorAll("*");
+    var crCount = 0;
+    var crSamples = [];
+    for (var cri = 0; cri < crEls.length; cri++) {
+      var crel = crEls[cri];
+      if (crel.namespaceURI !== "http://www.w3.org/1999/xhtml") continue;
+      var crtn = crel.tagName.toUpperCase();
+      if (crtn === "STYLE" || crtn === "SCRIPT") continue;
+      var crTxt = "";
+      for (var crn = 0; crn < crel.childNodes.length; crn++) {
+        var crnd = crel.childNodes[crn];
+        if (crnd.nodeType === 3) crTxt += crnd.textContent || "";
+      }
+      crTxt = crTxt.trim();
+      if (crTxt.length < 4) continue;
+      var hasArabic = false;
+      for (var crc = 0; crc < crTxt.length; crc++) {
+        var code = crTxt.charCodeAt(crc);
+        if (code >= 1536 && code <= 1791) { hasArabic = true; break; }
+      }
+      if (!hasArabic) continue;
+      var crcs = view.getComputedStyle(crel);
+      if (crcs.display === "none" || crcs.visibility === "hidden") continue;
+      var fs2 = parseFloat(crcs.fontSize);
+      if (!fs2 || fs2 < 40) continue;
+      var lh = parseFloat(crcs.lineHeight);
+      if (!lh) continue; // "normal" resolves to px in computed style; NaN = skip
+      var crr = crel.getBoundingClientRect();
+      var lines = Math.round(crr.height / lh);
+      if (lines < 2) continue; // single line cannot crowd itself
+      var ratio = lh / fs2;
+      if (ratio < 1.25) {
+        crCount++;
+        if (crSamples.length < 4) {
+          crSamples.push(
+            crel.tagName + ' "' + crTxt.slice(0, 24) + '" line-height ' +
+              (Math.round(ratio * 100) / 100) + " at " + Math.round(fs2) + "px",
+          );
+        }
+      }
+    }
+    for (var crs = 0; crs < crSamples.length; crs++) {
+      findings.push({
+        type: "crowding",
+        detail:
+          "CROWDED ARABIC TEXT: " + crSamples[crs] +
+          " - multi-line Arabic needs line-height 1.3 or more; set it explicitly on this element",
       });
     }
   }

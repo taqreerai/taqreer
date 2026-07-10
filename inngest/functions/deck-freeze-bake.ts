@@ -174,47 +174,49 @@ export const deckFreezeBake = inngest.createFunction(
     const dims = dimensionsForFormat(manifest.format);
 
     // ─── Step 2: observe (render + measure + photograph) and revise ──
+    // ── GENCHAT (backend-transparency feed) ── the bake continues the
+    // feed generation started (manifest.genChat): review started, the
+    // vision model's LIVE summarized thinking, review outcome, per-slide
+    // before/after proof. Writes go through jsonb_set targeting ONLY the
+    // genChat key, so a concurrent slide edit can never be clobbered by a
+    // chat tick. Handler-scoped: steps 2 AND 3 both write. Best-effort:
+    // the feed must never fail a bake.
+    const chatWrite = async (
+      mutate: (chat: GenChatEntry[]) => void,
+    ): Promise<void> => {
+      try {
+        const { prisma } = await import("@/lib/prisma");
+        const rows = await prisma.$queryRaw<{ chat: unknown }[]>(
+          Prisma.sql`SELECT "slideJson"->'genChat' AS chat FROM "PresentationVersion" WHERE id = ${versionId}`,
+        );
+        const chat: GenChatEntry[] = Array.isArray(rows[0]?.chat)
+          ? (rows[0].chat as GenChatEntry[])
+          : [];
+        mutate(chat);
+        while (chat.length > GENCHAT_MAX) chat.shift();
+        await prisma.$executeRaw(
+          Prisma.sql`UPDATE "PresentationVersion" SET "slideJson" = jsonb_set("slideJson", '{genChat}', ${JSON.stringify(chat)}::jsonb) WHERE id = ${versionId}`,
+        );
+        // LIVE tick (owner directive 2026-07-10: "the chat broadcast
+        // needs to be live"): push the feed over the project channel so
+        // the studio updates the instant the server writes - the 5s
+        // poll stays as the no-replay fallback. Thumbs stripped for the
+        // wire; the client keeps the thumbs it already has.
+        void broadcastToProject(projectId, "deck.genchat", {
+          versionId,
+          entries: chat.map((e) =>
+            e.thumbs ? { ...e, thumbs: undefined } : e,
+          ),
+        });
+      } catch (err) {
+        logger.warn("deck_genchat_write_failed", {
+          versionId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    };
+
     const observed = await step.run("observe-and-revise", async () => {
-      // ── GENCHAT (backend-transparency feed) ── the bake continues the
-      // feed generation started (manifest.genChat): review started, the
-      // vision model's LIVE summarized thinking, review outcome. Writes go
-      // through jsonb_set targeting ONLY the genChat key, so a concurrent
-      // slide edit can never be clobbered by a chat tick. Best-effort: the
-      // feed must never fail a bake.
-      const chatWrite = async (
-        mutate: (chat: GenChatEntry[]) => void,
-      ): Promise<void> => {
-        try {
-          const { prisma } = await import("@/lib/prisma");
-          const rows = await prisma.$queryRaw<{ chat: unknown }[]>(
-            Prisma.sql`SELECT "slideJson"->'genChat' AS chat FROM "PresentationVersion" WHERE id = ${versionId}`,
-          );
-          const chat: GenChatEntry[] = Array.isArray(rows[0]?.chat)
-            ? (rows[0].chat as GenChatEntry[])
-            : [];
-          mutate(chat);
-          while (chat.length > GENCHAT_MAX) chat.shift();
-          await prisma.$executeRaw(
-            Prisma.sql`UPDATE "PresentationVersion" SET "slideJson" = jsonb_set("slideJson", '{genChat}', ${JSON.stringify(chat)}::jsonb) WHERE id = ${versionId}`,
-          );
-          // LIVE tick (owner directive 2026-07-10: "the chat broadcast
-          // needs to be live"): push the feed over the project channel so
-          // the studio updates the instant the server writes - the 5s
-          // poll stays as the no-replay fallback. Thumbs stripped for the
-          // wire; the client keeps the thumbs it already has.
-          void broadcastToProject(projectId, "deck.genchat", {
-            versionId,
-            entries: chat.map((e) =>
-              e.thumbs ? { ...e, thumbs: undefined } : e,
-            ),
-          });
-        } catch (err) {
-          logger.warn("deck_genchat_write_failed", {
-            versionId,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
-      };
       // 2a. One clean render: audit findings + a downscaled shot per
       // pending slide. The browser closes BEFORE the model call - never
       // hold a Chrome instance across a long network wait. Tiny thumbs of
@@ -222,6 +224,7 @@ export const deckFreezeBake = inngest.createFunction(
       // exactly what the reviewer was sent.
       const shots = new Map<string, string>();
       const thumbs: string[] = [];
+      const thumbBySlide = new Map<string, string>();
       let findings: Record<string, FrameAuditFinding[]> = {};
       {
         const browser = await launchGuardedBrowser();
@@ -240,13 +243,13 @@ export const deckFreezeBake = inngest.createFunction(
               .jpeg({ quality: 80 })
               .toBuffer();
             shots.set(sid, jpeg.toString("base64"));
-            if (thumbs.length < 12) {
-              const thumb = await sharp(png)
-                .resize({ width: 200, fit: "inside" })
-                .jpeg({ quality: 50 })
-                .toBuffer();
-              thumbs.push(`data:image/jpeg;base64,${thumb.toString("base64")}`);
-            }
+            const thumb = await sharp(png)
+              .resize({ width: 200, fit: "inside" })
+              .jpeg({ quality: 50 })
+              .toBuffer();
+            const uri = `data:image/jpeg;base64,${thumb.toString("base64")}`;
+            thumbBySlide.set(sid, uri);
+            if (thumbs.length < 12) thumbs.push(uri);
           }
         } finally {
           await closeGuardedBrowser(browser);
@@ -263,7 +266,8 @@ export const deckFreezeBake = inngest.createFunction(
             f.type === "overflow" ||
             f.type === "anchor" ||
             f.type === "structure" ||
-            f.type === "contrast",
+            f.type === "contrast" ||
+            f.type === "crowding",
         ).length;
       for (const [sid, fs] of Object.entries(findings)) {
         if (fs.length > 0)
@@ -498,25 +502,11 @@ export const deckFreezeBake = inngest.createFunction(
               .filter((l) => /^SLIDE\s+\d+\s*:/i.test(l))
               .join("\n")
               .slice(0, 1900);
-            const revisedPositions = Object.keys(revisions)
-              .map(
-                (sid) =>
-                  manifest.slides.findIndex((x) => x.slideId === sid) + 1,
-              )
-              .sort((a, b) => a - b);
             await chatWrite((chat) => {
               if (verdictText) {
                 chat.push({
                   role: "assistant",
                   text: verdictText,
-                  at: Date.now(),
-                });
-              }
-              for (const pos of revisedPositions) {
-                chat.push({
-                  role: "event",
-                  kind: "reviseSlide",
-                  n: pos,
                   at: Date.now(),
                 });
               }
@@ -536,8 +526,19 @@ export const deckFreezeBake = inngest.createFunction(
         });
       }
 
+      // BEFORE-thumbs of the revised slides: step 3 pairs them with an
+      // AFTER shot in the per-slide "improved" feed entries - visible
+      // proof of what the revision changed (owner report 2026-07-10: an
+      // applied fix read as "nothing happened").
+      const beforeThumbs: Record<string, string> = {};
+      for (const sid of Object.keys(revisions)) {
+        const t = thumbBySlide.get(sid);
+        if (t) beforeThumbs[sid] = t;
+      }
+
       return {
         revisions,
+        beforeThumbs,
         fixWorthyBefore: Object.fromEntries(
           pendingIds.map((sid) => [sid, fixWorthy(findings[sid] ?? [])]),
         ) as Record<string, number>,
@@ -556,9 +557,16 @@ export const deckFreezeBake = inngest.createFunction(
       );
       const composedManifest = { ...manifest, slides: composed };
 
+      // Label the last quiet stretch (render + freeze + write has nothing
+      // to narrate; unlabeled it read as "stopped mid revising").
+      await chatWrite((chat) =>
+        chat.push({ role: "event", kind: "finalizing", at: Date.now() }),
+      );
+
       // Per-pending-slide FINAL html, decided inside the render session.
       const finalHtml = new Map<string, string>();
       const reverted = new Set<string>();
+      const afterThumbs: Record<string, string> = {};
       let frozenCount = 0;
 
       const browser = await launchGuardedBrowser();
@@ -588,7 +596,8 @@ export const deckFreezeBake = inngest.createFunction(
                 f.type === "overflow" ||
                 f.type === "anchor" ||
                 f.type === "structure" ||
-                f.type === "contrast",
+                f.type === "contrast" ||
+            f.type === "crowding",
             ).length;
             const before = observed.fixWorthyBefore[sid] ?? 0;
             if (now > before) {
@@ -705,8 +714,50 @@ export const deckFreezeBake = inngest.createFunction(
         for (const sid of reverted) {
           finalHtml.set(sid, stampAudited(storedById.get(sid)!));
         }
+        // AFTER shots of the applied revisions (frozen = final visuals):
+        // paired with the BEFORE thumbs in the per-slide feed entries so
+        // the change is visible proof, not a claim.
+        for (const sid of revisedIds) {
+          if (reverted.has(sid)) continue;
+          try {
+            const png = await shoot(page, sid);
+            const thumb = await sharp(png)
+              .resize({ width: 200, fit: "inside" })
+              .jpeg({ quality: 50 })
+              .toBuffer();
+            afterThumbs[sid] = `data:image/jpeg;base64,${thumb.toString("base64")}`;
+          } catch {
+            /* proof thumb is a courtesy - never fail the bake */
+          }
+        }
       } finally {
         await closeGuardedBrowser(browser);
+      }
+
+      // Per-slide revision proof: "improved slide N" with [before, after]
+      // thumbs. Written BEFORE the final write so the entries also ride
+      // into the manifest snapshot that carries the terminal baked entry.
+      const appliedRevised = pendingIds.filter(
+        (sid) => observed.revisions[sid] !== undefined && !reverted.has(sid),
+      );
+      if (appliedRevised.length > 0) {
+        await chatWrite((chat) => {
+          for (const sid of appliedRevised) {
+            const pos = manifest.slides.findIndex((x) => x.slideId === sid) + 1;
+            const pair: string[] = [];
+            const b = observed.beforeThumbs[sid];
+            if (b) pair.push(b);
+            const a2 = afterThumbs[sid];
+            if (a2) pair.push(a2);
+            chat.push({
+              role: "event",
+              kind: "reviseSlide",
+              n: pos,
+              ...(pair.length ? { thumbs: pair } : {}),
+              at: Date.now(),
+            });
+          }
+        });
       }
 
       // ONE write, both stores, with the bake-vs-edit guard: only replace a

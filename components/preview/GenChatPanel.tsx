@@ -68,6 +68,8 @@ export function GenChatPanel({
         return (e.n ?? 0) > 0
           ? t.reviewImproved.replace("{n}", String(e.n))
           : t.reviewClean;
+      case "finalizing":
+        return t.finalizing;
       case "baked":
         return t.baked;
       default:
@@ -172,21 +174,39 @@ export function GenChatPanel({
           const label = eventLabel(e);
           if (!label) return null;
           return (
-            <p
-              key={i}
-              className="flex items-center gap-2 px-1 text-[12px] font-medium text-foreground/75"
-            >
-              <span
-                className="h-1.5 w-1.5 shrink-0 rounded-full"
-                style={{
-                  background:
-                    e.kind === "baked"
-                      ? "var(--tq-status-ok-dot)"
-                      : "var(--tq-status-warn-dot)",
-                }}
-              />
-              {label}
-            </p>
+            <div key={i} className="space-y-1.5 px-1">
+              <p className="flex items-center gap-2 text-[12px] font-medium text-foreground/75">
+                <span
+                  className="h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{
+                    background:
+                      e.kind === "baked"
+                        ? "var(--tq-status-ok-dot)"
+                        : "var(--tq-status-warn-dot)",
+                  }}
+                />
+                {label}
+              </p>
+              {/* Revision PROOF: [before, after] shots of the slide, so a
+                  subtle fix (line-height, spacing) is visible, not a claim. */}
+              {e.kind === "reviseSlide" && e.thumbs && e.thumbs.length > 0 ? (
+                <span className="flex items-center gap-1.5 ps-3.5">
+                  {e.thumbs.map((src, ti) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={ti}
+                      src={src}
+                      alt=""
+                      className={`h-14 w-auto rounded-md border ${
+                        ti === e.thumbs!.length - 1 && e.thumbs!.length > 1
+                          ? "border-emerald-400/50"
+                          : "border-foreground/10 opacity-70"
+                      }`}
+                    />
+                  ))}
+                </span>
+              ) : null}
+            </div>
           );
         })}
         {/* Nothing yet (the very first seconds): the working pulse alone. */}

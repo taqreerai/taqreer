@@ -1028,6 +1028,7 @@
       "reviewAsk": "Slide review",
       "reviewClean": "All slides approved as designed",
       "reviewImproved": "Improved {n} slides after review",
+      "finalizing": "Finalizing output...",
       "baked": "Final output complete"
     },
     "layers": {
