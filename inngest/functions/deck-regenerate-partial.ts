@@ -44,7 +44,7 @@ import {
 import { injectImgSrc } from "@/lib/images/slide-images";
 import { findInjectedLogoInner, injectLogoMarkers } from "@/lib/deck/logo-inject";
 import { recordSlidePartialRegen } from "@/lib/db/slide-versioning";
-import { appendGenChat } from "@/lib/deck/genchat-store";
+import { appendGenChatEntries } from "@/lib/deck/genchat-store";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 import { fanOutNotification } from "@/lib/notifications/server";
 
@@ -705,9 +705,12 @@ export const deckRegeneratePartial = inngest.createFunction(
     // tab while this runs (owner spec 2026-07-10). Best-effort: the feed
     // must never fail the regen. ⚠️ Every call MUST live inside step.run
     // - prelude code re-runs on each Inngest checkpoint replay and would
-    // append duplicates.
-    const chatWrite = (mutate: (chat: GenChatEntry[]) => void): Promise<void> =>
-      appendGenChat(projectId, versionId, mutate, (msg, meta) =>
+    // append duplicates. ATOMIC variant (CR PR #128): the per-slide steps
+    // fan out via Promise.all and may run in separate invocations, so the
+    // read-modify-write appendGenChat could lose entries here - these
+    // writes are pure pushes, served by one atomic SQL append instead.
+    const chatAppend = (entries: GenChatEntry[]): Promise<void> =>
+      appendGenChatEntries(projectId, versionId, entries, (msg, meta) =>
         logger.warn(msg, meta),
       );
     const slideNumberOf = (slideId: string): number =>
@@ -717,12 +720,12 @@ export const deckRegeneratePartial = inngest.createFunction(
     // the moment the run begins, so the Chat tab is never dead air while
     // the first Claude call streams.
     await step.run("genchat-regen-start", () =>
-      chatWrite((chat) => {
-        for (const slideId of targetSlideIds) {
-          const n = slideNumberOf(slideId);
-          if (n > 0) chat.push({ role: "event", kind: "regen", n, at: Date.now() });
-        }
-      }),
+      chatAppend(
+        targetSlideIds
+          .map((slideId) => slideNumberOf(slideId))
+          .filter((n) => n > 0)
+          .map((n) => ({ role: "event" as const, kind: "regen" as const, n, at: Date.now() })),
+      ),
     );
 
     // Resolve the deck format ONCE per job so every per-slide call uses
@@ -974,17 +977,19 @@ export const deckRegeneratePartial = inngest.createFunction(
             .map((b) => b.thinking)
             .join("\n")
             .trim();
-          await chatWrite((chat) => {
-            if (thinkingText) {
-              chat.push({
-                role: "thinking",
-                text: thinkingText.slice(0, 2000),
-                at: Date.now(),
-              });
-            }
-            const n = slideNumberOf(slideId);
-            if (n > 0) chat.push({ role: "event", kind: "slide", n, at: Date.now() });
-          });
+          const feedEntries: GenChatEntry[] = [];
+          if (thinkingText) {
+            feedEntries.push({
+              role: "thinking",
+              text: thinkingText.slice(0, 2000),
+              at: Date.now(),
+            });
+          }
+          const feedN = slideNumberOf(slideId);
+          if (feedN > 0) {
+            feedEntries.push({ role: "event", kind: "slide", n: feedN, at: Date.now() });
+          }
+          await chatAppend(feedEntries);
           completedSlides += 1;
           // Push the heartbeat promise into the queue (NOT fire-and-
           // forget). We don't await here — that would serialise the

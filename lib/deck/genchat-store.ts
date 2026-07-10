@@ -16,6 +16,73 @@ import {
 } from "@/lib/schema/slide";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 
+/**
+ * ATOMIC push-only append - for writers that may run CONCURRENTLY (a
+ * multi-slide partial regen fans its per-slide steps out via Promise.all,
+ * and Inngest may execute them in separate invocations, so the
+ * read-modify-write appendGenChat below could lose entries there - CR PR
+ * #128). One SQL statement: merge + cap-trim + write under the row lock,
+ * RETURNING the post-write feed for the live broadcast. No locks beyond
+ * the row UPDATE itself (advisory/session SQL is banned on the prod
+ * transaction pooler). Use appendGenChat instead when the mutation must
+ * EDIT existing entries (the bake's in-place thinking ticker - a single
+ * sequential writer by construction).
+ */
+export async function appendGenChatEntries(
+  projectId: string,
+  versionId: string,
+  entries: GenChatEntry[],
+  warn: (msg: string, meta?: Record<string, unknown>) => void,
+): Promise<void> {
+  try {
+    const valid = entries.filter(
+      (e) => GenChatEntrySchema.safeParse(e).success,
+    );
+    if (valid.length !== entries.length) {
+      warn("deck_genchat_invalid_entries_dropped", {
+        versionId,
+        dropped: entries.length - valid.length,
+      });
+    }
+    if (valid.length === 0) return;
+    const { prisma } = await import("@/lib/prisma");
+    const rows = await prisma.$queryRaw<{ chat: unknown }[]>(
+      Prisma.sql`UPDATE "PresentationVersion" SET "slideJson" = jsonb_set(
+        "slideJson",
+        '{genChat}',
+        (
+          SELECT COALESCE(jsonb_agg(t.e ORDER BY t.ord), '[]'::jsonb)
+          FROM jsonb_array_elements(
+            COALESCE("slideJson"->'genChat', '[]'::jsonb) || ${JSON.stringify(valid)}::jsonb
+          ) WITH ORDINALITY AS t(e, ord)
+          WHERE t.ord > jsonb_array_length(
+            COALESCE("slideJson"->'genChat', '[]'::jsonb) || ${JSON.stringify(valid)}::jsonb
+          ) - ${GENCHAT_MAX}
+        )
+      )
+      WHERE id = ${versionId}
+      RETURNING "slideJson"->'genChat' AS chat`,
+    );
+    const chat: GenChatEntry[] = Array.isArray(rows[0]?.chat)
+      ? (rows[0].chat as GenChatEntry[])
+      : valid;
+    broadcastToProject(projectId, "deck.genchat", {
+      versionId,
+      entries: chat.map((e) => (e.thumbs ? { ...e, thumbs: undefined } : e)),
+    }).catch((err) => {
+      warn("deck_genchat_broadcast_failed", {
+        versionId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+  } catch (err) {
+    warn("deck_genchat_write_failed", {
+      versionId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 export async function appendGenChat(
   projectId: string,
   versionId: string,
