@@ -55,6 +55,13 @@ function memo<T>(fn: () => Promise<T>, ttlMs = 60_000): () => Promise<T> {
   };
 }
 
+// Client pageviews from a dev machine carry $host = localhost:<port> (or
+// 127.0.0.1) and would otherwise pollute every visitor count. coalesce keeps
+// server-side events (no $host) included - in ClickHouse a bare NULL
+// comparison is falsy and would silently drop them.
+const NOT_LOCALHOST = `NOT startsWith(coalesce(properties.$host, ''), 'localhost')
+  AND NOT startsWith(coalesce(properties.$host, ''), '127.0.0.1')`;
+
 // ─── Sources by channel ─────────────────────────────────────────────────────
 // PostHog auto-classifies each session's entry channel into $channel_type
 // (Direct, Organic Search, Paid Search, Organic Social, Referral, Email, ...).
@@ -65,6 +72,8 @@ const CHANNEL_HOGQL = `
 SELECT session.$channel_type AS channel, count(distinct person_id) AS visitors
 FROM events
 WHERE timestamp > now() - interval 30 day
+  AND ${NOT_LOCALHOST}
+  AND session.$channel_type != ''
 GROUP BY channel
 ORDER BY visitors DESC
 LIMIT 12`;
@@ -97,6 +106,7 @@ SELECT properties.$geoip_country_code AS code,
 FROM events
 WHERE timestamp > now() - interval 30 day
   AND properties.$geoip_country_code != ''
+  AND ${NOT_LOCALHOST}
 GROUP BY code
 ORDER BY visitors DESC
 LIMIT 30`;
@@ -134,7 +144,8 @@ export const getGeoVisitors = memo(fetchGeo);
 const ONLINE_HOGQL = `
 SELECT count(distinct person_id) AS n
 FROM events
-WHERE timestamp > now() - interval 5 minute`;
+WHERE timestamp > now() - interval 5 minute
+  AND ${NOT_LOCALHOST}`;
 
 async function fetchOnline(): Promise<number> {
   const rows = await posthogQuery(ONLINE_HOGQL);
@@ -151,7 +162,8 @@ export type TrafficTotals = { uniqueVisitors: number; pageviews: number };
 const TOTALS_HOGQL = `
 SELECT count(distinct person_id) AS uniques, countIf(event = '$pageview') AS pageviews
 FROM events
-WHERE timestamp > now() - interval 30 day`;
+WHERE timestamp > now() - interval 30 day
+  AND ${NOT_LOCALHOST}`;
 
 async function fetchTotals(): Promise<TrafficTotals> {
   const rows = await posthogQuery(TOTALS_HOGQL);
@@ -169,16 +181,19 @@ const DEVICE_HOGQL = `
 SELECT properties.$device_type AS k, count(distinct person_id) AS n
 FROM events
 WHERE timestamp > now() - interval 30 day AND properties.$device_type != ''
+  AND ${NOT_LOCALHOST}
 GROUP BY k ORDER BY n DESC LIMIT 8`;
 const BROWSER_HOGQL = `
 SELECT properties.$browser AS k, count(distinct person_id) AS n
 FROM events
 WHERE timestamp > now() - interval 30 day AND properties.$browser != ''
+  AND ${NOT_LOCALHOST}
 GROUP BY k ORDER BY n DESC LIMIT 8`;
 const OS_HOGQL = `
 SELECT properties.$os AS k, count(distinct person_id) AS n
 FROM events
 WHERE timestamp > now() - interval 30 day AND properties.$os != ''
+  AND ${NOT_LOCALHOST}
 GROUP BY k ORDER BY n DESC LIMIT 8`;
 
 async function toBreakdown(hogql: string): Promise<Breakdown[]> {
