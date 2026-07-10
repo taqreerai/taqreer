@@ -2333,6 +2333,61 @@ export function DeckView({
     setCurrentSlideIndex(streamingPreview.length - 1);
   }, [status, streamingPreview.length]);
 
+  // BAKE-PENDING POLLER - the deck.baked broadcast's fallback, mirroring the
+  // image-fill poller's rationale: broadcasts have no replay, and a tab whose
+  // channel is mid-reconnect when the freeze bake lands otherwise wears the
+  // draft chips until a manual refresh (user report 2026-07-10). While any
+  // slide lacks its bake marker, poll the fat-sync; the derived
+  // bakePendingIds empties as soon as a fetch sees the markers, which also
+  // stops the interval. Capped so an abandoned bake (function failure after
+  // retries) doesn't poll forever - the chips then stay, honestly.
+  useEffect(() => {
+    if (status === "generating" || bakePendingIds.size === 0) return;
+    let cancelled = false;
+    let ticks = 0;
+    const MAX_TICKS = 30; // ~6 min at 12s - beyond any healthy bake
+    const tick = async () => {
+      if (cancelled || ticks++ >= MAX_TICKS) return;
+      try {
+        const res = await fetch(
+          `/api/projects/${encodeURIComponent(projectId)}/status?includeManifest=true&includeSlideStates=true`,
+          { credentials: "same-origin" },
+        );
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          manifest?: unknown;
+          slideStates?: InitialSlideState[] | null;
+        };
+        if (cancelled) return;
+        if (data.manifest) {
+          const parsed = SlideManifestSchema.safeParse(data.manifest);
+          if (parsed.success) {
+            bumpEditorIfFocusedChanged(parsed.data);
+            setManifestStable(parsed.data);
+          }
+        }
+        if (Array.isArray(data.slideStates)) {
+          const nextStates: Record<string, InitialSlideState> = {};
+          const nextVersions: Record<string, HistoryRow[]> = {};
+          for (const s of data.slideStates) {
+            nextStates[s.slideKey] = s;
+            nextVersions[s.slideKey] = s.versions ?? [];
+          }
+          setSlideStates(nextStates);
+          setHistoryVersions(nextVersions);
+        }
+      } catch {
+        /* network blip - next tick retries */
+      }
+    };
+    const id = setInterval(() => void tick(), 12_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- bumpEditorIfFocusedChanged + setManifestStable are stable
+  }, [projectId, status, bakePendingIds]);
+
   // Wheel + keyboard slide navigation. Velocity-aware: a fast trackpad
   // swipe consumes many pixels of deltaY in a short window and flips
   // multiple slides in one motion; a slow scroll flips one at a time.

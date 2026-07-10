@@ -15,14 +15,21 @@
 // adds no new image machinery.
 
 // ── geometry ────────────────────────────────────────────────────────────────
-// Derived from the canvas so every format gets proportional framing. The
-// ratios reproduce the spike-proven 16:9 values EXACTLY (margin 96, split 768,
-// band 378, gap 64, chrome mid 40, brand top 52 at 1920x1080) and scale for
-// portrait 3:4 (1080x1440: margin 54, split 432, band 504, gap 36).
+// Derived from the canvas so every format gets proportional framing. 16:9
+// values: margin 64, split 768, band 378, gap 64 at 1920x1080; portrait 3:4
+// (1080x1440): margin 36, split 432, band 504, gap 36.
+//
+// Margin history: the spike used 5% (96px at 16:9) SIZED FOR THE CHROME TEXT
+// BANDS that used to render between the well and the canvas edge. The system
+// chrome was removed 2026-07-10 (owner direction), so the wide band became
+// pure waste - user report: "the well is tight and margins are huge, which
+// makes the content small". Now margin == the panel gap (width/30): the well
+// grew 1728x888 -> 1792x952 at 16:9. Old stored decks are untouched (their
+// geometry is baked into their own <style>).
 export type FrameCanvas = { width: number; height: number };
 
 export function frameGeometry(canvas: FrameCanvas) {
-  const margin = Math.round(canvas.width * 0.05); // safe-area inset
+  const margin = Math.round(canvas.width / 30); // safe-area inset
   const splitW = Math.round(canvas.width * 0.4); // tier-2 split panel width
   const bandH = Math.round(canvas.height * 0.35); // tier-2 band height
   const gap = Math.round(canvas.width / 30); // panel-to-well gap
@@ -399,6 +406,7 @@ Review each slide the way a design director reviews a printed proof:
 - clipping and overflow: content cut by the well edge or cramped against it
 - anchoring: a block sitting on the wrong side for the reading direction
 - hierarchy and balance: type scale, spacing rhythm, dead zones, lopsided or underfilled compositions
+- scale and presence: these slides are PROJECTED in a room - type must read from distance, and the composition should USE the canvas; content floating small in a sea of empty ground is a defect, not minimalism
 - legibility: text over photography or low-contrast fills
 - deck consistency: type scale and spacing language coherent from slide to slide`,
     },
