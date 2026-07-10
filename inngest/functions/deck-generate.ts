@@ -123,7 +123,7 @@ type EnhanceImages = { fileIds: string[]; textPerSlide: string[] };
 
 // ─── Shared prompt fragments (DRY) ───────────────────────────────────
 // The legacy authoring prompts (SYSTEM_PROMPT_CREATE_HTML / _SOCIAL_HTML,
-// LANG_DIRECTION, IMG_ADDENDUM) were DELETED at the 2026-07-10 frame cutover —
+// LANG_DIRECTION, IMG_ADDENDUM) were DELETED at the 2026-07-10 frame cutover -
 // lib/deck/frame.ts frameSystemPrompt() is the only generation contract now
 // (context/frame-architecture-2026-07-10.md). The flow addenda below survive:
 // they compose on the frame base.
@@ -284,11 +284,11 @@ const DESIGN_STYLE_DIRECTIVES: Record<string, string> = {
 
 function ruleLines(rules: Rules): string[] {
   if (!rules) return [];
-  // Bare info, ONE line per AVAILABLE option — no chrome/layout how-to (owner
+  // Bare info, ONE line per AVAILABLE option - no chrome/layout how-to (owner
   // direction 2026-07-10: the chrome variables hand off with NO position
   // words; Claude places them). An option that's off says nothing, EXCEPT
   // pagination (its absence is stated in 2 words so "no page numbers" is
-  // explicit). `data-anchor` is the one functional marker kept —
+  // explicit). `data-anchor` is the one functional marker kept -
   // sanitize.ts's rewriteChromeOnTop reads it to lift chrome above images.
   const lines: string[] = [""];
   lines.push(
@@ -1875,7 +1875,7 @@ export const deckGenerate = inngest.createFunction(
           // The FRAME base (context/frame-architecture-2026-07-10.md) is the
           // ONLY generation contract since the 2026-07-10 cutover. It embeds
           // its own image contract (declared bg/panels + in-well slots). The
-          // flow addenda compose on it — they redirect design intent
+          // flow addenda compose on it - they redirect design intent
           // (reproduce/preserve) and leave the output contract alone.
           frameSystemPrompt({
             canvas: SLIDE_DIMENSIONS[slideFormat],
@@ -1965,7 +1965,7 @@ export const deckGenerate = inngest.createFunction(
           // with data-revises="N" and this swaps the corrected slide IN PLACE
           // (same slideId, same deck position). MUST run BEFORE the cap guard:
           // a correction that arrives after the deck already hit its slide
-          // count would otherwise abort the stream and be dropped — the exact
+          // count would otherwise abort the stream and be dropped - the exact
           // first-draft lock-in this feature removes. Revisions never grow the
           // deck, so the budget ceiling is not in play. An invalid/oversized
           // index falls through to the normal (append + cap) path.
@@ -2077,7 +2077,7 @@ export const deckGenerate = inngest.createFunction(
           // FRAME decks: parse the declared attributes + well and wrap with
           // the system layers (bg/panels/well/chrome). Cover declarations land
           // in frameCtx for the whole deck. slides.length is the 0-based index
-          // of THIS slide (pre-push) — pagination; the restart guard resets it.
+          // of THIS slide (pre-push) - pagination; the restart guard resets it.
           const decl = parseFrameSlide(parsed.html);
           if (decl.deckTitle) frameCtx.deckTitle = decl.deckTitle;
           if (decl.brand) frameCtx.brand = decl.brand;
@@ -2821,7 +2821,7 @@ export const deckGenerate = inngest.createFunction(
       await inngest
         .send({
           name: "deck.images.requested",
-          // freezeAfter: FRAME decks bake AFTER the image reconcile commits —
+          // freezeAfter: FRAME decks bake AFTER the image reconcile commits -
           // the bake's read-modify-write on slideJson would otherwise race the
           // reconcile's write on the same blob (lost update). deck-images-
           // generate dispatches deck.freeze.bake on its way out when set.
@@ -2837,7 +2837,7 @@ export const deckGenerate = inngest.createFunction(
     } else {
       // FRAME deck without images: freeze bake right away (deck-freeze-bake
       // pins the flow wells to absolute boxes in the clean render). Fire-and-
-      // forget: a bake failure leaves the deck on its flow html — the viewer
+      // forget: a bake failure leaves the deck on its flow html - the viewer
       // renders it identically (pixel gate) and the editor takes the
       // degraded path until a later bake succeeds.
       await inngest

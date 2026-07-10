@@ -1,19 +1,19 @@
 // FREEZE BAKE for FRAME decks (context/frame-architecture-2026-07-10.md).
 //
-// Triggered by `deck.freeze.bake` — from deck-generate right after save
+// Triggered by `deck.freeze.bake` - from deck-generate right after save
 // (non-images decks) or from deck-images-generate after its reconcile commits
 // (images decks; the ordering avoids a lost-update race on the slideJson
 // blob). Renders the deck in the clean export-grade environment (fonts
 // settled, scale 1, no editor CSS), runs the freeze-in-place script on each
-// frame slide's well — pinning the FLOW layout to absolute boxes without
-// moving or re-styling anything — and writes the frozen html back to BOTH
+// frame slide's well - pinning the FLOW layout to absolute boxes without
+// moving or re-styling anything - and writes the frozen html back to BOTH
 // stores (PresentationVersion.slideJson + the current SlideVersion rows).
 //
 // TRUST GATE: every slide is pixel-diffed (flow render vs frozen render) and
 // self-verified (post-mutation re-measure inside the freeze script). A slide
 // that fails either check keeps its flow html: the viewer renders it
 // identically, and the editor takes the degraded-but-lossless path. A bake
-// failure must never damage a deck — the gate refuses instead of guessing.
+// failure must never damage a deck - the gate refuses instead of guessing.
 //
 // Spike numbers (2026-07-10, scratchpad/frame-gen): worst slide 0.014% pixel
 // diff; serialize-reload roundtrip 0.000%.
@@ -58,7 +58,7 @@ export const deckFreezeBake = inngest.createFunction(
     concurrency: { limit: 2 },
     triggers: [{ event: "deck.freeze.bake" }],
     // Retries exhausted: app-level log only. The deck stays on its flow html
-    // (viewer identical, editor degraded) — never user-visible breakage.
+    // (viewer identical, editor degraded) - never user-visible breakage.
     onFailure: async ({ event, error, logger }) => {
       const original = (event.data.event?.data ?? {}) as {
         projectId?: string;
@@ -123,7 +123,7 @@ export const deckFreezeBake = inngest.createFunction(
         const page = await browser.newPage();
         await guardPageEgress(page);
         // +1: a clip rect EQUAL to the viewport hits a Chrome blank-output
-        // edge case (see thumbnail-render.ts) — keep the viewport larger.
+        // edge case (see thumbnail-render.ts) - keep the viewport larger.
         await page.setViewport({
           width: canvasW,
           height: canvasH + 1,
@@ -146,7 +146,7 @@ export const deckFreezeBake = inngest.createFunction(
         );
         // ‼️ Headless Chrome defers remote font fetches until FIRST PAINT, so
         // fonts.ready can resolve vacuously with 0 faces loaded (measured on
-        // the spike: 0 faces at ready, 45 faces 3s later — geometry then
+        // the spike: 0 faces at ready, 45 faces 3s later - geometry then
         // shifts under the measurement). Force a paint, poll until the loaded
         // face count is stable, then fonts.ready again.
         await page.screenshot({ clip: { x: 0, y: 0, width: 8, height: 8 } });
@@ -253,7 +253,7 @@ export const deckFreezeBake = inngest.createFunction(
           return Buffer.from(await page.screenshot({ type: "png", clip: box }));
         };
 
-        // Pass 1: flow ground-truth shots (freeze candidates only — flawed
+        // Pass 1: flow ground-truth shots (freeze candidates only - flawed
         // slides are headed to the self-fix pass instead).
         const flowShots = new Map<string, Buffer>();
         for (const s of toFreeze) flowShots.set(s.slideId, await shoot(s.slideId));
@@ -382,29 +382,9 @@ export const deckFreezeBake = inngest.createFunction(
         where: { id: versionId },
         data: { slideJson: reparsed.data as never },
       });
-      // Mirror into the slide's CURRENT SlideVersion row (same pattern as the
-      // images reconcile) so Undo/History replay the frozen state, not a
-      // pre-freeze flow snapshot.
-      for (const s of slides) {
-        if (!baked.out[s.slideId]) continue;
-        const state = await prisma.slideState.findUnique({
-          where: {
-            presentationId_slideKey: {
-              presentationId: version.presentationId,
-              slideKey: s.slideId,
-            },
-          },
-          select: { id: true, currentVersionNumber: true },
-        });
-        if (!state) continue;
-        await prisma.slideVersion.updateMany({
-          where: {
-            slideStateId: state.id,
-            versionNumber: state.currentVersionNumber,
-          },
-          data: { slideJson: s as unknown as Prisma.InputJsonValue },
-        });
-      }
+      await mirrorSlideVersions(prisma, version.presentationId, slides, (id) =>
+        Boolean(baked.out[id]),
+      );
       return frozenIds.length;
     });
 
@@ -414,7 +394,7 @@ export const deckFreezeBake = inngest.createFunction(
     // corrected sections are re-assembled through the SAME frame pipeline,
     // written (stamped data-tq-audited so this can never loop), and a re-
     // dispatched bake freezes them. A failed/empty fix leaves the flow html
-    // in place — viewer fine, editor degraded, no damage possible.
+    // in place - viewer fine, editor degraded, no damage possible.
     let fixed = 0;
     if (baked.flawed.length > 0) {
       fixed = await step.run("self-fix", async () => {
@@ -478,7 +458,7 @@ export const deckFreezeBake = inngest.createFunction(
             },
           ],
           messages: [{ role: "user", content: frameFixUserText(flawedInput) }],
-        } as never);
+        });
         const finalMsg = await stream.finalMessage();
         const raw = finalMsg.content
           .filter((b) => b.type === "text")
@@ -580,26 +560,9 @@ export const deckFreezeBake = inngest.createFunction(
           where: { id: versionId },
           data: { slideJson: reparsed.data as never },
         });
-        for (const s of slides) {
-          if (!replacements.has(s.slideId)) continue;
-          const state = await prisma.slideState.findUnique({
-            where: {
-              presentationId_slideKey: {
-                presentationId: fresh.presentationId,
-                slideKey: s.slideId,
-              },
-            },
-            select: { id: true, currentVersionNumber: true },
-          });
-          if (!state) continue;
-          await prisma.slideVersion.updateMany({
-            where: {
-              slideStateId: state.id,
-              versionNumber: state.currentVersionNumber,
-            },
-            data: { slideJson: s as unknown as Prisma.InputJsonValue },
-          });
-        }
+        await mirrorSlideVersions(prisma, fresh.presentationId, slides, (id) =>
+          replacements.has(id),
+        );
         for (const f of baked.flawed) {
           logger.info("deck_frame_fixed", {
             versionId,
@@ -610,7 +573,7 @@ export const deckFreezeBake = inngest.createFunction(
         return replacements.size;
       });
 
-      // The fixed slides are unfrozen flow html — re-dispatch the bake to
+      // The fixed slides are unfrozen flow html - re-dispatch the bake to
       // freeze them (they carry data-tq-audited, so round 2 can never loop
       // back here). Distinct event id: the original id already fired.
       if (fixed > 0) {
@@ -643,4 +606,39 @@ export const deckFreezeBake = inngest.createFunction(
 // Same defensive CSS-attribute-selector escape as thumbnail-render.
 function cssEscape(value: string): string {
   return value.replace(/[^a-zA-Z0-9_-]/g, "\\$&");
+}
+
+// Mirror updated slide html into each slide's CURRENT SlideVersion row (the
+// dual-store rule; same pattern as the images reconcile) so Undo/History
+// replay the written state. Parallel per slide - the rows are independent
+// and a deck is at most a dozen slides (CR PR #127).
+async function mirrorSlideVersions(
+  prisma: (typeof import("@/lib/prisma"))["prisma"],
+  presentationId: string,
+  slides: { slideId: string }[],
+  written: (slideId: string) => boolean,
+): Promise<void> {
+  await Promise.all(
+    slides
+      .filter((s) => written(s.slideId))
+      .map(async (s) => {
+        const state = await prisma.slideState.findUnique({
+          where: {
+            presentationId_slideKey: {
+              presentationId,
+              slideKey: s.slideId,
+            },
+          },
+          select: { id: true, currentVersionNumber: true },
+        });
+        if (!state) return;
+        await prisma.slideVersion.updateMany({
+          where: {
+            slideStateId: state.id,
+            versionNumber: state.currentVersionNumber,
+          },
+          data: { slideJson: s as unknown as Prisma.InputJsonValue },
+        });
+      }),
+  );
 }

@@ -1,17 +1,17 @@
-// RENDER AUDIT for FRAME decks (context/frame-architecture-2026-07-10.md) —
+// RENDER AUDIT for FRAME decks (context/frame-architecture-2026-07-10.md) -
 // the "catch, don't guess" layer. Runs in the clean render deck-freeze-bake
 // already owns, BEFORE the freeze, and measures the flaw classes the frame
 // cannot prevent structurally (they live inside Claude's well):
 //
-//   overflow   — content extends past the clipped well (invisible = lost).
-//   anchor     — the 2026-07-10 slide-2 finding: text aligned toward the
+//   overflow   - content extends past the clipped well (invisible = lost).
+//   anchor     - the 2026-07-10 slide-2 finding: text aligned toward the
 //                reading side while its shrink-wrapped BLOCK anchors to the
 //                opposite edge (Claude's LTR mental model writes flex-end
 //                meaning "right"; under RTL flex-end = left). The signature is
 //                self-inconsistent, which is what makes it detectable with
 //                near-zero false positives: a designer who wants off-side
 //                anchoring aligns the text the same way.
-//   underfill  — content occupies a small fraction of the well (sparse slide).
+//   underfill  - content occupies a small fraction of the well (sparse slide).
 //                Report-only: composition taste, not a defect.
 //
 // Findings are DATA for the one-round self-fix pass (the model corrects its
@@ -89,7 +89,7 @@ function __tqAuditWell(well, dir) {
     if (!alignedToReading) continue;
     var br = b.getBoundingClientRect();
     var pr = b.parentElement.getBoundingClientRect();
-    if (br.width >= pr.width * 0.9) continue; // fills its parent — no anchor side
+    if (br.width >= pr.width * 0.9) continue; // fills its parent - no anchor side
     var readGap = readingRight ? pr.right - br.right : br.left - pr.left;
     var farGap = readingRight ? br.left - pr.left : pr.right - br.right;
     // Anchored to the WRONG side: big gap on the reading side, hugging the far
@@ -111,7 +111,7 @@ function __tqAuditWell(well, dir) {
         anchorCount +
         " text block(s) aligned toward the reading side but ANCHORED to the opposite edge, e.g. " +
         anchorSample +
-        " — under " + (readingRight ? "RTL align-items:flex-end anchors LEFT; use flex-start" : "LTR align-items:flex-end anchors RIGHT; use flex-start"),
+        " - under " + (readingRight ? "RTL align-items:flex-end anchors LEFT; use flex-start" : "LTR align-items:flex-end anchors RIGHT; use flex-start"),
     });
   }
 
@@ -143,7 +143,7 @@ function __tqAuditWell(well, dir) {
     if (fill < 0.42) {
       findings.push({
         type: "underfill",
-        detail: "content spans only " + Math.round(fill * 100) + "% of the well height — consider a fuller composition",
+        detail: "content spans only " + Math.round(fill * 100) + "% of the well height - consider a fuller composition",
       });
     }
   }

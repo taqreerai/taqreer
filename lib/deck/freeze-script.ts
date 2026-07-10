@@ -1,9 +1,9 @@
-// The PRECISE flattener (context/frame-architecture-2026-07-10.md) — the
+// The PRECISE flattener (context/frame-architecture-2026-07-10.md) - the
 // in-page "freeze-in-place" script deck-freeze-bake injects into the clean
 // puppeteer render. This is the ONLY flattener frame decks ever meet.
 //
 // Unlike the legacy editor flatten (lib/editor/flatten.ts), it does NOT hoist
-// elements to flat siblings and does NOT re-serialize computed styles — the
+// elements to flat siblings and does NOT re-serialize computed styles - the
 // unbounded conversion where that code's bug classes lived (orphaned pseudo
 // elements, unmatched descendant selectors, nth-child breaks). Freeze-in-place
 // keeps the DOM tree exactly as authored and PINS each well element where the
@@ -13,13 +13,13 @@
 //
 // Input domain (why this is safe): frame decks' wells are FLOW-ONLY by the
 // generation contract (no absolute, no transforms), and system layers
-// (tq-bg/tq-panel/tq-chrome) are already absolute — only the well pins.
+// (tq-bg/tq-panel/tq-chrome) are already absolute - only the well pins.
 //
 // Spike numbers (2026-07-10, scratchpad/frame-gen): worst slide 0.014% pixel
 // diff vs the flow render; serialize-reload roundtrip 0.000%.
 //
 // Kept as a plain JS source STRING (not a module import) because it executes
-// inside the rendered page via page.evaluate — no bundler round trip.
+// inside the rendered page via page.evaluate - no bundler round trip.
 
 export const FREEZE_SCRIPT = `
 function __tqFreezeWell(well) {
@@ -56,7 +56,7 @@ function __tqFreezeWell(well) {
       // height:auto is ONLY for boxes that actually CONTAIN text (so an editor
       // text edit grows them). An empty painted shell (divider bar, dot) or a
       // replaced element (img/svg) classified as an atomic leaf must keep its
-      // explicit height — auto collapses a divider to 0 and lets an img revert
+      // explicit height - auto collapses a divider to 0 and lets an img revert
       // to its intrinsic ratio (both caught by self-verify on the first e2e
       // bake, 2026-07-10).
       var tagLower = el.tagName.toLowerCase();
@@ -105,7 +105,7 @@ function __tqFreezeWell(well) {
     var gt = vr.top - vpr.top - (parseFloat(vpcs.borderTopWidth) || 0);
     // Text blocks pin with height:auto ON PURPOSE (editor text-grow), so a
     // flow-stretched box (flex:1 / stretch) legitimately collapses to its
-    // content height — comparing height there rejected visually-perfect
+    // content height - comparing height there rejected visually-perfect
     // slides (0.029% pixel diff, 2026-07-10 chrome e2e). The pixel gate
     // backstops any VISIBLE collapse (a stretched box with a background).
     if (

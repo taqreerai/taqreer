@@ -403,7 +403,7 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
 
       // The editor NEVER flattens (2026-07-10 frame cutover): frame decks
       // arrive pre-frozen by the server-side deck-freeze-bake (pixel-gated,
-      // clean render) — already the editor's absolute model. A not-yet-frozen
+      // clean render): already the editor's absolute model. A not-yet-frozen
       // frame deck (bake in flight) and any LEGACY pre-frame deck open as
       // stored in the degraded-but-lossless path (select/text/style work;
       // free drag is limited by nesting). The in-browser flatten and its
