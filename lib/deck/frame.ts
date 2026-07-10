@@ -263,6 +263,25 @@ export type FrameDeckCtx = {
 // SAFE_GENID charset ([A-Za-z0-9._-]) - slide indexes do.
 const bgGenId = (slideIndex: number) => `tqframe-bg-${slideIndex + 1}`;
 
+// Latin numerals ONLY (house rule): the prompt's LANG block already demands
+// 0-9, but the model occasionally emits Arabic-Indic anyway (slide-4 stats +
+// cover year, caught live 2026-07-10) - so the rule is ENFORCED here, at the
+// assembly chokepoint every path shares (generation, vision revisions,
+// partial regen). A 1:1 code-point map; these code points only ever occur in
+// human text, so a whole-string pass is safe. Includes Extended Arabic-Indic
+// (Persian forms some models mix in) and the Arabic percent/decimal marks so
+// "٦٥٪" becomes "65%", not "65٪".
+const LATIN_DIGIT_MAP: Record<string, string> = {
+  "٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4",
+  "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9",
+  "۰": "0", "۱": "1", "۲": "2", "۳": "3", "۴": "4",
+  "۵": "5", "۶": "6", "۷": "7", "۸": "8", "۹": "9",
+  "٪": "%", "٫": ".", "٬": ",",
+};
+export function latinizeDigits(html: string): string {
+  return html.replace(/[٠-٩۰-۹٪٫٬]/g, (ch) => LATIN_DIGIT_MAP[ch] ?? ch);
+}
+
 export function assembleFramedSlide(
   decl: FrameSlideDecl,
   ctx: FrameDeckCtx,
@@ -331,14 +350,14 @@ export function assembleFramedSlide(
   // DECLARED attrs are preserved on the stored section so post-hoc passes
   // (the render-audit self-fix, future partial regen) can reconstruct the
   // model's authoring view without the original stream.
-  return (
+  return latinizeDigits(
     `<section dir="${ctx.direction}" data-tq-frame="1" data-label="${esc(decl.label)}" data-role="${esc(decl.role)}"` +
-    ` data-bg="${esc(decl.bg)}"` +
-    (decl.bgCss ? ` data-bg-css="${esc(decl.bgCss)}"` : "") +
-    (decl.bgPrompt ? ` data-bg-prompt="${esc(decl.bgPrompt)}"` : "") +
-    (decl.bgScrim !== "none" ? ` data-bg-scrim="${decl.bgScrim}"` : "") +
-    (isCover && ctx.deckTitle ? ` data-deck-title="${esc(ctx.deckTitle)}"` : "") +
-    `>${ground}${panelHtml}${wellHtml}${chromeHtml}</section>`
+      ` data-bg="${esc(decl.bg)}"` +
+      (decl.bgCss ? ` data-bg-css="${esc(decl.bgCss)}"` : "") +
+      (decl.bgPrompt ? ` data-bg-prompt="${esc(decl.bgPrompt)}"` : "") +
+      (decl.bgScrim !== "none" ? ` data-bg-scrim="${decl.bgScrim}"` : "") +
+      (isCover && ctx.deckTitle ? ` data-deck-title="${esc(ctx.deckTitle)}"` : "") +
+      `>${ground}${panelHtml}${wellHtml}${chromeHtml}</section>`,
   );
 }
 
