@@ -32,6 +32,9 @@ type Props = {
   configVersion: number;
   // Per-generated-image surcharge (PlatformSettings.imageCredits).
   imageCredits: number;
+  // Flat base per partial/slide regen run (PlatformSettings.regenBaseCredits,
+  // 2026-07-10 vision-layer repricing: the regen's own review bake).
+  regenBaseCredits: number;
 };
 
 type PresetForm = {
@@ -143,7 +146,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export function SettingsClient({ presets, tiers, models, flows, configVersion, imageCredits }: Props) {
+export function SettingsClient({ presets, tiers, models, flows, configVersion, imageCredits, regenBaseCredits }: Props) {
   const router = useRouter();
   const [presetModal, setPresetModal] = useState<{ mode: "add" | "edit"; key?: string } | null>(
     null,
@@ -154,8 +157,10 @@ export function SettingsClient({ presets, tiers, models, flows, configVersion, i
   const [tierForm, setTierForm] = useState<TierForm | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Image surcharge inline editor (Platform section).
+  // Platform pricing knobs inline editor (Platform section). Saved together -
+  // the PATCH route validates and writes both.
   const [imageCreditsDraft, setImageCreditsDraft] = useState(String(imageCredits));
+  const [regenBaseDraft, setRegenBaseDraft] = useState(String(regenBaseCredits));
   const [imageSaving, setImageSaving] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
 
@@ -167,7 +172,10 @@ export function SettingsClient({ presets, tiers, models, flows, configVersion, i
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify({ imageCredits: imageCreditsDraft }),
+        body: JSON.stringify({
+          imageCredits: imageCreditsDraft,
+          regenBaseCredits: regenBaseDraft,
+        }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -494,12 +502,13 @@ export function SettingsClient({ presets, tiers, models, flows, configVersion, i
       <section className="space-y-3">
         <div className="space-y-0.5">
           <h2 className="text-lg font-semibold" style={{ color: PRIMARY }}>
-            Image pricing
+            Platform pricing
           </h2>
           <p className="text-xs" style={{ color: MUTED }}>
-            Credits charged per generated image on images-mode decks (held one
-            per slide up to the 12-image deck cap; settled on actual boxes).
-            0 = images free.
+            Credits per generated image on images-mode decks (held one per
+            slide up to the 12-image deck cap; settled on actual boxes; 0 =
+            free), and the flat base charged once per partial/slide regen run
+            (the regen&apos;s own render + vision review + freeze bake).
           </p>
         </div>
         <div className="surface-card flex flex-wrap items-end gap-3 rounded-xl p-4">
@@ -513,10 +522,24 @@ export function SettingsClient({ presets, tiers, models, flows, configVersion, i
               style={inputStyle}
             />
           </Field>
+          <Field label="Regen base credits">
+            <input
+              type="number"
+              min={0}
+              value={regenBaseDraft}
+              onChange={(e) => setRegenBaseDraft(e.target.value)}
+              className="w-32 rounded-lg px-3 py-2 text-sm"
+              style={inputStyle}
+            />
+          </Field>
           <button
             type="button"
             onClick={saveImageCredits}
-            disabled={imageSaving || imageCreditsDraft === String(imageCredits)}
+            disabled={
+              imageSaving ||
+              (imageCreditsDraft === String(imageCredits) &&
+                regenBaseDraft === String(regenBaseCredits))
+            }
             className="btn-pill px-4 py-2 text-sm disabled:opacity-50"
           >
             {imageSaving ? "Saving..." : "Save"}

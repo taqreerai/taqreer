@@ -1,6 +1,7 @@
 // PATCH /api/admin/settings/platform - admin edits platform-wide pricing
-// knobs (currently: imageCredits, the per-generated-image surcharge on
-// images-mode decks). Admin-only.
+// knobs: imageCredits (per-generated-image surcharge) and regenBaseCredits
+// (flat base per partial/slide regen run, the regen's own review bake).
+// Admin-only.
 
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/api/admin-context";
@@ -14,11 +15,16 @@ export async function PATCH(request: Request) {
   if ("error" in ctx) return ctx.error;
   try {
     const body = (await request.json()) as Record<string, unknown>;
-    // NaN for absent/empty input (not 0, which would silently make
-    // images free) - updatePlatformSettings rejects NaN with a 400.
-    const raw = String(body.imageCredits ?? "").trim();
-    const imageCredits = raw === "" ? NaN : Number(raw);
-    await updatePlatformSettings(ctx.userId, { imageCredits });
+    // NaN for absent/empty input (not 0, which would silently zero a
+    // price) - updatePlatformSettings rejects NaN with a 400.
+    const num = (v: unknown) => {
+      const raw = String(v ?? "").trim();
+      return raw === "" ? NaN : Number(raw);
+    };
+    await updatePlatformSettings(ctx.userId, {
+      imageCredits: num(body.imageCredits),
+      regenBaseCredits: num(body.regenBaseCredits),
+    });
     return NextResponse.json({ ok: true });
   } catch (err) {
     if (err instanceof ValidationError) {

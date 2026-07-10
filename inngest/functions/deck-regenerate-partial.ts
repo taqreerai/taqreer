@@ -6,6 +6,7 @@ import { regenCost } from "@/lib/credits/cost";
 import {
   ensureFresh,
   getPreset,
+  getRegenBaseCredits,
   regenPresetKey,
   creditCostFor,
 } from "@/lib/config/runtime-config";
@@ -595,15 +596,17 @@ export const deckRegeneratePartial = inngest.createFunction(
       data.quality && getPreset(data.quality) ? data.quality : regenPresetKey();
 
     // ─── Credit pre-authorization (billing plan Phase A) ───────────
-    // Regen costs perSlide × N (no base). Hold before any Claude call;
-    // settle in full after the save, release in onFailure. Keyed by
-    // the target version id - one regen run per version row, stable
-    // across Inngest retries.
+    // Regen costs ONE review-bake base per run (the regen's own render +
+    // vision review + freeze, 2026-07-10 vision-layer repricing) plus
+    // perSlide × N. Hold before any Claude call; settle in full after the
+    // save, release in onFailure. Keyed by the target version id - one
+    // regen run per version row, stable across Inngest retries.
     const regenChargeKey = `regen:${versionId}`;
     const regenAmount = regenCost(
       eventQuality,
       targetSlideIds.length,
       creditCostFor,
+      getRegenBaseCredits(),
     );
     const regenHold = await step.run("credit-hold", async () => {
       const project = await prisma.project.findUnique({

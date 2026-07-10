@@ -12,13 +12,19 @@ import {
   getTiers,
   getFreeCredits,
   getImageCredits,
+  getRegenBaseCredits,
   defaultPresetKey,
   regenPresetKey,
   ensureFresh,
 } from "../lib/config/runtime-config";
 import { QUALITY_PRESETS, DEFAULT_QUALITY, REGEN_QUALITY } from "../lib/types/quality";
 import { paramsForQuality } from "../lib/anthropic/quality-params";
-import { CREDIT_COST, TIERS, IMAGE_CREDITS_PER_IMAGE } from "../lib/credits/cost";
+import {
+  CREDIT_COST,
+  TIERS,
+  IMAGE_CREDITS_PER_IMAGE,
+  REGEN_BASE_CREDITS,
+} from "../lib/credits/cost";
 import { KNOWN_PLANS } from "../lib/plan";
 
 function checkAgainstConstants(label: string) {
@@ -32,6 +38,7 @@ function checkAgainstConstants(label: string) {
     "active preset keys",
   );
   assert.equal(getImageCredits(), IMAGE_CREDITS_PER_IMAGE, "image credits");
+  assert.equal(getRegenBaseCredits(), REGEN_BASE_CREDITS, "regen base credits");
   assert.equal(getTiers().length, KNOWN_PLANS.length, "tier count");
   for (const plan of KNOWN_PLANS) {
     const t = getTier(plan);
