@@ -13,12 +13,14 @@ import {
 import { useRouter } from "next/navigation";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
-import { motion, type Variants } from "framer-motion";
+import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { useServerStatus } from "@/lib/hooks/useServerStatus";
 import {
   SlideManifestSchema,
   SlideSchema,
   ThemeSchema,
+  GenChatEntrySchema,
+  type GenChatEntry,
   type SlideManifest,
   type SlideType,
   type ThemeType,
@@ -27,6 +29,7 @@ import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import { SlideEditor } from "@/components/preview/editor/SlideEditor";
 import { StylePill } from "@/components/preview/editor/StylePill";
 import { LayersPanel } from "@/components/preview/editor/LayersPanel";
+import { GenChatPanel } from "@/components/preview/GenChatPanel";
 import { serializeSlideSection } from "@/lib/editor/serialize";
 import { fitArtboard } from "@/lib/editor/canvas-fit";
 import { TopUtilityBar } from "@/components/app/TopUtilityBar";
@@ -519,6 +522,10 @@ export function DeckView({
   // first slide closes in the stream — typically 30–60 s into a
   // generation. Reset to [] when status leaves "generating".
   const [streamingPreview, setStreamingPreview] = useState<SlideType[]>([]);
+  // GenChat transparency feed accumulated from the generation status poll;
+  // after completion the manifest's own genChat (which the bake keeps
+  // appending to) takes over - see the genChatFeed derivation.
+  const [liveGenChat, setLiveGenChat] = useState<GenChatEntry[]>([]);
   // Stale-poll guards for the streaming preview. The pre-fix monotonic
   // guard was length-only (`validated.length >= prev.length`), which
   // worked for retry-induced shrinkage but couldn't reject the case
@@ -1526,6 +1533,17 @@ export function DeckView({
     return ids;
   }, [manifest]);
 
+  // The GenChat feed to display: during generation the status poll fills
+  // liveGenChat; once the manifest exists ITS genChat is the superset (the
+  // bake keeps appending to it and every fat-sync refreshes it). Prefer
+  // whichever is longer so the handoff between phases never truncates.
+  const genChatFeed = useMemo<GenChatEntry[]>(() => {
+    const fromManifest = manifest?.genChat ?? [];
+    return fromManifest.length >= liveGenChat.length
+      ? fromManifest
+      : liveGenChat;
+  }, [manifest, liveGenChat]);
+
   // Images-mode hydration + self-heal (context/images.md). The live swap
   // is driven by `slide.image.ready` broadcasts, but broadcasts have no
   // replay: one can land in the `/preview`→`/project` navigation gap
@@ -2345,7 +2363,7 @@ export function DeckView({
     if (status === "generating" || bakePendingIds.size === 0) return;
     let cancelled = false;
     let ticks = 0;
-    const MAX_TICKS = 30; // ~6 min at 12s - beyond any healthy bake
+    const MAX_TICKS = 72; // ~6 min at 5s - beyond any healthy bake
     const tick = async () => {
       if (cancelled || ticks++ >= MAX_TICKS) return;
       try {
@@ -2380,7 +2398,9 @@ export function DeckView({
         /* network blip - next tick retries */
       }
     };
-    const id = setInterval(() => void tick(), 12_000);
+    // 5s: fast enough that the GenChat feed (the bake's review thinking
+    // rides the manifest) reads live, cheap enough for a 60-90s window.
+    const id = setInterval(() => void tick(), 5_000);
     return () => {
       cancelled = true;
       clearInterval(id);
@@ -2694,6 +2714,19 @@ export function DeckView({
           }
         } else if (data.slideCount > 0) {
           setSlideCount(data.slideCount);
+        }
+        // GenChat transparency feed - validated per entry; entries are
+        // append-mostly so length-monotonic acceptance is enough (the live
+        // thinking entry mutates in place, so also accept same-length
+        // snapshots - text updates ride them).
+        const rawGenChat = (data as unknown as { genChat?: unknown }).genChat;
+        if (Array.isArray(rawGenChat)) {
+          const feed: GenChatEntry[] = [];
+          for (const candidate of rawGenChat) {
+            const parsed = GenChatEntrySchema.safeParse(candidate);
+            if (parsed.success) feed.push(parsed.data);
+          }
+          setLiveGenChat((prev) => (feed.length >= prev.length ? feed : prev));
         }
         // Live-preview slides — validate each via SlideSchema before
         // accepting (the server already validated, but the wire format
@@ -4199,6 +4232,33 @@ export function DeckView({
           />
         </motion.div>
       ) : null}
+
+      {/* GenChat - the backend-transparency feed, overlaying the Layers rail
+          while the deck generates + bakes (what we asked the model, its live
+          summarized thinking, milestones, the review pass). Fades out when
+          the bake lands - "the chat fades to the layers" (owner spec
+          2026-07-10) - revealing the LayersPanel beneath. */}
+      <AnimatePresence>
+        {generating || bakePendingIds.size > 0 ? (
+          <motion.div
+            key="genchat"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+          >
+            <GenChatPanel
+              entries={genChatFeed}
+              language={
+                (viewManifest?.language ?? streamingLanguage) === "en"
+                  ? "en"
+                  : "ar"
+              }
+              collapsed={layersCollapsed}
+            />
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       {/* Collapse / reopen the floating rails, a BARE arrow on the rail's
           canvas-facing edge (no border / no box, user direction 2026-06-14),

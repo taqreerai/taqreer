@@ -1017,6 +1017,19 @@
     },
     "share": "Share",
     "presence": "and {n} others",
+    "genchat": {
+      "kicker": "Behind the scenes",
+      "title": "What is happening now",
+      "youAsked": "Your ask",
+      "thinking": "Thinking",
+      "starting": "Preparing the design...",
+      "slideDone": "Designed slide {n}",
+      "revised": "Improved slide {n} mid-stream",
+      "reviewing": "Reviewing the rendered slides with a designer's eye...",
+      "reviewClean": "Approved every slide as designed",
+      "reviewImproved": "Improved {n} slides after review",
+      "baked": "Final output complete"
+    },
     "layers": {
       "generatedImage": "Generated image",
       "image": "Image",

@@ -65,6 +65,8 @@ import {
 import {
   SlideManifestSchema,
   dimensionsForFormat,
+  GENCHAT_MAX,
+  type GenChatEntry,
   type SlideManifest,
 } from "@/lib/schema/slide";
 import { buildHtmlDocumentServer } from "@/lib/export/html-document-server";
@@ -173,6 +175,39 @@ export const deckFreezeBake = inngest.createFunction(
 
     // ─── Step 2: observe (render + measure + photograph) and revise ──
     const observed = await step.run("observe-and-revise", async () => {
+      // ── GENCHAT (backend-transparency feed) ── the bake continues the
+      // feed generation started (manifest.genChat): review started, the
+      // vision model's LIVE summarized thinking, review outcome. Writes go
+      // through jsonb_set targeting ONLY the genChat key, so a concurrent
+      // slide edit can never be clobbered by a chat tick. Best-effort: the
+      // feed must never fail a bake.
+      const chatWrite = async (
+        mutate: (chat: GenChatEntry[]) => void,
+      ): Promise<void> => {
+        try {
+          const { prisma } = await import("@/lib/prisma");
+          const rows = await prisma.$queryRaw<{ chat: unknown }[]>(
+            Prisma.sql`SELECT "slideJson"->'genChat' AS chat FROM "PresentationVersion" WHERE id = ${versionId}`,
+          );
+          const chat: GenChatEntry[] = Array.isArray(rows[0]?.chat)
+            ? (rows[0].chat as GenChatEntry[])
+            : [];
+          mutate(chat);
+          while (chat.length > GENCHAT_MAX) chat.shift();
+          await prisma.$executeRaw(
+            Prisma.sql`UPDATE "PresentationVersion" SET "slideJson" = jsonb_set("slideJson", '{genChat}', ${JSON.stringify(chat)}::jsonb) WHERE id = ${versionId}`,
+          );
+        } catch (err) {
+          logger.warn("deck_genchat_write_failed", {
+            versionId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      };
+      await chatWrite((chat) =>
+        chat.push({ role: "event", kind: "review", at: Date.now() }),
+      );
+
       // 2a. One clean render: audit findings + a downscaled shot per
       // pending slide. The browser closes BEFORE the model call - never
       // hold a Chrome instance across a long network wait.
@@ -278,7 +313,9 @@ export const deckFreezeBake = inngest.createFunction(
             const stream = client.messages.stream({
               model: "claude-opus-4-8",
               max_tokens: VISION_MAX_TOKENS,
-              thinking: { type: "adaptive" },
+              // summarized: the stream carries a user-readable reasoning
+              // summary - relayed live into the GenChat feed below.
+              thinking: { type: "adaptive", display: "summarized" },
               output_config: { effort: "low" },
               system: [
                 {
@@ -300,6 +337,29 @@ export const deckFreezeBake = inngest.createFunction(
                   content: frameVisionUserBlocks(visionInputs, deckCss),
                 },
               ],
+            });
+            // Relay the vision model's summarized thinking into the feed,
+            // throttled + non-overlapping (each tick is a jsonb_set write).
+            let lastChatTick = 0;
+            let chatBusy = false;
+            stream.on("thinking", (_delta, snapshot) => {
+              const now = Date.now();
+              if (chatBusy || now - lastChatTick < 3000) return;
+              lastChatTick = now;
+              chatBusy = true;
+              const text =
+                snapshot.length > 600 ? `…${snapshot.slice(-600)}` : snapshot;
+              void chatWrite((chat) => {
+                const last = chat[chat.length - 1];
+                if (last?.role === "thinking") {
+                  last.text = text;
+                  last.at = Date.now();
+                } else {
+                  chat.push({ role: "thinking", text, at: Date.now() });
+                }
+              }).finally(() => {
+                chatBusy = false;
+              });
             });
             const finalMsg = await stream.finalMessage();
             const raw = finalMsg.content
@@ -382,6 +442,14 @@ export const deckFreezeBake = inngest.createFunction(
               cache_write: finalMsg.usage.cache_creation_input_tokens,
               stop_reason: finalMsg.stop_reason,
             });
+            await chatWrite((chat) =>
+              chat.push({
+                role: "event",
+                kind: "reviewDone",
+                n: revisedCount,
+                at: Date.now(),
+              }),
+            );
           }
         }
       } catch (err) {
@@ -592,6 +660,12 @@ export const deckFreezeBake = inngest.createFunction(
       const reparsed = SlideManifestSchema.safeParse({
         ...fm,
         slides: outSlides,
+        // Terminal feed entry, atomic with the bake markers - the client
+        // fades the chat into the Layers panel on this signal.
+        genChat: [
+          ...(fm.genChat ?? []),
+          { role: "event" as const, kind: "baked" as const, at: Date.now() },
+        ].slice(-GENCHAT_MAX),
       });
       if (!reparsed.success) {
         throw new Error("Baked manifest failed validation; not writing");

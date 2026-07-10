@@ -12,6 +12,8 @@ import {
   SLIDE_DIMENSIONS,
   SLIDE_FORMATS,
   SLIDE_ROLE_VALUES,
+  GENCHAT_MAX,
+  type GenChatEntry,
   type SlideFormat,
   type SlideManifest,
   type SlideType,
@@ -1794,6 +1796,11 @@ export const deckGenerate = inngest.createFunction(
       // for the final manifest inject below, so we sign only once per run.
       const signedUploadedFaces = await buildSignedUploadedFontFaces(data.brief);
 
+      // GENCHAT feed store - declared at the writeProgress scope so every
+      // progress write can carry it; populated + described where the HTML
+      // stream sets up (chatPush/chatThinking helpers there).
+      const genChat: GenChatEntry[] = [];
+
       const writeProgress = (
         stage: "thinking" | "designing" | "validating" | "saving",
         currentSlide: number,
@@ -1819,6 +1826,7 @@ export const deckGenerate = inngest.createFunction(
                 streamingTheme,
                 streamingDirection: streamDirection,
                 streamingLanguage: streamLanguage,
+                genChat: genChat.slice(),
               } as never,
             },
           })
@@ -1900,6 +1908,41 @@ export const deckGenerate = inngest.createFunction(
         // path. The HTML suffix replaces the JSON path's "return the deck JSON"
         // closer (gated out of buildUserMessage for HTML flows).
         const userText = `${baseUserMessage}\n\nAuthor the deck now: emit the \`<section>\` slides using the provided design system, starting with the cover. The first character of your reply must be \`<\`.`;
+
+        // ── GENCHAT (backend-transparency feed) ────────────────────────────
+        // What the studio's layers rail shows while the deck generates: the
+        // ask, the model's LIVE summarized thinking (one entry, updated in
+        // place), and milestone events. Rides the same streaming-state blob
+        // writeProgress already rewrites - no new channel. The final
+        // manifest carries the feed so the bake phase APPENDS to it and a
+        // mid-run reload resumes the view instead of a dead spinner.
+        // (The genChat store itself lives at the writeProgress scope.)
+        const chatPush = (e: Omit<GenChatEntry, "at">) => {
+          genChat.push({ ...e, at: Date.now() });
+          if (genChat.length > GENCHAT_MAX)
+            genChat.splice(0, genChat.length - GENCHAT_MAX);
+        };
+        let thinkingEntry: GenChatEntry | null = null;
+        const chatThinking = (snapshot: string) => {
+          const text =
+            snapshot.length > 600 ? `…${snapshot.slice(-600)}` : snapshot;
+          if (!thinkingEntry) {
+            chatPush({ role: "thinking", text });
+            thinkingEntry = genChat[genChat.length - 1];
+          } else {
+            thinkingEntry.text = text;
+            thinkingEntry.at = Date.now();
+          }
+        };
+        // The ask, as the user bubble: the brief-bearing user message minus
+        // the mechanical closing directive, truncated for the wire.
+        chatPush({
+          role: "user",
+          text:
+            baseUserMessage.length > 500
+              ? `${baseUserMessage.slice(0, 500)}…`
+              : baseUserMessage,
+        });
 
         await writeProgress("thinking", 0, estimatedTotal, {
           thinkingTokens: 0,
@@ -1992,6 +2035,7 @@ export const deckGenerate = inngest.createFunction(
                 (s) => s.slideId === target.slideId,
               );
               if (previewIdx >= 0) streamingPreview[previewIdx] = revised;
+              chatPush({ role: "event", kind: "revise", n: revises + 1 });
               logger.info("deck_slide_revised", {
                 position: revises + 1,
                 slideId: target.slideId,
@@ -2098,6 +2142,7 @@ export const deckGenerate = inngest.createFunction(
           };
           slides.push(slide);
           streamingPreview.push(slide);
+          chatPush({ role: "event", kind: "slide", n: slides.length });
           if (isImagesMode(data)) {
             dispatchImageWarm(
               slide.slideId,
@@ -2114,7 +2159,15 @@ export const deckGenerate = inngest.createFunction(
           model: callParams.model,
           // Per-model ceiling - Haiku rejects >64k (API 400).
           max_tokens: callParams.maxTokens,
-          thinking: callParams.thinking,
+          // display:"summarized" - the API streams a CONDENSED, user-readable
+          // summary of the reasoning instead of the raw chain of thought;
+          // it feeds the GenChat transparency view. Billing unchanged (only
+          // the streamed representation is condensed); the system-prompt
+          // cache block is unaffected by thinking-param changes.
+          thinking:
+            callParams.thinking.type === "adaptive"
+              ? { ...callParams.thinking, display: "summarized" as const }
+              : callParams.thinking,
           system: [
             {
               type: "text",
@@ -2146,6 +2199,11 @@ export const deckGenerate = inngest.createFunction(
         );
 
         stream.on("thinking", (_delta, snapshot) => {
+          // display:"summarized" makes this snapshot the USER-READABLE
+          // reasoning summary - feed it to the GenChat entry live. (The
+          // token estimate below undercounts under summarized display -
+          // it is a progress hint only.)
+          chatThinking(snapshot);
           const now = Date.now();
           if (now - lastThinkingWriteAt > 1000) {
             lastThinkingWriteAt = now;
@@ -2253,6 +2311,9 @@ export const deckGenerate = inngest.createFunction(
             direction: langDir.direction,
             theme,
             slides,
+            // GenChat rides on the manifest so the freeze bake APPENDS its
+            // review entries and a reload mid-bake resumes the feed.
+            genChat: genChat.slice(),
           };
           const result = SlideManifestSchema.safeParse(manifest);
           if (!result.success) {

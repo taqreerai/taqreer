@@ -185,6 +185,14 @@ export async function GET(
     slideJson?.streamingTheme && typeof slideJson.streamingTheme === "object"
       ? slideJson.streamingTheme
       : null;
+  // GenChat transparency feed (generation + bake phases). Array-asserted and
+  // defensively capped like streamingPreview; entry validation happens
+  // client-side in DeckView.
+  const genChat = Array.isArray(
+    (slideJson as { genChat?: unknown } | null)?.genChat,
+  )
+    ? (slideJson as { genChat: unknown[] }).genChat.slice(0, 60)
+    : null;
   // String-narrow the direction + language to the two valid values
   // each accepts; anything else collapses to null and DeckView falls
   // back to its own default (which currently matches the brief's
@@ -361,6 +369,7 @@ export async function GET(
     streamingTheme,
     streamingDirection,
     streamingLanguage,
+    genChat,
     imageFills,
     // Latest version id + its own status. DeckView's partial-regen polling
     // uses this to distinguish "applying is done" (versionId == the new
