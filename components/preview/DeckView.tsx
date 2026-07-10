@@ -415,7 +415,20 @@ export function DeckView({
         changed = true;
         return ns;
       });
-      return changed ? { ...next, slides } : prev;
+      // GenChat rides the manifest, and during the BAKE phase it is often
+      // the ONLY thing that changed - returning `prev` here silently
+      // dropped every feed update until a slide's html finally moved,
+      // freezing the chat for the whole review (user report 2026-07-10:
+      // "stuck at designing slide 7 until I refreshed"). Newer = a longer
+      // feed or a fresher last entry (the live thinking mutates in place).
+      const feedKey = (m: SlideManifest) => {
+        const c = m.genChat ?? [];
+        const last = c[c.length - 1];
+        return `${c.length}:${last?.at ?? 0}:${last?.text?.length ?? 0}`;
+      };
+      const genChatChanged = feedKey(next) !== feedKey(prev);
+      if (!changed && !genChatChanged) return prev;
+      return { ...next, slides: changed ? slides : prev.slides };
     });
   }, []);
 
@@ -1533,15 +1546,17 @@ export function DeckView({
     return ids;
   }, [manifest]);
 
-  // The GenChat feed to display: during generation the status poll fills
-  // liveGenChat; once the manifest exists ITS genChat is the superset (the
-  // bake keeps appending to it and every fat-sync refreshes it). Prefer
-  // whichever is longer so the handoff between phases never truncates.
+  // The GenChat feed to display: the generation poll and the deck.genchat
+  // broadcasts fill liveGenChat; the manifest's copy refreshes on every
+  // fat-sync (the bake appends to it). Prefer the FRESHEST source - longer
+  // feed wins, and at equal length the newer last entry wins (the live
+  // thinking entry mutates in place, so length alone can't tell).
   const genChatFeed = useMemo<GenChatEntry[]>(() => {
-    const fromManifest = manifest?.genChat ?? [];
-    return fromManifest.length >= liveGenChat.length
-      ? fromManifest
-      : liveGenChat;
+    const a = manifest?.genChat ?? [];
+    const b = liveGenChat;
+    if (a.length !== b.length) return a.length > b.length ? a : b;
+    const at = (c: GenChatEntry[]) => c[c.length - 1]?.at ?? 0;
+    return at(a) >= at(b) ? a : b;
   }, [manifest, liveGenChat]);
 
   // Images-mode hydration + self-heal (context/images.md). The live swap
@@ -2017,6 +2032,29 @@ export function DeckView({
         if (cancelled) return;
         void fetchAndSwapState();
       });
+      // GenChat LIVE tick from the bake - the feed updates the moment the
+      // server writes instead of waiting for the next poll. Entries are
+      // validated individually; thumbs are stripped on the wire, so keep
+      // the thumbs the client already holds for the same position.
+      localHandle.on("deck.genchat", (payload) => {
+        if (cancelled) return;
+        const feed: GenChatEntry[] = [];
+        for (const candidate of payload.entries ?? []) {
+          const parsed = GenChatEntrySchema.safeParse(candidate);
+          if (parsed.success) feed.push(parsed.data);
+        }
+        if (feed.length === 0) return;
+        setLiveGenChat((prev) => {
+          const at = (c: GenChatEntry[]) => c[c.length - 1]?.at ?? 0;
+          if (feed.length < prev.length) return prev;
+          if (feed.length === prev.length && at(feed) <= at(prev)) return prev;
+          return feed.map((e, i) =>
+            !e.thumbs && prev[i]?.kind === "review" && prev[i]?.thumbs
+              ? { ...e, thumbs: prev[i].thumbs }
+              : e,
+          );
+        });
+      });
       // Images mode (context/images.md): a reserved image box was filled
       // by gpt-image-2 — during the stream by deck-image-warm, or later by
       // regenerate. Record genid → url so SlideRenderer (via the
@@ -2398,11 +2436,14 @@ export function DeckView({
         /* network blip - next tick retries */
       }
     };
-    // 5s: fast enough that the GenChat feed (the bake's review thinking
-    // rides the manifest) reads live, cheap enough for a 60-90s window.
+    // Immediate first tick (the interval alone left a 5s dead window right
+    // when the review bubble lands), then 5s: fast enough that the GenChat
+    // feed reads live as the poll fallback, cheap for a 60-180s window -
+    // the deck.genchat broadcasts are the real-time path on top.
     // The cap CLEARS the interval (CR PR #128): an abandoned bake leaves
     // bakePendingIds stable, so the effect never re-runs and a no-op timer
     // would otherwise tick for the rest of the session.
+    void tick();
     const id = setInterval(() => {
       if (cancelled || ticks >= MAX_TICKS) {
         clearInterval(id);

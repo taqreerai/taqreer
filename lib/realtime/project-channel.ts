@@ -89,7 +89,12 @@ export type ProjectBroadcastEvent =
   // stamped. Pointer-only: clients fat-sync the manifest, which swaps any
   // revised slides in place and clears the draft chips (they derive from
   // the markers).
-  | "deck.baked";
+  | "deck.baked"
+  // GenChat LIVE tick: the bake pushed feed entries (review ask, live
+  // review thinking, verdicts, per-slide outcomes). Carries the feed
+  // itself (thumbs stripped for the wire) so the studio's chat updates
+  // the moment the server writes, not on the next poll.
+  | "deck.genchat";
 
 const BROADCAST_EVENTS: readonly ProjectBroadcastEvent[] = [
   "comment.created",
@@ -102,6 +107,7 @@ const BROADCAST_EVENTS: readonly ProjectBroadcastEvent[] = [
   "slides.locks.bulk-changed",
   "slide.image.ready",
   "deck.baked",
+  "deck.genchat",
 ];
 
 // Wire payload shapes. Server-broadcast helper enforces the same shapes.
@@ -163,6 +169,12 @@ export type ProjectBroadcastPayloadMap = {
     // Slides the vision pass revised (visuals changed). Informational —
     // the fat-sync refetch is what actually swaps the content.
     revisedSlideIds: string[];
+  };
+  "deck.genchat": {
+    versionId: string;
+    // The current feed (bounded, thumbs stripped for the wire — the poll /
+    // fat-sync path carries the full entries). Client-validated per entry.
+    entries: unknown[];
   };
 };
 
@@ -294,6 +306,7 @@ export async function openProjectChannel(
     "slides.locks.bulk-changed": [],
     "slide.image.ready": [],
     "deck.baked": [],
+    "deck.genchat": [],
   };
   const presenceSubscribers: Array<(state: ViewerPresence) => void> = [];
 

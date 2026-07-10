@@ -197,6 +197,17 @@ export const deckFreezeBake = inngest.createFunction(
           await prisma.$executeRaw(
             Prisma.sql`UPDATE "PresentationVersion" SET "slideJson" = jsonb_set("slideJson", '{genChat}', ${JSON.stringify(chat)}::jsonb) WHERE id = ${versionId}`,
           );
+          // LIVE tick (owner directive 2026-07-10: "the chat broadcast
+          // needs to be live"): push the feed over the project channel so
+          // the studio updates the instant the server writes - the 5s
+          // poll stays as the no-replay fallback. Thumbs stripped for the
+          // wire; the client keeps the thumbs it already has.
+          void broadcastToProject(projectId, "deck.genchat", {
+            versionId,
+            entries: chat.map((e) =>
+              e.thumbs ? { ...e, thumbs: undefined } : e,
+            ),
+          });
         } catch (err) {
           logger.warn("deck_genchat_write_failed", {
             versionId,
