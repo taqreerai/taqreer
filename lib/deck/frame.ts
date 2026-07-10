@@ -51,7 +51,7 @@ export function frameSystemPrompt(opts: {
   // authored-LTR mirroring — bg photos don't flip, so mirrored compositions
   // break against them. RTL drift is caught downstream, never guess-rewritten.
   const langBlock = ar
-    ? `‼️ LANGUAGE & DIRECTION — this deck is ARABIC: design natively RTL. The system sets dir="rtl" on every slide root (do NOT set dir yourself). The eye enters from the RIGHT: lead text blocks and columns anchor to the visual RIGHT, secondary/decorative elements to the LEFT; body text right-aligned. Do NOT set dir on child blocks that contain Latin letters; for an inline Latin run inside an Arabic sentence (URL, email, English word) wrap just that run in <span dir="ltr">. Numbers are ALWAYS Latin digits (0-9), never Arabic-Indic (٠-٩). letter-spacing on Arabic-bearing elements is stripped at export.`
+    ? `‼️ LANGUAGE & DIRECTION — this deck is ARABIC: design natively RTL. The system sets dir="rtl" on every slide root (do NOT set dir yourself). The eye enters from the RIGHT: lead text blocks and columns anchor to the visual RIGHT, secondary/decorative elements to the LEFT; body text right-aligned. Flex keywords are LOGICAL under RTL: align-items/justify-content flex-START anchors to the reading side (the RIGHT) and flex-END anchors LEFT — to anchor content to the reading edge use flex-start, never flex-end. Do NOT set dir on child blocks that contain Latin letters; for an inline Latin run inside an Arabic sentence (URL, email, English word) wrap just that run in <span dir="ltr">. Numbers are ALWAYS Latin digits (0-9), never Arabic-Indic (٠-٩). letter-spacing on Arabic-bearing elements is stripped at export.`
     : `LANGUAGE & DIRECTION — this deck is ENGLISH (LTR). The system sets dir="ltr" on every slide root (do NOT set dir yourself).`;
 
   const bgKinds = imagesMode
@@ -114,6 +114,7 @@ ${imageBlocks}
 - Write every repeated item (list rows, cards, steps, table cells) out IN FULL as elements. There is NO template engine: never use a JS loop, \`.map()\`, \`+\` concatenation, or \`\${…}\`.
 - Decide the slide count from the brief (match \`brief.slideCount\` when given; else adapt).
 - VARY the composition slide to slide: different FLOW structures, one coherent look.
+- SELF-CORRECTION — if AFTER emitting a slide you realize it has a real flaw (content overflowing the well, broken hierarchy, a block anchored to the wrong side, imbalanced composition), re-emit the ENTIRE corrected <section> with the same attributes PLUS data-revises="N" (N = the 1-based position of the slide it replaces, counting from the cover). The system swaps the corrected slide in place of the old one. Re-emit ONLY when the fix is meaningfully better; never re-emit an unchanged slide, and never use data-revises on a first-time slide.
 
 BRAND & COLOUR — the brand variables are INJECTED for you; reference them, don't redefine them.
 
@@ -190,6 +191,21 @@ const esc = (s: string) =>
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+
+// SELF-CORRECTION marker (thinking mode re-emits improved slides; the prompt's
+// revision contract makes that explicit): `data-revises="N"` on a re-emitted
+// section = replace the deck's N-th slide (1-based). Returns the 0-based index,
+// or null when absent/invalid. Ingest MUST check this BEFORE the slide-cap
+// guard — a correction arriving after the deck hit its slide count would
+// otherwise abort the stream and be dropped (the pre-2026-07-10 behavior that
+// locked in first drafts).
+export function parseFrameRevises(sectionHtml: string): number | null {
+  const openTag = /<section\b[^>]*>/i.exec(sectionHtml)?.[0] ?? "";
+  const raw = attr(openTag, "data-revises");
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 ? n - 1 : null;
+}
 
 export function parseFrameSlide(sectionHtml: string): FrameSlideDecl {
   const openTag = /<section\b[^>]*>/i.exec(sectionHtml)?.[0] ?? "<section>";

@@ -37,6 +37,7 @@ import {
   frameSystemPrompt,
   frameSystemCss,
   parseFrameSlide,
+  parseFrameRevises,
   assembleFramedSlide,
   fillFrameTotals,
   type FrameDeckCtx,
@@ -2103,6 +2104,61 @@ export const deckGenerate = inngest.createFunction(
         let rawCssSeen = "";
 
         const ingestSlide = (parsed: ParsedSlide) => {
+          // ── FRAME self-correction (data-revises) ── thinking mode re-emits
+          // improved slides; the frame prompt's revision contract marks them
+          // with data-revises="N" and this swaps the corrected slide IN PLACE
+          // (same slideId, same deck position). MUST run BEFORE the cap guard:
+          // a correction that arrives after the deck already hit its slide
+          // count would otherwise abort the stream and be dropped — the exact
+          // first-draft lock-in this feature removes. Revisions never grow the
+          // deck, so the budget ceiling is not in play. An invalid/oversized
+          // index falls through to the normal (append + cap) path.
+          if (frameGen) {
+            const revises = parseFrameRevises(parsed.html);
+            if (revises !== null && revises < slides.length) {
+              const target = slides[revises];
+              const decl = parseFrameSlide(parsed.html);
+              if (decl.deckTitle) frameCtx.deckTitle = decl.deckTitle;
+              if (decl.brand) frameCtx.brand = decl.brand;
+              if (decl.brandSub) frameCtx.brandSub = decl.brandSub;
+              const revised: SlideType = {
+                ...target,
+                html: buildSlideHtml(
+                  assembleFramedSlide(
+                    decl,
+                    frameCtx,
+                    revises,
+                    SLIDE_DIMENSIONS[slideFormat],
+                  ),
+                  `${frameCss}\n${scopedStyle}`,
+                  SLIDE_DIMENSIONS[slideFormat],
+                ),
+              };
+              slides[revises] = revised;
+              const previewIdx = streamingPreview.findIndex(
+                (s) => s.slideId === target.slideId,
+              );
+              if (previewIdx >= 0) streamingPreview[previewIdx] = revised;
+              logger.info("deck_slide_revised", {
+                position: revises + 1,
+                slideId: target.slideId,
+                jobId,
+              });
+              // Changed image boxes warm here; unchanged ones dedupe away
+              // (warm keys are genid:content-hash, not per-slide).
+              if (isImagesMode(data)) {
+                dispatchImageWarm(
+                  revised.slideId,
+                  revised.html,
+                  projectId,
+                  warmedKeys,
+                  warmedGenidsForCap,
+                  logger,
+                );
+              }
+              return;
+            }
+          }
           // Budget ceiling reached: drop every further section (covers
           // flush() too) and abort the stream once, below. Charge stays
           // == hold == authored.
