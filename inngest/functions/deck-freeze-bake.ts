@@ -140,6 +140,14 @@ export const deckFreezeBake = inngest.createFunction(
       // (e.g. after a freeze-script fix ships, to rescue kept-flow slides).
       force?: boolean;
     };
+    // review=false skips the vision revision pass entirely (no render for
+    // shots, no audit, no model call) - the bake goes straight to freeze +
+    // gates. ENHANCE decks send this (owner decision 2026-07-11): 1:1
+    // rebuilds of a source the model already saw, up to 75 slides - one
+    // whole-deck review at that size costs more than the deck. Default
+    // TRUE (create / social / mimic / datasheet / regen bakes / ops
+    // re-bakes all review).
+    const review = (event.data as { review?: boolean }).review !== false;
     if (!projectId || !versionId) {
       throw new Error("deck-freeze-bake: event missing projectId / versionId");
     }
@@ -195,6 +203,18 @@ export const deckFreezeBake = inngest.createFunction(
       );
 
     const observed = await step.run("observe-and-revise", async () => {
+      if (!review) {
+        // Vision pass disabled for this bake (enhance): no render, no
+        // audit, no model call - the freeze step renders once and gates.
+        logger.info("deck_vision_skipped", {
+          versionId,
+          pending: pendingIds.length,
+        });
+        return {
+          revisions: {} as Record<string, string>,
+          fixWorthyBefore: {} as Record<string, number>,
+        };
+      }
       // 2a. One clean render: audit findings + a downscaled shot per
       // pending slide. The browser closes BEFORE the model call - never
       // hold a Chrome instance across a long network wait. Tiny thumbs of

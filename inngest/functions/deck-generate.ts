@@ -2903,6 +2903,14 @@ export const deckGenerate = inngest.createFunction(
     // (the boxes just stay branded gradients), and the fill runs in its own
     // retried function (deck-images-generate). Off-mode decks never reach
     // this branch, so they remain byte-identical to before.
+    // review: ENHANCE decks skip the bake's vision revision pass (owner
+    // decision 2026-07-11): enhance is a 1:1 rebuild of a source the model
+    // already saw, decks run big (up to 75 slides), and one whole-deck
+    // review at that size would burn thousands of credits worth of tokens
+    // before the user touches the deck. The bake still freezes + gates;
+    // regen-triggered bakes keep the review (explicit authoring, subset-
+    // sized). All other flows review as before.
+    const review = data.type !== "enhance";
     if (isImagesMode(data)) {
       await inngest
         .send({
@@ -2911,7 +2919,7 @@ export const deckGenerate = inngest.createFunction(
           // the bake's read-modify-write on slideJson would otherwise race the
           // reconcile's write on the same blob (lost update). deck-images-
           // generate dispatches deck.freeze.bake on its way out when set.
-          data: { projectId, versionId, freezeAfter: true },
+          data: { projectId, versionId, freezeAfter: true, review },
         })
         .catch((err) => {
           logger.warn("deck_images_dispatch_failed", {
@@ -2930,7 +2938,7 @@ export const deckGenerate = inngest.createFunction(
         .send({
           id: `freeze:${projectId}:${versionId}`,
           name: "deck.freeze.bake",
-          data: { projectId, versionId },
+          data: { projectId, versionId, review },
         })
         .catch((err) => {
           logger.warn("deck_freeze_dispatch_failed", {

@@ -1231,7 +1231,11 @@ export const deckRegeneratePartial = inngest.createFunction(
         await inngest.send({
           id: `freeze:${projectId}:${versionId}:regen:${data.jobId ?? event.id ?? "0"}`,
           name: "deck.freeze.bake",
-          data: { projectId, versionId },
+          // review ALWAYS on for regen bakes, enhance decks included: a
+          // regen is an explicit authoring request, the review is subset-
+          // sized (the regen'd slides only), and it is what catches regen
+          // defects - the 70cr regen base pays for exactly this.
+          data: { projectId, versionId, review: true },
         });
       } catch (err) {
         bakeDispatched = false;
