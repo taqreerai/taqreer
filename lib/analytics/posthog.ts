@@ -58,8 +58,11 @@ function memo<T>(fn: () => Promise<T>, ttlMs = 60_000): () => Promise<T> {
 // ─── Sources by channel ─────────────────────────────────────────────────────
 // PostHog auto-classifies each session's entry channel into $channel_type
 // (Direct, Organic Search, Paid Search, Organic Social, Referral, Email, ...).
+// It is a SESSION property (session.*), not an event property - reading
+// properties.$channel_type returns null for every event and buckets all
+// traffic under "Unknown".
 const CHANNEL_HOGQL = `
-SELECT properties.$channel_type AS channel, count(distinct person_id) AS visitors
+SELECT session.$channel_type AS channel, count(distinct person_id) AS visitors
 FROM events
 WHERE timestamp > now() - interval 30 day
 GROUP BY channel
