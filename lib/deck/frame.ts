@@ -1,5 +1,6 @@
 // FRAME architecture (context/frame-architecture-2026-07-10.md) — the system-
-// owned slide frame. Generation under the `frameGen` flag splits ownership:
+// owned slide frame — the ONLY generation contract since the 2026-07-10
+// cutover. It splits ownership:
 // the SYSTEM renders everything edge-touching / identity / direction-dependent
 // (margins, 6-slot chrome, backgrounds, photo panels, scrims, brand mark, dir),
 // and CLAUDE designs composition inside a clipped content WELL, in FLOW ONLY
@@ -41,13 +42,7 @@ export function frameGeometry(canvas: FrameCanvas) {
   };
 }
 
-// Back-compat alias (earlier callers read only the well box).
-export function frameWellSize(canvas: FrameCanvas) {
-  return frameGeometry(canvas);
-}
 
-// Replaced at finalize (assembleManifest knows the total; streaming doesn't).
-export const FRAME_TOTAL_TOKEN = "%%TQTOTAL%%";
 
 // ── the frame prompt ────────────────────────────────────────────────────────
 // Parameterized variant of SYSTEM_PROMPT_CREATE_HTML for frame decks. Proven
@@ -265,9 +260,7 @@ export function parseFrameSlide(sectionHtml: string): FrameSlideDecl {
 
 // ── assembly ────────────────────────────────────────────────────────────────
 // Deck-level context accumulated while slides stream (the cover carries the
-// deck identity; if any slide ever carries the total token, finalize fills it
-// (safety net; nothing emits it since system pagination was dropped), so the
-// page number renders FRAME_TOTAL_TOKEN and finalize replaces it).
+// deck identity accumulated as slides stream (the cover declares it).
 export type FrameDeckCtx = {
   direction: "rtl" | "ltr";
   deckTitle: string | null;
@@ -460,10 +453,3 @@ ${blocks}
 Re-emit each slide as a complete corrected <section> in the exact same output contract (same declared attributes unless a flaw requires changing one; exactly one <div class="well">), PLUS data-revises="<the slide's position number>" on each <section> so the system swaps it in place. Keep the same content and visual system — fix the measured flaws, don't redesign. If an <img> carries a src attribute, preserve that src EXACTLY. Emit ONLY the corrected <section> elements, nothing else.`;
 }
 
-// Finalize safety net: nothing emits the total token today (system pagination
-// dropped 2026-07-10), but any stray token in a slide's
-// page-number slot rendered FRAME_TOTAL_TOKEN; replace once the count is
-// final. Safe on non-frame decks (the token never appears).
-export function fillFrameTotals(html: string, total: number): string {
-  return html.split(FRAME_TOTAL_TOKEN).join(String(total).padStart(2, "0"));
-}

@@ -39,7 +39,6 @@ import {
   parseFrameSlide,
   parseFrameRevises,
   assembleFramedSlide,
-  fillFrameTotals,
 } from "@/lib/deck/frame";
 import { buildSlideHtml, canvasFrameCss } from "@/lib/deck/scaffold";
 import { injectImgSrc } from "@/lib/images/slide-images";
@@ -507,7 +506,6 @@ export const deckFreezeBake = inngest.createFunction(
           // One fix round only: the stamp makes the next bake freeze this
           // slide regardless of any remaining findings.
           html = html.replace(/<section /, '<section data-tq-audited="1" ');
-          html = fillFrameTotals(html, m.slides.length);
           // Re-wrap with the deck's scoped CSS: reuse the stored slide's own
           // style content minus the frame armor (buildSlideHtml re-adds it,
           // along with the tq-canvas class stamp).
