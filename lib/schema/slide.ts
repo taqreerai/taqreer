@@ -217,10 +217,11 @@ export const GenChatEntrySchema = z.object({
       "slide", // slide n closed during the stream
       "revise", // the model swapped slide n in place (data-revises)
       "review", // the bake's review ASK (role user, carries the sent thumbs)
-      "reviseSlide", // the review pass revised slide n ([before, after] thumbs)
+      "reviseSlide", // the review pass revised slide n (text only)
       "reviewDone", // vision pass returned: n = number of slides revised
       "finalizing", // freeze + write phase started (labels the quiet stretch)
       "baked", // freeze bake finished - the deck is final
+      "regen", // partial regen of slide n started (the redesign call is running)
     ])
     .optional(),
   n: z.number().optional(),

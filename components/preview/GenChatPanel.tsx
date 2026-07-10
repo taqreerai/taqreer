@@ -15,7 +15,7 @@
 //              started / review done / baked), rendered through the dict
 //              so the feed reads right in both languages.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { useDict } from "@/components/i18n/LocaleProvider";
 import {
   SLIDE_NAV_WIDTH,
@@ -29,12 +29,19 @@ export function GenChatPanel({
   language,
   isPost = false,
   collapsed = false,
+  tabsSlot,
 }: {
   entries: GenChatEntry[];
   language: "ar" | "en";
   // 3:4 social decks are POSTS, not slides - the milestone labels follow.
   isPost?: boolean;
   collapsed?: boolean;
+  // Layers ⇄ Chat rail tabs (owner spec 2026-07-10) - the SegmentedToggle
+  // DeckView builds, rendered IN PLACE of the title header so the toggle
+  // sits pixel-identical across this panel and LayersPanel (the two
+  // crossfade in the same rail slot). Omitted -> plain title header (the
+  // standalone chat during generation, before the editor exists).
+  tabsSlot?: ReactNode;
 }) {
   const dict = useDict();
   const t = dict.editor.genchat;
@@ -61,6 +68,11 @@ export function GenChatPanel({
       case "revise":
       case "reviseSlide":
         return (isPost ? t.revisedPost : t.revised).replace(
+          "{n}",
+          String(e.n ?? ""),
+        );
+      case "regen":
+        return (isPost ? t.regenPost : t.regenSlide).replace(
           "{n}",
           String(e.n ?? ""),
         );
@@ -101,9 +113,13 @@ export function GenChatPanel({
         transition: "transform 300ms ease",
       }}
     >
-      <header className="border-b border-foreground/[0.08] px-1 pb-3 pt-1">
-        <h2 className="text-sm font-semibold text-foreground">{t.title}</h2>
-      </header>
+      {tabsSlot ? (
+        <div className="px-1 pb-1 pt-1">{tabsSlot}</div>
+      ) : (
+        <header className="border-b border-foreground/[0.08] px-1 pb-3 pt-1">
+          <h2 className="text-sm font-semibold text-foreground">{t.title}</h2>
+        </header>
+      )}
 
       <div
         ref={scrollRef}
@@ -187,25 +203,6 @@ export function GenChatPanel({
                 />
                 {label}
               </p>
-              {/* Revision PROOF: [before, after] shots of the slide, so a
-                  subtle fix (line-height, spacing) is visible, not a claim. */}
-              {e.kind === "reviseSlide" && e.thumbs && e.thumbs.length > 0 ? (
-                <span className="flex items-center gap-1.5 ps-3.5">
-                  {e.thumbs.map((src, ti) => (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      key={ti}
-                      src={src}
-                      alt=""
-                      className={`h-14 w-auto rounded-md border ${
-                        ti === e.thumbs!.length - 1 && e.thumbs!.length > 1
-                          ? "border-emerald-400/50"
-                          : "border-foreground/10 opacity-70"
-                      }`}
-                    />
-                  ))}
-                </span>
-              ) : null}
             </div>
           );
         })}

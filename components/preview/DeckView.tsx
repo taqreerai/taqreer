@@ -30,6 +30,7 @@ import { SlideEditor } from "@/components/preview/editor/SlideEditor";
 import { StylePill } from "@/components/preview/editor/StylePill";
 import { LayersPanel } from "@/components/preview/editor/LayersPanel";
 import { GenChatPanel } from "@/components/preview/GenChatPanel";
+import { SegmentedToggle } from "@/components/create/controls";
 import { serializeSlideSection } from "@/lib/editor/serialize";
 import { fitArtboard } from "@/lib/editor/canvas-fit";
 import { TopUtilityBar } from "@/components/app/TopUtilityBar";
@@ -3121,6 +3122,21 @@ export function DeckView({
           // handler does: setManifest + setSlideStates + setHistoryVersions.
           slideStates?: InitialSlideState[] | null;
         };
+        // GenChat: the partial regen appends per-slide milestones +
+        // thinking to the pinned version's feed, and the status route
+        // returns that row's genChat. Adopt with the same length-
+        // monotonic guard as the generation poll - the deck.genchat
+        // broadcasts stay the fast path; this poll is the no-replay net.
+        const regenGenChat = (data as unknown as { genChat?: unknown })
+          .genChat;
+        if (Array.isArray(regenGenChat)) {
+          const feed: GenChatEntry[] = [];
+          for (const candidate of regenGenChat) {
+            const parsed = GenChatEntrySchema.safeParse(candidate);
+            if (parsed.success) feed.push(parsed.data);
+          }
+          setLiveGenChat((prev) => (feed.length >= prev.length ? feed : prev));
+        }
         // Optimistic mode: applying.versionId starts as "__pending__".
         // Until the apply POST returns and we replace it with the real
         // versionId, no terminal can be declared on a pinned version
@@ -3278,6 +3294,39 @@ export function DeckView({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- dict.editor.errors strings + bumpEditorIfFocusedChanged + setManifestStable are stable; intentionally not re-run triggers
   }, [applying, projectId, projectTitle, router]);
+
+  // ── Left rail tabs: Layers ⇄ Chat (owner spec 2026-07-10) ──────────
+  // The GenChat feed is a persistent TAB beside Layers, same
+  // SegmentedToggle UI as the right sidebar's slides/comments tabs. The
+  // ACTIVE tab follows API activity: any communication with the model
+  // (generation stream, freeze bake, partial regen) flips to Chat, and
+  // the activity ending flips back to Layers. Only the EDGES
+  // auto-switch, so a manual flip mid-run sticks. Adjust-during-render
+  // (not a mount effect) per the set-state-in-effect lint rule.
+  const apiActive =
+    status === "generating" || bakePendingIds.size > 0 || applying != null;
+  const [railTab, setRailTab] = useState<"layers" | "chat">("layers");
+  const [prevApiActive, setPrevApiActive] = useState(false);
+  if (apiActive !== prevApiActive) {
+    setPrevApiActive(apiActive);
+    setRailTab(apiActive ? "chat" : "layers");
+  }
+  // The Chat tab exists whenever there is (or is about to be) a feed;
+  // decks with no GenChat history keep the plain Layers header.
+  const chatTabAvailable = apiActive || genChatFeed.length > 0;
+  const railTabsSlot = chatTabAvailable ? (
+    <SegmentedToggle
+      options={[
+        { value: "layers", label: dict.editor.layers.title, icon: "layers" },
+        { value: "chat", label: dict.editor.genchat.title, icon: "auto_awesome" },
+      ]}
+      value={railTab}
+      onChange={setRailTab}
+      ariaLabel={dict.editor.genchat.railTabsAria}
+      size="comfortable"
+      fullWidth
+    />
+  ) : undefined;
 
   // Translate API failure status codes to Arabic UI messages — used
   // by the drag-box comment editor (step 2c/d). 409 is the realistic
@@ -4263,6 +4312,7 @@ export function DeckView({
         >
           <LayersPanel
             collapsed={layersCollapsed}
+            tabsSlot={railTabsSlot}
             doc={editorDoc}
             // The full selection SET: a sole leaf highlights its row; a whole group
             // highlights its folder. A leaf-row click selects that one element; a
@@ -4283,13 +4333,17 @@ export function DeckView({
         </motion.div>
       ) : null}
 
-      {/* GenChat - the backend-transparency feed, overlaying the Layers rail
-          while the deck generates + bakes (what we asked the model, its live
-          summarized thinking, milestones, the review pass). Fades out when
-          the bake lands - "the chat fades to the layers" (owner spec
-          2026-07-10) - revealing the LayersPanel beneath. */}
+      {/* GenChat - the backend-transparency feed, the Chat TAB of the left
+          rail (owner spec 2026-07-10). While the model is talked to
+          (generation, bake, partial regen) the rail auto-switches here; the
+          activity ending switches back to Layers (the crossfade below
+          reveals the LayersPanel beneath). In edit mode the tab bar lets
+          the user flip back to the history at any time; during pure
+          generation (no editor yet) the panel stands alone, no tabs. */}
       <AnimatePresence>
-        {generating || bakePendingIds.size > 0 ? (
+        {railTab === "chat" &&
+        chatTabAvailable &&
+        (editMode || apiActive) ? (
           <motion.div
             key="genchat"
             initial={{ opacity: 0 }}
@@ -4306,6 +4360,7 @@ export function DeckView({
               }
               isPost={isPostFormat}
               collapsed={layersCollapsed}
+              tabsSlot={editMode ? railTabsSlot : undefined}
             />
           </motion.div>
         ) : null}

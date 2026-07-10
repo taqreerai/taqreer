@@ -12,8 +12,11 @@ import {
 import { prisma } from "@/lib/prisma";
 import {
   CAROUSEL_DIRECTIVE,
+  GENCHAT_MAX,
+  GenChatEntrySchema,
   SLIDE_DIMENSIONS,
   SlideManifestSchema,
+  type GenChatEntry,
   type SlideFormat,
   type SlideManifest,
 } from "@/lib/schema/slide";
@@ -23,8 +26,10 @@ import { COMPOSITION_RULES } from "@/inngest/prompts/composition-rules";
 import { themeToCssVars } from "@/lib/export/theme-css-vars";
 import { scopeDeckCss, unscopeDeckCss } from "@/lib/deck/scope-css";
 import { enforceCanvasFrame } from "@/lib/deck/scaffold";
+import { frameSystemCss } from "@/lib/deck/frame";
 import { findInjectedLogoInner, injectLogoMarkers } from "@/lib/deck/logo-inject";
 import { recordSlidePartialRegen } from "@/lib/db/slide-versioning";
+import { appendGenChat } from "@/lib/deck/genchat-store";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 import { fanOutNotification } from "@/lib/notifications/server";
 
@@ -676,6 +681,33 @@ export const deckRegeneratePartial = inngest.createFunction(
       return parsed.data;
     });
 
+    // ── GENCHAT (backend-transparency feed) ── a partial regen CONTINUES
+    // the chat the generation + bake started: the new version row was
+    // seeded as a copy of the source manifest (genChat included), so
+    // appends here extend one feed. The studio's rail flips to the Chat
+    // tab while this runs (owner spec 2026-07-10). Best-effort: the feed
+    // must never fail the regen. ⚠️ Every call MUST live inside step.run
+    // - prelude code re-runs on each Inngest checkpoint replay and would
+    // append duplicates.
+    const chatWrite = (mutate: (chat: GenChatEntry[]) => void): Promise<void> =>
+      appendGenChat(projectId, versionId, mutate, (msg, meta) =>
+        logger.warn(msg, meta),
+      );
+    const slideNumberOf = (slideId: string): number =>
+      source.slides.findIndex((s) => s.slideId === slideId) + 1;
+
+    // Per-slide start milestones - the feed shows "redesigning slide n"
+    // the moment the run begins, so the Chat tab is never dead air while
+    // the first Claude call streams.
+    await step.run("genchat-regen-start", () =>
+      chatWrite((chat) => {
+        for (const slideId of targetSlideIds) {
+          const n = slideNumberOf(slideId);
+          if (n > 0) chat.push({ role: "event", kind: "regen", n, at: Date.now() });
+        }
+      }),
+    );
+
     // Resolve the deck format ONCE per job so every per-slide call uses
     // the same dimensions — Claude needs the right canvas size in the
     // system prompt or vertical decks regen at 16:9.
@@ -778,10 +810,56 @@ export const deckRegeneratePartial = inngest.createFunction(
           // whole rescoped stylesheet matching NOTHING) nor the enforced
           // canvas frame (any geometry the model emitted was final,
           // persisted). Stamp the class + append the frame here.
-          const html = enforceCanvasFrame(
+          // Strip bake markers the model copies off its references: the
+          // CURRENT slide + frozen siblings all carry data-tq-frozen /
+          // data-tq-audited, and a regen'd slide arriving pre-stamped is
+          // FALSE-frozen - the dispatched freeze bake sees nothing pending,
+          // so the slide skips the vision review and its geometry is never
+          // actually pinned (caught live 2026-07-10). The bake re-earns the
+          // markers on the fresh html.
+          const stripped = enforceCanvasFrame(
             rescoped,
             SLIDE_DIMENSIONS[sourceFormat],
+          ).replace(
+            /\sdata-tq-(?:frozen|audited)(?:=(?:"[^"]*"|'[^']*'|[^\s>]+))?/g,
+            "",
           );
+          // FRAME slides: re-inject the frame-system css exactly like
+          // generation does (frame css FIRST, the model's <style> after it,
+          // so the model's rules keep cascade priority). The regen model
+          // rebuilds its style block from scratch and drops the .tq-well
+          // geometry rule - the well then renders as an unstyled static div,
+          // 0px tall (abs-only children), and the Layers walk's sub-1px skip
+          // lists the whole slide empty (caught live 2026-07-10, slide-4
+          // regen). frameSystemCss is self-scoped; injected as the section's
+          // first child like buildSlideHtml does.
+          const sourceSlide = source.slides.find((s) => s.slideId === slideId);
+          const html = sourceSlide?.html.includes("data-tq-frame")
+            ? stripped.replace(
+                /<section\b[^>]*>/i,
+                (openTag) =>
+                  `${openTag}<style>${frameSystemCss(SLIDE_DIMENSIONS[sourceFormat])}</style>`,
+              )
+            : stripped;
+          // Feed: the model's thinking summary (non-streaming call, so it
+          // arrives whole - post-hoc, not live) + the slide-done milestone.
+          // Presets without thinking simply skip the summary entry.
+          const thinkingText = message.content
+            .filter((b) => b.type === "thinking")
+            .map((b) => b.thinking)
+            .join("\n")
+            .trim();
+          await chatWrite((chat) => {
+            if (thinkingText) {
+              chat.push({
+                role: "thinking",
+                text: thinkingText.slice(0, 2000),
+                at: Date.now(),
+              });
+            }
+            const n = slideNumberOf(slideId);
+            if (n > 0) chat.push({ role: "event", kind: "slide", n, at: Date.now() });
+          });
           completedSlides += 1;
           // Push the heartbeat promise into the queue (NOT fire-and-
           // forget). We don't await here — that would serialise the
@@ -841,6 +919,25 @@ export const deckRegeneratePartial = inngest.createFunction(
           : update.html;
         return { ...s, html };
       });
+      // Carry the GenChat feed into the rebuilt manifest. The version row
+      // holds source history + this run's appends (jsonb_set writes above);
+      // rebuilding the manifest without it would wipe the chat right before
+      // the freeze bake continues it. Fresh read (not `source.genChat`) so
+      // the run's own entries survive; per-entry validation so one bad
+      // entry can't fail the whole save.
+      const liveRow = await prisma.presentationVersion.findUnique({
+        where: { id: versionId },
+        select: { slideJson: true },
+      });
+      const rawChat = (liveRow?.slideJson as { genChat?: unknown } | null)
+        ?.genChat;
+      const genChat: GenChatEntry[] = [];
+      if (Array.isArray(rawChat)) {
+        for (const candidateEntry of rawChat) {
+          const parsedEntry = GenChatEntrySchema.safeParse(candidateEntry);
+          if (parsedEntry.success) genChat.push(parsedEntry.data);
+        }
+      }
       const candidate: SlideManifest = {
         version: source.version,
         presentationId: source.presentationId,
@@ -854,6 +951,7 @@ export const deckRegeneratePartial = inngest.createFunction(
         // landscape after a partial regen.
         format: source.format,
         theme: source.theme,
+        ...(genChat.length > 0 ? { genChat: genChat.slice(-GENCHAT_MAX) } : {}),
         slides,
       };
       // Validate Claude output before persisting — per inngest/** coding

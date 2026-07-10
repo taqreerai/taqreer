@@ -152,6 +152,40 @@ SlideVersion v1 rows) - the dual-store rule.
 - Legacy decks (pre-frame): open unflattened in the existing degraded-but-
   lossless path. Pre-launch rule: disposable, no remediation.
 
+## GenChat (backend-transparency feed) + the studio rail tabs
+
+- ONE continuous feed per version across generation, freeze bake, and partial
+  regen, stored in `slideJson.genChat` (GENCHAT_MAX 60, FIFO). Writers:
+  deck-generate (streaming-state blob), deck-freeze-bake + deck-regenerate-
+  partial via the shared `appendGenChat` (lib/deck/genchat-store.ts:
+  parameterized jsonb_set on ONLY the genChat key + fire-and-forget
+  `deck.genchat` broadcast, thumbs stripped on the wire). Regen appends
+  per-slide "regen" start milestones, the post-hoc thinking summary, and
+  "slide" done milestones; its save-new-version carries the accumulated feed
+  into the rebuilt manifest (it used to silently wipe it).
+- Revision milestones are TEXT ONLY (owner 2026-07-10: no before/after
+  thumb pairs - data-URI images bloat the stored manifest). The review-ask
+  entry keeps its sent-screenshot thumbs.
+- Studio: the feed is the Chat TAB of the left rail (SegmentedToggle, same
+  UI as the right rail's slides/comments; icon auto_awesome). The ACTIVE tab
+  follows API activity - generating || bakePending || applying flips to
+  Chat, the activity ending flips back to Layers; only the EDGES auto-switch
+  so a manual flip mid-run sticks (adjust-during-render, not a mount
+  effect). Live path = deck.genchat broadcasts; fallbacks = the generation
+  poll, the apply-poller, and the bakePending poller (all length-monotonic).
+
+## Partial regen x frame (2026-07-10 fixes, both caught live)
+
+- The regen model copies root attributes off its references - a regen'd
+  slide arriving pre-stamped data-tq-frozen/audited is FALSE-frozen (the
+  bake sees nothing pending: no vision review, geometry never pinned).
+  deck-regenerate-partial strips the bake markers; the bake re-earns them.
+- The regen model rebuilds its <style> from scratch and drops the .tq-well
+  geometry rule - the well collapses to an unstyled 0px static div and the
+  Layers walk (sub-1px skip) lists the slide EMPTY. The regen path now
+  re-injects frameSystemCss as the section's first style block (generation
+  parity: frame css first, model rules keep cascade priority).
+
 ## Rollout
 
 Phase 1+2 DONE (2026-07-10, all FLAGGED via brief.frameGen / FRAME_GEN_ALL=1,

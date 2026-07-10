@@ -8,7 +8,7 @@
 // draggable-list feel) to change stacking order: on drop we reassign z-index by
 // the new order and persist. Rebuilds live as the slide's DOM changes.
 
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import { Reorder, useDragControls } from "framer-motion";
 import { buildLayerTree, stackingTarget, type LayerNode } from "@/lib/editor/leaves";
 import { serializeSlideSection } from "@/lib/editor/serialize";
@@ -107,6 +107,7 @@ export function LayersPanel({
   restackTick = 0,
   slideId,
   collapsed = false,
+  tabsSlot,
 }: {
   // The editor iframe's document (from SlideEditor.onDocReady), or null when the
   // editor isn't mounted yet.
@@ -136,6 +137,12 @@ export function LayersPanel({
   // Studio: collapsed → slide off the left edge (kept mounted); DeckView shows
   // a bare edge arrow to reopen.
   collapsed?: boolean;
+  // Layers ⇄ Chat rail tabs (owner spec 2026-07-10) - the SegmentedToggle
+  // DeckView builds, rendered IN PLACE of the title header so the toggle
+  // sits pixel-identical across this panel and GenChatPanel (the two
+  // crossfade in the same rail slot). Omitted -> the classic title header
+  // (decks with no GenChat history).
+  tabsSlot?: ReactNode;
 }) {
   const dict = useDict();
   const { dir } = useLocale();
@@ -358,10 +365,14 @@ export function LayersPanel({
         transition: "transform 300ms ease",
       }}
     >
-      <header className="border-b border-foreground/[0.08] px-1 pb-3 pt-1">
-        <p className="text-muted text-[10px] uppercase tracking-widest">{countLabel}</p>
-        <h2 className="mt-1 text-sm font-semibold text-foreground">{t.title}</h2>
-      </header>
+      {tabsSlot ? (
+        <div className="px-1 pb-1 pt-1">{tabsSlot}</div>
+      ) : (
+        <header className="border-b border-foreground/[0.08] px-1 pb-3 pt-1">
+          <p className="text-muted text-[10px] uppercase tracking-widest">{countLabel}</p>
+          <h2 className="mt-1 text-sm font-semibold text-foreground">{t.title}</h2>
+        </header>
+      )}
 
       {displayOrder.length === 0 && !bgNode ? (
         doc == null ? (
