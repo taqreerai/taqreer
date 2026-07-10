@@ -360,26 +360,42 @@ export const deckFreezeBake = inngest.createFunction(
             // throttled + non-overlapping (each tick is a jsonb_set write).
             let lastChatTick = 0;
             let chatBusy = false;
+            let latestThinking = "";
+            const putThinking = (text: string) => (chat: GenChatEntry[]) => {
+              const last = chat[chat.length - 1];
+              if (last?.role === "thinking") {
+                last.text = text;
+                last.at = Date.now();
+              } else {
+                chat.push({ role: "thinking", text, at: Date.now() });
+              }
+            };
             stream.on("thinking", (_delta, snapshot) => {
+              latestThinking = snapshot;
               const now = Date.now();
               if (chatBusy || now - lastChatTick < 3000) return;
               lastChatTick = now;
               chatBusy = true;
               const text =
                 snapshot.length > 600 ? `…${snapshot.slice(-600)}` : snapshot;
-              void chatWrite((chat) => {
-                const last = chat[chat.length - 1];
-                if (last?.role === "thinking") {
-                  last.text = text;
-                  last.at = Date.now();
-                } else {
-                  chat.push({ role: "thinking", text, at: Date.now() });
-                }
-              }).finally(() => {
+              void chatWrite(putThinking(text)).finally(() => {
                 chatBusy = false;
               });
             });
             const finalMsg = await stream.finalMessage();
+            // FINAL FLUSH: the throttle freezes the entry at its last tick,
+            // cutting a COMPLETED thought mid-word ("...examine the cards
+            // slide now. The" - owner report 2026-07-10, read as "the
+            // review died"). Persist the full summary once the call ends.
+            if (latestThinking) {
+              await chatWrite(
+                putThinking(
+                  latestThinking.length > 1900
+                    ? `…${latestThinking.slice(-1900)}`
+                    : latestThinking,
+                ),
+              );
+            }
             const raw = finalMsg.content
               .filter((b) => b.type === "text")
               .map((b) => (b as { text: string }).text)

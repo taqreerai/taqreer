@@ -1922,16 +1922,20 @@ export const deckGenerate = inngest.createFunction(
           if (genChat.length > GENCHAT_MAX)
             genChat.splice(0, genChat.length - GENCHAT_MAX);
         };
-        let thinkingEntry: GenChatEntry | null = null;
+        const thinkingRef: { entry: GenChatEntry | null; snapshot: string } = {
+          entry: null,
+          snapshot: "",
+        };
         const chatThinking = (snapshot: string) => {
+          thinkingRef.snapshot = snapshot;
           const text =
             snapshot.length > 600 ? `…${snapshot.slice(-600)}` : snapshot;
-          if (!thinkingEntry) {
+          if (!thinkingRef.entry) {
             chatPush({ role: "thinking", text });
-            thinkingEntry = genChat[genChat.length - 1];
+            thinkingRef.entry = genChat[genChat.length - 1];
           } else {
-            thinkingEntry.text = text;
-            thinkingEntry.at = Date.now();
+            thinkingRef.entry.text = text;
+            thinkingRef.entry.at = Date.now();
           }
         };
         // NO brief bubble (owner direction 2026-07-10: "skip user msg, start
@@ -2377,6 +2381,19 @@ export const deckGenerate = inngest.createFunction(
         usage.cacheReadTokens += message.usage.cache_read_input_tokens ?? 0;
         usage.cacheCreationTokens +=
           message.usage.cache_creation_input_tokens ?? 0;
+
+        // GenChat FINAL FLUSH: replace the live-truncated (tail-600)
+        // thinking text with the complete summary now the stream ended -
+        // same fix as the bake's review entry (a mid-word cut read as "the
+        // model died mid-thought"). The entry object already sits inside
+        // genChat, so mutating it here lands in the final manifest.
+        if (thinkingRef.entry && thinkingRef.snapshot) {
+          thinkingRef.entry.text =
+            thinkingRef.snapshot.length > 1900
+              ? `…${thinkingRef.snapshot.slice(-1900)}`
+              : thinkingRef.snapshot;
+          thinkingRef.entry.at = Date.now();
+        }
         logger.info("claude_usage", {
           label: "create-html",
           input: message.usage.input_tokens,
