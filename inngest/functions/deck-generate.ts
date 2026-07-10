@@ -12,6 +12,8 @@ import {
   SLIDE_DIMENSIONS,
   SLIDE_FORMATS,
   SLIDE_ROLE_VALUES,
+  GENCHAT_MAX,
+  type GenChatEntry,
   type SlideFormat,
   type SlideManifest,
   type SlideType,
@@ -1794,6 +1796,11 @@ export const deckGenerate = inngest.createFunction(
       // for the final manifest inject below, so we sign only once per run.
       const signedUploadedFaces = await buildSignedUploadedFontFaces(data.brief);
 
+      // GENCHAT feed store - declared at the writeProgress scope so every
+      // progress write can carry it; populated + described where the HTML
+      // stream sets up (chatPush/chatThinking helpers there).
+      const genChat: GenChatEntry[] = [];
+
       const writeProgress = (
         stage: "thinking" | "designing" | "validating" | "saving",
         currentSlide: number,
@@ -1819,6 +1826,7 @@ export const deckGenerate = inngest.createFunction(
                 streamingTheme,
                 streamingDirection: streamDirection,
                 streamingLanguage: streamLanguage,
+                genChat: genChat.slice(),
               } as never,
             },
           })
@@ -1901,6 +1909,46 @@ export const deckGenerate = inngest.createFunction(
         // closer (gated out of buildUserMessage for HTML flows).
         const userText = `${baseUserMessage}\n\nAuthor the deck now: emit the \`<section>\` slides using the provided design system, starting with the cover. The first character of your reply must be \`<\`.`;
 
+        // ── GENCHAT (backend-transparency feed) ────────────────────────────
+        // What the studio's layers rail shows while the deck generates: the
+        // ask, the model's LIVE summarized thinking (one entry, updated in
+        // place), and milestone events. Rides the same streaming-state blob
+        // writeProgress already rewrites - no new channel. The final
+        // manifest carries the feed so the bake phase APPENDS to it and a
+        // mid-run reload resumes the view instead of a dead spinner.
+        // (The genChat store itself lives at the writeProgress scope.)
+        const chatPush = (e: Omit<GenChatEntry, "at">) => {
+          genChat.push({ ...e, at: Date.now() });
+          if (genChat.length > GENCHAT_MAX)
+            genChat.splice(0, genChat.length - GENCHAT_MAX);
+        };
+        const thinkingRef: { entry: GenChatEntry | null; snapshot: string } = {
+          entry: null,
+          snapshot: "",
+        };
+        const chatThinking = (snapshot: string) => {
+          thinkingRef.snapshot = snapshot;
+          const text =
+            snapshot.length > 600 ? `…${snapshot.slice(-600)}` : snapshot;
+          // The cached entry can be EVICTED by chatPush's FIFO cap (it is
+          // the oldest entry, so it goes first on event-heavy decks) - a
+          // detached object would swallow every later update (CR PR #128).
+          // Re-append when it fell out; chronology-wise the tail is where a
+          // LIVE entry belongs anyway.
+          if (!thinkingRef.entry || genChat.indexOf(thinkingRef.entry) === -1) {
+            chatPush({ role: "thinking", text });
+            thinkingRef.entry = genChat[genChat.length - 1];
+          } else {
+            thinkingRef.entry.text = text;
+            thinkingRef.entry.at = Date.now();
+          }
+        };
+        // NO brief bubble (owner direction 2026-07-10: "skip user msg, start
+        // directly with the reply from api") - the feed opens with the
+        // model's live thinking. The REVIEW ask later in the bake IS shown
+        // (with the sent screenshots) because that exchange is the part the
+        // user can't otherwise see.
+
         await writeProgress("thinking", 0, estimatedTotal, {
           thinkingTokens: 0,
           thinkingBudget,
@@ -1910,14 +1958,13 @@ export const deckGenerate = inngest.createFunction(
         const slides: SlideType[] = [];
         const warmedKeys = new Set<string>();
         const warmedGenidsForCap = new Set<string>();
-        // FRAME decks: deck-level chrome context accumulated as slides stream
-        // (the cover declares title/brand; later slides render them in chrome
-        // slots). The frame CSS is per-deck constant, computed once.
+        // FRAME decks: deck-level context accumulated as slides stream (the
+        // cover declares data-deck-title, re-stamped on the stored cover for
+        // the manifest-title extraction; nothing renders from it). The frame
+        // CSS is per-deck constant, computed once.
         const frameCtx: FrameDeckCtx = {
           direction: streamDirection,
           deckTitle: null,
-          brand: null,
-          brandSub: null,
         };
         const frameCss = frameSystemCss(SLIDE_DIMENSIONS[slideFormat]);
         let cancelObserved = false;
@@ -1975,8 +2022,6 @@ export const deckGenerate = inngest.createFunction(
               const target = slides[revises];
               const decl = parseFrameSlide(parsed.html);
               if (decl.deckTitle) frameCtx.deckTitle = decl.deckTitle;
-              if (decl.brand) frameCtx.brand = decl.brand;
-              if (decl.brandSub) frameCtx.brandSub = decl.brandSub;
               const revised: SlideType = {
                 ...target,
                 html: buildSlideHtml(
@@ -1995,6 +2040,7 @@ export const deckGenerate = inngest.createFunction(
                 (s) => s.slideId === target.slideId,
               );
               if (previewIdx >= 0) streamingPreview[previewIdx] = revised;
+              chatPush({ role: "event", kind: "revise", n: revises + 1 });
               logger.info("deck_slide_revised", {
                 position: revises + 1,
                 slideId: target.slideId,
@@ -2075,13 +2121,12 @@ export const deckGenerate = inngest.createFunction(
               ? (parsed.role as NonNullable<SlideType["role"]>)
               : undefined;
           // FRAME decks: parse the declared attributes + well and wrap with
-          // the system layers (bg/panels/well/chrome). Cover declarations land
-          // in frameCtx for the whole deck. slides.length is the 0-based index
-          // of THIS slide (pre-push) - pagination; the restart guard resets it.
+          // the system layers (bg/panels/well + the empty chrome sentinel).
+          // The cover's data-deck-title lands in frameCtx for the deck.
+          // slides.length is the 0-based index of THIS slide (pre-push);
+          // the restart guard resets it.
           const decl = parseFrameSlide(parsed.html);
           if (decl.deckTitle) frameCtx.deckTitle = decl.deckTitle;
-          if (decl.brand) frameCtx.brand = decl.brand;
-          if (decl.brandSub) frameCtx.brandSub = decl.brandSub;
           const sectionHtml = assembleFramedSlide(
             decl,
             frameCtx,
@@ -2102,6 +2147,7 @@ export const deckGenerate = inngest.createFunction(
           };
           slides.push(slide);
           streamingPreview.push(slide);
+          chatPush({ role: "event", kind: "slide", n: slides.length });
           if (isImagesMode(data)) {
             dispatchImageWarm(
               slide.slideId,
@@ -2118,7 +2164,15 @@ export const deckGenerate = inngest.createFunction(
           model: callParams.model,
           // Per-model ceiling - Haiku rejects >64k (API 400).
           max_tokens: callParams.maxTokens,
-          thinking: callParams.thinking,
+          // display:"summarized" - the API streams a CONDENSED, user-readable
+          // summary of the reasoning instead of the raw chain of thought;
+          // it feeds the GenChat transparency view. Billing unchanged (only
+          // the streamed representation is condensed); the system-prompt
+          // cache block is unaffected by thinking-param changes.
+          thinking:
+            callParams.thinking.type === "adaptive"
+              ? { ...callParams.thinking, display: "summarized" as const }
+              : callParams.thinking,
           system: [
             {
               type: "text",
@@ -2150,6 +2204,11 @@ export const deckGenerate = inngest.createFunction(
         );
 
         stream.on("thinking", (_delta, snapshot) => {
+          // display:"summarized" makes this snapshot the USER-READABLE
+          // reasoning summary - feed it to the GenChat entry live. (The
+          // token estimate below undercounts under summarized display -
+          // it is a progress hint only.)
+          chatThinking(snapshot);
           const now = Date.now();
           if (now - lastThinkingWriteAt > 1000) {
             lastThinkingWriteAt = now;
@@ -2257,6 +2316,9 @@ export const deckGenerate = inngest.createFunction(
             direction: langDir.direction,
             theme,
             slides,
+            // GenChat rides on the manifest so the freeze bake APPENDS its
+            // review entries and a reload mid-bake resumes the feed.
+            genChat: genChat.slice(),
           };
           const result = SlideManifestSchema.safeParse(manifest);
           if (!result.success) {
@@ -2324,6 +2386,23 @@ export const deckGenerate = inngest.createFunction(
         usage.cacheReadTokens += message.usage.cache_read_input_tokens ?? 0;
         usage.cacheCreationTokens +=
           message.usage.cache_creation_input_tokens ?? 0;
+
+        // GenChat FINAL FLUSH: replace the live-truncated (tail-600)
+        // thinking text with the complete summary now the stream ended -
+        // same fix as the bake's review entry (a mid-word cut read as "the
+        // model died mid-thought"). chatThinking re-appends the entry if
+        // the FIFO cap evicted it, so this mutation always lands in the
+        // array the final manifest snapshots.
+        if (thinkingRef.snapshot) {
+          chatThinking(thinkingRef.snapshot);
+          if (thinkingRef.entry) {
+            thinkingRef.entry.text =
+              thinkingRef.snapshot.length > 1900
+                ? `…${thinkingRef.snapshot.slice(-1900)}`
+                : thinkingRef.snapshot;
+            thinkingRef.entry.at = Date.now();
+          }
+        }
         logger.info("claude_usage", {
           label: "create-html",
           input: message.usage.input_tokens,
@@ -2390,6 +2469,13 @@ export const deckGenerate = inngest.createFunction(
             `Create-HTML produced no slides (stop=${message.stop_reason}).`,
           );
         }
+
+        // NOTE (2026-07-10): a post-stream "forced revision" turn lived here
+        // for a few hours and was superseded the same day - it reviewed CODE
+        // blind. The forced revision now runs inside deck-freeze-bake as a
+        // VISION pass: the bake renders every slide, photographs it, and the
+        // model reviews the rendered deck (with the audit's measurements)
+        // before anything freezes. See context/frame-architecture-2026-07-10.md.
 
         // Claude tags the COVER <section> with data-deck-title (3–8 words, the
         // deck's language). Title extraction + language/direction resolution +

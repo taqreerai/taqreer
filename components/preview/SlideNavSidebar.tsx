@@ -58,6 +58,13 @@ export type NavItem =
       // (user feedback 2026-05-20: a small corner icon was too easy
       // to miss when scanning a 15-slide deck for locked rows).
       locked?: boolean;
+      // True while the deck is still GENERATING: a streamed slide is a
+      // first draft the model may still swap via a data-revises
+      // correction (or the freeze bake's self-fix). The tile shows a
+      // "draft" chip so nobody treats it as final; the chip vanishes
+      // for the whole deck the moment the completed manifest takes
+      // over the nav items.
+      draft?: boolean;
     };
 
 export function SlideNavSidebar({
@@ -564,6 +571,29 @@ export function SlideNavSidebar({
                 <div className="pointer-events-none absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-white shadow">
                   {item.commentCount}
                 </div>
+              ) : null}
+
+              {/* Draft chip — logical TOP-START corner while the deck
+                  is still generating (the model may re-emit this slide
+                  as a correction before the deck lands). Warn-tint
+                  status tokens; disappears with the streaming nav items
+                  once the completed manifest takes over. */}
+              {item.kind === "slide" && item.draft ? (
+                <span
+                  className="pointer-events-none absolute start-1 top-1 flex items-center gap-1 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold leading-none"
+                  style={{ color: "var(--tq-status-warn-dot)" }}
+                >
+                  {/* Spinning ring: the draft state is ACTIVE work (the
+                      bake's vision review is in flight), not a passive tag. */}
+                  <span
+                    className="spinner h-2.5 w-2.5 shrink-0 rounded-full border"
+                    style={{
+                      borderColor: "color-mix(in srgb, var(--tq-status-warn-dot) 30%, transparent)",
+                      borderTopColor: "var(--tq-status-warn-dot)",
+                    }}
+                  />
+                  {dict.editor.nav.draftChip}
+                </span>
               ) : null}
 
               {/* Slide number — physical BOTTOM-RIGHT chip. Same

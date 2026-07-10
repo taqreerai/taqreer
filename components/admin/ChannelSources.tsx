@@ -1,7 +1,8 @@
-// Admin > Overview "Sources by channel" card. Labelled bars (mirrors the
-// DeviceBreakdown pattern), fed real PostHog data from the server page. Channel
-// = PostHog's $channel_type (Direct, Organic Search, Paid Social, Referral...).
-// Distinguishes "not configured" (null) from "no traffic yet" (empty).
+// Admin > Overview "Traffic sources" card. Labelled bars (mirrors the
+// DeviceBreakdown pattern), fed real PostHog data from the server page. Label
+// = the actual source (utm_source or referring domain, normalized); the muted
+// suffix is PostHog's $channel_type classification (Paid Search, Organic
+// Social...). Distinguishes "not configured" (null) from "no traffic" (empty).
 
 import type { ChannelRow } from "@/lib/analytics/posthog";
 
@@ -14,7 +15,7 @@ export function ChannelSources({ data }: { data: ChannelRow[] | null }) {
     <div className="surface-card flex flex-1 flex-col gap-4 rounded-xl p-5">
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-semibold" style={{ color: PRIMARY }}>
-          Sources by channel
+          Traffic sources
         </span>
         <span className="text-xs" style={{ color: MUTED }}>
           30d
@@ -32,12 +33,17 @@ export function ChannelSources({ data }: { data: ChannelRow[] | null }) {
       ) : (
         <div className="flex flex-col gap-3">
           {data.map((d) => (
-            <div key={d.label} className="flex items-center gap-3">
-              <span
-                className="w-28 flex-shrink-0 truncate text-sm"
-                style={{ color: PRIMARY }}
-              >
-                {d.label}
+            <div
+              key={`${d.label}|${d.channel}`}
+              className="flex items-center gap-3"
+            >
+              <span className="w-40 flex-shrink-0 truncate text-sm">
+                <span style={{ color: PRIMARY }}>{d.label}</span>
+                {d.channel ? (
+                  <span className="ms-1.5 text-xs" style={{ color: MUTED }}>
+                    {d.channel}
+                  </span>
+                ) : null}
               </span>
               <div
                 className="h-1.5 flex-1 overflow-hidden rounded-full"

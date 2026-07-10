@@ -13,12 +13,14 @@ import {
 import { useRouter } from "next/navigation";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
-import { motion, type Variants } from "framer-motion";
+import { AnimatePresence, motion, type Variants } from "framer-motion";
 import { useServerStatus } from "@/lib/hooks/useServerStatus";
 import {
   SlideManifestSchema,
   SlideSchema,
   ThemeSchema,
+  GenChatEntrySchema,
+  type GenChatEntry,
   type SlideManifest,
   type SlideType,
   type ThemeType,
@@ -27,6 +29,8 @@ import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import { SlideEditor } from "@/components/preview/editor/SlideEditor";
 import { StylePill } from "@/components/preview/editor/StylePill";
 import { LayersPanel } from "@/components/preview/editor/LayersPanel";
+import { GenChatPanel } from "@/components/preview/GenChatPanel";
+import { SegmentedToggle } from "@/components/create/controls";
 import { serializeSlideSection } from "@/lib/editor/serialize";
 import { fitArtboard } from "@/lib/editor/canvas-fit";
 import { TopUtilityBar } from "@/components/app/TopUtilityBar";
@@ -412,7 +416,20 @@ export function DeckView({
         changed = true;
         return ns;
       });
-      return changed ? { ...next, slides } : prev;
+      // GenChat rides the manifest, and during the BAKE phase it is often
+      // the ONLY thing that changed - returning `prev` here silently
+      // dropped every feed update until a slide's html finally moved,
+      // freezing the chat for the whole review (user report 2026-07-10:
+      // "stuck at designing slide 7 until I refreshed"). Newer = a longer
+      // feed or a fresher last entry (the live thinking mutates in place).
+      const feedKey = (m: SlideManifest) => {
+        const c = m.genChat ?? [];
+        const last = c[c.length - 1];
+        return `${c.length}:${last?.at ?? 0}:${last?.text?.length ?? 0}`;
+      };
+      const genChatChanged = feedKey(next) !== feedKey(prev);
+      if (!changed && !genChatChanged) return prev;
+      return { ...next, slides: changed ? slides : prev.slides };
     });
   }, []);
 
@@ -519,6 +536,10 @@ export function DeckView({
   // first slide closes in the stream — typically 30–60 s into a
   // generation. Reset to [] when status leaves "generating".
   const [streamingPreview, setStreamingPreview] = useState<SlideType[]>([]);
+  // GenChat transparency feed accumulated from the generation status poll;
+  // after completion the manifest's own genChat (which the bake keeps
+  // appending to) takes over - see the genChatFeed derivation.
+  const [liveGenChat, setLiveGenChat] = useState<GenChatEntry[]>([]);
   // Stale-poll guards for the streaming preview. The pre-fix monotonic
   // guard was length-only (`validated.length >= prev.length`), which
   // worked for retry-induced shrinkage but couldn't reject the case
@@ -1505,6 +1526,40 @@ export function DeckView({
     return Array.from(ids).sort().join(",");
   }, [manifest, streamingPreview]);
 
+  // FRAME decks: slides still awaiting their bake outcome. The freeze bake
+  // stamps every slide it settles - data-tq-frozen (pinned) or
+  // data-tq-audited (kept-flow) - so "draft" is DERIVED, never tracked: a
+  // frame slide with no marker can still be revised by the bake's vision
+  // pass. Derivation makes every sync path converge for free: initial load,
+  // the deck.baked fat-sync, the visibility-regain refetch. Legacy non-frame
+  // decks have no data-tq-frame and never chip.
+  const bakePendingIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const s of manifest?.slides ?? []) {
+      if (
+        s.html.includes("data-tq-frame") &&
+        !s.html.includes("data-tq-frozen") &&
+        !s.html.includes("data-tq-audited")
+      ) {
+        ids.add(s.slideId);
+      }
+    }
+    return ids;
+  }, [manifest]);
+
+  // The GenChat feed to display: the generation poll and the deck.genchat
+  // broadcasts fill liveGenChat; the manifest's copy refreshes on every
+  // fat-sync (the bake appends to it). Prefer the FRESHEST source - longer
+  // feed wins, and at equal length the newer last entry wins (the live
+  // thinking entry mutates in place, so length alone can't tell).
+  const genChatFeed = useMemo<GenChatEntry[]>(() => {
+    const a = manifest?.genChat ?? [];
+    const b = liveGenChat;
+    if (a.length !== b.length) return a.length > b.length ? a : b;
+    const at = (c: GenChatEntry[]) => c[c.length - 1]?.at ?? 0;
+    return at(a) >= at(b) ? a : b;
+  }, [manifest, liveGenChat]);
+
   // Images-mode hydration + self-heal (context/images.md). The live swap
   // is driven by `slide.image.ready` broadcasts, but broadcasts have no
   // replay: one can land in the `/preview`→`/project` navigation gap
@@ -1968,6 +2023,39 @@ export function DeckView({
         }
         void fetchAndSwapState();
       });
+      // FRAME decks: the freeze bake finished - vision revisions applied and
+      // bake markers stamped. Pointer-only event: the fat-sync pulls the
+      // updated manifest, which swaps any revised slides in place (editor
+      // bump handled inside for the focused slide) and clears the draft
+      // chips by derivation (bakePendingIds reads the markers). Fires for
+      // everyone including the actor - the bake has no meaningful actor.
+      localHandle.on("deck.baked", () => {
+        if (cancelled) return;
+        void fetchAndSwapState();
+      });
+      // GenChat LIVE tick from the bake - the feed updates the moment the
+      // server writes instead of waiting for the next poll. Entries are
+      // validated individually; thumbs are stripped on the wire, so keep
+      // the thumbs the client already holds for the same position.
+      localHandle.on("deck.genchat", (payload) => {
+        if (cancelled) return;
+        const feed: GenChatEntry[] = [];
+        for (const candidate of payload.entries ?? []) {
+          const parsed = GenChatEntrySchema.safeParse(candidate);
+          if (parsed.success) feed.push(parsed.data);
+        }
+        if (feed.length === 0) return;
+        setLiveGenChat((prev) => {
+          const at = (c: GenChatEntry[]) => c[c.length - 1]?.at ?? 0;
+          if (feed.length < prev.length) return prev;
+          if (feed.length === prev.length && at(feed) <= at(prev)) return prev;
+          return feed.map((e, i) =>
+            !e.thumbs && prev[i]?.kind === "review" && prev[i]?.thumbs
+              ? { ...e, thumbs: prev[i].thumbs }
+              : e,
+          );
+        });
+      });
       // Images mode (context/images.md): a reserved image box was filled
       // by gpt-image-2 — during the stream by deck-image-warm, or later by
       // regenerate. Record genid → url so SlideRenderer (via the
@@ -2302,6 +2390,75 @@ export function DeckView({
     setCurrentSlideIndex(streamingPreview.length - 1);
   }, [status, streamingPreview.length]);
 
+  // BAKE-PENDING POLLER - the deck.baked broadcast's fallback, mirroring the
+  // image-fill poller's rationale: broadcasts have no replay, and a tab whose
+  // channel is mid-reconnect when the freeze bake lands otherwise wears the
+  // draft chips until a manual refresh (user report 2026-07-10). While any
+  // slide lacks its bake marker, poll the fat-sync; the derived
+  // bakePendingIds empties as soon as a fetch sees the markers, which also
+  // stops the interval. Capped so an abandoned bake (function failure after
+  // retries) doesn't poll forever - the chips then stay, honestly.
+  useEffect(() => {
+    if (status === "generating" || bakePendingIds.size === 0) return;
+    let cancelled = false;
+    let ticks = 0;
+    const MAX_TICKS = 72; // ~6 min at 5s - beyond any healthy bake
+    const tick = async () => {
+      if (cancelled || ticks++ >= MAX_TICKS) return;
+      try {
+        const res = await fetch(
+          `/api/projects/${encodeURIComponent(projectId)}/status?includeManifest=true&includeSlideStates=true`,
+          { credentials: "same-origin" },
+        );
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          manifest?: unknown;
+          slideStates?: InitialSlideState[] | null;
+        };
+        if (cancelled) return;
+        if (data.manifest) {
+          const parsed = SlideManifestSchema.safeParse(data.manifest);
+          if (parsed.success) {
+            bumpEditorIfFocusedChanged(parsed.data);
+            setManifestStable(parsed.data);
+          }
+        }
+        if (Array.isArray(data.slideStates)) {
+          const nextStates: Record<string, InitialSlideState> = {};
+          const nextVersions: Record<string, HistoryRow[]> = {};
+          for (const s of data.slideStates) {
+            nextStates[s.slideKey] = s;
+            nextVersions[s.slideKey] = s.versions ?? [];
+          }
+          setSlideStates(nextStates);
+          setHistoryVersions(nextVersions);
+        }
+      } catch {
+        /* network blip - next tick retries */
+      }
+    };
+    // Immediate first tick (the interval alone left a 5s dead window right
+    // when the review bubble lands), then 5s: fast enough that the GenChat
+    // feed reads live as the poll fallback, cheap for a 60-180s window -
+    // the deck.genchat broadcasts are the real-time path on top.
+    // The cap CLEARS the interval (CR PR #128): an abandoned bake leaves
+    // bakePendingIds stable, so the effect never re-runs and a no-op timer
+    // would otherwise tick for the rest of the session.
+    void tick();
+    const id = setInterval(() => {
+      if (cancelled || ticks >= MAX_TICKS) {
+        clearInterval(id);
+        return;
+      }
+      void tick();
+    }, 5_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- bumpEditorIfFocusedChanged + setManifestStable are stable
+  }, [projectId, status, bakePendingIds]);
+
   // Wheel + keyboard slide navigation. Velocity-aware: a fast trackpad
   // swipe consumes many pixels of deltaY in a short window and flips
   // multiple slides in one motion; a slow scroll flips one at a time.
@@ -2608,6 +2765,19 @@ export function DeckView({
           }
         } else if (data.slideCount > 0) {
           setSlideCount(data.slideCount);
+        }
+        // GenChat transparency feed - validated per entry; entries are
+        // append-mostly so length-monotonic acceptance is enough (the live
+        // thinking entry mutates in place, so also accept same-length
+        // snapshots - text updates ride them).
+        const rawGenChat = (data as unknown as { genChat?: unknown }).genChat;
+        if (Array.isArray(rawGenChat)) {
+          const feed: GenChatEntry[] = [];
+          for (const candidate of rawGenChat) {
+            const parsed = GenChatEntrySchema.safeParse(candidate);
+            if (parsed.success) feed.push(parsed.data);
+          }
+          setLiveGenChat((prev) => (feed.length >= prev.length ? feed : prev));
         }
         // Live-preview slides — validate each via SlideSchema before
         // accepting (the server already validated, but the wire format
@@ -2952,6 +3122,21 @@ export function DeckView({
           // handler does: setManifest + setSlideStates + setHistoryVersions.
           slideStates?: InitialSlideState[] | null;
         };
+        // GenChat: the partial regen appends per-slide milestones +
+        // thinking to the pinned version's feed, and the status route
+        // returns that row's genChat. Adopt with the same length-
+        // monotonic guard as the generation poll - the deck.genchat
+        // broadcasts stay the fast path; this poll is the no-replay net.
+        const regenGenChat = (data as unknown as { genChat?: unknown })
+          .genChat;
+        if (Array.isArray(regenGenChat)) {
+          const feed: GenChatEntry[] = [];
+          for (const candidate of regenGenChat) {
+            const parsed = GenChatEntrySchema.safeParse(candidate);
+            if (parsed.success) feed.push(parsed.data);
+          }
+          setLiveGenChat((prev) => (feed.length >= prev.length ? feed : prev));
+        }
         // Optimistic mode: applying.versionId starts as "__pending__".
         // Until the apply POST returns and we replace it with the real
         // versionId, no terminal can be declared on a pinned version
@@ -3109,6 +3294,59 @@ export function DeckView({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- dict.editor.errors strings + bumpEditorIfFocusedChanged + setManifestStable are stable; intentionally not re-run triggers
   }, [applying, projectId, projectTitle, router]);
+
+  // ── Left rail tabs: Layers ⇄ Chat (owner spec 2026-07-10) ──────────
+  // The GenChat feed is a persistent TAB beside Layers, same
+  // SegmentedToggle UI as the right sidebar's slides/comments tabs. The
+  // ACTIVE tab follows API activity: any communication with the model
+  // (generation stream, freeze bake, partial regen) flips to Chat, and
+  // the activity ending flips back to Layers. Only the EDGES
+  // auto-switch, so a manual flip mid-run sticks. Adjust-during-render
+  // (not a mount effect) per the set-state-in-effect lint rule.
+  const apiActive =
+    status === "generating" || bakePendingIds.size > 0 || applying != null;
+  const [railTab, setRailTab] = useState<"layers" | "chat">("layers");
+  // Whether the current Chat tab was AUTO-activated (an activity edge or a
+  // manual open DURING activity) vs user-pinned while idle. Auto-activated
+  // chat returns to Layers by a LEVEL rule - any render after the activity
+  // ends corrects it - so a missed edge (batched state transitions on a
+  // page opened mid-stream, seen live 2026-07-10) still heals; a user
+  // reading history on an idle deck is never yanked away.
+  const [autoChat, setAutoChat] = useState(false);
+  const [prevApiActive, setPrevApiActive] = useState(false);
+  if (apiActive !== prevApiActive) {
+    setPrevApiActive(apiActive);
+    if (apiActive) {
+      setAutoChat(true);
+      setRailTab("chat");
+    }
+  }
+  if (!apiActive && autoChat && railTab === "chat") {
+    setAutoChat(false);
+    setRailTab("layers");
+  }
+  // The Chat tab exists whenever there is (or is about to be) a feed;
+  // decks with no GenChat history keep the plain Layers header.
+  const chatTabAvailable = apiActive || genChatFeed.length > 0;
+  const railTabsSlot = chatTabAvailable ? (
+    <SegmentedToggle
+      options={[
+        { value: "layers", label: dict.editor.layers.title, icon: "layers" },
+        { value: "chat", label: dict.editor.genchat.title, icon: "auto_awesome" },
+      ]}
+      value={railTab}
+      onChange={(v) => {
+        // A manual flip to Chat DURING activity keeps the auto-return (the
+        // user is watching the run); flipped while idle = pinned history
+        // reading, never auto-yanked back to Layers.
+        setAutoChat(v === "chat" && apiActive);
+        setRailTab(v);
+      }}
+      ariaLabel={dict.editor.genchat.railTabsAria}
+      size="comfortable"
+      fullWidth
+    />
+  ) : undefined;
 
   // Translate API failure status codes to Arabic UI messages — used
   // by the drag-box comment editor (step 2c/d). 409 is the realistic
@@ -3802,6 +4040,12 @@ export function DeckView({
           index: idx,
           slide: previewSlide,
           commentCount: 0,
+          // Every streamed slide is a DRAFT until the deck lands: the
+          // model can still swap it via a data-revises correction (the
+          // forced revision pass runs after the last slide streams).
+          // The chip clears deck-wide when `generating` flips and the
+          // manifest branch below takes over.
+          draft: true,
         };
       }
       const isNextSlot = idx === streamingPreview.length;
@@ -3865,6 +4109,8 @@ export function DeckView({
           !!applying?.targetSlideIds.includes(slide.slideId) ||
           peerRegenInProgress.has(slide.slideId),
         locked: slideStates[slide.slideId]?.lockedAt != null,
+        // Still awaiting its bake outcome - the vision pass may revise it.
+        draft: bakePendingIds.has(slide.slideId),
       }));
   // Peer/own regen overlay for the focused slide (completed only — no focused
   // slide identity to key on while generating).
@@ -3874,9 +4120,16 @@ export function DeckView({
       peerRegenInProgress.has(focusedSlide.slideId));
   const isFocusedLocked =
     !!focusedSlide && slideStates[focusedSlide.slideId]?.lockedAt != null;
+  // DRAFT = the freeze bake's vision review is still in flight for this
+  // slide: the bake may swap its html any moment, so editing is disabled
+  // (belt to the bake's write guard's braces - an edit mid-bake would be
+  // discarded by the stale check anyway, this makes it impossible instead).
+  const isFocusedDraft =
+    !!focusedSlide && bakePendingIds.has(focusedSlide.slideId);
   // Editing is disabled while generating (controls aren't live yet), or when
-  // the focused slide is mid-regen / locked.
-  const editingDisabled = generating || isFocusedRegenerating || isFocusedLocked;
+  // the focused slide is mid-regen / locked / still a draft.
+  const editingDisabled =
+    generating || isFocusedRegenerating || isFocusedLocked || isFocusedDraft;
 
   // Undo / redo enabled-state for the toolbar buttons — driven by the focused
   // slide's LOCAL stack (the same one ⌘Z / ⌘⇧Z + handleLocalUndo/Redo drive).
@@ -4079,6 +4332,7 @@ export function DeckView({
         >
           <LayersPanel
             collapsed={layersCollapsed}
+            tabsSlot={railTabsSlot}
             doc={editorDoc}
             // The full selection SET: a sole leaf highlights its row; a whole group
             // highlights its folder. A leaf-row click selects that one element; a
@@ -4098,6 +4352,39 @@ export function DeckView({
           />
         </motion.div>
       ) : null}
+
+      {/* GenChat - the backend-transparency feed, the Chat TAB of the left
+          rail (owner spec 2026-07-10). While the model is talked to
+          (generation, bake, partial regen) the rail auto-switches here; the
+          activity ending switches back to Layers (the crossfade below
+          reveals the LayersPanel beneath). In edit mode the tab bar lets
+          the user flip back to the history at any time; during pure
+          generation (no editor yet) the panel stands alone, no tabs. */}
+      <AnimatePresence>
+        {railTab === "chat" &&
+        chatTabAvailable &&
+        (editMode || apiActive) ? (
+          <motion.div
+            key="genchat"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+          >
+            <GenChatPanel
+              entries={genChatFeed}
+              language={
+                (viewManifest?.language ?? streamingLanguage) === "en"
+                  ? "en"
+                  : "ar"
+              }
+              isPost={isPostFormat}
+              collapsed={layersCollapsed}
+              tabsSlot={editMode ? railTabsSlot : undefined}
+            />
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
 
       {/* Collapse / reopen the floating rails, a BARE arrow on the rail's
           canvas-facing edge (no border / no box, user direction 2026-06-14),
@@ -4542,6 +4829,42 @@ export function DeckView({
             ) : null}
           </div>
 
+
+          {/* Draft chip — the focused slide's bake outcome hasn't landed:
+              while generating every streamed slide is revisable, and after
+              completion the freeze bake's vision pass can still revise it
+              (bakePendingIds derives from the missing bake markers, so the
+              chip clears the moment the deck.baked fat-sync lands). Same
+              recipe as the nav-tile chip; anchored to the artboard corner
+              via the artboardFit rect in edit mode (the wrapper there is
+              the whole workspace, not the artboard). */}
+          {(generating
+            ? previewHeroSlide != null
+            : focusedSlide != null && bakePendingIds.has(focusedSlide.slideId)) ? (
+            <span
+              className="pointer-events-none absolute z-10 flex items-center gap-1.5 rounded-md bg-black/70 px-2 py-1 text-xs font-semibold leading-none"
+              style={{
+                color: "var(--tq-status-warn-dot)",
+                ...(artboardFit
+                  ? {
+                      insetInlineStart: artboardFit.offsetX + 12,
+                      top: artboardFit.offsetY + 12,
+                    }
+                  : { insetInlineStart: 12, top: 12 }),
+              }}
+            >
+              {/* Spinning ring: draft = the bake's vision review is in
+                  flight, an active state (same recipe as the nav chip). */}
+              <span
+                className="spinner h-3 w-3 shrink-0 rounded-full border"
+                style={{
+                  borderColor: "color-mix(in srgb, var(--tq-status-warn-dot) 30%, transparent)",
+                  borderTopColor: "var(--tq-status-warn-dot)",
+                }}
+              />
+              {dict.editor.nav.draftChip}
+            </span>
+          ) : null}
 
           {/* Regenerating overlay — full-canvas dim + clean spinner.
               The dim layer uses `var(--tq-bg-dim)` (the same 55 %

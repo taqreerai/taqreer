@@ -32,11 +32,13 @@ chrome placement). The frame architecture splits ownership:
      [<div class="tq-panel ps|pe|bt|bb" data-tq-lock>  tier-2 photo panel]
   L1 <div class="tq-well" [style=shrunk-for-panel]>
        Claude's flow design; tier-3 in-well <img data-genimage> slots
-  L2 <div class="tq-chrome light|dark" data-tq-lock>
-       6 slots: ts/tc/te/bs/bc/be (logical CSS, auto-mirrors under RTL)
-       kicker→ts, deck-title→te, pagination→bs (LTR digits on inner span),
-       brand line→be, cover brand mark→ts (kicker→tc on cover)
-       slots over a photo get .onpanel (light ink + text shadow)
+  L2 <div class="tq-chrome" data-tq-lock>   EMPTY structure sentinel
+       (owner direction 2026-07-10, final: the system renders NOTHING the
+       user didn't choose - pagination/persistent hand off to Claude via the
+       flow variables; the identity-chrome slots were removed the same day
+       they shipped. The empty div stays as the slide's LAST layer so the
+       bake's structure check catches markup-eating corruption. Old stored
+       decks keep their rendered slots - their CSS is baked into their html.)
 </section>
 ```
 
@@ -47,10 +49,9 @@ prompt per bg kind.
 ## Generation contract (prompt)
 
 - Claude declares per section: data-bg (color|image|split-start|split-end|
-  band-top|band-bottom), data-bg-css, data-bg-prompt, data-bg-scrim,
-  data-kicker, data-chrome (light|dark); cover adds data-deck-title,
-  data-brand, data-brand-sub. Exactly ONE <div class="well"> per section
-  (modifier classes allowed).
+  band-top|band-bottom), data-bg-css, data-bg-prompt, data-bg-scrim; cover
+  adds data-deck-title (project name only - nothing renders from it).
+  Exactly ONE <div class="well"> per section (modifier classes allowed).
 - Well is FLOW ONLY: flex/grid/gap/padding/flex:1/auto margins; NEVER
   absolute/left/top/transforms/negative margins. Px sizes fine.
 - Direction NATIVE to the deck language (owner contract 2026-07-10: no
@@ -63,17 +64,59 @@ prompt per bg kind.
   images, 0 dir attrs, 0 abs-in-well across every run.
 - Text over photos ONLY via tier-1/tier-2 with the system scrim.
 
-## Freeze bake (the only flattener)
+## Freeze bake (the only flattener) + THE VISION LOOP (2026-07-10 rework)
 
-lib/deck/freeze-script.ts + inngest deck-freeze-bake. Freeze-in-place: keep
-the DOM tree as authored; pin each well element (position:absolute + measured
-parent-relative left/top/width/height; text blocks atomic w/ height:auto;
-img/svg leaves). NO hoisting, NO style re-serialization - classes, pseudo
+lib/deck/freeze-script.ts + inngest deck-freeze-bake. The bake is now the
+product's fidelity core - a 4-step loop, terminates in ONE run (no afterfix
+event chain):
+
+1. load-manifest: pending = frame slides with NO bake marker (data-tq-frozen
+   / data-tq-audited are both terminal; event flag `force:true` re-opens
+   audited slides - the ops rescue hatch).
+2. observe-and-revise: ONE clean render → per pending slide: AUDIT (overflow,
+   anchor, underfill advisory, STRUCTURE = system layers missing from the
+   parsed DOM, i.e. a malformed model attribute swallowed the well/chrome
+   boundary) + a downscaled screenshot (<=1152px JPEG, ~1k tokens). Browser
+   closes, then ONE vision call: Claude reviews the RENDERED slides (its own
+   eyes) + well code + measured findings, re-emits corrections via
+   data-revises. Anti-churn rules + an "OK" fast path. Failure of any kind
+   degrades to plain freezing - the bake never depends on the model call.
+3. freeze-and-write: render the corrected deck once → regression guard
+   (re-audit revised slides; measurably worse than the original = revert) →
+   freeze-in-place + self-verify + pixel gate → ONE dual-store write with the
+   bake-vs-edit guard (slide whose stored html changed since step 1 is
+   skipped - never clobber a user edit). Every pending slide leaves FINAL:
+   frozen html or flow html stamped data-tq-audited.
+4. finalize: thumbnails re-dispatch when revisions landed (only if this
+   version is the promoted one) + `deck.baked` broadcast (pointer-only;
+   clients fat-sync and the DRAFT CHIPS clear by derivation).
+
+Freeze-in-place: keep the DOM tree as authored; pin each well element
+(position:absolute + measured parent-relative left/top/width/height + right/
+bottom:auto + grid-area:auto; text blocks atomic w/ height:auto; img/svg
+leaves). right/bottom:auto neutralizes inert inset declarations that would
+ACTIVATE on pinning; grid-area:auto restores the parent padding box as the
+containing block (abspos grid children otherwise resolve insets against
+their GRID AREA - first prod deck shifted every 12-col item by exactly its
+column offset). NO hoisting, NO style re-serialization - classes, pseudo
 elements, descendant selectors keep working untouched. Self-verifies
 (re-measures after mutation) and PIXEL-GATES (renders flow vs frozen,
 refuses above threshold; failed slides stay flow = degraded-editing path).
 Spike numbers: worst slide 0.014% pixels vs old flattener's 0.57% mean;
 serialize-reload roundtrip 0.000%.
+
+DRAFT CHIPS (client): a frame slide with no bake marker is a DRAFT - chip
+with spinner on nav tiles + hero, editor INERT for it (locked-slide
+vocabulary). Derived purely from the markers (no tracked state), so load /
+fat-sync / visibility-regain all converge; the deck.baked broadcast clears
+them live. Vision shots can never contain the chips - they render the raw
+deck document, the chips are app UI.
+
+Vision-loop economics (measured 2026-07-10 local): clean 5-slide deck
+asked=5 revised=0, 12.5k in / 165 out (~$0.07); 6-slide deck with 2 real
+defects asked=6 revised=2, 30k in / 8.3k out (~$0.36); 1-slide subset bake
+(regen aftermath) 8.6k in. System prompt = the generation prompt verbatim →
+prompt cache shared across calls AND decks (cache_read observed cross-deck).
 
 Runs in the clean export-grade render. ‼️ Headless font race: Chrome defers
 remote font fetches until FIRST PAINT; fonts.ready resolves vacuously (0
@@ -85,7 +128,13 @@ save; images decks bake AFTER the images reconcile commits (the bake's
 read-modify-write on slideJson would otherwise race the reconcile's write -
 lost update). Image fill never changes geometry (slots have explicit sizes),
 so baking after reconcile only orders the WRITES, and reconcile's src
-injection targets data-genid attrs the freeze preserves.
+injection targets data-genid attrs the freeze preserves. A vision revision
+of an image slide keeps srcs by prompt rule + the injectImgSrc backstop
+(ready GeneratedImage rows re-injected by genid). deck-regenerate-partial
+also dispatches the bake after its write (per-run dedup id - partial regen
+mutates the SAME versionId in place), so regen slides get the same
+vision-review + freeze as generated ones; the pending filter makes it a
+subset bake automatically.
 
 Bake writes BOTH stores (PresentationVersion.slideJson + the seeded
 SlideVersion v1 rows) - the dual-store rule.
@@ -102,6 +151,86 @@ SlideVersion v1 rows) - the dual-store rule.
   verify LayersPanel on nested boxes (follow-up).
 - Legacy decks (pre-frame): open unflattened in the existing degraded-but-
   lossless path. Pre-launch rule: disposable, no remediation.
+
+## GenChat (backend-transparency feed) + the studio rail tabs
+
+- ONE continuous feed per version across generation, freeze bake, and partial
+  regen, stored in `slideJson.genChat` (GENCHAT_MAX 60, FIFO). Writers:
+  deck-generate (streaming-state blob), deck-freeze-bake + deck-regenerate-
+  partial via the shared `appendGenChat` (lib/deck/genchat-store.ts:
+  parameterized jsonb_set on ONLY the genChat key + fire-and-forget
+  `deck.genchat` broadcast, thumbs stripped on the wire). Regen appends
+  per-slide "regen" start milestones, the post-hoc thinking summary, and
+  "slide" done milestones; its save-new-version carries the accumulated feed
+  into the rebuilt manifest (it used to silently wipe it).
+- Revision milestones are TEXT ONLY (owner 2026-07-10: no before/after
+  thumb pairs - data-URI images bloat the stored manifest). The review-ask
+  entry keeps its sent-screenshot thumbs.
+- Studio: the feed is the Chat TAB of the left rail (SegmentedToggle, same
+  UI as the right rail's slides/comments; icon auto_awesome). The ACTIVE tab
+  follows API activity - generating || bakePending || applying flips to
+  Chat, the activity ending flips back to Layers; only the EDGES auto-switch
+  so a manual flip mid-run sticks (adjust-during-render, not a mount
+  effect). Live path = deck.genchat broadcasts; fallbacks = the generation
+  poll, the apply-poller, and the bakePending poller (all length-monotonic).
+
+## Partial regen x frame (2026-07-10, rebuilt on the frame contract)
+
+Frame decks regen through the FRAME contract now (owner-caught drift: the
+legacy pre-frame prompt fed frozen abs-pinned output back to the model and
+asked for absolute positioning - each regen degraded further, dropping the
+.well class the deck font + the 96/110px well padding hang on):
+
+- system = frameSystemPrompt VERBATIM (prompt cache shared with generation
+  and the bake's vision pass); user message = frameRegenUserMessage
+  (lib/deck/frame.ts): declared section attrs + the current well labeled
+  FROZEN machine output (content + look reference only) + the deck css in
+  authoring view + the comments / redesign intent. Reply = ONE section in
+  the generation contract, no deck <style>.
+- Ingest = the same path as the bake's vision revisions: parseFrameSlide ->
+  assembleFramedSlide -> buildSlideHtml(frameSystemCss + deck css from
+  slide 1 + any defensively-collected model css). ONE first-child style
+  block (the bake's revision re-wrap reads the FIRST block as "the slide's
+  css"); .well and layer structure guaranteed by construction; bake markers
+  stripped (a pre-stamped regen is FALSE-frozen - the bake would see
+  nothing pending and skip review + freeze); system bg/panel image srcs
+  re-injected from the source slide (they live outside the well, so the
+  reply never carries them). Legacy pre-frame decks keep the old prompt.
+- Verified live: two consecutive regens of the same slide came back
+  structurally identical (font, padding, layers, one style block) - the
+  compounding-drift class is closed.
+- Revision milestones in GenChat are TEXT ONLY (owner: no before/after
+  thumb pairs bloating the manifest); the review-ask entry keeps its sent
+  screenshots.
+## Grouping engine (2026-07-10, in the freeze)
+
+- A PAINTED CONTAINER with block content (a card: bg / border / shadow +
+  number + icon + texts) freezes as an EMPTY SHAPE plus its direct children
+  LIFTED to siblings (pinned against the lift target in the same measure
+  pass, inserted right after the shape so the group is a contiguous
+  paint-ordered band), all stamped with one data-tq-group. Guards keep a
+  container ATOMIC when lifting could change rendering: overflow clip,
+  transform (incl. individual rotate/scale/translate), opacity < 1,
+  filter/backdrop/clip-path/mask, or icon-badge shape (only replaced
+  children). Nested lifts inside a member restructure WITHOUT stamping
+  (nested group targets would double-move on folder drag). All under
+  self-verify + the pixel gate.
+- Membership semantics: ROOTS drag, LEAVES fold. Group selection (canvas
+  click from outside, panel folder click, folder-active highlight) targets
+  the stamped roots; the Layers panel's member ROWS are the leaves, which
+  inherit the gid via closest() (a lifted column's inner runs fold into the
+  card's folder). Double-click enters the group (existing editor
+  semantics); the shape then selects/edits alone - it has its own Layers
+  row now.
+- TRANSFORM bake-in (re-freeze correctness, found via the gate): editor
+  nudges write inline translate(); a re-bake measures the moved rect AND
+  kept the transform - double-counted, 2x offset. Translate-only matrices
+  now bake into the pin and clear; rotated/scaled elements keep their
+  authored geometry untouched (bounding rect is not a layout box).
+- Layers panel reflection: the observer also watches STYLE (trailing 250ms
+  debounce for style-only batches, so canvas drags do not churn) - a
+  restyle that flips leaf classification (wrapper gains a fill -> Shape
+  row) reflects live; add/remove/text/group changes stay rAF-fast.
 
 ## Rollout
 

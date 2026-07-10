@@ -6,14 +6,18 @@ import { regenCost } from "@/lib/credits/cost";
 import {
   ensureFresh,
   getPreset,
+  getRegenBaseCredits,
   regenPresetKey,
   creditCostFor,
 } from "@/lib/config/runtime-config";
 import { prisma } from "@/lib/prisma";
 import {
   CAROUSEL_DIRECTIVE,
+  GENCHAT_MAX,
+  GenChatEntrySchema,
   SLIDE_DIMENSIONS,
   SlideManifestSchema,
+  type GenChatEntry,
   type SlideFormat,
   type SlideManifest,
 } from "@/lib/schema/slide";
@@ -22,9 +26,25 @@ import { type Quality } from "@/lib/types/quality";
 import { COMPOSITION_RULES } from "@/inngest/prompts/composition-rules";
 import { themeToCssVars } from "@/lib/export/theme-css-vars";
 import { scopeDeckCss, unscopeDeckCss } from "@/lib/deck/scope-css";
-import { enforceCanvasFrame } from "@/lib/deck/scaffold";
+import {
+  buildSlideHtml,
+  canvasFrameCss,
+  enforceCanvasFrame,
+} from "@/lib/deck/scaffold";
+import {
+  assembleFramedSlide,
+  extractStoredSectionTag,
+  extractStoredWell,
+  frameCtxFromStoredCover,
+  frameRegenUserMessage,
+  frameSystemCss,
+  frameSystemPrompt,
+  parseFrameSlide,
+} from "@/lib/deck/frame";
+import { injectImgSrc } from "@/lib/images/slide-images";
 import { findInjectedLogoInner, injectLogoMarkers } from "@/lib/deck/logo-inject";
 import { recordSlidePartialRegen } from "@/lib/db/slide-versioning";
+import { appendGenChatEntries } from "@/lib/deck/genchat-store";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 import { fanOutNotification } from "@/lib/notifications/server";
 
@@ -576,15 +596,17 @@ export const deckRegeneratePartial = inngest.createFunction(
       data.quality && getPreset(data.quality) ? data.quality : regenPresetKey();
 
     // ─── Credit pre-authorization (billing plan Phase A) ───────────
-    // Regen costs perSlide × N (no base). Hold before any Claude call;
-    // settle in full after the save, release in onFailure. Keyed by
-    // the target version id - one regen run per version row, stable
-    // across Inngest retries.
+    // Regen costs ONE review-bake base per run (the regen's own render +
+    // vision review + freeze, 2026-07-10 vision-layer repricing) plus
+    // perSlide × N. Hold before any Claude call; settle in full after the
+    // save, release in onFailure. Keyed by the target version id - one
+    // regen run per version row, stable across Inngest retries.
     const regenChargeKey = `regen:${versionId}`;
     const regenAmount = regenCost(
       eventQuality,
       targetSlideIds.length,
       creditCostFor,
+      getRegenBaseCredits(),
     );
     const regenHold = await step.run("credit-hold", async () => {
       const project = await prisma.project.findUnique({
@@ -676,10 +698,88 @@ export const deckRegeneratePartial = inngest.createFunction(
       return parsed.data;
     });
 
+    // ── GENCHAT (backend-transparency feed) ── a partial regen CONTINUES
+    // the chat the generation + bake started: the new version row was
+    // seeded as a copy of the source manifest (genChat included), so
+    // appends here extend one feed. The studio's rail flips to the Chat
+    // tab while this runs (owner spec 2026-07-10). Best-effort: the feed
+    // must never fail the regen. ⚠️ Every call MUST live inside step.run
+    // - prelude code re-runs on each Inngest checkpoint replay and would
+    // append duplicates. ATOMIC variant (CR PR #128): the per-slide steps
+    // fan out via Promise.all and may run in separate invocations, so the
+    // read-modify-write appendGenChat could lose entries here - these
+    // writes are pure pushes, served by one atomic SQL append instead.
+    const chatAppend = (entries: GenChatEntry[]): Promise<void> =>
+      appendGenChatEntries(projectId, versionId, entries, (msg, meta) =>
+        logger.warn(msg, meta),
+      );
+    const slideNumberOf = (slideId: string): number =>
+      source.slides.findIndex((s) => s.slideId === slideId) + 1;
+
+    // Per-slide start milestones - the feed shows "redesigning slide n"
+    // the moment the run begins, so the Chat tab is never dead air while
+    // the first Claude call streams.
+    await step.run("genchat-regen-start", () =>
+      chatAppend(
+        targetSlideIds
+          .map((slideId) => slideNumberOf(slideId))
+          .filter((n) => n > 0)
+          .map((n) => ({ role: "event" as const, kind: "regen" as const, n, at: Date.now() })),
+      ),
+    );
+
     // Resolve the deck format ONCE per job so every per-slide call uses
     // the same dimensions — Claude needs the right canvas size in the
     // system prompt or vertical decks regen at 16:9.
     const sourceFormat: SlideFormat = source.format ?? "16:9";
+    // FRAME decks: the deck's shared design-system css (fonts, kickers,
+    // cards) in authoring view - the FIRST slide's stored style minus the
+    // deterministic system layers, the exact recipe the freeze bake uses
+    // for its vision call. Rebuilt into every regen'd frame slide so the
+    // deck look NEVER depends on the model reproducing rules it only sees
+    // through chrome-sliced sibling excerpts (caught live 2026-07-10: a
+    // regen'd slide came back with no font-family rule at all - system
+    // font, unstyled cards). Slide 1 is the pristine carrier; a regen of
+    // slide 1 itself still reads the SOURCE version's copy.
+    const sourceStyle =
+      /<style>([\s\S]*?)<\/style>/.exec(source.slides[0]?.html ?? "")?.[1] ??
+      "";
+    const sourceDeckCss = sourceStyle
+      .split(canvasFrameCss(SLIDE_DIMENSIONS[sourceFormat]))
+      .join("")
+      .split(frameSystemCss(SLIDE_DIMENSIONS[sourceFormat]))
+      .join("")
+      .trim();
+    // FRAME decks regen through the FRAME contract (2026-07-10, owner-caught
+    // drift: the legacy pre-frame prompt fed pinned machine output back to
+    // the model and asked for absolute positioning - each regen degraded
+    // further, dropping the .well class the deck font + padding hang on).
+    // system = frameSystemPrompt VERBATIM, so the prompt cache is shared
+    // with generation and the bake's vision pass; the reply is one section
+    // in the generation contract, assembled through the same path the
+    // vision revisions use.
+    const isFrameDeck = source.slides.some((s) =>
+      s.html.includes("data-tq-frame"),
+    );
+    const frameRegenSystemPrompt = isFrameDeck
+      ? frameSystemPrompt({
+          canvas: SLIDE_DIMENSIONS[sourceFormat],
+          language: source.language === "en" ? "en" : "ar",
+          imagesMode: source.slides.some((s) =>
+            s.html.includes("data-genimage"),
+          ),
+          kind: sourceFormat === "3:4" ? "social" : "deck",
+        })
+      : null;
+    const frameCtx = isFrameDeck
+      ? frameCtxFromStoredCover(
+          (
+            source.slides.find((s) => s.html.includes('data-role="cover"')) ??
+            source.slides[0]
+          ).html,
+          source.direction === "ltr" ? "ltr" : "rtl",
+        )
+      : null;
     // Pre-build BOTH system prompts once so per-slide steps just pick
     // by mode. Two ephemeral caches max (one per mode) instead of a
     // fresh compile per slide. The mode is decided per-slide inside
@@ -713,14 +813,50 @@ export const deckRegeneratePartial = inngest.createFunction(
       targetSlideIds.map((slideId) =>
         step.run(`regen-slide-${slideId}`, async () => {
           const client = getClient();
-          const userMessage = buildPartialUserMessage(source, slideId, comments);
+          const slideIndex = source.slides.findIndex(
+            (s) => s.slideId === slideId,
+          );
+          const sourceSlide =
+            slideIndex >= 0 ? source.slides[slideIndex] : undefined;
+          // FRAME slides regen through the frame contract; legacy pre-frame
+          // decks keep the historical prompt pair untouched.
+          const isFrame =
+            frameRegenSystemPrompt !== null &&
+            (sourceSlide?.html.includes("data-tq-frame") ?? false);
+          const userMessage = isFrame
+            ? frameRegenUserMessage(
+                {
+                  position: slideIndex + 1,
+                  total: source.slides.length,
+                  sectionTag: extractStoredSectionTag(sourceSlide!.html),
+                  // Same corrupt-slide fallback the bake's vision pass uses:
+                  // when the well boundary can't be found, hand the model the
+                  // raw DOM part - the rebuild heals the structure.
+                  wellHtml:
+                    extractStoredWell(sourceSlide!.html) ??
+                    sourceSlide!.html
+                      .slice(sourceSlide!.html.indexOf("</style>") + 8)
+                      .slice(0, 12_000),
+                  comments: comments
+                    .filter((c) => c.slideId === slideId)
+                    .map((c) => ({
+                      content: c.content,
+                      box: c.boundsJson
+                        ? `x=${Math.round(c.boundsJson.x)} y=${Math.round(c.boundsJson.y)} w=${Math.round(c.boundsJson.w)} h=${Math.round(c.boundsJson.h)}`
+                        : null,
+                    })),
+                },
+                sourceDeckCss,
+              )
+            : buildPartialUserMessage(source, slideId, comments);
           // Mode mirrors what buildPartialUserMessage picks internally:
           // a slide with comments → apply-comments (strict preservation);
           // a slide without → redesign (variation required). Keeps the
           // system prompt in sync with the user-message branch.
           // Single source of truth shared with `buildPartialUserMessage`.
-          const systemPromptText =
-            pickRegenMode(comments, slideId) === "apply-comments"
+          const systemPromptText = isFrame
+            ? frameRegenSystemPrompt!
+            : pickRegenMode(comments, slideId) === "apply-comments"
               ? applyCommentsSystemPrompt
               : redesignSystemPrompt;
           // Use the original deck's quality preset — paramsForQuality
@@ -757,31 +893,103 @@ export const deckRegeneratePartial = inngest.createFunction(
           if (!rawHtml) {
             throw new Error(`Empty HTML returned for slide ${slideId}`);
           }
-          // FIX A — re-scope the model's <style> through the canonical scoper.
-          // Generation scopes Claude's CSS via scopeDeckCss (emitting BOTH the
-          // root-compound `.tq-canvas.x` AND the descendant `.tq-canvas .x`
-          // form); the partial regen instead trusted the model to hand-prefix,
-          // and it sometimes emitted only the compound form for a NESTED class
-          // (`.tq-canvas.uc .uc-ic`) — a selector that matches no element, so
-          // the rule is dead and the icons fall to the browser-default ~300px
-          // (huge, list broken). unscope → scope rebuilds both forms. Idempotent
-          // on already-correct CSS. Applies to every per-slide regen + redesign,
-          // every project (the single chokepoint both routes dispatch into).
-          const rescoped = rawHtml.replace(
-            /<style\b[^>]*>([\s\S]*?)<\/style>/gi,
-            (_m, css: string) =>
-              `<style>${scopeDeckCss(unscopeDeckCss(css))}</style>`,
+          // Strip bake markers the model copies off its references: the
+          // CURRENT slide + frozen siblings all carry data-tq-frozen /
+          // data-tq-audited, and a regen'd slide arriving pre-stamped is
+          // FALSE-frozen - the dispatched freeze bake sees nothing pending,
+          // so the slide skips the vision review and its geometry is never
+          // actually pinned (caught live 2026-07-10). The bake re-earns the
+          // markers on the fresh html.
+          const noMarkers = rawHtml.replace(
+            /\sdata-tq-(?:frozen|audited)(?:=(?:"[^"]*"|'[^']*'|[^\s>]+))?/g,
+            "",
           );
-          // FIX B (audit 2026-07-08) — regen output never passed
-          // buildSlideHtml, so it carried neither the `.tq-canvas` scope
-          // class (redesign mode can return a bare `<div>` root, leaving the
-          // whole rescoped stylesheet matching NOTHING) nor the enforced
-          // canvas frame (any geometry the model emitted was final,
-          // persisted). Stamp the class + append the frame here.
-          const html = enforceCanvasFrame(
-            rescoped,
-            SLIDE_DIMENSIONS[sourceFormat],
-          );
+          let html: string;
+          if (isFrame) {
+            // FRAME reply: one section in the generation contract. Parse +
+            // assemble through the SAME path the bake's vision revisions
+            // use, then rebuild the EXACT stored shape generation produces:
+            // ONE first-child style block (frame css + deck css + any
+            // defensively-collected model css + armor) via buildSlideHtml.
+            // The single block matters: the bake's revision re-wrap reads
+            // the FIRST style block as "the slide's css", and the .tq-well
+            // geometry rule must be present or the well collapses to a 0px
+            // static div and the Layers panel lists the slide empty (both
+            // caught live 2026-07-10).
+            const extraCss: string[] = [];
+            const noStyles = noMarkers.replace(
+              /<style\b[^>]*>([\s\S]*?)<\/style>/gi,
+              (_m, css: string) => {
+                // The contract forbids a <style> block; if the model emits
+                // one anyway, keep its rules (scoped) instead of dropping.
+                extraCss.push(scopeDeckCss(unscopeDeckCss(css)));
+                return "";
+              },
+            );
+            const decl = parseFrameSlide(noStyles);
+            let assembled = assembleFramedSlide(
+              decl,
+              frameCtx!,
+              slideIndex,
+              SLIDE_DIMENSIONS[sourceFormat],
+            );
+            // System bg/panel image layers live OUTSIDE the well, so the
+            // model's reply never carries their reconciled src - assembly
+            // recreates the box as a placeholder. Re-inject the src the
+            // SOURCE slide already holds for the deterministic bg genid.
+            const bgGenid = `tqframe-bg-${slideIndex + 1}`;
+            if (assembled.includes(`data-genid="${bgGenid}"`)) {
+              const srcTag = new RegExp(
+                `<img[^>]*data-genid="${bgGenid}"[^>]*>`,
+                "i",
+              ).exec(sourceSlide!.html)?.[0];
+              const src = srcTag ? /\ssrc="([^"]+)"/.exec(srcTag)?.[1] : null;
+              if (src && !src.startsWith("data:")) {
+                assembled = injectImgSrc(assembled, bgGenid, src);
+              }
+            }
+            html = buildSlideHtml(
+              assembled,
+              `${frameSystemCss(SLIDE_DIMENSIONS[sourceFormat])}\n${sourceDeckCss}${
+                extraCss.length ? `\n${extraCss.join("\n")}` : ""
+              }`,
+              SLIDE_DIMENSIONS[sourceFormat],
+            );
+          } else {
+            // Legacy (pre-frame) decks keep the historical path untouched:
+            // FIX A - re-scope the model's <style> in place through the
+            // canonical scoper; FIX B (audit 2026-07-08) - stamp the
+            // `.tq-canvas` scope class + append the enforced canvas frame
+            // (redesign mode can return a bare `<div>` root, leaving the
+            // rescoped stylesheet matching NOTHING).
+            const rescoped = noMarkers.replace(
+              /<style\b[^>]*>([\s\S]*?)<\/style>/gi,
+              (_m, css: string) =>
+                `<style>${scopeDeckCss(unscopeDeckCss(css))}</style>`,
+            );
+            html = enforceCanvasFrame(rescoped, SLIDE_DIMENSIONS[sourceFormat]);
+          }
+          // Feed: the model's thinking summary (non-streaming call, so it
+          // arrives whole - post-hoc, not live) + the slide-done milestone.
+          // Presets without thinking simply skip the summary entry.
+          const thinkingText = message.content
+            .filter((b) => b.type === "thinking")
+            .map((b) => b.thinking)
+            .join("\n")
+            .trim();
+          const feedEntries: GenChatEntry[] = [];
+          if (thinkingText) {
+            feedEntries.push({
+              role: "thinking",
+              text: thinkingText.slice(0, 2000),
+              at: Date.now(),
+            });
+          }
+          const feedN = slideNumberOf(slideId);
+          if (feedN > 0) {
+            feedEntries.push({ role: "event", kind: "slide", n: feedN, at: Date.now() });
+          }
+          await chatAppend(feedEntries);
           completedSlides += 1;
           // Push the heartbeat promise into the queue (NOT fire-and-
           // forget). We don't await here — that would serialise the
@@ -841,6 +1049,25 @@ export const deckRegeneratePartial = inngest.createFunction(
           : update.html;
         return { ...s, html };
       });
+      // Carry the GenChat feed into the rebuilt manifest. The version row
+      // holds source history + this run's appends (jsonb_set writes above);
+      // rebuilding the manifest without it would wipe the chat right before
+      // the freeze bake continues it. Fresh read (not `source.genChat`) so
+      // the run's own entries survive; per-entry validation so one bad
+      // entry can't fail the whole save.
+      const liveRow = await prisma.presentationVersion.findUnique({
+        where: { id: versionId },
+        select: { slideJson: true },
+      });
+      const rawChat = (liveRow?.slideJson as { genChat?: unknown } | null)
+        ?.genChat;
+      const genChat: GenChatEntry[] = [];
+      if (Array.isArray(rawChat)) {
+        for (const candidateEntry of rawChat) {
+          const parsedEntry = GenChatEntrySchema.safeParse(candidateEntry);
+          if (parsedEntry.success) genChat.push(parsedEntry.data);
+        }
+      }
       const candidate: SlideManifest = {
         version: source.version,
         presentationId: source.presentationId,
@@ -854,6 +1081,7 @@ export const deckRegeneratePartial = inngest.createFunction(
         // landscape after a partial regen.
         format: source.format,
         theme: source.theme,
+        ...(genChat.length > 0 ? { genChat: genChat.slice(-GENCHAT_MAX) } : {}),
         slides,
       };
       // Validate Claude output before persisting — per inngest/** coding
@@ -895,13 +1123,9 @@ export const deckRegeneratePartial = inngest.createFunction(
         }),
       ]);
 
-      // Regen saved - capture the full held amount (per-slide × N, the
-      // exact number quoted at hold time). Idempotent per chargeKey.
-      await settleHold({
-        jobKey: regenChargeKey,
-        chargeAmount: regenAmount,
-        metadata: { status: "succeeded", slides: targetSlideIds.length },
-      });
+      // (The credit settle moved to the dispatch-and-settle step below -
+      // the held BASE pays for the freeze bake, so the charge is decided
+      // only after the bake dispatch outcome is known. CR PR #128.)
 
       // Per-slide history bookkeeping. One new SlideVersion row per
       // regenerated slide (source="partial_regen"), SlideState
@@ -984,6 +1208,53 @@ export const deckRegeneratePartial = inngest.createFunction(
           actorPrismaUserId,
         }),
     );
+
+    // FRAME decks (context/frame-architecture-2026-07-10.md): the regen'd
+    // slides are fresh unfrozen model output - run them through the same
+    // vision-revise + freeze bake every generated slide gets. The bake's
+    // pending filter picks up exactly the unfrozen slides, so this is a
+    // subset bake. Dedup id varies per run (partial regen mutates the SAME
+    // versionId in place, so the plain freeze:version id would dedupe
+    // against the original generation's bake).
+    //
+    // DISPATCH THEN SETTLE (CR PR #128): the held BASE (regenBaseCredits)
+    // pays for the bake's render + vision review + freeze - so the charge
+    // is decided by the dispatch outcome: full on success, minus the base
+    // when the event could not be sent (the user pays for the regen call
+    // that ran, never for a review that will not). Send + settle are both
+    // idempotent (dedup event id / per-jobKey settle), so a step retry is
+    // safe; the step itself never throws on send failure - a failed
+    // dispatch must not fail a regen whose slides are already saved.
+    await step.run("dispatch-bake-and-settle", async () => {
+      let bakeDispatched = true;
+      try {
+        await inngest.send({
+          id: `freeze:${projectId}:${versionId}:regen:${data.jobId ?? event.id ?? "0"}`,
+          name: "deck.freeze.bake",
+          data: { projectId, versionId },
+        });
+      } catch (err) {
+        bakeDispatched = false;
+        logger.warn("deck_freeze_dispatch_failed", {
+          projectId,
+          versionId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+      const chargeAmount = bakeDispatched
+        ? regenAmount
+        : Math.max(0, regenAmount - getRegenBaseCredits());
+      await settleHold({
+        jobKey: regenChargeKey,
+        chargeAmount,
+        metadata: {
+          status: "succeeded",
+          slides: targetSlideIds.length,
+          bakeDispatched,
+        },
+      });
+      return { bakeDispatched, chargeAmount };
+    });
 
     // Phase 16.E — bell notification per regen'd slide. The fan-out
     // helper's 10-minute group window merges N sequential slide

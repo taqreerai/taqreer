@@ -24,21 +24,22 @@ export const ALL_FLOWS: readonly Flow[] = [
 
 export const CREDIT_COST: Record<Quality, { base: number; perSlide: number }> =
   {
-    // Re-priced 2026-07-07 off PRODUCTION Job-table averages (see
-    // context/pricing-study-2026-07.md §3): opus-fast really costs
-    // ~$0.62/deck (not the $0.10 sample the 06-12 pricing used), so
-    // its perSlide moved 10 -> 15 to stay above cost at the cheaper
-    // per-credit revenue of the 2026-07 ladder. opus-balanced measured
-    // ~$0.89/deck - its old price already clears cost, unchanged.
-    // fable-low measured ~$3.22/deck (n=1): repriced 500+28 -> 900+60
-    // so it can NEVER be reactivated below cost; stays inactive until
-    // demand + a bigger sample justify it.
-    "opus-fast": { base: 100, perSlide: 15 },
-    "opus-balanced": { base: 400, perSlide: 22 },
-    // Placeholder 2026-07-08 (preset restructure) - final numbers come
-    // from the low-vs-medium cost test; live price is DB-driven anyway.
-    "opus-medium": { base: 600, perSlide: 30 },
-    "fable-low": { base: 900, perSlide: 60 },
+    // Re-priced 2026-07-10 for the VISION LAYER (owner-approved +60 base
+    // +12/slide on every preset): every generation now runs a second Opus
+    // call - the freeze bake's vision review (screenshots + code in,
+    // verdicts + revised sections out, thinking at effort medium).
+    // Measured off the 2026-07-10 console day: review input ~2.2k
+    // tokens/slide + ~2k fixed, output ~2.5-4k per REVISED slide -
+    // ~$0.10 flat + $0.02/slide per bake at steady state. Numbers are
+    // launch-provisional like opus-medium's (heavy-revision test day,
+    // 5-slide decks); retune on 100+ persisted vision-usage rows.
+    // History: 2026-07-07 repricing set fast 100+15 / balanced 400+22 /
+    // medium 600+30 / fable-low 900+60 off prod Job averages (see
+    // context/pricing-study-2026-07.md §3).
+    "opus-fast": { base: 160, perSlide: 27 },
+    "opus-balanced": { base: 460, perSlide: 34 },
+    "opus-medium": { base: 660, perSlide: 42 },
+    "fable-low": { base: 960, perSlide: 72 },
   };
 
 // A preset → cost lookup. Defaults to the CREDIT_COST constant (the client
@@ -183,13 +184,24 @@ export function generationCost(
   return base + Math.max(0, slides) * perSlide;
 }
 
-/** Regen (partial or full): no base, per regenerated slide only (§3). */
+// Flat base charged ONCE per partial/slide regen run (2026-07-10 vision
+// layer): every regen runs its own render + vision review + freeze bake,
+// a per-run cost independent of how many slides it touches (~$0.15
+// measured). CLIENT-SAFE fallback; the server passes the DB-backed admin
+// knob (PlatformSettings.regenBaseCredits via getRegenBaseCredits).
+export const REGEN_BASE_CREDITS = 70;
+
+/** Partial/slide regen: one review-bake base per RUN + per regenerated
+ *  slide. (A FULL deck regen re-dispatches deck.generate and bills through
+ *  the generation formula instead.) */
 export function regenCost(
   preset: Quality,
   slides: number,
   costOf: CostLookup = defaultCostLookup,
+  regenBase: number = REGEN_BASE_CREDITS,
 ): number {
-  return Math.max(0, slides) * costOf(preset).perSlide;
+  if (slides <= 0) return 0;
+  return regenBase + slides * costOf(preset).perSlide;
 }
 
 /**

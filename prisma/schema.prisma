@@ -818,5 +818,9 @@ model PlatformSettings {
   // Credits charged per generated image on images-mode decks (2026-07
   // repricing - image generation was previously uncharged). Admin-editable.
   imageCredits  Int      @default(5)
+  // Flat base charged once per partial/slide regen run (2026-07-10 vision
+  // layer repricing): every regen now runs its own render + vision review +
+  // freeze bake, a per-run cost independent of slide count. Admin-editable.
+  regenBaseCredits Int   @default(70)
   updatedAt     DateTime @updatedAt
 }

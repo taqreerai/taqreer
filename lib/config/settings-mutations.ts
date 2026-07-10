@@ -327,28 +327,46 @@ export async function updateTier(
 }
 
 /**
- * Platform-wide pricing knobs (PlatformSettings singleton). Currently
- * one field: imageCredits - the per-generated-image surcharge on
- * images-mode decks (2026-07 repricing). 0 is allowed (images free);
- * the upsert create seeds the singleton on an unseeded DB.
+ * Platform-wide pricing knobs (PlatformSettings singleton):
+ *   imageCredits     - per-generated-image surcharge on images-mode decks
+ *                      (2026-07 repricing). 0 allowed (images free).
+ *   regenBaseCredits - flat base per partial/slide regen run (the regen's
+ *                      own render + vision review + freeze bake,
+ *                      2026-07-10 vision-layer repricing). 0 allowed.
+ * The upsert create seeds the singleton on an unseeded DB.
  */
 export async function updatePlatformSettings(
   adminUserId: string,
-  input: { imageCredits: number },
+  input: { imageCredits: number; regenBaseCredits: number },
 ): Promise<void> {
   assert(
     isNonNegInt(input.imageCredits),
     "Image credits must be a non-negative integer.",
   );
+  assert(
+    isNonNegInt(input.regenBaseCredits),
+    "Regen base credits must be a non-negative integer.",
+  );
   await commit({
     adminUserId,
     eventType: "admin.settings.platform.update",
-    metadata: { imageCredits: input.imageCredits },
+    metadata: {
+      imageCredits: input.imageCredits,
+      regenBaseCredits: input.regenBaseCredits,
+    },
     mutate: async (tx) => {
       await tx.platformSettings.upsert({
         where: { id: "singleton" },
-        create: { id: "singleton", configVersion: 1, imageCredits: input.imageCredits },
-        update: { imageCredits: input.imageCredits },
+        create: {
+          id: "singleton",
+          configVersion: 1,
+          imageCredits: input.imageCredits,
+          regenBaseCredits: input.regenBaseCredits,
+        },
+        update: {
+          imageCredits: input.imageCredits,
+          regenBaseCredits: input.regenBaseCredits,
+        },
       });
     },
   });

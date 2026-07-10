@@ -53,11 +53,14 @@ export type TierConfigRow = {
 // 2026-07-08 preset restructure: 3-level quality ladder (fast / low /
 // medium), ungated everywhere - credits are the only meter. opus-medium
 // credits are a PLACEHOLDER until the low-vs-medium cost test lands.
+// 2026-07-10 vision-layer repricing (owner-approved +60 base +12/slide):
+// every generation now runs the freeze bake's vision review as a second
+// Opus call - see lib/credits/cost.ts CREDIT_COST for the measured math.
 export const SEED_PRESETS: readonly PresetConfig[] = [
-  { key: "opus-fast",     label: "Opus 4.8", model: "claude-opus-4-8", thinking: false, effort: null,     maxTokens: 128000, baseCredits: 100, perSlideCredits: 15, secsPerSlide: 8,  baseOverheadSecs: 25, active: true, sortOrder: 0 },
-  { key: "opus-balanced", label: "Opus 4.8", model: "claude-opus-4-8", thinking: true,  effort: "low",    maxTokens: 128000, baseCredits: 400, perSlideCredits: 22, secsPerSlide: 25, baseOverheadSecs: 60, active: true, sortOrder: 1 },
-  { key: "opus-medium",   label: "Opus 4.8", model: "claude-opus-4-8", thinking: true,  effort: "medium", maxTokens: 128000, baseCredits: 600, perSlideCredits: 30, secsPerSlide: 25, baseOverheadSecs: 60, active: true, sortOrder: 2 },
-  { key: "fable-low",     label: "Fable 5",  model: "claude-fable-5",  thinking: true,  effort: "low",    maxTokens: 128000, baseCredits: 900, perSlideCredits: 60, secsPerSlide: 20, baseOverheadSecs: 45, active: false, sortOrder: 3 },
+  { key: "opus-fast",     label: "Opus 4.8", model: "claude-opus-4-8", thinking: false, effort: null,     maxTokens: 128000, baseCredits: 160, perSlideCredits: 27, secsPerSlide: 8,  baseOverheadSecs: 25, active: true, sortOrder: 0 },
+  { key: "opus-balanced", label: "Opus 4.8", model: "claude-opus-4-8", thinking: true,  effort: "low",    maxTokens: 128000, baseCredits: 460, perSlideCredits: 34, secsPerSlide: 25, baseOverheadSecs: 60, active: true, sortOrder: 1 },
+  { key: "opus-medium",   label: "Opus 4.8", model: "claude-opus-4-8", thinking: true,  effort: "medium", maxTokens: 128000, baseCredits: 660, perSlideCredits: 42, secsPerSlide: 25, baseOverheadSecs: 60, active: true, sortOrder: 2 },
+  { key: "fable-low",     label: "Fable 5",  model: "claude-fable-5",  thinking: true,  effort: "low",    maxTokens: 128000, baseCredits: 960, perSlideCredits: 72, secsPerSlide: 20, baseOverheadSecs: 45, active: false, sortOrder: 3 },
 ];
 
 // Preset ladder per tier (user direction 2026-07-08): free stays on the
@@ -77,11 +80,16 @@ const SEED_DEFAULT_KEY = "opus-fast";
 // by scripts/check-config-parity.ts.
 const SEED_IMAGE_CREDITS = 5;
 
+// Mirrors REGEN_BASE_CREDITS (lib/credits/cost.ts) - same import-cycle
+// rationale + parity assertion as SEED_IMAGE_CREDITS.
+const SEED_REGEN_BASE_CREDITS = 70;
+
 // ─── In-process snapshot ──────────────────────────────────────────────
 type Snapshot = {
   presets: Map<string, PresetConfig>;
   tiers: Map<string, TierConfigRow>;
   imageCredits: number;
+  regenBaseCredits: number;
   version: number;
 };
 
@@ -89,6 +97,7 @@ const SEED_SNAPSHOT: Snapshot = {
   presets: new Map(SEED_PRESETS.map((p) => [p.key, p])),
   tiers: new Map(SEED_TIERS.map((t) => [t.plan, t])),
   imageCredits: SEED_IMAGE_CREDITS,
+  regenBaseCredits: SEED_REGEN_BASE_CREDITS,
   version: 0,
 };
 
@@ -137,10 +146,12 @@ export async function ensureFresh(): Promise<void> {
   try {
     const settings = await prisma.platformSettings.findUnique({
       where: { id: "singleton" },
-      select: { configVersion: true, imageCredits: true },
+      select: { configVersion: true, imageCredits: true, regenBaseCredits: true },
     });
     const version = settings?.configVersion ?? 0;
     const imageCredits = settings?.imageCredits ?? SEED_IMAGE_CREDITS;
+    const regenBaseCredits =
+      settings?.regenBaseCredits ?? SEED_REGEN_BASE_CREDITS;
     if (snapshot && snapshot.version === version) return;
     const [presets, tiers] = await Promise.all([
       prisma.preset.findMany({ orderBy: { sortOrder: "asc" } }),
@@ -152,6 +163,7 @@ export async function ensureFresh(): Promise<void> {
         presets: SEED_SNAPSHOT.presets,
         tiers: SEED_SNAPSHOT.tiers,
         imageCredits,
+        regenBaseCredits,
         version,
       };
       return;
@@ -160,6 +172,7 @@ export async function ensureFresh(): Promise<void> {
       presets: new Map(presets.map((p) => [p.key, rowToPreset(p)])),
       tiers: new Map(tiers.map((t) => [t.plan, rowToTier(t)])),
       imageCredits,
+      regenBaseCredits,
       version,
     };
   } catch (err) {
@@ -273,6 +286,11 @@ export function getFreeCredits(): number {
 /** Credits charged per generated image (images-mode decks). DB-backed admin knob. */
 export function getImageCredits(): number {
   return current().imageCredits;
+}
+/** Flat base charged once per partial/slide regen run (the regen's own
+ *  render + vision review + freeze bake, 2026-07-10). DB-backed admin knob. */
+export function getRegenBaseCredits(): number {
+  return current().regenBaseCredits;
 }
 
 // Per-tier numbers the PRICING surfaces display, from the live config: the free

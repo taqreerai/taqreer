@@ -15,26 +15,32 @@
 // adds no new image machinery.
 
 // ── geometry ────────────────────────────────────────────────────────────────
-// Derived from the canvas so every format gets proportional framing. The
-// ratios reproduce the spike-proven 16:9 values EXACTLY (margin 96, split 768,
-// band 378, gap 64, chrome mid 40, brand top 52 at 1920x1080) and scale for
-// portrait 3:4 (1080x1440: margin 54, split 432, band 504, gap 36).
+// Derived from the canvas so every format gets proportional framing. 16:9
+// values: margin 64, split 768, band 378, gap 64 at 1920x1080; portrait 3:4
+// (1080x1440): margin 36, split 432, band 504, gap 36.
+//
+// Margin history: the spike used 5% (96px at 16:9) SIZED FOR THE CHROME TEXT
+// BANDS that used to render between the well and the canvas edge; the chrome
+// was removed 2026-07-10 (owner direction) and the margin shrank in steps.
+// The "margins are huge" report turned out to be TWO stacked gaps: the frame
+// margin PLUS the model's own .well padding - which is the model's DESIGN.
+// Final contract (owner, same day): the frame keeps a 10px SAFETY inset only
+// (clearance so content never kisses the canvas edge; overflow is already
+// impossible via the clipped well) and the model owns ALL visual margins -
+// the prompt says nothing about spacing. Old stored decks are untouched
+// (their geometry is baked into their own <style>).
 export type FrameCanvas = { width: number; height: number };
 
 export function frameGeometry(canvas: FrameCanvas) {
-  const margin = Math.round(canvas.width * 0.05); // safe-area inset
+  const margin = 10; // SAFETY inset only - the model designs its own margins
   const splitW = Math.round(canvas.width * 0.4); // tier-2 split panel width
   const bandH = Math.round(canvas.height * 0.35); // tier-2 band height
   const gap = Math.round(canvas.width / 30); // panel-to-well gap
-  const chromeMid = Math.round(margin * (40 / 96)); // chrome text band center
-  const brandTop = Math.round(margin * (52 / 96)); // cover brand-mark top
   return {
     margin,
     splitW,
     bandH,
     gap,
-    chromeMid,
-    brandTop,
     wellW: canvas.width - margin * 2,
     wellH: canvas.height - margin * 2,
     splitWellW: canvas.width - splitW - gap - margin,
@@ -67,7 +73,7 @@ export function frameSystemPrompt(opts: {
   // authored-LTR mirroring - bg photos don't flip, so mirrored compositions
   // break against them. RTL drift is caught downstream, never guess-rewritten.
   const langBlock = ar
-    ? `‼️ LANGUAGE & DIRECTION - this deck is ARABIC: design natively RTL. The system sets dir="rtl" on every slide root (do NOT set dir yourself). The eye enters from the RIGHT: lead text blocks and columns anchor to the visual RIGHT, secondary/decorative elements to the LEFT; body text right-aligned. Flex keywords are LOGICAL under RTL: align-items/justify-content flex-START anchors to the reading side (the RIGHT) and flex-END anchors LEFT - to anchor content to the reading edge use flex-start, never flex-end. Do NOT set dir on child blocks that contain Latin letters; for an inline Latin run inside an Arabic sentence (URL, email, English word) wrap just that run in <span dir="ltr">. Digit-only chrome blocks (pagination "01 / 07", dates, phone numbers) - dir="ltr" on that block IS fine (the digits would otherwise reorder under the RTL paragraph direction). Numbers are ALWAYS Latin digits (0-9), never Arabic-Indic (٠-٩). letter-spacing on Arabic-bearing elements is stripped at export.`
+    ? `‼️ LANGUAGE & DIRECTION - this deck is ARABIC: design natively RTL. The system sets dir="rtl" on every slide root (do NOT set dir yourself). The eye enters from the RIGHT: lead text blocks and columns anchor to the visual RIGHT, secondary/decorative elements to the LEFT; body text right-aligned. Flex keywords are LOGICAL under RTL: align-items/justify-content flex-START anchors to the reading side (the RIGHT) and flex-END anchors LEFT - to anchor content to the reading edge use flex-start, never flex-end. Do NOT set dir on child blocks that contain Latin letters; for an inline Latin run inside an Arabic sentence (URL, email, English word) wrap just that run in <span dir="ltr">. Digit-only blocks (pagination "01 / 07", dates, phone numbers) - dir="ltr" on that block IS fine (the digits would otherwise reorder under the RTL paragraph direction), but give it an explicit text-align: dir=ltr makes start-alignment mean LEFT. Numbers are ALWAYS Latin digits (0-9), never Arabic-Indic (٠-٩). letter-spacing on Arabic-bearing elements is stripped at export.`
     : `LANGUAGE & DIRECTION - this deck is ENGLISH (LTR). The system sets dir="ltr" on every slide root (do NOT set dir yourself).`;
 
   const bgKinds = imagesMode
@@ -100,11 +106,10 @@ BACKGROUND KINDS - "color" only for this deck: a flat or gradient ground via dat
 
   return `${social ? `You are an elite social media designer. Design an original carousel of ${canvas.width}x${canvas.height} portrait cards for a phone feed, fresh for this brief, as one HTML fragment. Open with a hook that stops the scroll.` : `You are a world-class presentation designer. Design a complete, ORIGINAL slide deck - your own visual system, fresh for this brief - as one HTML fragment. Bespoke and editorial, never a generic template.`}
 
-THE FRAME IS SYSTEM-OWNED. Each slide has three layers; you author only what is declared here:
+THE FRAME IS SYSTEM-OWNED. Each slide has two layers; you author only what is declared here:
 1. BACKGROUND - you DECLARE it per slide via section attributes (below); the system renders it. You never draw backgrounds or edge-to-edge imagery yourself.
-2. CONTENT WELL - your canvas. Inside each <section>, emit EXACTLY ONE <div class="well">…</div> and design everything in it. The well is already inset from the slide edges; treat its edges as the canvas edges. Content outside it is clipped. Its size depends on the background you declare:
+2. CONTENT WELL - your canvas. Inside each <section>, emit EXACTLY ONE <div class="well">…</div> and design everything in it. Treat the well's edges as the slide edges. Content outside it is clipped. Its size depends on the background you declare:
 ${wellSizes}
-3. CHROME (deck title, kicker, brand mark) - the system renders these in fixed positions. Never draw them yourself: no running deck titles, no brand marks or logo lockups anywhere in the well. You declare the per-slide kicker text via an attribute.
 
 ${langBlock}
 
@@ -112,8 +117,6 @@ OUTPUT - emit exactly this, with NOTHING else (no prose, no fences, no JSON, no 
 1. ONE <style> block FIRST - your design system: CSS custom properties + component classes built ON the injected brand variables. Define styling ONCE and reuse via classes.
 2. THEN the slides, each:
 <section data-label="<short ${ar ? "Arabic" : ""} name>" data-role="cover|content|section|stats|quote|image|closing"
-         data-kicker="<2-4 word kicker for this slide, or omit>"
-         data-chrome="light|dark"   (light = white chrome text for dark/photo backgrounds, dark = ink chrome for light backgrounds)
          ${bgKinds}
          data-bg-css="<any CSS background value for the non-photo area, e.g. var(--brand-1) or a linear-gradient>"${imagesMode ? `
          data-bg-prompt="<for image/split/band: a concrete textless photo prompt - SUBJECT / SCENE / MOOD, no text/logos/people-brands>"
@@ -122,14 +125,14 @@ OUTPUT - emit exactly this, with NOTHING else (no prose, no fences, no JSON, no 
 </section>
 ${imageBlocks}
 - The FIRST character of your response is \`<\` (your <style>).
-- The COVER <section> also carries data-deck-title="…" (3-8 words, in the deck's language, a real title - becomes the project name), plus the deck's BRAND MARK as data: data-brand="<the brand/venture name>" and optionally data-brand-sub="<one short sub-line>". The system renders the brand mark; NEVER draw a brand mark, wordmark, or logo lockup inside the well.
+- The COVER <section> also carries data-deck-title="…" (3-8 words, in the deck's language, a real title - becomes the project name).
 - Slides are TOP-LEVEL siblings - never nest a <section>. Exactly one .well per section, nothing else inside the section.
 - There is NO wrapper element around your output: never write CSS through an imagined container (e.g. \`.deck x\`, \`.wrapper x\` - those selectors match NOTHING). Base styles go on .well or your own classes.
 - ‼️ Design the well in FLOW ONLY: flex and grid (display:flex/grid, flex-direction, gap, padding, margin, flex:1, aspect-ratio, align-items/justify-content). NEVER position:absolute/relative offsets, NEVER left/top, NEVER transforms, NEVER negative margins inside the well - the layout must be pure document flow, so nothing can ever overlap. Give .well itself display:flex;flex-direction:column (or grid) filling its box; distribute space with gap, flex:1, and auto margins. Px font sizes and fixed px sizes for images/cards are fine. Plan each slide so content FITS its well without overflowing.
-- Use left/top/right/bottom longhands, NOT the \`inset\` shorthand.
 - Write every repeated item (list rows, cards, steps, table cells) out IN FULL as elements. There is NO template engine: never use a JS loop, \`.map()\`, \`+\` concatenation, or \`\${…}\`.
 - Decide the slide count from the brief (match \`brief.slideCount\` when given; else adapt).
 - VARY the composition slide to slide: different FLOW structures, one coherent look.
+- COPY: never use the em dash or the en dash in any text; use a comma, colon, or plain hyphen instead.
 - SELF-CORRECTION - if AFTER emitting a slide you realize it has a real flaw (content overflowing the well, broken hierarchy, a block anchored to the wrong side, imbalanced composition), re-emit the ENTIRE corrected <section> with the same attributes PLUS data-revises="N" (N = the 1-based position of the slide it replaces, counting from the cover). The system swaps the corrected slide in place of the old one. Re-emit ONLY when the fix is meaningfully better; never re-emit an unchanged slide, and never use data-revises on a first-time slide.
 
 BRAND & COLOUR - the brand variables are INJECTED for you; reference them, don't redefine them.
@@ -159,27 +162,16 @@ export function frameSystemCss(canvas: FrameCanvas): string {
     `.tq-canvas .tq-scrim.strong{background:linear-gradient(to top,rgba(10,12,16,.9) 0%,rgba(10,12,16,.62) 45%,rgba(10,12,16,.3) 100%)}` +
     `.tq-canvas .tq-well{position:absolute;top:${g.margin}px;inset-inline-start:${g.margin}px;width:${wellW}px;height:${wellH}px;z-index:1;overflow:hidden}` +
     `.tq-canvas .tq-well>.well{width:100%;height:100%}` +
-    // Chrome GEOMETRY is armored (!important on positional props): the model is
-    // INVITED to restyle the chrome's LOOK via these stable hooks (its scoped
-    // CSS loads after this sheet, so equal-specificity visual rules win), but
-    // slot placement can never move. Defaults below are deliberately neutral.
-    `.tq-canvas .tq-chrome{position:absolute!important;inset:0!important;z-index:2!important;pointer-events:none!important;font-family:var(--font-body,var(--font));font-size:19px;font-weight:500}` +
-    `.tq-canvas .tq-chrome .slot{position:absolute!important;display:flex;align-items:center;gap:12px;line-height:1}` +
-    `.tq-canvas .tq-chrome.light .slot{color:rgba(255,255,255,.92)}` +
-    `.tq-canvas .tq-chrome.dark .slot{color:var(--brand-text);opacity:.75}` +
-    `.tq-canvas .tq-chrome .slot.ts{top:${g.chromeMid}px!important;inset-inline-start:${g.margin}px!important;inset-inline-end:auto!important}` +
-    `.tq-canvas .tq-chrome .slot.te{top:${g.chromeMid}px!important;inset-inline-end:${g.margin}px!important;inset-inline-start:auto!important}` +
-    `.tq-canvas .tq-chrome .slot.bs{bottom:${g.chromeMid}px!important;inset-inline-start:${g.margin}px!important;inset-inline-end:auto!important}` +
-    `.tq-canvas .tq-chrome .slot.be{bottom:${g.chromeMid}px!important;inset-inline-end:${g.margin}px!important;inset-inline-start:auto!important}` +
-    `.tq-canvas .tq-chrome .slot.tc{top:${g.chromeMid}px!important;inset-inline-start:50%!important;transform:translateX(-50%)!important}` +
-    `.tq-canvas .tq-chrome .kicker-dash{display:inline-block;width:34px;height:2px;background:var(--accent,currentColor)}` +
-    `.tq-canvas .tq-chrome .slot.brand{top:${g.brandTop}px!important}` +
-    `.tq-canvas .tq-chrome .slot.brand .brand-name{font-size:34px;font-weight:700;color:var(--accent,currentColor);line-height:1.2}` +
-    `.tq-canvas .tq-chrome .slot.brand .brand-sub{font-size:13px;letter-spacing:4px;opacity:.8;margin-top:6px}` +
-    // Slots that sit OVER a photo (full-bleed or panel) force light ink + a
-    // soft shadow - per-slot, computed from the declared geometry. LEGIBILITY
-    // GUARD: armored so a deck restyle can't put dark chrome on a dark photo.
-    `.tq-canvas .tq-chrome .slot.onpanel{color:rgba(255,255,255,.94)!important;opacity:1!important;text-shadow:0 1px 14px rgba(10,12,16,.5)}`
+    // The chrome layer is an EMPTY STRUCTURE SENTINEL (owner direction
+    // 2026-07-10: the system draws NOTHING the user didn't choose - the
+    // flow's pagination/persistent variables hand off to Claude, and the
+    // system stopped rendering identity chrome). The empty div stays as the
+    // slide's LAST layer so the bake's structure check can detect
+    // markup-eating corruption (an unterminated model attribute swallowing
+    // the layer boundary) - and old stored decks carry their own copy of the
+    // former slot CSS inside their baked <style>, so deleting the rules here
+    // does not affect them.
+    `.tq-canvas .tq-chrome{position:absolute!important;inset:0!important;z-index:2!important;pointer-events:none!important}`
   );
 }
 
@@ -187,15 +179,11 @@ export function frameSystemCss(canvas: FrameCanvas): string {
 export type FrameSlideDecl = {
   label: string;
   role: string;
-  kicker: string | null;
-  chrome: "light" | "dark";
   bg: string;
   bgCss: string | null;
   bgPrompt: string | null;
   bgScrim: "none" | "soft" | "strong";
   deckTitle: string | null;
-  brand: string | null;
-  brandSub: string | null;
   /** Claude's ENTIRE well div (modifier classes carry its CSS), or the section
    *  inner HTML as a fallback when the well tag is missing. */
   wellHtml: string;
@@ -241,15 +229,11 @@ export function parseFrameSlide(sectionHtml: string): FrameSlideDecl {
   return {
     label: attr(openTag, "data-label") ?? "",
     role: attr(openTag, "data-role") ?? "content",
-    kicker: attr(openTag, "data-kicker"),
-    chrome: attr(openTag, "data-chrome") === "light" ? "light" : "dark",
     bg: attr(openTag, "data-bg") ?? "color",
     bgCss: attr(openTag, "data-bg-css"),
     bgPrompt: attr(openTag, "data-bg-prompt"),
     bgScrim: scrim === "soft" || scrim === "strong" ? scrim : "none",
     deckTitle: attr(openTag, "data-deck-title"),
-    brand: attr(openTag, "data-brand"),
-    brandSub: attr(openTag, "data-brand-sub"),
     wellHtml: wellMatch
       ? wellMatch[1]
       : sectionHtml
@@ -263,19 +247,40 @@ export function parseFrameSlide(sectionHtml: string): FrameSlideDecl {
 // deck identity accumulated as slides stream (the cover declares it).
 export type FrameDeckCtx = {
   direction: "rtl" | "ltr";
+  // Cover-declared title, re-stamped on the stored cover section (it feeds
+  // the manifest/project title extraction). NOT rendered anywhere.
   deckTitle: string | null;
-  brand: string | null;
-  brandSub: string | null;
-  // NOTE (owner direction 2026-07-10): the flow's chrome VARIABLES
-  // (pagination, persistent text) are NOT system slots - they hand off to
-  // Claude via ruleLines with no position words at all, and Claude places
-  // them in its design (frozen + audited like any well content). The system
-  // renders only IDENTITY chrome: brand mark, kicker, running title.
+  // NOTE (owner direction 2026-07-10, twice): the chrome layer renders
+  // NOTHING the user didn't choose. The flow's variables (pagination,
+  // persistent text) hand off to Claude via ruleLines with no position
+  // words, and Claude places them in its design (frozen + audited like any
+  // well content). The system's identity chrome (brand mark, kicker,
+  // running title) was removed the same day it shipped - it stamped every
+  // slide with repeated titles nobody asked for.
 };
 
 // Genids the SYSTEM invents for bg/panel boxes must satisfy the pipeline's
 // SAFE_GENID charset ([A-Za-z0-9._-]) - slide indexes do.
 const bgGenId = (slideIndex: number) => `tqframe-bg-${slideIndex + 1}`;
+
+// Latin numerals ONLY (house rule): the prompt's LANG block already demands
+// 0-9, but the model occasionally emits Arabic-Indic anyway (slide-4 stats +
+// cover year, caught live 2026-07-10) - so the rule is ENFORCED here, at the
+// assembly chokepoint every path shares (generation, vision revisions,
+// partial regen). A 1:1 code-point map; these code points only ever occur in
+// human text, so a whole-string pass is safe. Includes Extended Arabic-Indic
+// (Persian forms some models mix in) and the Arabic percent/decimal marks so
+// "٦٥٪" becomes "65%", not "65٪".
+const LATIN_DIGIT_MAP: Record<string, string> = {
+  "٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4",
+  "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9",
+  "۰": "0", "۱": "1", "۲": "2", "۳": "3", "۴": "4",
+  "۵": "5", "۶": "6", "۷": "7", "۸": "8", "۹": "9",
+  "٪": "%", "٫": ".", "٬": ",",
+};
+export function latinizeDigits(html: string): string {
+  return html.replace(/[٠-٩۰-۹٪٫٬]/g, (ch) => LATIN_DIGIT_MAP[ch] ?? ch);
+}
 
 export function assembleFramedSlide(
   decl: FrameSlideDecl,
@@ -330,51 +335,14 @@ export function assembleFramedSlide(
   // ── Layer 1: the well (Claude's flow design, verbatim) ──
   const wellHtml = `<div class="tq-well"${wellStyle}>${decl.wellHtml}</div>`;
 
-  // ── Layer 2: chrome ──
-  // Slots over a photo force light ink (.onpanel) - computed from geometry.
-  const overPhoto = new Set(
-    decl.bg === "image"
-      ? ["ts", "tc", "te", "bs", "be"]
-      : decl.bg === "split-start"
-        ? ["ts", "bs"]
-        : decl.bg === "split-end"
-          ? ["te", "be"]
-          : decl.bg === "band-top"
-            ? ["ts", "tc", "te"]
-            : decl.bg === "band-bottom"
-              ? ["bs", "be"]
-              : [],
-  );
-  const op = (pos: string) => (overPhoto.has(pos) ? " onpanel" : "");
+  // ── Layer 2: chrome = an EMPTY structure sentinel ──
+  // The system renders NOTHING here (owner direction 2026-07-10: chrome only
+  // carries what the user chose, and those variables hand off to Claude).
+  // The empty div stays as the slide's LAST layer purely so the bake's
+  // structure check can detect markup-eating corruption (an unterminated
+  // model attribute swallowing the layer boundary swallows this div).
+  const chromeHtml = `<div class="tq-chrome" data-tq-lock="1"></div>`;
   const isCover = decl.role === "cover";
-  const slots: string[] = [];
-  // Cover brand mark (model-declared identity); kicker rides top-center on the
-  // cover, top-start elsewhere. Slot classes (.kicker/.title) are stable
-  // STYLE HOOKS: the
-  // deck's own scoped CSS loads after the frame sheet, so the model's design
-  // system can restyle the chrome's look - geometry is armored and can't move.
-  if (isCover && ctx.brand) {
-    slots.push(
-      `<div class="slot ts brand${op("ts")}"><div><div class="brand-name">${esc(ctx.brand)}</div>${ctx.brandSub ? `<div class="brand-sub">${esc(ctx.brandSub)}</div>` : ""}</div></div>`,
-    );
-    if (decl.kicker)
-      slots.push(
-        `<div class="slot tc kicker${op("tc")}"><span class="kicker-dash"></span><span>${esc(decl.kicker)}</span></div>`,
-      );
-  } else if (decl.kicker) {
-    slots.push(
-      `<div class="slot ts kicker${op("ts")}"><span class="kicker-dash"></span><span>${esc(decl.kicker)}</span></div>`,
-    );
-  }
-  if (ctx.deckTitle && !isCover)
-    slots.push(
-      `<div class="slot te title${op("te")}">${esc(ctx.deckTitle)}</div>`,
-    );
-  // Pagination + persistent footer are DELIBERATELY absent here (owner
-  // direction 2026-07-10): those flow variables hand off to Claude with no
-  // position forcing - it draws them inside its design, where the freeze +
-  // audit + gate cover them like any other well content.
-  const chromeHtml = `<div class="tq-chrome ${decl.chrome}" data-tq-lock="1">${slots.join("")}</div>`;
 
   // data-tq-frame marks the deck as frame-architecture for every consumer
   // (the editor NEVER runs its flatten on frame decks - frozen or awaiting
@@ -382,17 +350,14 @@ export function assembleFramedSlide(
   // DECLARED attrs are preserved on the stored section so post-hoc passes
   // (the render-audit self-fix, future partial regen) can reconstruct the
   // model's authoring view without the original stream.
-  return (
+  return latinizeDigits(
     `<section dir="${ctx.direction}" data-tq-frame="1" data-label="${esc(decl.label)}" data-role="${esc(decl.role)}"` +
-    ` data-chrome="${decl.chrome}" data-bg="${esc(decl.bg)}"` +
-    (decl.kicker ? ` data-kicker="${esc(decl.kicker)}"` : "") +
-    (decl.bgCss ? ` data-bg-css="${esc(decl.bgCss)}"` : "") +
-    (decl.bgPrompt ? ` data-bg-prompt="${esc(decl.bgPrompt)}"` : "") +
-    (decl.bgScrim !== "none" ? ` data-bg-scrim="${decl.bgScrim}"` : "") +
-    (isCover && ctx.deckTitle ? ` data-deck-title="${esc(ctx.deckTitle)}"` : "") +
-    (isCover && ctx.brand ? ` data-tq-brand="${esc(ctx.brand)}"` : "") +
-    (isCover && ctx.brandSub ? ` data-tq-brand-sub="${esc(ctx.brandSub)}"` : "") +
-    `>${ground}${panelHtml}${wellHtml}${chromeHtml}</section>`
+      ` data-bg="${esc(decl.bg)}"` +
+      (decl.bgCss ? ` data-bg-css="${esc(decl.bgCss)}"` : "") +
+      (decl.bgPrompt ? ` data-bg-prompt="${esc(decl.bgPrompt)}"` : "") +
+      (decl.bgScrim !== "none" ? ` data-bg-scrim="${decl.bgScrim}"` : "") +
+      (isCover && ctx.deckTitle ? ` data-deck-title="${esc(ctx.deckTitle)}"` : "") +
+      `>${ground}${panelHtml}${wellHtml}${chromeHtml}</section>`,
   );
 }
 
@@ -420,36 +385,151 @@ export function frameCtxFromStoredCover(
   return {
     direction,
     deckTitle: attr(tag, "data-deck-title"),
-    brand: attr(tag, "data-tq-brand"),
-    brandSub: attr(tag, "data-tq-brand-sub"),
   };
 }
 
-// The user message for the ONE-round self-fix call (system = frameSystemPrompt,
-// so the corrected sections follow the same contract). Each flawed slide is
-// handed back in the model's own authoring format with its measured findings;
-// the response re-uses the data-revises revision semantics for mapping.
-export function frameFixUserText(
-  flawed: {
-    position: number; // 1-based deck position
-    sectionTag: string; // stored open tag (carries the declared attrs)
-    wellHtml: string; // Claude's well div, current state
-    findings: string[];
-  }[],
+// ── PARTIAL REGEN (single slide, frame decks) ───────────────────────────────
+// The studio's redesign / apply-comments call for ONE slide of an existing
+// frame deck. system = frameSystemPrompt verbatim (prompt cache shared with
+// generation + the vision pass); this user message overrides the output
+// shape: exactly ONE corrected section, no deck <style>. The stored well is
+// FROZEN machine output (the bake pinned every element to absolute
+// coordinates), so the message frames it as content + look reference and
+// demands a pure-flow rebuild. Feeding pinned code back through the legacy
+// pre-frame prompt was the regen DRIFT class (caught live 2026-07-10: the
+// .well class dropped, so the deck font and the 96/110px well padding
+// matched nothing; every repeat regen degraded further).
+export type FrameRegenComment = { content: string; box: string | null };
+export type FrameRegenInput = {
+  position: number; // 1-based deck position
+  total: number; // deck size
+  sectionTag: string; // stored open tag (carries the declared attrs)
+  wellHtml: string; // current well - frozen machine output
+  comments: FrameRegenComment[]; // empty = redesign mode
+};
+
+export function frameRegenUserMessage(
+  input: FrameRegenInput,
+  deckCss: string,
 ): string {
-  const blocks = flawed
-    .map(
-      (f) => `SLIDE ${f.position} - measured flaws:
-${f.findings.map((x) => `  • ${x}`).join("\n")}
-Current section attributes: ${f.sectionTag}
-Current well:
-${f.wellHtml}`,
-    )
-    .join("\n\n");
-  return `QUALITY PASS - the deck you designed was rendered and MEASURED; the slides below have concrete flaws. Fix ONLY these slides.
+  const intent = input.comments.length
+    ? `USER COMMENTS - apply faithfully, minimally
+Rebuild the SAME visual design in pure flow, changing ONLY what the comments ask. Every element a comment does not reference keeps its content, styling, and place in the composition. If a comment is ambiguous, prefer the conservative interpretation; if comments conflict, the later one wins.
+${input.comments
+  .map(
+    (c, i) =>
+      `  ${i + 1}. ${c.box ? `Region (slide-space): ${c.box}\n     ` : ""}"${c.content.replace(/"/g, '\\"')}"`,
+  )
+  .join("\n")}`
+    : `REDESIGN BRIEF - variation REQUIRED
+The user hit "redesign this slide" wanting a fresh visual approach. Keep every piece of content VERBATIM (headlines, body text, lists, labels, statistics, captions) - change the composition. Pick a distinctly different flow structure than the current slide; a result that reads the same at a glance is a failure.`;
 
-${blocks}
+  return `PARTIAL REGEN - redesign ONE slide of an EXISTING deck (slide ${input.position} of ${input.total}). The rest of the deck is fixed.
 
-Re-emit each slide as a complete corrected <section> in the exact same output contract (same declared attributes unless a flaw requires changing one; exactly one <div class="well">), PLUS data-revises="<the slide's position number>" on each <section> so the system swaps it in place. Keep the same content and visual system - fix the measured flaws, don't redesign. If an <img> carries a src attribute, preserve that src EXACTLY. Emit ONLY the corrected <section> elements, nothing else.`;
+CURRENT SLIDE - section attributes:
+${input.sectionTag}
+
+CURRENT WELL CODE - FROZEN machine output: the export pipeline pinned every element to absolute coordinates. It is a CONTENT and look reference ONLY, never a layout to copy - your reply must be authored in pure flow per the system rules.
+${input.wellHtml}
+
+Shared deck stylesheet (FIXED - you cannot change it; reuse its classes or use inline styles, and do NOT emit a <style> block):
+${deckCss}
+
+${intent}
+
+RULES:
+- Reply with EXACTLY ONE corrected <section> in the generation contract: keep the declared data attributes from the section tag above (change data-bg-css only if your design needs it; keep data-label and data-role), containing exactly one <div class="well"> in PURE FLOW. No <style> block, no data-revises, no prose, no fences - the FIRST character of your reply is the < of the section.
+- Never copy position:absolute, left/top offsets, or fixed pixel insets from the current code - they are machine output, not design.
+- Keep the message and text content as written${input.comments.length ? " except where a comment asks otherwise" : ""}.
+- Preserve every <img> src EXACTLY. Keep data-genimage boxes exactly as they are (same data-genimage and data-genaspect values, no new image slots).
+- Numerals in RTL decks: a digit block with dir="ltr" renders text-align:start as LEFT - keep dir=ltr, set text-align explicitly to place the numerals where the composition needs them.`;
+}
+
+// ── VISION QUALITY PASS (the bake's revision call) ──────────────────────────
+// The deck is rendered in the real export browser and every pending slide is
+// handed back as [rendered image + current code + measured findings] so the
+// model reviews what the USER actually sees, not what it imagines its code
+// renders as. system = frameSystemPrompt (same string as generation, so the
+// prompt cache is shared cross-call and the corrected sections follow the
+// exact same contract). The response reuses the data-revises semantics.
+//
+// Content-block layout: intro, then per slide IMAGE immediately followed by
+// its text block (interleaved image+caption is the layout the vision docs
+// recommend for multi-image prompts), the shared deck stylesheet once, and
+// the rules last.
+export type FrameVisionSlideInput = {
+  position: number; // 1-based deck position
+  total: number; // deck size (positions are deck-wide, pending may be a subset)
+  sectionTag: string; // stored open tag (carries the declared attrs)
+  wellHtml: string; // Claude's well div, current state
+  findings: string[]; // measured audit findings, may be empty
+  imageBase64: string; // downscaled JPEG of the rendered slide
+};
+
+type VisionBlock =
+  | { type: "text"; text: string }
+  | {
+      type: "image";
+      source: { type: "base64"; media_type: "image/jpeg"; data: string };
+    };
+
+export function frameVisionUserBlocks(
+  slides: FrameVisionSlideInput[],
+  deckCss: string,
+): VisionBlock[] {
+  const blocks: VisionBlock[] = [
+    {
+      type: "text",
+      text: `VISION QUALITY PASS - the deck you designed was rendered in the real export browser. Each slide below appears as its actual rendered image, followed by its current code and any MEASURED findings from the render audit.
+
+Review each slide the way a design director reviews a printed proof:
+- clipping and overflow: content cut by the well edge or cramped against it
+- anchoring: a block sitting on the wrong side for the reading direction
+- hierarchy and balance: type scale, spacing rhythm, dead zones, lopsided or underfilled compositions
+- scale and presence: these slides are PROJECTED in a room - type must read from distance, and the composition should USE the canvas; content floating small in a sea of empty ground is a defect, not minimalism
+- legibility: text over photography or low-contrast fills
+- deck consistency: type scale and spacing language coherent from slide to slide`,
+    },
+  ];
+  for (const s of slides) {
+    blocks.push({
+      type: "image",
+      source: {
+        type: "base64",
+        media_type: "image/jpeg",
+        data: s.imageBase64,
+      },
+    });
+    blocks.push({
+      type: "text",
+      text: `SLIDE ${s.position} of ${s.total} - rendered above.
+Section attributes: ${s.sectionTag}
+Well code:
+${s.wellHtml}
+Measured findings:${
+        s.findings.length
+          ? "\n" + s.findings.map((x) => `  - ${x}`).join("\n")
+          : " none"
+      }`,
+    });
+  }
+  blocks.push({
+    type: "text",
+    text: `Shared deck stylesheet (FIXED - you cannot change it; reuse its classes or use inline styles, and do NOT emit a <style> block):
+${deckCss}
+
+RULES:
+- FIRST, one verdict line per slide, in order, no exceptions - grade each slide individually before deciding anything:
+  SLIDE <n>: OK
+  SLIDE <n>: REVISING - <under ten words naming the defect>
+  SLIDE <n>: DISPUTING - <under ten words: why the measured finding is factually wrong in the render>
+- ‼️ MEASURED findings are DEFECTS, not suggestions. A slide with a measured finding MUST be REVISING - the only alternative is DISPUTING when the measurement is factually wrong in the rendered image. "It reads as a stylistic choice" is NOT a dispute; the measurements encode this product's design law.
+- THEN emit the corrected <section> for every REVISING slide, in the exact generation contract (same declared attributes unless the fix requires changing one, exactly one <div class="well">) PLUS data-revises="<the slide's position number>".
+- Beyond the findings, revise when a correction genuinely improves the slide: a real defect or a clear visual upgrade. Never re-emit for a minor taste difference.
+- Keep the message and text content as written (trim or rewrap text only when the defect demands it).
+- Preserve every <img> src EXACTLY. Keep data-genimage boxes exactly as they are (same data-genimage and data-genaspect values, no new image slots).
+- Numerals in RTL decks: a digit block with dir="ltr" renders text-align:start as LEFT - keep dir=ltr, set text-align explicitly to place the numerals where the composition needs them.`,
+  });
+  return blocks;
 }
 

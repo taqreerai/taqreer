@@ -40,7 +40,20 @@ export const TEXT_TAGS = new Set([
 export function isTextLeaf(el: Element): boolean {
   return (
     (el.textContent ?? "").trim().length > 0 &&
-    [...el.children].every((c) => INLINE_TAGS.has(c.tagName))
+    [...el.children].every(
+      (c) =>
+        INLINE_TAGS.has(c.tagName) &&
+        // A child PINNED to its own coordinates (inline position:absolute -
+        // what the freeze bake stamps on every element it pins) is an
+        // independently PLACED box, not part of this element's text run, even
+        // when its tag is inline. Without this, a frozen header/footer row
+        // whose children are <span>s read as ONE text leaf: selection grabbed
+        // the whole row and the Layers panel listed one merged layer (user
+        // report 2026-07-10). Inline STYLE check on purpose - no computed
+        // style needed, and author-static spans inside atomically-frozen
+        // headings (never pinned) keep collapsing into their parent run.
+        (c as HTMLElement).style?.position !== "absolute",
+    )
   );
 }
 
@@ -260,8 +273,17 @@ export function buildLayerTree(section: HTMLElement): LayerNode[] {
   walk(section);
   // Stamp each leaf's group id (virtual grouping) so the panel can fold same-group
   // leaves into a folder. Read here, in the one place that already walks the DOM.
+  // Membership INHERITS down a stamped root's subtree (closest, not own
+  // attribute): the freeze's grouping engine stamps only the shape + the
+  // lifted direct children, but a lifted text COLUMN's inner runs are the
+  // leaves this panel lists - they must fold into the same folder. Bounded
+  // by the section so nothing outside the slide leaks in.
   for (const n of out) {
-    const gid = n.el.getAttribute("data-tq-group");
+    const host = n.el.closest("[data-tq-group]");
+    const gid =
+      host && section.contains(host)
+        ? host.getAttribute("data-tq-group")
+        : null;
     if (gid) n.group = gid;
   }
   // NOTE: the slide BACKGROUND (kind "background") is NOT emitted here — the

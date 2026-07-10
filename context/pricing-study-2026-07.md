@@ -160,3 +160,38 @@ Everything else (pricing cards, FAQ, in-app estimates, upgrade modals, welcome/r
 ---
 
 *Sources: vendor pricing pages verified live via Playwright 2026-07-07 (gamma.app, beautiful.ai, canva.com, presentations.ai, decktopus.com, pitch.com, plusai.com, mouj.ai, sharayeh.com); Anthropic model pricing via claude-api skill 2026-07-07; gpt-image-2 pricing via web search 2026-07-07 (~$0.053/image medium 1024x1024); prod DB queries against `Job`, `UsageEvent`, `Tier`, `Preset` tables 2026-07-07; freemium conversion benchmarks: userpilot/ChartMogul/ProfitWell 2025-26.*
+
+## 10. Addendum 2026-07-10: the VISION LAYER repricing (owner-approved)
+
+The frame architecture added a SECOND Opus call to every generation and
+every partial regen: the freeze bake's vision review (rendered-slide
+screenshots + code in, verdicts + revised sections out, thinking at effort
+medium). Measured off the 2026-07-10 console day ($16.82 total, split
+against the local Job table):
+
+- Review call shape: input ~2.2k tokens/slide (screenshot + well code) +
+  ~2k fixed; output ~2.5-4k per REVISED slide, near zero when clean.
+  Steady-state model: ~$0.10 flat + $0.02/slide per bake.
+- Regen call (frame contract): ~6.7k in / 2.4k out ~= $0.10/slide - plus
+  the regen's OWN bake. A 1-slide regen really costs $0.20-0.30; the old
+  15-30 cr charge sold it 4-8x below cost.
+
+Approved changes (all live in config + code, PR #128 branch):
+
+- Presets +60 base +12/slide: fast 160+27, balanced 460+34, medium 660+42,
+  fable-low (inactive) 960+72. Config-only: SEED_PRESETS + Preset rows via
+  scripts/reprice-vision-layer.ts (run locally 2026-07-10; ‼️ RUN ON PROD
+  after deploy - seed-config is create-only and will NOT touch live rows).
+- Partial/slide regen formula gains a per-RUN base: regenCost = regenBase +
+  N x perSlide. regenBase = PlatformSettings.regenBaseCredits (default 70,
+  admin-editable next to imageCredits; schema migration
+  20260710193626_regen_base_credits). A full-deck regen re-dispatches
+  deck.generate and bills through the generation formula - unaffected.
+- Verified live: 1-slide regen on an opus-balanced deck held == settled ==
+  estimateShown = 104 (70 + 34); prior rows on the same deck show the old
+  22. check-config-parity extended to the new constant pair.
+
+Caveats: numbers derive from a heavy-revision test day on 5-slide fast
+decks - launch-provisional like opus-medium's. The vision call's token
+usage is still only console-logged; persist it (Job-style telemetry) and
+retune on 100+ real rows.

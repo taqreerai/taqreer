@@ -194,6 +194,47 @@ export function dimensionsForFormat(format: SlideFormat | undefined) {
   return SLIDE_DIMENSIONS[format ?? "16:9"];
 }
 
+// One GenChat entry - the backend-transparency feed shown in the layers rail
+// during generation + bake. Three shapes:
+//   role "user"     - what we asked the model (the brief digest / review ask),
+//                     raw text in `text`.
+//   role "thinking" - the model's LIVE summarized reasoning (the API's
+//                     thinking display:"summarized" stream); ONE entry per
+//                     call, updated in place as deltas arrive.
+//   role "assistant" - the model's REPLY text worth showing verbatim (the
+//                     review's per-slide verdict lines: "SLIDE 3: REVISING -
+//                     numerals anchored left").
+//   role "event"    - a localizable milestone: the CLIENT renders `kind`
+//                     (+ optional slide number `n`) through the dictionary,
+//                     so the feed reads right in both languages.
+export const GenChatEntrySchema = z.object({
+  role: z.enum(["user", "thinking", "assistant", "event"]),
+  // Bounded hard: thinking summaries + briefs are truncated by the writers,
+  // but the schema is the backstop against a runaway blob.
+  text: z.string().max(2000).optional(),
+  kind: z
+    .enum([
+      "slide", // slide n closed during the stream
+      "revise", // the model swapped slide n in place (data-revises)
+      "review", // the bake's review ASK (role user, carries the sent thumbs)
+      "reviseSlide", // the review pass revised slide n (text only)
+      "reviewDone", // vision pass returned: n = number of slides revised
+      "finalizing", // freeze + write phase started (labels the quiet stretch)
+      "baked", // freeze bake finished - the deck is final
+      "regen", // partial regen of slide n started (the redesign call is running)
+    ])
+    .optional(),
+  n: z.number().optional(),
+  // TINY data-URI thumbnails of the exact screenshots sent to the review
+  // call (owner spec 2026-07-10: "see the images sent"). ~5-8KB each,
+  // bounded hard so the feed can never bloat the manifest.
+  thumbs: z.array(z.string().max(40000)).max(12).optional(),
+  at: z.number(), // epoch ms, for ordering + relative timestamps
+});
+export type GenChatEntry = z.infer<typeof GenChatEntrySchema>;
+// Writers keep the feed bounded to this many entries (drop oldest).
+export const GENCHAT_MAX = 60;
+
 export const SlideManifestSchema = z.object({
   version: z.literal("2.0"),
   presentationId: z.string().min(1),
@@ -240,6 +281,13 @@ export const SlideManifestSchema = z.object({
         .optional(),
     })
     .optional(),
+  // GENCHAT (2026-07-10): the backend-transparency feed the studio shows in
+  // the layers rail while the deck generates + bakes - what we asked the
+  // model, its live summarized thinking, and milestone events. Written by
+  // deck-generate (streaming state) and APPENDED by deck-freeze-bake (this
+  // field on the final manifest), bounded to the last GENCHAT_MAX entries.
+  // Optional: pre-feature manifests never carry it; exports ignore it.
+  genChat: z.array(GenChatEntrySchema).max(60).optional(),
 });
 
 export type SlideManifest = z.infer<typeof SlideManifestSchema>;
