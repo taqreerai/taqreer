@@ -348,12 +348,79 @@ export function assembleFramedSlide(
 
   // data-tq-frame marks the deck as frame-architecture for every consumer
   // (the editor NEVER runs its flatten on frame decks — frozen or awaiting
-  // the bake); data-tq-frozen is stamped later by deck-freeze-bake.
+  // the bake); data-tq-frozen is stamped later by deck-freeze-bake. The
+  // DECLARED attrs are preserved on the stored section so post-hoc passes
+  // (the render-audit self-fix, future partial regen) can reconstruct the
+  // model's authoring view without the original stream.
   return (
     `<section dir="${ctx.direction}" data-tq-frame="1" data-label="${esc(decl.label)}" data-role="${esc(decl.role)}"` +
+    ` data-chrome="${decl.chrome}" data-bg="${esc(decl.bg)}"` +
+    (decl.kicker ? ` data-kicker="${esc(decl.kicker)}"` : "") +
+    (decl.bgCss ? ` data-bg-css="${esc(decl.bgCss)}"` : "") +
+    (decl.bgPrompt ? ` data-bg-prompt="${esc(decl.bgPrompt)}"` : "") +
+    (decl.bgScrim !== "none" ? ` data-bg-scrim="${decl.bgScrim}"` : "") +
     (isCover && ctx.deckTitle ? ` data-deck-title="${esc(ctx.deckTitle)}"` : "") +
+    (isCover && ctx.brand ? ` data-tq-brand="${esc(ctx.brand)}"` : "") +
+    (isCover && ctx.brandSub ? ` data-tq-brand-sub="${esc(ctx.brandSub)}"` : "") +
     `>${ground}${panelHtml}${wellHtml}${chromeHtml}</section>`
   );
+}
+
+// ── stored-slide helpers for post-hoc passes (audit self-fix) ───────────────
+// The assembled section is deterministic (ground → panel → well → chrome), so
+// Claude's well div can be re-extracted from the STORED html.
+export function extractStoredWell(storedHtml: string): string | null {
+  const m = /<div class="tq-well"[^>]*>([\s\S]*?)<\/div><div class="tq-chrome/.exec(
+    storedHtml,
+  );
+  return m ? m[1] : null;
+}
+
+// The section's open-tag declared attributes (for the fix call's context).
+export function extractStoredSectionTag(storedHtml: string): string {
+  return /<section\b[^>]*>/i.exec(storedHtml)?.[0] ?? "<section>";
+}
+
+// Rebuild the deck ctx from the stored COVER section (attrs stamped above).
+export function frameCtxFromStoredCover(
+  coverHtml: string,
+  direction: "rtl" | "ltr",
+): FrameDeckCtx {
+  const tag = extractStoredSectionTag(coverHtml);
+  return {
+    direction,
+    deckTitle: attr(tag, "data-deck-title"),
+    brand: attr(tag, "data-tq-brand"),
+    brandSub: attr(tag, "data-tq-brand-sub"),
+  };
+}
+
+// The user message for the ONE-round self-fix call (system = frameSystemPrompt,
+// so the corrected sections follow the same contract). Each flawed slide is
+// handed back in the model's own authoring format with its measured findings;
+// the response re-uses the data-revises revision semantics for mapping.
+export function frameFixUserText(
+  flawed: {
+    position: number; // 1-based deck position
+    sectionTag: string; // stored open tag (carries the declared attrs)
+    wellHtml: string; // Claude's well div, current state
+    findings: string[];
+  }[],
+): string {
+  const blocks = flawed
+    .map(
+      (f) => `SLIDE ${f.position} — measured flaws:
+${f.findings.map((x) => `  • ${x}`).join("\n")}
+Current section attributes: ${f.sectionTag}
+Current well:
+${f.wellHtml}`,
+    )
+    .join("\n\n");
+  return `QUALITY PASS — the deck you designed was rendered and MEASURED; the slides below have concrete flaws. Fix ONLY these slides.
+
+${blocks}
+
+Re-emit each slide as a complete corrected <section> in the exact same output contract (same declared attributes unless a flaw requires changing one; exactly one <div class="well">), PLUS data-revises="<the slide's position number>" on each <section> so the system swaps it in place. Keep the same content and visual system — fix the measured flaws, don't redesign. If an <img> carries a src attribute, preserve that src EXACTLY. Emit ONLY the corrected <section> elements, nothing else.`;
 }
 
 // Finalize: pagination totals aren't known while streaming — every slide's

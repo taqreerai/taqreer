@@ -29,6 +29,20 @@ import {
 import { SlideManifestSchema, dimensionsForFormat } from "@/lib/schema/slide";
 import { buildHtmlDocumentServer } from "@/lib/export/html-document-server";
 import { FREEZE_SCRIPT } from "@/lib/deck/freeze-script";
+import { AUDIT_SCRIPT, type FrameAuditFinding } from "@/lib/deck/audit-script";
+import {
+  frameSystemPrompt,
+  frameFixUserText,
+  frameCtxFromStoredCover,
+  extractStoredWell,
+  extractStoredSectionTag,
+  parseFrameSlide,
+  parseFrameRevises,
+  assembleFramedSlide,
+  fillFrameTotals,
+} from "@/lib/deck/frame";
+import { buildSlideHtml, canvasFrameCss } from "@/lib/deck/scaffold";
+import { injectImgSrc } from "@/lib/images/slide-images";
 
 const SETCONTENT_TIMEOUT_MS = 60_000;
 // A slide whose frozen render differs from its flow render by more than this
@@ -159,6 +173,65 @@ export const deckFreezeBake = inngest.createFunction(
           `new Promise(function(r){ requestAnimationFrame(function(){ requestAnimationFrame(r); }); })`,
         );
 
+        // ── RENDER AUDIT (catch, don't guess) ── measure each pending slide
+        // for the flaw classes the frame can't prevent structurally: content
+        // clipped by the well, and reading-side-aligned text anchored to the
+        // wrong edge (the RTL flex-end drift). Fix-worthy slides SKIP the
+        // freeze this round; a one-shot self-fix pass (step below) hands the
+        // findings back to the model, and the re-dispatched bake freezes the
+        // corrected versions. data-tq-audited marks fix-attempted slides so
+        // round 2 freezes them regardless (one round, never a loop).
+        await page.evaluate(`${AUDIT_SCRIPT}; window.__tqAudit = __tqAuditWell;`);
+        const audit = (await page.evaluate(
+          (ids, dir) => {
+            const out: Record<string, unknown[]> = {};
+            for (const sid of ids) {
+              const escaped = sid.replace(/[^a-zA-Z0-9_-]/g, "\\$&");
+              const well = document
+                .querySelector(`[data-slide-id="${escaped}"]`)
+                ?.querySelector(".tq-well");
+              out[sid] = well
+                ? (
+                    window as unknown as {
+                      __tqAudit: (w: Element, d: string) => unknown[];
+                    }
+                  ).__tqAudit(well, dir)
+                : [];
+            }
+            return out;
+          },
+          pending.map((s) => s.slideId),
+          manifest.direction,
+        )) as Record<string, FrameAuditFinding[]>;
+        // Cap the fix batch: the call is API-billed, and a deck-wide flaw
+        // (shared CSS) rarely needs more than a few exemplars corrected.
+        const flawed = pending
+          .filter(
+            (s) =>
+              !s.html.includes("data-tq-audited") &&
+              (audit[s.slideId] ?? []).some(
+                (f) => f.type === "overflow" || f.type === "anchor",
+              ),
+          )
+          .slice(0, 4)
+          .map((s) => ({
+            slideId: s.slideId,
+            position: manifest.slides.findIndex((x) => x.slideId === s.slideId) + 1,
+            findings: (audit[s.slideId] ?? [])
+              .filter((f) => f.type !== "underfill")
+              .map((f) => f.detail),
+          }));
+        const flawedIds = new Set(flawed.map((f) => f.slideId));
+        for (const [sid, fs] of Object.entries(audit)) {
+          if (fs.length > 0)
+            logger.info("deck_frame_audit", {
+              slideId: sid,
+              findings: JSON.stringify(fs).slice(0, 500),
+              willFix: flawedIds.has(sid),
+            });
+        }
+        const toFreeze = pending.filter((s) => !flawedIds.has(s.slideId));
+
         const shoot = async (slideId: string): Promise<Buffer> => {
           const box = (await page.evaluate((sid) => {
             const host = document.querySelector(`[data-slide-id="${sid}"]`);
@@ -181,9 +254,10 @@ export const deckFreezeBake = inngest.createFunction(
           return Buffer.from(await page.screenshot({ type: "png", clip: box }));
         };
 
-        // Pass 1: flow ground-truth shots.
+        // Pass 1: flow ground-truth shots (freeze candidates only — flawed
+        // slides are headed to the self-fix pass instead).
         const flowShots = new Map<string, Buffer>();
-        for (const s of pending) flowShots.set(s.slideId, await shoot(s.slideId));
+        for (const s of toFreeze) flowShots.set(s.slideId, await shoot(s.slideId));
 
         // Pass 2: freeze each pending slide's well in-page + stamp frozen.
         await page.evaluate(
@@ -214,7 +288,7 @@ export const deckFreezeBake = inngest.createFunction(
             out[sid] = { html: sec.outerHTML, pinned: res.pinned, bad: res.bad };
           }
           return out;
-        }, pending.map((s) => s.slideId))) as Record<
+        }, toFreeze.map((s) => s.slideId))) as Record<
           string,
           { html: string; pinned: number; bad: unknown[] } | { error: string }
         >;
@@ -223,7 +297,7 @@ export const deckFreezeBake = inngest.createFunction(
         // spike proved the serialize-reload roundtrip is 0.000%).
         const out: Record<string, string> = {};
         let rejected = 0;
-        for (const s of pending) {
+        for (const s of toFreeze) {
           const f = frozen[s.slideId];
           if (!f || "error" in f) {
             rejected++;
@@ -268,7 +342,7 @@ export const deckFreezeBake = inngest.createFunction(
           }
           out[s.slideId] = f.html;
         }
-        return { out, rejected, total: pending.length };
+        return { out, rejected, total: toFreeze.length, flawed };
       } finally {
         await closeGuardedBrowser(browser);
       }
@@ -335,13 +409,218 @@ export const deckFreezeBake = inngest.createFunction(
       return frozenIds.length;
     });
 
+    // ─── Step 4: ONE-round self-fix for audit-flawed slides ──────────
+    // The model corrects its own slides (catch, don't guess): the measured
+    // findings + each slide's current authoring view go back to Claude, the
+    // corrected sections are re-assembled through the SAME frame pipeline,
+    // written (stamped data-tq-audited so this can never loop), and a re-
+    // dispatched bake freezes them. A failed/empty fix leaves the flow html
+    // in place — viewer fine, editor degraded, no damage possible.
+    let fixed = 0;
+    if (baked.flawed.length > 0) {
+      fixed = await step.run("self-fix", async () => {
+        const { prisma } = await import("@/lib/prisma");
+        const Anthropic = (await import("@anthropic-ai/sdk")).default;
+        const apiKey = process.env.ANTHROPIC_API_KEY;
+        if (!apiKey) {
+          logger.warn("deck_frame_fix_skipped", { reason: "no-api-key" });
+          return 0;
+        }
+        const version = await prisma.presentationVersion.findUnique({
+          where: { id: versionId },
+          select: { slideJson: true, presentationId: true },
+        });
+        if (!version) return 0;
+        const parsed = SlideManifestSchema.safeParse(version.slideJson);
+        if (!parsed.success) return 0;
+        const m = parsed.data;
+        const dims = dimensionsForFormat(m.format);
+        const direction = m.direction === "ltr" ? "ltr" : "rtl";
+        const cover =
+          m.slides.find((s) => s.html.includes('data-role="cover"')) ??
+          m.slides[0];
+        const ctx = frameCtxFromStoredCover(cover.html, direction);
+        const imagesMode = m.slides.some((s) =>
+          s.html.includes("data-genimage"),
+        );
+
+        // Hand each flawed slide back in the model's authoring format.
+        const bySlideId = new Map(m.slides.map((s) => [s.slideId, s]));
+        const flawedInput = baked.flawed
+          .map((f) => {
+            const slide = bySlideId.get(f.slideId);
+            const wellHtml = slide ? extractStoredWell(slide.html) : null;
+            if (!slide || !wellHtml) return null;
+            return {
+              position: f.position,
+              sectionTag: extractStoredSectionTag(slide.html),
+              wellHtml,
+              findings: f.findings,
+            };
+          })
+          .filter((x): x is NonNullable<typeof x> => x !== null);
+        if (flawedInput.length === 0) return 0;
+
+        const client = new Anthropic({ apiKey });
+        const stream = client.messages.stream({
+          model: "claude-opus-4-8",
+          max_tokens: 16000,
+          thinking: { type: "adaptive" },
+          output_config: { effort: "low" },
+          system: [
+            {
+              type: "text",
+              text: frameSystemPrompt({
+                canvas: dims,
+                language: m.language === "en" ? "en" : "ar",
+                imagesMode,
+              }),
+            },
+          ],
+          messages: [{ role: "user", content: frameFixUserText(flawedInput) }],
+        } as never);
+        const finalMsg = await stream.finalMessage();
+        const raw = finalMsg.content
+          .filter((b) => b.type === "text")
+          .map((b) => (b as { text: string }).text)
+          .join("");
+
+        // Parse the corrected sections; data-revises maps each to its slide.
+        const { StreamingHtmlSplitter } = await import(
+          "@/lib/deck/html-stream"
+        );
+        const splitter = new StreamingHtmlSplitter();
+        const sections = [...splitter.push(raw), ...splitter.flush()];
+        const armor = canvasFrameCss(dims);
+        const flawedByPos = new Map(baked.flawed.map((f) => [f.position, f]));
+        const replacements = new Map<string, string>();
+        for (const sec of sections) {
+          const revises = parseFrameRevises(sec.html);
+          if (revises === null) continue;
+          const target = flawedByPos.get(revises + 1);
+          if (!target) continue; // only slides we asked about
+          const slide = bySlideId.get(target.slideId);
+          if (!slide) continue;
+          const decl = parseFrameSlide(sec.html);
+          let html = assembleFramedSlide(decl, ctx, revises, dims);
+          // One fix round only: the stamp makes the next bake freeze this
+          // slide regardless of any remaining findings.
+          html = html.replace(/<section /, '<section data-tq-audited="1" ');
+          html = fillFrameTotals(html, m.slides.length);
+          // Re-wrap with the deck's scoped CSS: reuse the stored slide's own
+          // style content minus the frame armor (buildSlideHtml re-adds it,
+          // along with the tq-canvas class stamp).
+          const oldCss =
+            /<style>([\s\S]*?)<\/style>/.exec(slide.html)?.[1] ?? "";
+          html = buildSlideHtml(html, oldCss.split(armor).join(""), dims);
+          replacements.set(target.slideId, html);
+        }
+        if (replacements.size === 0) {
+          logger.warn("deck_frame_fix_empty", {
+            versionId,
+            asked: flawedInput.length,
+            gotSections: sections.length,
+          });
+          return 0;
+        }
+
+        // Already-generated images survive the fix: re-inject ready srcs by
+        // genid (the fix prompt asks to preserve them, this is the backstop).
+        const ready = await prisma.generatedImage.findMany({
+          where: {
+            presentationVersionId: versionId,
+            status: "ready",
+            storageUrl: { not: null },
+            slideKey: { in: [...replacements.keys()] },
+          },
+          select: { genid: true, slideKey: true, storageUrl: true },
+        });
+        for (const r of ready) {
+          const cur = replacements.get(r.slideKey);
+          if (cur && r.storageUrl)
+            replacements.set(r.slideKey, injectImgSrc(cur, r.genid, r.storageUrl));
+        }
+
+        // Write BOTH stores (the dual-store rule), fresh read to compose.
+        const fresh = await prisma.presentationVersion.findUnique({
+          where: { id: versionId },
+          select: { slideJson: true, presentationId: true },
+        });
+        if (!fresh) return 0;
+        const freshParsed = SlideManifestSchema.safeParse(fresh.slideJson);
+        if (!freshParsed.success) return 0;
+        const fm = freshParsed.data;
+        const slides = fm.slides.map((s) =>
+          replacements.has(s.slideId)
+            ? { ...s, html: replacements.get(s.slideId)! }
+            : s,
+        );
+        const reparsed = SlideManifestSchema.safeParse({ ...fm, slides });
+        if (!reparsed.success) {
+          logger.warn("deck_frame_fix_invalid", { versionId });
+          return 0;
+        }
+        await prisma.presentationVersion.update({
+          where: { id: versionId },
+          data: { slideJson: reparsed.data as never },
+        });
+        for (const s of slides) {
+          if (!replacements.has(s.slideId)) continue;
+          const state = await prisma.slideState.findUnique({
+            where: {
+              presentationId_slideKey: {
+                presentationId: fresh.presentationId,
+                slideKey: s.slideId,
+              },
+            },
+            select: { id: true, currentVersionNumber: true },
+          });
+          if (!state) continue;
+          await prisma.slideVersion.updateMany({
+            where: {
+              slideStateId: state.id,
+              versionNumber: state.currentVersionNumber,
+            },
+            data: { slideJson: s as unknown as Prisma.InputJsonValue },
+          });
+        }
+        for (const f of baked.flawed) {
+          logger.info("deck_frame_fixed", {
+            versionId,
+            slideId: f.slideId,
+            applied: replacements.has(f.slideId),
+          });
+        }
+        return replacements.size;
+      });
+
+      // The fixed slides are unfrozen flow html — re-dispatch the bake to
+      // freeze them (they carry data-tq-audited, so round 2 can never loop
+      // back here). Distinct event id: the original id already fired.
+      if (fixed > 0) {
+        await inngest
+          .send({
+            id: `freeze:${projectId}:${versionId}:afterfix`,
+            name: "deck.freeze.bake",
+            data: { projectId, versionId },
+          })
+          .catch((err) => {
+            logger.warn("deck_freeze_afterfix_dispatch_failed", {
+              versionId,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          });
+      }
+    }
+
     logger.info("deck_freeze_baked", {
       projectId,
       versionId,
       frozen: written,
       rejected: baked.rejected,
+      fixed,
     });
-    return { versionId, frozen: written, rejected: baked.rejected };
+    return { versionId, frozen: written, rejected: baked.rejected, fixed };
   },
 );
 
