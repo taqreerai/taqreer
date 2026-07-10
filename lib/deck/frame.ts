@@ -72,7 +72,7 @@ export function frameSystemPrompt(opts: {
   // authored-LTR mirroring — bg photos don't flip, so mirrored compositions
   // break against them. RTL drift is caught downstream, never guess-rewritten.
   const langBlock = ar
-    ? `‼️ LANGUAGE & DIRECTION — this deck is ARABIC: design natively RTL. The system sets dir="rtl" on every slide root (do NOT set dir yourself). The eye enters from the RIGHT: lead text blocks and columns anchor to the visual RIGHT, secondary/decorative elements to the LEFT; body text right-aligned. Flex keywords are LOGICAL under RTL: align-items/justify-content flex-START anchors to the reading side (the RIGHT) and flex-END anchors LEFT — to anchor content to the reading edge use flex-start, never flex-end. Do NOT set dir on child blocks that contain Latin letters; for an inline Latin run inside an Arabic sentence (URL, email, English word) wrap just that run in <span dir="ltr">. Numbers are ALWAYS Latin digits (0-9), never Arabic-Indic (٠-٩). letter-spacing on Arabic-bearing elements is stripped at export.`
+    ? `‼️ LANGUAGE & DIRECTION — this deck is ARABIC: design natively RTL. The system sets dir="rtl" on every slide root (do NOT set dir yourself). The eye enters from the RIGHT: lead text blocks and columns anchor to the visual RIGHT, secondary/decorative elements to the LEFT; body text right-aligned. Flex keywords are LOGICAL under RTL: align-items/justify-content flex-START anchors to the reading side (the RIGHT) and flex-END anchors LEFT — to anchor content to the reading edge use flex-start, never flex-end. Do NOT set dir on child blocks that contain Latin letters; for an inline Latin run inside an Arabic sentence (URL, email, English word) wrap just that run in <span dir="ltr">. Digit-only chrome blocks (pagination "01 / 07", dates, phone numbers) — dir="ltr" on that block IS fine (the digits would otherwise reorder under the RTL paragraph direction). Numbers are ALWAYS Latin digits (0-9), never Arabic-Indic (٠-٩). letter-spacing on Arabic-bearing elements is stripped at export.`
     : `LANGUAGE & DIRECTION — this deck is ENGLISH (LTR). The system sets dir="ltr" on every slide root (do NOT set dir yourself).`;
 
   const bgKinds = imagesMode
@@ -109,7 +109,7 @@ THE FRAME IS SYSTEM-OWNED. Each slide has three layers; you author only what is 
 1. BACKGROUND — you DECLARE it per slide via section attributes (below); the system renders it. You never draw backgrounds or edge-to-edge imagery yourself.
 2. CONTENT WELL — your canvas. Inside each <section>, emit EXACTLY ONE <div class="well">…</div> and design everything in it. The well is already inset from the slide edges; treat its edges as the canvas edges. Content outside it is clipped. Its size depends on the background you declare:
 ${wellSizes}
-3. CHROME (page number, deck title, kicker, brand line) — the system renders these in fixed positions. You never draw chrome: no page numbers, no running titles, no logos anywhere in the well. You declare the per-slide kicker text via an attribute.
+3. CHROME (deck title, kicker, brand mark) — the system renders these in fixed positions. Never draw them yourself: no running deck titles, no brand marks or logo lockups anywhere in the well. You declare the per-slide kicker text via an attribute.
 
 ${langBlock}
 
@@ -265,24 +265,19 @@ export function parseFrameSlide(sectionHtml: string): FrameSlideDecl {
 
 // ── assembly ────────────────────────────────────────────────────────────────
 // Deck-level context accumulated while slides stream (the cover carries the
-// deck identity; pagination totals aren't known until the stream ends, so the
+// deck identity; if any slide ever carries the total token, finalize fills it
+// (safety net; nothing emits it since system pagination was dropped), so the
 // page number renders FRAME_TOTAL_TOKEN and finalize replaces it).
 export type FrameDeckCtx = {
   direction: "rtl" | "ltr";
   deckTitle: string | null;
   brand: string | null;
   brandSub: string | null;
-  // Chrome CONTENT comes from the FLOW's own variables (brief.rules), not the
-  // model and not hardcoded: the /create output card has a pagination toggle
-  // and a persistent-text field; when applied they drive the system slots
-  // directly. Their old prompt handoff (draw-it-yourself, data-anchor) is
-  // dropped for frame decks — the system renders, nothing to teach.
-  /** rules.pagination — render the page-number slot on non-cover slides. */
-  pagination: boolean;
-  /** rules.persistent.text — the bottom-end line; null = slot omitted. */
-  brandLine: string | null;
-  /** rules.persistent.exclude — roles that skip the brand line. */
-  brandLineExclude: ("cover" | "closing")[];
+  // NOTE (owner direction 2026-07-10): the flow's chrome VARIABLES
+  // (pagination, persistent text) are NOT system slots — they hand off to
+  // Claude via ruleLines with no position words at all, and Claude places
+  // them in its design (frozen + audited like any well content). The system
+  // renders only IDENTITY chrome: brand mark, kicker, running title.
 };
 
 // Genids the SYSTEM invents for bg/panel boxes must satisfy the pipeline's
@@ -361,8 +356,8 @@ export function assembleFramedSlide(
   const isCover = decl.role === "cover";
   const slots: string[] = [];
   // Cover brand mark (model-declared identity); kicker rides top-center on the
-  // cover, top-start elsewhere. Slot classes (.kicker/.title/.pagination/
-  // .brand-line + the pagination's inner spans) are stable STYLE HOOKS: the
+  // cover, top-start elsewhere. Slot classes (.kicker/.title) are stable
+  // STYLE HOOKS: the
   // deck's own scoped CSS loads after the frame sheet, so the model's design
   // system can restyle the chrome's look — geometry is armored and can't move.
   if (isCover && ctx.brand) {
@@ -382,22 +377,10 @@ export function assembleFramedSlide(
     slots.push(
       `<div class="slot te title${op("te")}">${esc(ctx.deckTitle)}</div>`,
     );
-  // Pagination: the FLOW's toggle (rules.pagination). dir=ltr sits on an INNER
-  // span: on the slot itself it would flip the slot's own inset-inline-start
-  // and collide with the be slot (found 2026-07-10).
-  if (ctx.pagination && !isCover)
-    slots.push(
-      `<div class="slot bs pagination${op("bs")}"><span dir="ltr"><span class="page-cur">${String(slideIndex + 1).padStart(2, "0")}</span><span class="page-sep"> / </span><span class="page-total">${FRAME_TOTAL_TOKEN}</span></span></div>`,
-    );
-  // Bottom-end line: the FLOW's persistent text (rules.persistent), honoring
-  // its cover/closing exclusions. No hardcoded placeholder branding.
-  const skipBrandLine =
-    (isCover && ctx.brandLineExclude.includes("cover")) ||
-    (decl.role === "closing" && ctx.brandLineExclude.includes("closing"));
-  if (ctx.brandLine && !skipBrandLine)
-    slots.push(
-      `<div class="slot be brand-line${op("be")}">${esc(ctx.brandLine)}</div>`,
-    );
+  // Pagination + persistent footer are DELIBERATELY absent here (owner
+  // direction 2026-07-10): those flow variables hand off to Claude with no
+  // position forcing — it draws them inside its design, where the freeze +
+  // audit + gate cover them like any other well content.
   const chromeHtml = `<div class="tq-chrome ${decl.chrome}" data-tq-lock="1">${slots.join("")}</div>`;
 
   // data-tq-frame marks the deck as frame-architecture for every consumer
@@ -416,9 +399,6 @@ export function assembleFramedSlide(
     (isCover && ctx.deckTitle ? ` data-deck-title="${esc(ctx.deckTitle)}"` : "") +
     (isCover && ctx.brand ? ` data-tq-brand="${esc(ctx.brand)}"` : "") +
     (isCover && ctx.brandSub ? ` data-tq-brand-sub="${esc(ctx.brandSub)}"` : "") +
-    (isCover && !ctx.pagination ? ` data-tq-pagination="0"` : "") +
-    (isCover && ctx.brandLine ? ` data-tq-brand-line="${esc(ctx.brandLine)}"` : "") +
-    (isCover && ctx.brandLineExclude.length ? ` data-tq-brand-line-skip="${ctx.brandLineExclude.join(",")}"` : "") +
     `>${ground}${panelHtml}${wellHtml}${chromeHtml}</section>`
   );
 }
@@ -449,11 +429,6 @@ export function frameCtxFromStoredCover(
     deckTitle: attr(tag, "data-deck-title"),
     brand: attr(tag, "data-tq-brand"),
     brandSub: attr(tag, "data-tq-brand-sub"),
-    pagination: attr(tag, "data-tq-pagination") !== "0",
-    brandLine: attr(tag, "data-tq-brand-line"),
-    brandLineExclude: (attr(tag, "data-tq-brand-line-skip") ?? "")
-      .split(",")
-      .filter((x): x is "cover" | "closing" => x === "cover" || x === "closing"),
   };
 }
 
@@ -485,7 +460,8 @@ ${blocks}
 Re-emit each slide as a complete corrected <section> in the exact same output contract (same declared attributes unless a flaw requires changing one; exactly one <div class="well">), PLUS data-revises="<the slide's position number>" on each <section> so the system swaps it in place. Keep the same content and visual system — fix the measured flaws, don't redesign. If an <img> carries a src attribute, preserve that src EXACTLY. Emit ONLY the corrected <section> elements, nothing else.`;
 }
 
-// Finalize: pagination totals aren't known while streaming — every slide's
+// Finalize safety net: nothing emits the total token today (system pagination
+// dropped 2026-07-10), but any stray token in a slide's
 // page-number slot rendered FRAME_TOTAL_TOKEN; replace once the count is
 // final. Safe on non-frame decks (the token never appears).
 export function fillFrameTotals(html: string, total: number): string {

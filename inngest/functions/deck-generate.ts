@@ -292,10 +292,12 @@ export function isImagesMode(event: DeckGenerateEvent): boolean {
 // system owns margins/chrome/backgrounds/panels/scrims/brand/dir and Claude
 // designs FLOW-ONLY inside a clipped well; deck-freeze-bake then pins the flow
 // layout to absolute boxes for the freeform editor. Opt-in per event
-// (brief.frameGen) or globally via FRAME_GEN_ALL=1 (local testing). Phase 2
-// scope: create-flow 16:9 AND 3:4 social (portrait frame geometry + the social
-// prompt variant) — enhance, mimic, and datasheet keep their prompts until
-// deliberately migrated.
+// (brief.frameGen) or globally via FRAME_GEN_ALL=1 (local testing). Phase 3
+// scope (2026-07-10): ALL HTML-authoring flows — create (scratch/text/upload),
+// 3:4 social, datasheet, mimic, and enhance. The flow addenda compose on the
+// frame base exactly as they composed on the legacy create base (they
+// redirect the DESIGN intent — reproduce/preserve/chart rules — and leave the
+// output contract alone).
 export function isFrameGen(
   event: DeckGenerateEvent,
   slideFormat: string,
@@ -303,15 +305,7 @@ export function isFrameGen(
   const optIn =
     (event.brief as { frameGen?: boolean } | null)?.frameGen === true ||
     process.env.FRAME_GEN_ALL === "1";
-  const sourceKind = (event.brief as { source?: { kind?: string } } | null)
-    ?.source?.kind;
-  return (
-    optIn &&
-    (slideFormat === "16:9" || slideFormat === "3:4") &&
-    (event.type ?? "create") === "create" &&
-    sourceKind !== "mimic" &&
-    sourceKind !== "data"
-  );
+  return optIn && (slideFormat === "16:9" || slideFormat === "3:4");
 }
 
 // HTML-authoring flows (context/plan-create-agent-pivot.md): Claude streams
@@ -414,27 +408,22 @@ const DESIGN_STYLE_DIRECTIVES: Record<string, string> = {
     "Expose the structure. Box regions with thick 2–3px solid rules in the brand's darkest ink AND use heavy flat FILL blocks as region backgrounds (not ink-on-light — this is what separates it from Swiss); collapse spacing so borders touch, and align hard-left/right or collide on purpose, never centred. Heaviest brand-font weight, uppercase Latin via CSS text-transform; one harsh accent as a flat fill. Hard offset shadows (solid, no blur); zero rounded corners, zero gradients, zero soft anything. Keep the brand fonts — no monospace. Signature + frame: every region boxed + a stark fixed corner label. Density: medium-to-dense, structural. Archetypes: boxed-grid, fill-statement, stacked-rules, collision-headline. When generating images: prefer none; if any, harsh high-contrast black-and-white or halftone, flat and unretouched.",
 };
 
-function ruleLines(rules: Rules, systemChrome = false): string[] {
+function ruleLines(rules: Rules): string[] {
   if (!rules) return [];
-  // Bare info, ONE line per AVAILABLE option — no chrome/layout how-to. An option
-  // that's off says nothing, EXCEPT pagination (its absence is stated in 2 words
-  // so "no page numbers" is explicit). `data-anchor` is the one functional marker
-  // kept — sanitize.ts's rewriteChromeOnTop reads it to lift chrome above images.
-  //
-  // FRAME decks (systemChrome): pagination + the persistent footer are rendered
-  // by the SYSTEM chrome straight from these flow variables — the draw-it-
-  // yourself lines would make Claude duplicate them in the well, so they're
-  // dropped entirely (the frame prompt already forbids drawing chrome).
+  // Bare info, ONE line per AVAILABLE option — no chrome/layout how-to (owner
+  // direction 2026-07-10: the chrome variables hand off with NO position
+  // words; Claude places them). An option that's off says nothing, EXCEPT
+  // pagination (its absence is stated in 2 words so "no page numbers" is
+  // explicit). `data-anchor` is the one functional marker kept —
+  // sanitize.ts's rewriteChromeOnTop reads it to lift chrome above images.
   const lines: string[] = [""];
-  if (!systemChrome) {
-    lines.push(
-      rules.pagination
-        ? `Pagination — put a page number on every slide, marked \`data-anchor\`.`
-        : `No pagination.`,
-    );
-  }
+  lines.push(
+    rules.pagination
+      ? `Pagination — put a page number on every slide, marked \`data-anchor\`.`
+      : `No pagination.`,
+  );
   if (rules.fixTypos) lines.push(`Fix typos silently, keeping the meaning.`);
-  if (!systemChrome && rules.persistent && rules.persistent.text.trim()) {
+  if (rules.persistent && rules.persistent.text.trim()) {
     const skip = rules.persistent.exclude.length
       ? ` (not on ${rules.persistent.exclude.join(" / ")})`
       : "";
@@ -930,9 +919,6 @@ function injectDeckLogo(manifest: SlideManifest, brief: unknown): void {
 
 function buildUserMessage(event: DeckGenerateEvent) {
   const format = resolveFormat(event);
-  // FRAME decks: pagination/footer are SYSTEM chrome (rendered from the same
-  // flow variables) — ruleLines drops their draw-it-yourself handoff.
-  const systemChrome = isFrameGen(event, format);
   const { width, height } = SLIDE_DIMENSIONS[format];
   const orientationLabel = format === "16:9" ? "horizontal" : "vertical";
 
@@ -1033,7 +1019,7 @@ function buildUserMessage(event: DeckGenerateEvent) {
     );
   }
 
-  lines.push(...ruleLines(rules, systemChrome));
+  lines.push(...ruleLines(rules));
 
   // Logo placement — brand logo, if provided, is up to Claude to compose
   // into the chrome. See `buildLogoBlock` below for the full block;
@@ -2017,9 +2003,11 @@ export const deckGenerate = inngest.createFunction(
         const htmlSystem = [
           // FRAME decks swap the whole base: the frame prompt embeds its own
           // image contract (declared bg/panels + in-well slots), so the
-          // generic IMG_ADDENDUM must NOT compose on top of it. isFrameGen
-          // already excludes 3:4 / enhance / mimic / data, so those branches
-          // below stay mutually exclusive with it.
+          // generic IMG_ADDENDUM must NOT compose on top of it. The flow
+          // addenda (mimic/enhance) DO compose — they redirect design intent
+          // and leave the output contract alone. Mimic-with-images keeps its
+          // recreate-the-reference addendum (its box contract matches the
+          // frame's tier-3 in-well slots).
           //
           // 3:4 (create only) is a social carousel, not a projected deck — swap
           // the deck base for the social base (unlocked CSS toolbox + carousel
@@ -2036,13 +2024,13 @@ export const deckGenerate = inngest.createFunction(
               : SYSTEM_PROMPT_CREATE_HTML,
           paletteAuto ? AUTO_PALETTE_ADDENDUM : null,
           // Mimic with images on recreates the reference's imagery (its own
-          // addendum); every other images-on flow uses the generic reserve-a-box
-          // rules.
-          !frameGen && isImagesMode(data)
-            ? htmlSourceKind === "mimic"
-              ? MIMIC_IMG_ADDENDUM
-              : IMG_ADDENDUM
-            : null,
+          // addendum); every other LEGACY images-on flow uses the generic
+          // reserve-a-box rules (the frame base embeds its own).
+          isImagesMode(data) && htmlSourceKind === "mimic"
+            ? MIMIC_IMG_ADDENDUM
+            : !frameGen && isImagesMode(data)
+              ? IMG_ADDENDUM
+              : null,
           htmlSourceKind === "mimic" ? MIMIC_HTML_ADDENDUM : null,
           data.type === "enhance" ? ENHANCE_HTML_ADDENDUM : null,
         ]
@@ -2067,20 +2055,11 @@ export const deckGenerate = inngest.createFunction(
         // FRAME decks: deck-level chrome context accumulated as slides stream
         // (the cover declares title/brand; later slides render them in chrome
         // slots). The frame CSS is per-deck constant, computed once.
-        const frameRules = (data.brief as { rules?: {
-          pagination?: boolean;
-          persistent?: { text?: string; exclude?: ("cover" | "closing")[] } | null;
-        } | null } | null)?.rules;
         const frameCtx: FrameDeckCtx = {
           direction: streamDirection,
           deckTitle: null,
           brand: null,
           brandSub: null,
-          // Chrome content = the FLOW's own variables (output-card pagination
-          // toggle + persistent text), not the model, not hardcoded.
-          pagination: frameRules?.pagination !== false,
-          brandLine: frameRules?.persistent?.text?.trim() || null,
-          brandLineExclude: frameRules?.persistent?.exclude ?? [],
         };
         const frameCss = frameGen
           ? frameSystemCss(SLIDE_DIMENSIONS[slideFormat])
