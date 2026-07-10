@@ -25,7 +25,11 @@ import { type Quality } from "@/lib/types/quality";
 import { COMPOSITION_RULES } from "@/inngest/prompts/composition-rules";
 import { themeToCssVars } from "@/lib/export/theme-css-vars";
 import { scopeDeckCss, unscopeDeckCss } from "@/lib/deck/scope-css";
-import { enforceCanvasFrame } from "@/lib/deck/scaffold";
+import {
+  buildSlideHtml,
+  canvasFrameCss,
+  enforceCanvasFrame,
+} from "@/lib/deck/scaffold";
 import { frameSystemCss } from "@/lib/deck/frame";
 import { findInjectedLogoInner, injectLogoMarkers } from "@/lib/deck/logo-inject";
 import { recordSlidePartialRegen } from "@/lib/db/slide-versioning";
@@ -712,6 +716,24 @@ export const deckRegeneratePartial = inngest.createFunction(
     // the same dimensions — Claude needs the right canvas size in the
     // system prompt or vertical decks regen at 16:9.
     const sourceFormat: SlideFormat = source.format ?? "16:9";
+    // FRAME decks: the deck's shared design-system css (fonts, kickers,
+    // cards) in authoring view - the FIRST slide's stored style minus the
+    // deterministic system layers, the exact recipe the freeze bake uses
+    // for its vision call. Rebuilt into every regen'd frame slide so the
+    // deck look NEVER depends on the model reproducing rules it only sees
+    // through chrome-sliced sibling excerpts (caught live 2026-07-10: a
+    // regen'd slide came back with no font-family rule at all - system
+    // font, unstyled cards). Slide 1 is the pristine carrier; a regen of
+    // slide 1 itself still reads the SOURCE version's copy.
+    const sourceStyle =
+      /<style>([\s\S]*?)<\/style>/.exec(source.slides[0]?.html ?? "")?.[1] ??
+      "";
+    const sourceDeckCss = sourceStyle
+      .split(canvasFrameCss(SLIDE_DIMENSIONS[sourceFormat]))
+      .join("")
+      .split(frameSystemCss(SLIDE_DIMENSIONS[sourceFormat]))
+      .join("")
+      .trim();
     // Pre-build BOTH system prompts once so per-slide steps just pick
     // by mode. Two ephemeral caches max (one per mode) instead of a
     // fresh compile per slide. The mode is decided per-slide inside
@@ -789,27 +811,6 @@ export const deckRegeneratePartial = inngest.createFunction(
           if (!rawHtml) {
             throw new Error(`Empty HTML returned for slide ${slideId}`);
           }
-          // FIX A — re-scope the model's <style> through the canonical scoper.
-          // Generation scopes Claude's CSS via scopeDeckCss (emitting BOTH the
-          // root-compound `.tq-canvas.x` AND the descendant `.tq-canvas .x`
-          // form); the partial regen instead trusted the model to hand-prefix,
-          // and it sometimes emitted only the compound form for a NESTED class
-          // (`.tq-canvas.uc .uc-ic`) — a selector that matches no element, so
-          // the rule is dead and the icons fall to the browser-default ~300px
-          // (huge, list broken). unscope → scope rebuilds both forms. Idempotent
-          // on already-correct CSS. Applies to every per-slide regen + redesign,
-          // every project (the single chokepoint both routes dispatch into).
-          const rescoped = rawHtml.replace(
-            /<style\b[^>]*>([\s\S]*?)<\/style>/gi,
-            (_m, css: string) =>
-              `<style>${scopeDeckCss(unscopeDeckCss(css))}</style>`,
-          );
-          // FIX B (audit 2026-07-08) — regen output never passed
-          // buildSlideHtml, so it carried neither the `.tq-canvas` scope
-          // class (redesign mode can return a bare `<div>` root, leaving the
-          // whole rescoped stylesheet matching NOTHING) nor the enforced
-          // canvas frame (any geometry the model emitted was final,
-          // persisted). Stamp the class + append the frame here.
           // Strip bake markers the model copies off its references: the
           // CURRENT slide + frozen siblings all carry data-tq-frozen /
           // data-tq-audited, and a regen'd slide arriving pre-stamped is
@@ -817,30 +818,55 @@ export const deckRegeneratePartial = inngest.createFunction(
           // so the slide skips the vision review and its geometry is never
           // actually pinned (caught live 2026-07-10). The bake re-earns the
           // markers on the fresh html.
-          const stripped = enforceCanvasFrame(
-            rescoped,
-            SLIDE_DIMENSIONS[sourceFormat],
-          ).replace(
+          const noMarkers = rawHtml.replace(
             /\sdata-tq-(?:frozen|audited)(?:=(?:"[^"]*"|'[^']*'|[^\s>]+))?/g,
             "",
           );
-          // FRAME slides: re-inject the frame-system css exactly like
-          // generation does (frame css FIRST, the model's <style> after it,
-          // so the model's rules keep cascade priority). The regen model
-          // rebuilds its style block from scratch and drops the .tq-well
-          // geometry rule - the well then renders as an unstyled static div,
-          // 0px tall (abs-only children), and the Layers walk's sub-1px skip
-          // lists the whole slide empty (caught live 2026-07-10, slide-4
-          // regen). frameSystemCss is self-scoped; injected as the section's
-          // first child like buildSlideHtml does.
           const sourceSlide = source.slides.find((s) => s.slideId === slideId);
-          const html = sourceSlide?.html.includes("data-tq-frame")
-            ? stripped.replace(
-                /<section\b[^>]*>/i,
-                (openTag) =>
-                  `${openTag}<style>${frameSystemCss(SLIDE_DIMENSIONS[sourceFormat])}</style>`,
-              )
-            : stripped;
+          let html: string;
+          if (sourceSlide?.html.includes("data-tq-frame")) {
+            // FRAME slides: rebuild the EXACT stored shape generation
+            // produces - ONE style block (frame css + model css + armor) as
+            // the section's first child, via the same buildSlideHtml. The
+            // model's css is COLLECTED out of the body and rescoped through
+            // the canonical scoper (FIX A: unscope -> scope rebuilds both
+            // selector forms, idempotent on correct CSS). Two invariants
+            // hang on that single first-child block (both broken live
+            // 2026-07-10 on regen'd slides):
+            //   - the .tq-well geometry rule must be present, or the well
+            //     collapses to an unstyled 0px static div and the Layers
+            //     walk (sub-1px skip) lists the slide EMPTY;
+            //   - the bake's vision-revision re-wrap reads the FIRST style
+            //     block as "the slide's css" - a second block is silently
+            //     dropped on revision (the revised slide lost its fonts and
+            //     every model class rule).
+            const cssParts: string[] = [];
+            const bodyOnly = noMarkers.replace(
+              /<style\b[^>]*>([\s\S]*?)<\/style>/gi,
+              (_m, css: string) => {
+                cssParts.push(scopeDeckCss(unscopeDeckCss(css)));
+                return "";
+              },
+            );
+            html = buildSlideHtml(
+              bodyOnly,
+              `${frameSystemCss(SLIDE_DIMENSIONS[sourceFormat])}\n${sourceDeckCss}\n${cssParts.join("\n")}`,
+              SLIDE_DIMENSIONS[sourceFormat],
+            );
+          } else {
+            // Legacy (pre-frame) decks keep the historical path untouched:
+            // FIX A - re-scope the model's <style> in place through the
+            // canonical scoper; FIX B (audit 2026-07-08) - stamp the
+            // `.tq-canvas` scope class + append the enforced canvas frame
+            // (redesign mode can return a bare `<div>` root, leaving the
+            // rescoped stylesheet matching NOTHING).
+            const rescoped = noMarkers.replace(
+              /<style\b[^>]*>([\s\S]*?)<\/style>/gi,
+              (_m, css: string) =>
+                `<style>${scopeDeckCss(unscopeDeckCss(css))}</style>`,
+            );
+            html = enforceCanvasFrame(rescoped, SLIDE_DIMENSIONS[sourceFormat]);
+          }
           // Feed: the model's thinking summary (non-streaming call, so it
           // arrives whole - post-hoc, not live) + the slide-done milestone.
           // Presets without thinking simply skip the summary entry.
