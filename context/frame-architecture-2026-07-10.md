@@ -202,10 +202,35 @@ asked for absolute positioning - each regen degraded further, dropping the
 - Revision milestones in GenChat are TEXT ONLY (owner: no before/after
   thumb pairs bloating the manifest); the review-ask entry keeps its sent
   screenshots.
-- OPEN (owner report, needs design round): a painted card containing text
-  selects as one unit on canvas, and its shape has no own Layers row - the
-  freeze would need to lift painted-container children to siblings +
-  data-tq-group them for shape-alone selection.
+## Grouping engine (2026-07-10, in the freeze)
+
+- A PAINTED CONTAINER with block content (a card: bg / border / shadow +
+  number + icon + texts) freezes as an EMPTY SHAPE plus its direct children
+  LIFTED to siblings (pinned against the lift target in the same measure
+  pass, inserted right after the shape so the group is a contiguous
+  paint-ordered band), all stamped with one data-tq-group. Guards keep a
+  container ATOMIC when lifting could change rendering: overflow clip,
+  transform (incl. individual rotate/scale/translate), opacity < 1,
+  filter/backdrop/clip-path/mask, or icon-badge shape (only replaced
+  children). Nested lifts inside a member restructure WITHOUT stamping
+  (nested group targets would double-move on folder drag). All under
+  self-verify + the pixel gate.
+- Membership semantics: ROOTS drag, LEAVES fold. Group selection (canvas
+  click from outside, panel folder click, folder-active highlight) targets
+  the stamped roots; the Layers panel's member ROWS are the leaves, which
+  inherit the gid via closest() (a lifted column's inner runs fold into the
+  card's folder). Double-click enters the group (existing editor
+  semantics); the shape then selects/edits alone - it has its own Layers
+  row now.
+- TRANSFORM bake-in (re-freeze correctness, found via the gate): editor
+  nudges write inline translate(); a re-bake measures the moved rect AND
+  kept the transform - double-counted, 2x offset. Translate-only matrices
+  now bake into the pin and clear; rotated/scaled elements keep their
+  authored geometry untouched (bounding rect is not a layout box).
+- Layers panel reflection: the observer also watches STYLE (trailing 250ms
+  debounce for style-only batches, so canvas drags do not churn) - a
+  restyle that flips leaf classification (wrapper gains a fill -> Shape
+  row) reflects live; add/remove/text/group changes stay rAF-fast.
 
 ## Rollout
 

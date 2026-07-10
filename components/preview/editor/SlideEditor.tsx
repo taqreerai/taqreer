@@ -604,8 +604,11 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
         if (!unit) return;
         // Double-click a GROUPED element (from outside the group): ENTER the group
         // and select the clicked member individually. A second double-click — now
-        // inside the group — falls through to text edit below.
-        const gid = unit.getAttribute("data-tq-group");
+        // inside the group — falls through to text edit below. Membership via
+        // closest (a lifted column's inner runs inherit its group).
+        const gid =
+          unit.closest("[data-tq-group]")?.getAttribute("data-tq-group") ??
+          null;
         if (gid && activeGroupRef.current !== gid) {
           e.preventDefault();
           activeGroupRef.current = gid;
@@ -726,7 +729,12 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
         e.preventDefault(); // no native image-drag / text-selection / focus
         lastHover = null;
         place(hover, null);
-        const gid = unit.getAttribute("data-tq-group");
+        // Membership reads via closest: the freeze's grouping engine stamps
+        // the shape + the lifted direct children, and a lifted COLUMN's
+        // inner text runs (what resolveHit returns) inherit its membership.
+        const gid =
+          unit.closest("[data-tq-group]")?.getAttribute("data-tq-group") ??
+          null;
         if (activeGroupRef.current && gid !== activeGroupRef.current) {
           activeGroupRef.current = null;
         }

@@ -185,10 +185,14 @@ export function LayersPanel({
 
   // Build + live-rebuild the tree from the slide's stage. childList/subtree
   // catches add/remove; characterData refreshes a text row's label;
-  // data-tq-group (and ONLY that attribute) refreshes the folders the instant a
-  // group/ungroup stamps it. Other attribute toggles (contenteditable, the
-  // edit-time z-lift, OUR z-index writes, locks) are NOT observed, so editing /
-  // reordering / locking doesn't churn the list. rAF-debounced.
+  // data-tq-group refreshes the folders the instant a group/ungroup stamps
+  // it. STYLE is observed too (owner spec 2026-07-10: whatever happens on
+  // the editor reflects on the layers) - a restyle can flip an element's
+  // leaf classification (a wrapper gaining a fill becomes a Shape row, a
+  // shape losing its fill drops out) - but style mutates EVERY FRAME during
+  // a canvas drag, so style-only batches fold into a trailing debounce: one
+  // rebuild ~250ms after the interaction settles. Everything else stays
+  // rAF-debounced.
   useEffect(() => {
     const stage = doc?.getElementById("tqe-stage");
     if (!stage) {
@@ -197,22 +201,34 @@ export function LayersPanel({
       return;
     }
     let raf = 0;
+    let styleTimer = 0;
     const rebuild = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => setTree(buildLayerTree(stage)));
     };
     rebuild();
-    const mo = new MutationObserver(rebuild);
+    const mo = new MutationObserver((muts) => {
+      const styleOnly = muts.every(
+        (m) => m.type === "attributes" && m.attributeName === "style",
+      );
+      if (styleOnly) {
+        window.clearTimeout(styleTimer);
+        styleTimer = window.setTimeout(rebuild, 250);
+        return;
+      }
+      rebuild();
+    });
     mo.observe(stage, {
       childList: true,
       subtree: true,
       characterData: true,
       attributes: true,
-      attributeFilter: ["data-tq-group"],
+      attributeFilter: ["data-tq-group", "style"],
     });
     return () => {
       mo.disconnect();
       cancelAnimationFrame(raf);
+      window.clearTimeout(styleTimer);
     };
   }, [doc]);
 
@@ -248,8 +264,12 @@ export function LayersPanel({
     let id: string | null = null;
     if (selected.length === 1) id = selected[0].getAttribute("data-tq-id");
     else if (selected.length > 1) {
-      const gid = selected[0].getAttribute("data-tq-group");
-      if (gid && selected.every((el) => el.getAttribute("data-tq-group") === gid)) id = `g:${gid}`;
+      // Membership reads via closest so a group selected from the CANVAS
+      // (roots) and one selected from a folder resolve to the same gid.
+      const gidOf = (el: HTMLElement) =>
+        el.closest("[data-tq-group]")?.getAttribute("data-tq-group") ?? null;
+      const gid = gidOf(selected[0]);
+      if (gid && selected.every((el) => gidOf(el) === gid)) id = `g:${gid}`;
     }
     if (!id) return;
     const row = document.querySelector<HTMLElement>(`[data-layer-id="${CSS.escape(id)}"]`);
@@ -333,8 +353,33 @@ export function LayersPanel({
   // selection (every member, and nothing else).
   const sole = selected.length === 1 ? selected[0] : null;
   const selSet = new Set(selected);
-  const groupActive = (members: LayerNode[]) =>
-    selected.length === members.length && members.every((m) => selSet.has(m.el));
+  // GROUP SELECTION = the stamped ROOTS (the elements carrying data-tq-group:
+  // the freeze's shape + its lifted direct children, or a user-grouped
+  // selection). The panel's member ROWS are the LEAVES (inherited gid via
+  // buildLayerTree) - selecting those instead would double-move a lifted
+  // column's inner runs on group drag (column + child both by the delta).
+  // Same set the canvas selects when clicking a group from outside
+  // (SlideEditor's members query), so the folder highlight and the canvas
+  // agree.
+  const groupRoots = (gid: string): HTMLElement[] => {
+    const stage = doc?.getElementById("tqe-stage");
+    return stage
+      ? Array.from(
+          stage.querySelectorAll<HTMLElement>(
+            `[data-tq-group="${CSS.escape(gid)}"]`,
+          ),
+        )
+      : [];
+  };
+  const groupActive = (gid: string, members: LayerNode[]) => {
+    const roots = groupRoots(gid);
+    if (roots.length > 0) {
+      return (
+        selected.length === roots.length && roots.every((r) => selSet.has(r))
+      );
+    }
+    return selected.length === members.length && members.every((m) => selSet.has(m.el));
+  };
 
   return (
     <aside
@@ -437,10 +482,13 @@ export function LayersPanel({
                   members={d.members}
                   open={expanded.has(d.gid)}
                   onToggleOpen={() => toggleExpand(d.gid)}
-                  active={groupActive(d.members)}
+                  active={groupActive(d.gid, d.members)}
                   sole={sole}
                   dragging={dragging}
-                  onSelectGroup={() => onSelect(d.members.map((m) => m.el))}
+                  onSelectGroup={() => {
+                    const roots = groupRoots(d.gid);
+                    onSelect(roots.length ? roots : d.members.map((m) => m.el));
+                  }}
                   onSelectMember={(el) => onSelect([el])}
                   onToggleLock={onToggleLock}
                   onDelete={onDelete}
