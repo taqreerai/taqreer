@@ -40,7 +40,20 @@ export const TEXT_TAGS = new Set([
 export function isTextLeaf(el: Element): boolean {
   return (
     (el.textContent ?? "").trim().length > 0 &&
-    [...el.children].every((c) => INLINE_TAGS.has(c.tagName))
+    [...el.children].every(
+      (c) =>
+        INLINE_TAGS.has(c.tagName) &&
+        // A child PINNED to its own coordinates (inline position:absolute -
+        // what the freeze bake stamps on every element it pins) is an
+        // independently PLACED box, not part of this element's text run, even
+        // when its tag is inline. Without this, a frozen header/footer row
+        // whose children are <span>s read as ONE text leaf: selection grabbed
+        // the whole row and the Layers panel listed one merged layer (user
+        // report 2026-07-10). Inline STYLE check on purpose - no computed
+        // style needed, and author-static spans inside atomically-frozen
+        // headings (never pinned) keep collapsing into their parent run.
+        (c as HTMLElement).style?.position !== "absolute",
+    )
   );
 }
 

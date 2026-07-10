@@ -64,12 +64,31 @@ function __tqFreezeWell(well) {
         tagLower === "img" || tagLower === "svg" || tagLower === "video" || tagLower === "canvas";
       var growsWithText =
         text && !replaced && el.textContent.trim().length > 0;
+      // TEXT blocks get 2px of width SLACK: a shrink-wrapped span pinned at
+      // its EXACT measured width has zero tolerance, and glyph advance
+      // widths shift sub-pixel across devicePixelRatio / font hinting - a
+      // marginal line then WRAPS in the viewer while both bake renders
+      // agree (user report 2026-07-10: "01" + an Arabic word kicker broke
+      // onto two lines). The slack grows AWAY from the text's anchored edge
+      // so the glyphs themselves never move: right-aligned text extends the
+      // box leftward, centered splits it, left-aligned extends rightward.
+      // Self-verify compares against these same slacked values.
+      var slackShift = 0;
+      if (growsWithText) {
+        var ta = cs.textAlign;
+        var rtl = cs.direction === "rtl";
+        var alignRight =
+          ta === "right" ||
+          ((ta === "start" || ta === "justify") && rtl) ||
+          (ta === "end" && !rtl);
+        slackShift = alignRight ? 2 : ta === "center" ? 1 : 0;
+      }
       jobs.push({
         el: el,
         text: growsWithText,
-        left: r.left - pr.left - (parseFloat(pcs.borderLeftWidth) || 0),
+        left: r.left - pr.left - (parseFloat(pcs.borderLeftWidth) || 0) - slackShift,
         top: r.top - pr.top - (parseFloat(pcs.borderTopWidth) || 0),
-        w: r.width,
+        w: r.width + (growsWithText ? 2 : 0),
         h: r.height,
       });
       var tag = el.tagName.toLowerCase();
@@ -96,6 +115,12 @@ function __tqFreezeWell(well) {
     // restores the padding box as containing block. Harmless off-grid.
     s.setProperty("grid-area", "auto");
     s.setProperty("width", job.w.toFixed(2) + "px");
+    // The pin OWNS the width now - a stylesheet max-width smaller than the
+    // slacked text width clamps it and fails self-verify (first 32px-margin
+    // e2e: P.close-body max-width clamped 822 -> 820). The measured width
+    // already respected whatever min/max applied in flow.
+    s.setProperty("max-width", "none");
+    s.setProperty("min-width", "0");
     // TEXT boxes keep height:auto so an editor text edit grows the box (the
     // editor's resize semantics); the measured height equals auto height at
     // bake time, so the render is identical. Non-text boxes pin exactly.

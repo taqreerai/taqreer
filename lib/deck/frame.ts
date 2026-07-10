@@ -21,15 +21,15 @@
 //
 // Margin history: the spike used 5% (96px at 16:9) SIZED FOR THE CHROME TEXT
 // BANDS that used to render between the well and the canvas edge. The system
-// chrome was removed 2026-07-10 (owner direction), so the wide band became
-// pure waste - user report: "the well is tight and margins are huge, which
-// makes the content small". Now margin == the panel gap (width/30): the well
-// grew 1728x888 -> 1792x952 at 16:9. Old stored decks are untouched (their
+// chrome was removed 2026-07-10 (owner direction), making the band pure
+// waste; the user then cut the margin twice the same day: 96 -> 64, then
+// "still huge, reduce it by 50%" -> 32 (width/60; 18 on 3:4 portrait). The
+// well is now 1856x1016 at 16:9. Old stored decks are untouched (their
 // geometry is baked into their own <style>).
 export type FrameCanvas = { width: number; height: number };
 
 export function frameGeometry(canvas: FrameCanvas) {
-  const margin = Math.round(canvas.width / 30); // safe-area inset
+  const margin = Math.round(canvas.width / 60); // safe-area inset
   const splitW = Math.round(canvas.width * 0.4); // tier-2 split panel width
   const bandH = Math.round(canvas.height * 0.35); // tier-2 band height
   const gap = Math.round(canvas.width / 30); // panel-to-well gap
@@ -129,6 +129,7 @@ ${imageBlocks}
 - Write every repeated item (list rows, cards, steps, table cells) out IN FULL as elements. There is NO template engine: never use a JS loop, \`.map()\`, \`+\` concatenation, or \`\${…}\`.
 - Decide the slide count from the brief (match \`brief.slideCount\` when given; else adapt).
 - VARY the composition slide to slide: different FLOW structures, one coherent look.
+- COPY: never use the em dash or the en dash in any text; use a comma, colon, or plain hyphen instead.
 - SELF-CORRECTION - if AFTER emitting a slide you realize it has a real flaw (content overflowing the well, broken hierarchy, a block anchored to the wrong side, imbalanced composition), re-emit the ENTIRE corrected <section> with the same attributes PLUS data-revises="N" (N = the 1-based position of the slide it replaces, counting from the cover). The system swaps the corrected slide in place of the old one. Re-emit ONLY when the fix is meaningfully better; never re-emit an unchanged slide, and never use data-revises on a first-time slide.
 
 BRAND & COLOUR - the brand variables are INJECTED for you; reference them, don't redefine them.
