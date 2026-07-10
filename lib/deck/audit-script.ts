@@ -22,7 +22,11 @@ export type FrameAuditFinding = {
   // a malformed slide (e.g. an unterminated attribute quote in model output
   // swallowing the well/chrome boundary at parse time) loses its system
   // layers - fix-worthy, the vision pass re-emits the slide cleanly.
-  type: "overflow" | "anchor" | "underfill" | "structure";
+  // "contrast" = text measured near-invisible against its effective
+  // background (the 2026-07-10 cream-on-cream deck: a deck-wide light ink
+  // on slides that declared light data-bg-css grounds; the vision pass SAW
+  // it but had no measured fact to anchor a real fix).
+  type: "overflow" | "anchor" | "underfill" | "structure" | "contrast";
   detail: string;
 };
 
@@ -133,6 +137,118 @@ function __tqAuditWell(well, dir) {
         anchorSample +
         " - under " + (readingRight ? "RTL align-items:flex-end anchors LEFT; use flex-start" : "LTR align-items:flex-end anchors RIGHT; use flex-start"),
     });
+  }
+
+  // ── contrast: text near-invisible against its effective background ──
+  // FRAME-AWARE adaptation of lib/deck/contrast-check.ts (detect-only in
+  // thumbnail-render since 2026-06-12; the frame moved backgrounds to
+  // SIBLING layers - tq-bg ground, tq-panel photos - so the plain ancestor
+  // walk would measure against the transparent canvas instead of the real
+  // ground and misfire both ways). Same conservative rules: solid opaque
+  // colors only, Manhattan RGB distance < 60, tiny text ignored.
+  var sec = well.closest("section");
+  // Escape-free parser (no regex literals: this file ships as a raw source
+  // string and escape sequences would differ between the compiled template
+  // and raw-source extraction in harnesses).
+  var parseC = function (c) {
+    if (!c || c.slice(0, 3) !== "rgb") return null;
+    var i = c.indexOf("(");
+    var j = c.indexOf(")");
+    if (i < 0 || j < i) return null;
+    var parts = c.slice(i + 1, j).split(",").map(function (p) { return parseFloat(p); });
+    if (parts.length < 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) return null;
+    return [parts[0], parts[1], parts[2], parts.length > 3 && !isNaN(parts[3]) ? parts[3] : 1];
+  };
+  if (sec) {
+    // The slide's GROUND: the tq-bg layer's solid color (photo/gradient
+    // grounds are ambiguous - the scrim owns legibility there), falling
+    // back to the canvas background.
+    var groundAmbiguous = false;
+    var ground = null;
+    var bgEl = sec.querySelector(":scope > .tq-bg");
+    if (bgEl) {
+      if (bgEl.querySelector("img")) groundAmbiguous = true;
+      else {
+        var bcs2 = view.getComputedStyle(bgEl);
+        if (bcs2.backgroundImage && bcs2.backgroundImage !== "none") groundAmbiguous = true;
+        else ground = parseC(bcs2.backgroundColor);
+      }
+    }
+    if (!ground && !groundAmbiguous) ground = parseC(view.getComputedStyle(sec).backgroundColor);
+    var panelRects = [];
+    var panels = sec.querySelectorAll(":scope > .tq-panel");
+    for (var pp = 0; pp < panels.length; pp++) panelRects.push(panels[pp].getBoundingClientRect());
+    var contrastCount = 0;
+    var contrastSamples = [];
+    var cEls = well.querySelectorAll("*");
+    for (var ci = 0; ci < cEls.length; ci++) {
+      var cel = cEls[ci];
+      var direct = "";
+      for (var cn = 0; cn < cel.childNodes.length; cn++) {
+        var nd = cel.childNodes[cn];
+        if (nd.nodeType === 3) direct += (nd.textContent || "").trim();
+      }
+      if (direct.length < 2) continue;
+      var ccs = view.getComputedStyle(cel);
+      if (ccs.display === "none" || ccs.visibility === "hidden") continue;
+      var ink = parseC(ccs.color);
+      if (!ink || ink[3] < 0.9) continue;
+      // nearest solid background BETWEEN the text and the well
+      var bg = null;
+      var ambiguous = false;
+      var walkN = cel;
+      while (walkN && walkN !== well.parentElement) {
+        var wcs = view.getComputedStyle(walkN);
+        if (wcs.backgroundImage && wcs.backgroundImage !== "none") { ambiguous = true; break; }
+        var wbg = parseC(wcs.backgroundColor);
+        if (wbg && wbg[3] >= 0.9) { bg = wbg; break; }
+        if (walkN === well) break;
+        walkN = walkN.parentElement;
+      }
+      if (ambiguous) continue;
+      if (!bg) {
+        // no local fill: the text sits on the slide GROUND - unless it
+        // overlaps a photo panel (scrim territory, skip).
+        var cr2 = cel.getBoundingClientRect();
+        var onPanel = false;
+        for (var pr2 = 0; pr2 < panelRects.length; pr2++) {
+          var p2 = panelRects[pr2];
+          if (cr2.left < p2.right && cr2.right > p2.left && cr2.top < p2.bottom && cr2.bottom > p2.top) { onPanel = true; break; }
+        }
+        if (onPanel || groundAmbiguous || !ground || ground[3] < 0.9) continue;
+        bg = ground;
+      }
+      var dist =
+        Math.abs(ink[0] - bg[0]) + Math.abs(ink[1] - bg[1]) + Math.abs(ink[2] - bg[2]);
+      if (dist < 60) {
+        contrastCount++;
+        if (contrastSamples.length < 6) {
+          contrastSamples.push(
+            cel.tagName +
+              (cel.className ? "." + String(cel.className).split(" ")[0] : "") +
+              ' "' + direct.slice(0, 40) + '" color ' + ccs.color +
+              " on background rgb(" + bg[0] + "," + bg[1] + "," + bg[2] + ")",
+          );
+        }
+      }
+    }
+    // ONE finding PER invisible block (capped): the vision model fixes only
+    // what it is told about (a single-example finding got a partial fix on
+    // the first live case - headline restored, sub-labels still invisible),
+    // and the regression guard counts findings, so per-block findings make
+    // a partial fix measurably better and a full fix measurably clean.
+    for (var cs2 = 0; cs2 < contrastSamples.length; cs2++) {
+      findings.push({
+        type: "contrast",
+        detail:
+          "INVISIBLE TEXT" +
+          (cs2 === contrastSamples.length - 1 && contrastCount > contrastSamples.length
+            ? " (+" + (contrastCount - contrastSamples.length) + " more)"
+            : "") +
+          ": " + contrastSamples[cs2] +
+          " - set a strongly contrasting color explicitly on this element (do not rely on the deck-wide inherited ink)",
+      });
+    }
   }
 
   // ── underfill: sparse well (report-only) ──

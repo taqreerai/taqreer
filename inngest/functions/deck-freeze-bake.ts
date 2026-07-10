@@ -240,7 +240,8 @@ export const deckFreezeBake = inngest.createFunction(
           (f) =>
             f.type === "overflow" ||
             f.type === "anchor" ||
-            f.type === "structure",
+            f.type === "structure" ||
+            f.type === "contrast",
         ).length;
       for (const [sid, fs] of Object.entries(findings)) {
         if (fs.length > 0)
@@ -510,7 +511,8 @@ export const deckFreezeBake = inngest.createFunction(
               (f) =>
                 f.type === "overflow" ||
                 f.type === "anchor" ||
-                f.type === "structure",
+                f.type === "structure" ||
+                f.type === "contrast",
             ).length;
             const before = observed.fixWorthyBefore[sid] ?? 0;
             if (now > before) {
