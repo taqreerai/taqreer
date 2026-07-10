@@ -474,6 +474,7 @@ export const deckFreezeBake = inngest.createFunction(
                 canvas: dims,
                 language: m.language === "en" ? "en" : "ar",
                 imagesMode,
+                kind: m.format === "3:4" ? "social" : "deck",
               }),
             },
           ],

@@ -292,9 +292,10 @@ export function isImagesMode(event: DeckGenerateEvent): boolean {
 // system owns margins/chrome/backgrounds/panels/scrims/brand/dir and Claude
 // designs FLOW-ONLY inside a clipped well; deck-freeze-bake then pins the flow
 // layout to absolute boxes for the freeform editor. Opt-in per event
-// (brief.frameGen) or globally via FRAME_GEN_ALL=1 (local testing). Phase 1
-// scope: create-flow 16:9 only — 3:4 social, enhance, mimic, and datasheet
-// keep their prompts until deliberately migrated.
+// (brief.frameGen) or globally via FRAME_GEN_ALL=1 (local testing). Phase 2
+// scope: create-flow 16:9 AND 3:4 social (portrait frame geometry + the social
+// prompt variant) — enhance, mimic, and datasheet keep their prompts until
+// deliberately migrated.
 export function isFrameGen(
   event: DeckGenerateEvent,
   slideFormat: string,
@@ -306,7 +307,7 @@ export function isFrameGen(
     ?.source?.kind;
   return (
     optIn &&
-    slideFormat === "16:9" &&
+    (slideFormat === "16:9" || slideFormat === "3:4") &&
     (event.type ?? "create") === "create" &&
     sourceKind !== "mimic" &&
     sourceKind !== "data"
@@ -2018,6 +2019,7 @@ export const deckGenerate = inngest.createFunction(
                 canvas: SLIDE_DIMENSIONS[slideFormat],
                 language: streamLanguage,
                 imagesMode: isImagesMode(data),
+                kind: slideFormat === "3:4" ? "social" : "deck",
               })
             : slideFormat === "3:4"
               ? SYSTEM_PROMPT_SOCIAL_HTML

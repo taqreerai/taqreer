@@ -14,21 +14,36 @@
 // adds no new image machinery.
 
 // ── geometry ────────────────────────────────────────────────────────────────
-export const FRAME_MARGIN = 96; // safe-area inset
-const CHROME_BAND_MID = 40; // chrome text vertical center inside the margin band
-const SPLIT_W = 768; // tier-2 split panel width (40% of 1920)
-const BAND_H = 378; // tier-2 band height (35% of 1080)
-const PANEL_GAP = 64; // gap between a panel and the well
-
+// Derived from the canvas so every format gets proportional framing. The
+// ratios reproduce the spike-proven 16:9 values EXACTLY (margin 96, split 768,
+// band 378, gap 64, chrome mid 40, brand top 52 at 1920x1080) and scale for
+// portrait 3:4 (1080x1440: margin 54, split 432, band 504, gap 36).
 export type FrameCanvas = { width: number; height: number };
 
-export function frameWellSize(canvas: FrameCanvas) {
+export function frameGeometry(canvas: FrameCanvas) {
+  const margin = Math.round(canvas.width * 0.05); // safe-area inset
+  const splitW = Math.round(canvas.width * 0.4); // tier-2 split panel width
+  const bandH = Math.round(canvas.height * 0.35); // tier-2 band height
+  const gap = Math.round(canvas.width / 30); // panel-to-well gap
+  const chromeMid = Math.round(margin * (40 / 96)); // chrome text band center
+  const brandTop = Math.round(margin * (52 / 96)); // cover brand-mark top
   return {
-    wellW: canvas.width - FRAME_MARGIN * 2,
-    wellH: canvas.height - FRAME_MARGIN * 2,
-    splitWellW: canvas.width - SPLIT_W - PANEL_GAP - FRAME_MARGIN,
-    bandWellH: canvas.height - BAND_H - PANEL_GAP - FRAME_MARGIN,
+    margin,
+    splitW,
+    bandH,
+    gap,
+    chromeMid,
+    brandTop,
+    wellW: canvas.width - margin * 2,
+    wellH: canvas.height - margin * 2,
+    splitWellW: canvas.width - splitW - gap - margin,
+    bandWellH: canvas.height - bandH - gap - margin,
   };
+}
+
+// Back-compat alias (earlier callers read only the well box).
+export function frameWellSize(canvas: FrameCanvas) {
+  return frameGeometry(canvas);
 }
 
 // Replaced at finalize (assembleManifest knows the total; streaming doesn't).
@@ -42,9 +57,15 @@ export function frameSystemPrompt(opts: {
   canvas: FrameCanvas;
   language: "ar" | "en";
   imagesMode: boolean;
+  // "social" = the 3:4 carousel variant: posts persona, phone-feed framing,
+  // no PPTX AVOID list (3:4 exports PDF/PNG rendered by real Chrome), bands
+  // favored over splits (splits are narrow at 1080 wide). Defaults to "deck".
+  kind?: "deck" | "social";
 }): string {
   const { canvas, language, imagesMode } = opts;
-  const { wellW, wellH, splitWellW, bandWellH } = frameWellSize(canvas);
+  const social = opts.kind === "social";
+  const g = frameGeometry(canvas);
+  const { wellW, wellH, splitWellW, bandWellH } = g;
   const ar = language === "ar";
 
   // Direction is NATIVE to the deck language (owner contract 2026-07-10): no
@@ -63,8 +84,8 @@ export function frameSystemPrompt(opts: {
 BACKGROUND KINDS —
 - "color": flat/gradient ground (data-bg-css).
 - "image": FULL-BLEED photo behind everything (data-bg-prompt + data-bg-scrim). ‼️ The ONLY layout where your text may sit over a photo — the system's scrim guarantees legibility.
-- "split-start"/"split-end": a full-height photo panel (${SPLIT_W}px wide) bleeding to that edge. LOGICAL sides: start = the reading side (${ar ? "visual RIGHT in this RTL deck" : "visual LEFT"}). Your well sits on the opposite side. Add data-bg-css to tint the remaining ground.
-- "band-top"/"band-bottom": a full-width photo band (${BAND_H}px tall) on that edge; your well takes the rest. Add data-bg-css for the remaining ground.
+- "split-start"/"split-end": a full-height photo panel (${g.splitW}px wide) bleeding to that edge. LOGICAL sides: start = the reading side (${ar ? "visual RIGHT in this RTL deck" : "visual LEFT"}). Your well sits on the opposite side. Add data-bg-css to tint the remaining ground.
+- "band-top"/"band-bottom": a full-width photo band (${g.bandH}px tall) on that edge; your well takes the rest. Add data-bg-css for the remaining ground.${social ? " Portrait cards favor bands and full-bleed; splits are narrow at this width." : ""}
 
 IN-WELL CONTENT IMAGES — inside the well you may reserve FRAMED photo slots as content blocks (photo cards, gallery tiles, a portrait beside a quote):
   <img data-genimage="<textless photo prompt — SUBJECT/SCENE/MOOD>" data-genid="<unique-id>" alt="" style="width:…px;height:…px;object-fit:cover;display:block;background:<a brand-tinted placeholder gradient>;"/>
@@ -82,7 +103,7 @@ BACKGROUND KINDS — "color" only for this deck: a flat or gradient ground via d
    - data-bg="band-top" or "band-bottom": well = ${wellW}x${bandWellH}px (the band takes the other edge)`
     : `   - well = ${wellW}x${wellH}px`;
 
-  return `You are a world-class presentation designer. Design a complete, ORIGINAL slide deck — your own visual system, fresh for this brief — as one HTML fragment. Bespoke and editorial, never a generic template.
+  return `${social ? `You are an elite social media designer. Design an original carousel of ${canvas.width}x${canvas.height} portrait cards for a phone feed, fresh for this brief, as one HTML fragment. Open with a hook that stops the scroll.` : `You are a world-class presentation designer. Design a complete, ORIGINAL slide deck — your own visual system, fresh for this brief — as one HTML fragment. Bespoke and editorial, never a generic template.`}
 
 THE FRAME IS SYSTEM-OWNED. Each slide has three layers; you author only what is declared here:
 1. BACKGROUND — you DECLARE it per slide via section attributes (below); the system renders it. You never draw backgrounds or edge-to-edge imagery yourself.
@@ -126,33 +147,34 @@ ALSO AVOID: !important, viewport units (vw/vh/vmin/vmax), @media, position: fixe
 
 // ── system CSS (logical properties: chrome + panels auto-mirror under dir) ──
 export function frameSystemCss(canvas: FrameCanvas): string {
-  const { wellW, wellH } = frameWellSize(canvas);
+  const g = frameGeometry(canvas);
+  const { wellW, wellH } = g;
   return (
     `.tq-canvas{position:relative;background:var(--brand-bg)}` +
     `.tq-canvas .tq-bg{position:absolute;inset:0;z-index:0}` +
     `.tq-canvas .tq-bg>img{width:100%;height:100%;object-fit:cover;display:block}` +
     `.tq-canvas .tq-panel{position:absolute;z-index:0;overflow:hidden}` +
     `.tq-canvas .tq-panel>img{width:100%;height:100%;object-fit:cover;display:block}` +
-    `.tq-canvas .tq-panel.ps{inset-inline-start:0;top:0;width:${SPLIT_W}px;height:100%}` +
-    `.tq-canvas .tq-panel.pe{inset-inline-end:0;top:0;width:${SPLIT_W}px;height:100%}` +
-    `.tq-canvas .tq-panel.bt{top:0;inset-inline-start:0;width:100%;height:${BAND_H}px}` +
-    `.tq-canvas .tq-panel.bb{bottom:0;inset-inline-start:0;width:100%;height:${BAND_H}px}` +
+    `.tq-canvas .tq-panel.ps{inset-inline-start:0;top:0;width:${g.splitW}px;height:100%}` +
+    `.tq-canvas .tq-panel.pe{inset-inline-end:0;top:0;width:${g.splitW}px;height:100%}` +
+    `.tq-canvas .tq-panel.bt{top:0;inset-inline-start:0;width:100%;height:${g.bandH}px}` +
+    `.tq-canvas .tq-panel.bb{bottom:0;inset-inline-start:0;width:100%;height:${g.bandH}px}` +
     `.tq-canvas .tq-scrim{position:absolute;inset:0}` +
     `.tq-canvas .tq-scrim.soft{background:linear-gradient(to top,rgba(10,12,16,.78) 0%,rgba(10,12,16,.38) 45%,rgba(10,12,16,.14) 100%)}` +
     `.tq-canvas .tq-scrim.strong{background:linear-gradient(to top,rgba(10,12,16,.9) 0%,rgba(10,12,16,.62) 45%,rgba(10,12,16,.3) 100%)}` +
-    `.tq-canvas .tq-well{position:absolute;top:${FRAME_MARGIN}px;inset-inline-start:${FRAME_MARGIN}px;width:${wellW}px;height:${wellH}px;z-index:1;overflow:hidden}` +
+    `.tq-canvas .tq-well{position:absolute;top:${g.margin}px;inset-inline-start:${g.margin}px;width:${wellW}px;height:${wellH}px;z-index:1;overflow:hidden}` +
     `.tq-canvas .tq-well>.well{width:100%;height:100%}` +
     `.tq-canvas .tq-chrome{position:absolute;inset:0;z-index:2;pointer-events:none;font-family:var(--font-body,var(--font));font-size:19px;font-weight:500}` +
     `.tq-canvas .tq-chrome .slot{position:absolute;display:flex;align-items:center;gap:12px;line-height:1}` +
     `.tq-canvas .tq-chrome.light .slot{color:rgba(255,255,255,.92)}` +
     `.tq-canvas .tq-chrome.dark .slot{color:var(--brand-text);opacity:.75}` +
-    `.tq-canvas .tq-chrome .slot.ts{top:${CHROME_BAND_MID}px;inset-inline-start:${FRAME_MARGIN}px}` +
-    `.tq-canvas .tq-chrome .slot.te{top:${CHROME_BAND_MID}px;inset-inline-end:${FRAME_MARGIN}px}` +
-    `.tq-canvas .tq-chrome .slot.bs{bottom:${CHROME_BAND_MID}px;inset-inline-start:${FRAME_MARGIN}px}` +
-    `.tq-canvas .tq-chrome .slot.be{bottom:${CHROME_BAND_MID}px;inset-inline-end:${FRAME_MARGIN}px}` +
-    `.tq-canvas .tq-chrome .slot.tc{top:${CHROME_BAND_MID}px;inset-inline-start:50%;transform:translateX(-50%)}` +
+    `.tq-canvas .tq-chrome .slot.ts{top:${g.chromeMid}px;inset-inline-start:${g.margin}px}` +
+    `.tq-canvas .tq-chrome .slot.te{top:${g.chromeMid}px;inset-inline-end:${g.margin}px}` +
+    `.tq-canvas .tq-chrome .slot.bs{bottom:${g.chromeMid}px;inset-inline-start:${g.margin}px}` +
+    `.tq-canvas .tq-chrome .slot.be{bottom:${g.chromeMid}px;inset-inline-end:${g.margin}px}` +
+    `.tq-canvas .tq-chrome .slot.tc{top:${g.chromeMid}px;inset-inline-start:50%;transform:translateX(-50%)}` +
     `.tq-canvas .tq-chrome .kicker-dash{display:inline-block;width:34px;height:2px;background:var(--accent,currentColor)}` +
-    `.tq-canvas .tq-chrome .slot.brand{top:52px}` +
+    `.tq-canvas .tq-chrome .slot.brand{top:${g.brandTop}px}` +
     `.tq-canvas .tq-chrome .slot.brand .brand-name{font-size:34px;font-weight:700;color:var(--accent,currentColor);line-height:1.2}` +
     `.tq-canvas .tq-chrome .slot.brand .brand-sub{font-size:13px;letter-spacing:4px;opacity:.8;margin-top:6px}` +
     // Slots that sit OVER a photo (full-bleed or panel) force light ink + a
@@ -258,7 +280,8 @@ export function assembleFramedSlide(
   slideIndex: number,
   canvas: FrameCanvas,
 ): string {
-  const { splitWellW, bandWellH } = frameWellSize(canvas);
+  const g = frameGeometry(canvas);
+  const { splitWellW, bandWellH } = g;
   const placeholder =
     "background:linear-gradient(to top,var(--brand-1),var(--brand-2))";
   const scrimDiv =
@@ -287,7 +310,7 @@ export function assembleFramedSlide(
     panelHtml = `<div class="tq-panel ${cls}" data-tq-lock="1">${bgImg("portrait")}${scrimDiv}</div>`;
     wellStyle =
       decl.bg === "split-start"
-        ? ` style="inset-inline-start:${SPLIT_W + PANEL_GAP}px;width:${splitWellW}px"`
+        ? ` style="inset-inline-start:${g.splitW + g.gap}px;width:${splitWellW}px"`
         : ` style="width:${splitWellW}px"`;
   } else if (
     (decl.bg === "band-top" || decl.bg === "band-bottom") &&
@@ -297,7 +320,7 @@ export function assembleFramedSlide(
     panelHtml = `<div class="tq-panel ${cls}" data-tq-lock="1">${bgImg("landscape")}${scrimDiv}</div>`;
     wellStyle =
       decl.bg === "band-top"
-        ? ` style="top:${BAND_H + PANEL_GAP}px;height:${bandWellH}px"`
+        ? ` style="top:${g.bandH + g.gap}px;height:${bandWellH}px"`
         : ` style="height:${bandWellH}px"`;
   }
 
