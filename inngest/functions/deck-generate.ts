@@ -1930,7 +1930,12 @@ export const deckGenerate = inngest.createFunction(
           thinkingRef.snapshot = snapshot;
           const text =
             snapshot.length > 600 ? `…${snapshot.slice(-600)}` : snapshot;
-          if (!thinkingRef.entry) {
+          // The cached entry can be EVICTED by chatPush's FIFO cap (it is
+          // the oldest entry, so it goes first on event-heavy decks) - a
+          // detached object would swallow every later update (CR PR #128).
+          // Re-append when it fell out; chronology-wise the tail is where a
+          // LIVE entry belongs anyway.
+          if (!thinkingRef.entry || genChat.indexOf(thinkingRef.entry) === -1) {
             chatPush({ role: "thinking", text });
             thinkingRef.entry = genChat[genChat.length - 1];
           } else {
@@ -2385,14 +2390,18 @@ export const deckGenerate = inngest.createFunction(
         // GenChat FINAL FLUSH: replace the live-truncated (tail-600)
         // thinking text with the complete summary now the stream ended -
         // same fix as the bake's review entry (a mid-word cut read as "the
-        // model died mid-thought"). The entry object already sits inside
-        // genChat, so mutating it here lands in the final manifest.
-        if (thinkingRef.entry && thinkingRef.snapshot) {
-          thinkingRef.entry.text =
-            thinkingRef.snapshot.length > 1900
-              ? `…${thinkingRef.snapshot.slice(-1900)}`
-              : thinkingRef.snapshot;
-          thinkingRef.entry.at = Date.now();
+        // model died mid-thought"). chatThinking re-appends the entry if
+        // the FIFO cap evicted it, so this mutation always lands in the
+        // array the final manifest snapshots.
+        if (thinkingRef.snapshot) {
+          chatThinking(thinkingRef.snapshot);
+          if (thinkingRef.entry) {
+            thinkingRef.entry.text =
+              thinkingRef.snapshot.length > 1900
+                ? `…${thinkingRef.snapshot.slice(-1900)}`
+                : thinkingRef.snapshot;
+            thinkingRef.entry.at = Date.now();
+          }
         }
         logger.info("claude_usage", {
           label: "create-html",

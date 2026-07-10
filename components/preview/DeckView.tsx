@@ -2400,7 +2400,16 @@ export function DeckView({
     };
     // 5s: fast enough that the GenChat feed (the bake's review thinking
     // rides the manifest) reads live, cheap enough for a 60-90s window.
-    const id = setInterval(() => void tick(), 5_000);
+    // The cap CLEARS the interval (CR PR #128): an abandoned bake leaves
+    // bakePendingIds stable, so the effect never re-runs and a no-op timer
+    // would otherwise tick for the rest of the session.
+    const id = setInterval(() => {
+      if (cancelled || ticks >= MAX_TICKS) {
+        clearInterval(id);
+        return;
+      }
+      void tick();
+    }, 5_000);
     return () => {
       cancelled = true;
       clearInterval(id);

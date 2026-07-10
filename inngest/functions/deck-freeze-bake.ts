@@ -650,9 +650,13 @@ export const deckFreezeBake = inngest.createFunction(
           } else {
             const frozenShot = await shoot(page, sid);
             const flowShot = flowShots.get(sid)!;
+            // removeAlpha: pin the raw buffers to exactly 3 channels - a
+            // 4-channel (RGBA) screenshot would put the j += 3 walk out of
+            // phase with pixel boundaries and turn the diff into noise
+            // (CR PR #128).
             const [a, b] = await Promise.all([
-              sharp(flowShot).raw().toBuffer(),
-              sharp(frozenShot).raw().toBuffer(),
+              sharp(flowShot).removeAlpha().raw().toBuffer(),
+              sharp(frozenShot).removeAlpha().raw().toBuffer(),
             ]);
             let diff = 0;
             const n = Math.min(a.length, b.length);
