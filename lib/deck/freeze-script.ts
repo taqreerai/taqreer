@@ -91,6 +91,119 @@ function __tqFreezeWell(well) {
       (!cs.maskImage || cs.maskImage === "none")
     );
   };
+  // ── SELECTOR TOPOLOGY GUARD (owner-caught 2026-07-10) ── lifting a
+  // child out of its container removes the container from the child's
+  // ancestor chain, so any stylesheet selector that routes THROUGH the
+  // container stops matching: ".tq-canvas .fcell .fn{font-size:56px}"
+  // left stat numerals unstyled on a real deck ("the slides lost the
+  // css") - the exact hoist bug class freeze-in-place exists to avoid.
+  // Collect every class and tag token that appears in a NON-TERMINAL
+  // compound of any selector in the document; a container carrying any
+  // of them stays ATOMIC. Char-walk parsing (no regex) per the raw-source
+  // harness constraint; anything unparseable degrades to "unsafe".
+  var ancestorTokens = (function () {
+    var toks = {};
+    var isWord = function (ch) {
+      return (
+        (ch >= "a" && ch <= "z") ||
+        (ch >= "A" && ch <= "Z") ||
+        (ch >= "0" && ch <= "9") ||
+        ch === "-" ||
+        ch === "_"
+      );
+    };
+    var collectFrom = function (prefix) {
+      var i = 0;
+      while (i < prefix.length) {
+        var ch = prefix.charAt(i);
+        if (ch === "." || ch === "#") {
+          var j = i + 1;
+          var name = "";
+          while (j < prefix.length && isWord(prefix.charAt(j))) {
+            name += prefix.charAt(j);
+            j++;
+          }
+          if (name) toks[name.toLowerCase()] = true;
+          i = j;
+        } else if (isWord(ch) && (i === 0 || !isWord(prefix.charAt(i - 1)))) {
+          // bare tag compound (e.g. "div span") - collect the tag too
+          var k = i;
+          var tag = "";
+          while (k < prefix.length && isWord(prefix.charAt(k))) {
+            tag += prefix.charAt(k);
+            k++;
+          }
+          if (tag) toks[tag.toLowerCase()] = true;
+          i = k;
+        } else {
+          i++;
+        }
+      }
+    };
+    try {
+      for (var s = 0; s < document.styleSheets.length; s++) {
+        var rules;
+        try {
+          rules = document.styleSheets[s].cssRules;
+        } catch (e) {
+          continue;
+        }
+        for (var r = 0; r < rules.length; r++) {
+          var sel = rules[r].selectorText;
+          if (!sel) continue;
+          var parts = sel.split(",");
+          for (var q = 0; q < parts.length; q++) {
+            var one = parts[q];
+            // The prefix BEFORE the last combinator holds the ancestor
+            // compounds; a selector with no combinator has none.
+            var last = -1;
+            for (var c = 0; c < one.length; c++) {
+              var cc = one.charAt(c);
+              if (cc === " " || cc === ">" || cc === "+" || cc === "~") last = c;
+            }
+            if (last >= 0) collectFrom(one.slice(0, last));
+          }
+        }
+      }
+    } catch (e) {
+      toks.__parse_failed = true;
+    }
+    return toks;
+  })();
+  var selectorSafe = function (el) {
+    if (ancestorTokens.__parse_failed) return false;
+    if (ancestorTokens[el.tagName.toLowerCase()]) return false;
+    for (var i = 0; i < el.classList.length; i++) {
+      if (ancestorTokens[String(el.classList[i]).toLowerCase()]) return false;
+    }
+    if (el.id && ancestorTokens[String(el.id).toLowerCase()]) return false;
+    return true;
+  };
+  // ── INHERITANCE GUARD ── lifted children lose whatever inheritable
+  // text properties the container set (color, font, line-height, align):
+  // lift only when the container's computed values EQUAL its parent's, so
+  // re-homing changes nothing the children inherit.
+  var INHERITED = [
+    "color",
+    "fontFamily",
+    "fontSize",
+    "fontWeight",
+    "fontStyle",
+    "lineHeight",
+    "letterSpacing",
+    "textAlign",
+    "textTransform",
+    "direction",
+    "whiteSpace",
+  ];
+  var inheritanceSafe = function (el, cs) {
+    if (!el.parentElement) return false;
+    var ps = getComputedStyle(el.parentElement);
+    for (var i = 0; i < INHERITED.length; i++) {
+      if (cs[INHERITED[i]] !== ps[INHERITED[i]]) return false;
+    }
+    return true;
+  };
   // A lift needs real content structure: at least one visible NON-replaced
   // element child. A painted badge holding a single icon (circle + svg)
   // stays atomic - it is semantically ONE object.
@@ -205,8 +318,15 @@ function __tqFreezeWell(well) {
       // Lift decision: a painted container with block content becomes an
       // empty shape; its direct children re-home beside it (pinned against
       // THIS container - the lift target), stamped with one group id at the
-      // top level only.
-      if (hasPaint(cs) && liftSafe(cs) && hasBlockContent(el)) {
+      // top level only. selectorSafe + inheritanceSafe keep any container
+      // whose css TOPOLOGY the lift would break atomic instead.
+      if (
+        hasPaint(cs) &&
+        liftSafe(cs) &&
+        hasBlockContent(el) &&
+        selectorSafe(el) &&
+        inheritanceSafe(el, cs)
+      ) {
         var gid = inGroup
           ? null
           : el.getAttribute("data-tq-group") || "tqg-" + ++groupSeq;
@@ -231,6 +351,7 @@ function __tqFreezeWell(well) {
   // group stays contiguous and paints above its shape exactly as the
   // descendants did before the lift (later sibling = later paint).
   var cursors = new Map();
+  var lifted = 0;
   for (var j = 0; j < jobs.length; j++) {
     var job = jobs[j];
     var s = job.el.style;
@@ -264,6 +385,7 @@ function __tqFreezeWell(well) {
     if (job.clearTf) s.setProperty("transform", "none");
     if (job.gid) job.el.setAttribute("data-tq-group", job.gid);
     if (job.moveAfter) {
+      lifted++;
       var cur = cursors.get(job.moveAfter) || job.moveAfter;
       cur.parentNode.insertBefore(job.el, cur.nextSibling);
       cursors.set(job.moveAfter, job.el);
@@ -299,6 +421,6 @@ function __tqFreezeWell(well) {
       });
     }
   }
-  return { pinned: jobs.length, bad: bad.slice(0, 8) };
+  return { pinned: jobs.length, lifted: lifted, bad: bad.slice(0, 8) };
 }
 `;

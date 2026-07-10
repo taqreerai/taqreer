@@ -95,6 +95,13 @@ const SETCONTENT_TIMEOUT_MS = 60_000;
 // 0.00014 worst-case, so 1% is a wide safety margin that still catches any
 // real regression (the font-race class measured 22%).
 const PIXEL_GATE = 1.0;
+// Slides where the freeze LIFTED painted-container children (the grouping
+// engine) gate near-zero instead: a lift is same-rect restructuring and
+// must be visually LOSSLESS by construction - any real diff is damage.
+// Owner-caught 2026-07-10: a lift that broke ".fcell .fn" descendant
+// selectors shrank four stat numerals and slid UNDER the whole-canvas 1%
+// gate (thin text strokes in small regions).
+const LIFT_PIXEL_GATE = 0.15;
 // Longest edge of the vision-prompt shots. 1152px keeps composition, type
 // scale, and legibility judgeable at ~1k input tokens per slide; the full
 // canvas would cost ~2.2k for no review benefit.
@@ -582,7 +589,8 @@ export const deckFreezeBake = inngest.createFunction(
         const frozen = (await page.evaluate((ids) => {
           const out: Record<
             string,
-            { html: string; pinned: number; bad: unknown[] } | { error: string }
+            | { html: string; pinned: number; lifted: number; bad: unknown[] }
+            | { error: string }
           > = {};
           for (const sid of ids) {
             // Defensive escape: slideIds are system-assigned (slide-N)
@@ -597,16 +605,26 @@ export const deckFreezeBake = inngest.createFunction(
             }
             const res = (
               window as unknown as {
-                __tqFreeze: (w: Element) => { pinned: number; bad: unknown[] };
+                __tqFreeze: (w: Element) => {
+                  pinned: number;
+                  lifted: number;
+                  bad: unknown[];
+                };
               }
             ).__tqFreeze(well);
             sec.setAttribute("data-tq-frozen", "1");
-            out[sid] = { html: sec.outerHTML, pinned: res.pinned, bad: res.bad };
+            out[sid] = {
+              html: sec.outerHTML,
+              pinned: res.pinned,
+              lifted: res.lifted,
+              bad: res.bad,
+            };
           }
           return out;
         }, toFreeze)) as Record<
           string,
-          { html: string; pinned: number; bad: unknown[] } | { error: string }
+          | { html: string; pinned: number; lifted: number; bad: unknown[] }
+          | { error: string }
         >;
 
         // Frozen shots + pixel gate (in-place is authoritative: the spike
@@ -647,10 +665,13 @@ export const deckFreezeBake = inngest.createFunction(
                 diff++;
             }
             const pct = (diff / (n / 3)) * 100;
-            if (pct > PIXEL_GATE) {
+            const gate = f.lifted > 0 ? LIFT_PIXEL_GATE : PIXEL_GATE;
+            if (pct > gate) {
               logger.warn("deck_freeze_pixelgate_failed", {
                 slideId: sid,
                 diffPct: pct.toFixed(3),
+                gate,
+                lifted: f.lifted,
               });
             } else {
               accept = true;
