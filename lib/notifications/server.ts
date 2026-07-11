@@ -60,6 +60,10 @@ export type NotificationType =
   | "billing.subscription_ending"
   // A subscription purchase/upgrade activated a (new) plan.
   | "billing.plan_changed"
+  // Account-scoped goodwill / remediation credit refund (e.g. a
+  // user-cancelled generation is refunded its base fee). Sole recipient
+  // = the user, allowSelfEcho.
+  | "credit.refund"
   // Account-scoped: the user's email change was confirmed (sole
   // recipient = the user, allowSelfEcho).
   | "account.email_changed"
@@ -111,6 +115,13 @@ export type NotificationPayloadMap = {
     // What put credits in: a renewal/upgrade, a top-up pack, or the
     // free signup gift - drives the row's sub-line.
     reason: "renewal" | "topup" | "welcome";
+  };
+  "credit.refund": {
+    // Credits returned to the account.
+    credits: number;
+    // Why the refund happened - drives the row's sub-line. "cancelled"
+    // = a generation the user cancelled had its base fee refunded.
+    reason: "cancelled" | "goodwill";
   };
   "billing.payment_failed": Record<string, never>;
   "billing.plan_changed": {

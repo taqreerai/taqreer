@@ -11,6 +11,7 @@ import {
   sendReceipt,
   sendPaymentFailed,
   sendSubscriptionEnding,
+  sendRefund,
 } from "@/lib/email/billing";
 
 const APP_ORIGIN = process.env.NEXT_PUBLIC_SITE_URL ?? "https://taqreer.ai";
@@ -151,6 +152,35 @@ export async function emailPaymentFailed(
     appOrigin: APP_ORIGIN,
     planLabel: planLabel(plan, await cadenceForUser(prismaUserId), to.locale),
     amount: money(invoice.amount_due ?? invoice.amount_paid, invoice.currency),
+  });
+}
+
+// Credit REFUND (goodwill / user-cancelled generation) - not a Stripe money
+// refund; the account's credit balance was topped back up. Latin-numeral
+// credit counts (brand rule). Fire-and-forget at the call site.
+export async function emailRefundCredits(
+  prismaUserId: string,
+  input: {
+    credits: number;
+    reason: "cancelled" | "goodwill";
+    balance: number | null;
+    now?: Date;
+  },
+): Promise<void> {
+  const to = await recipient(prismaUserId);
+  if (!to) return;
+  const n = (v: number) => v.toLocaleString("en-US");
+  await sendRefund({
+    toEmail: to.email,
+    locale: to.locale,
+    appOrigin: APP_ORIGIN,
+    credits: n(input.credits),
+    reason: input.reason,
+    balanceLabel: input.balance != null ? n(input.balance) : null,
+    dateLabel: dateLabel(
+      Math.floor((input.now ?? new Date()).getTime() / 1000),
+      to.locale,
+    ),
   });
 }
 

@@ -2897,6 +2897,48 @@ export const deckGenerate = inngest.createFunction(
       }
     });
 
+    // ─── Auto-refund on a USER-CANCELLED generation (owner decision
+    // 2026-07-11) ─── the flat generation BASE is the "commit to design a
+    // full deck" fee; if the user aborted with the deck kept-partial, that
+    // fee is refunded (they still pay per-slide for what they kept + any
+    // images). A visible refund, not a silent discount: it rings the bell
+    // + emails so the user sees "you stopped it, here's the setup fee back."
+    // Only fires when the settle actually charged (admin/waived runs and
+    // 0-slide cancels never reach here charged). Own step, idempotent by
+    // refundKey, best-effort - a mail/bell hiccup must never fail the run.
+    if (stoppedEarly && jobId) {
+      await step.run("refund-cancelled-base", async () => {
+        await ensureFresh();
+        const pricedPreset: Quality = data.quality ?? defaultPresetKey();
+        const base = creditCostFor(pricedPreset).base;
+        if (base <= 0) return { refunded: 0, reason: "no-base" };
+        const project = await prisma.project.findUnique({
+          where: { id: projectId },
+          select: { userId: true, user: { select: { role: true } } },
+        });
+        // Admin owners are never charged, so nothing to refund.
+        if (!project || project.user.role === "admin") {
+          return { refunded: 0, reason: "waived-or-missing" };
+        }
+        const { refundAndNotify } = await import(
+          "@/lib/credits/refund-remediation"
+        );
+        const res = await refundAndNotify({
+          userId: project.userId,
+          credits: base,
+          refundKey: `refund:cancel:${jobId}`,
+          reason: "cancelled",
+          metadata: { jobId, projectId, kind: "generation.cancelled.base" },
+        });
+        logger.info("credit_refund_cancel", {
+          jobId,
+          refunded: res.refunded,
+          alreadyRefunded: res.alreadyRefunded,
+        });
+        return res;
+      });
+    }
+
     // Images-mode (context/images.md): the deck is now saved with reserved
     // placeholder boxes; kick off the async gpt-image-2 fill. Fire-and-
     // forget — a dispatch failure must never fail a successful generation

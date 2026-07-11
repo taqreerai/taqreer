@@ -271,6 +271,21 @@ function formatNotificationRow(
       href = "/plans";
       break;
     }
+    case "credit.refund": {
+      kind = "success";
+      const refunded =
+        typeof payload.credits === "number" ? payload.credits : 0;
+      title = n.billing.refundTitle.replace(
+        "{credits}",
+        refunded.toLocaleString("en-US"),
+      );
+      desc =
+        payload.reason === "cancelled"
+          ? n.billing.refundCancelled
+          : n.billing.refundGoodwill;
+      href = "/plans";
+      break;
+    }
     case "billing.payment_failed":
       kind = "error";
       title = n.billing.paymentFailedTitle;
