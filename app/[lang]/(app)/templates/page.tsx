@@ -54,6 +54,8 @@ export default async function TemplatesPage({
     // 3-dots menu. Selected on every row (own + community) so the
     // narrow function can populate it uniformly.
     isPublic: true,
+    // Moderation state — drives the owner's menu label + "under review" chip.
+    reviewStatus: true,
     isPremium: true,
     createdAt: true,
   } as const;
@@ -99,6 +101,7 @@ function narrow(
     thumbnailUrls: string[];
     language: string;
     isPublic: boolean;
+    reviewStatus: "PRIVATE" | "PENDING" | "APPROVED";
     isPremium: boolean;
   },
   isMine: boolean,
@@ -110,6 +113,7 @@ function narrow(
     language: row.language,
     isMine,
     isPublic: row.isPublic,
+    reviewStatus: row.reviewStatus,
     isPremium: row.isPremium,
     // Pending = row exists but the Inngest showcase-render hasn't
     // produced the 4 PNGs yet. Drives auto-refresh on the client.

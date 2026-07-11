@@ -49,10 +49,15 @@ export type TemplateTileData = {
   // affordance — community tiles get no menu at all. Defaults false
   // is safer, but every call site sets it explicitly today.
   isMine: boolean;
-  // Current visibility. Drives the menu chip label
-  // ("اجعله عاما" when private, "اجعله خاصا" when public).
-  // Optimistically updated on toggle before router.refresh re-fetches.
+  // Current visibility (true only when APPROVED + live). Drives the
+  // community-vs-mine split. Optimistically updated on toggle before
+  // router.refresh re-fetches.
   isPublic: boolean;
+  // Moderation state of the owner's publish request. Drives the menu label
+  // (submit / cancel request / make private) and the "under review" chip.
+  // Optional so legacy call sites compile; falls back to APPROVED/PRIVATE
+  // derived from isPublic.
+  reviewStatus?: "PRIVATE" | "PENDING" | "APPROVED";
   // Premium templates show the "مميز" badge. Optional so callers that
   // don't carry it compile; the use-gate itself is enforced server-side.
   isPremium?: boolean;
@@ -74,17 +79,19 @@ export function TemplateTile({
   const router = useRouter();
   const dict = useDict();
 
-  // Optimistic copy of isPublic — the menu chip label flips
-  // instantly on click for UX snappiness, even before router.refresh
-  // pulls the canonical value back. Resync from props whenever
-  // the canonical value changes (e.g. after a sibling tile flips
-  // visibility + the dashboard's SSR re-fetch propagates a fresh
-  // template prop down here) so the local state never drifts stale.
-  const [isPublicLocal, setIsPublicLocal] = useState(template.isPublic);
+  // Optimistic copy of the moderation state — the menu label + "under review"
+  // chip flip instantly on click, even before router.refresh pulls the
+  // canonical value back. Resync from props whenever the canonical value
+  // changes (e.g. after a sibling tile flips + the SSR re-fetch propagates a
+  // fresh prop down) so the local mirror never drifts stale. Falls back to
+  // APPROVED/PRIVATE derived from isPublic when a caller omits reviewStatus.
+  const canonicalStatus =
+    template.reviewStatus ?? (template.isPublic ? "APPROVED" : "PRIVATE");
+  const [statusLocal, setStatusLocal] = useState(canonicalStatus);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical "resync local mirror when canonical prop changes" shape; useMemo can't store mutable local state for the optimistic toggle case
-    setIsPublicLocal(template.isPublic);
-  }, [template.isPublic]);
+    setStatusLocal(canonicalStatus);
+  }, [canonicalStatus]);
 
   // Menu trigger state. menuRect = null means menu closed.
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -126,8 +133,12 @@ export function TemplateTile({
   const cover = slides[scrub.displayIndex] ?? null;
 
   const handleToggleVisibility = async () => {
-    const nextPublic = !isPublicLocal;
-    setIsPublicLocal(nextPublic); // optimistic
+    const prevStatus = statusLocal;
+    // PRIVATE -> request review (enters the admin queue as PENDING).
+    // PENDING or APPROVED -> withdraw back to PRIVATE. Publishing is never
+    // self-service, so we only ever send a request; the server sets PENDING.
+    const wantPublic = prevStatus === "PRIVATE";
+    setStatusLocal(wantPublic ? "PENDING" : "PRIVATE"); // optimistic
     try {
       const res = await fetch(
         `/api/templates/${encodeURIComponent(id)}/visibility`,
@@ -135,20 +146,20 @@ export function TemplateTile({
           method: "PATCH",
           credentials: "same-origin",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ isPublic: nextPublic }),
+          body: JSON.stringify({ isPublic: wantPublic }),
         },
       );
       if (!res.ok) {
         // Roll back optimism on failure. Surface as console.warn —
         // no toast infra yet for templates; v2 add.
-        setIsPublicLocal(!nextPublic);
+        setStatusLocal(prevStatus);
         console.warn("[TemplateTile] visibility PATCH failed", await res.text());
         return;
       }
       // Re-fetch SSR so other pages (/templates) reflect the new state.
       router.refresh();
     } catch (err) {
-      setIsPublicLocal(!nextPublic);
+      setStatusLocal(prevStatus);
       console.warn("[TemplateTile] visibility PATCH error", err);
     }
   };
@@ -260,6 +271,16 @@ export function TemplateTile({
         <PremiumBadge className="pointer-events-none absolute top-2 start-2 z-10" />
       ) : null}
 
+      {/* "Under review" chip — only on the owner's own template while its
+          publish request is pending admin approval. Bottom-start (the scrub
+          counter sits bottom-end). `--tq-bg-dim` keeps it legible over any
+          cover image, matching the 3-dots trigger. */}
+      {isMine && statusLocal === "PENDING" ? (
+        <span className="pointer-events-none absolute bottom-2 start-2 z-10 rounded-full bg-[var(--tq-bg-dim)] px-2 py-0.5 text-[11px] font-medium text-foreground">
+          {dict.components.templateTile.pendingBadge}
+        </span>
+      ) : null}
+
       {useBusy ? (
         <div
           role="status"
@@ -347,7 +368,7 @@ export function TemplateTile({
             open={menuRect !== null}
             triggerRect={menuRect}
             templateId={id}
-            isPublic={isPublicLocal}
+            reviewStatus={statusLocal}
             onClose={closeMenu}
             onToggleVisibility={handleToggleVisibility}
             onUseAsTemplate={handleUseAsTemplate}

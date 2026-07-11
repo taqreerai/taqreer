@@ -16,6 +16,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
+import { isAdminSupabaseUser } from "@/lib/api/admin-context";
 
 // Same bucket the thumbnail-render Inngest function writes to.
 // Path convention: ${supabaseUserId}/${projectId}/${savedVersionId}/${slideKey}.webp
@@ -84,11 +85,14 @@ export async function PATCH(
     );
   }
 
+  // Admins can rename any project (full ownership); everyone else is scoped to
+  // their own. `updateMany` stays atomic on the resolved scope.
+  const admin = await isAdminSupabaseUser(user.id);
+  const scope = admin
+    ? { id: projectId }
+    : { id: projectId, user: { supabaseUserId: user.id } };
   const result = await prisma.project.updateMany({
-    where: {
-      id: projectId,
-      user: { supabaseUserId: user.id },
-    },
+    where: scope,
     data: { title: trimmed },
   });
   if (result.count === 0) {
@@ -112,14 +116,18 @@ export async function DELETE(
 
   const { id: projectId } = await params;
 
-  // Verify ownership BEFORE deleting anything. `findFirst` returns
-  // null on wrong-owner / missing project; both surface as 404 to
-  // the client so we don't leak project existence to non-owners.
+  // Admins can delete any project (full ownership); everyone else is scoped to
+  // their own. The owner filter also serves existence-hiding for non-owners.
+  const admin = await isAdminSupabaseUser(user.id);
+  const scope = admin
+    ? { id: projectId }
+    : { id: projectId, user: { supabaseUserId: user.id } };
+
+  // Verify access BEFORE deleting anything. `findFirst` returns null on
+  // wrong-owner / missing project; both surface as 404 to the client so we
+  // don't leak project existence to non-owners.
   const project = await prisma.project.findFirst({
-    where: {
-      id: projectId,
-      user: { supabaseUserId: user.id },
-    },
+    where: scope,
     select: {
       id: true,
       user: { select: { supabaseUserId: true } },
@@ -213,12 +221,7 @@ export async function DELETE(
   // no longer ours. The where clause makes the destructive write
   // atomic on (id, owner) — count=0 if either changed, and we
   // 404 instead of silently destroying state.
-  const deleted = await prisma.project.deleteMany({
-    where: {
-      id: projectId,
-      user: { supabaseUserId: user.id },
-    },
-  });
+  const deleted = await prisma.project.deleteMany({ where: scope });
   if (deleted.count === 0) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }

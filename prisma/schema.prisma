@@ -415,7 +415,19 @@ model Template {
   pdfUrl          String?
   thumbnailUrls   String[]
   useCount        Int       @default(0)
+  // `isPublic` is the single "live in the community feed" flag and is set
+  // true ONLY by an admin approval (see reviewStatus). Every public-surface
+  // read query keys on it, so the invariant is: isPublic === true  <=>
+  // reviewStatus === APPROVED.
   isPublic        Boolean   @default(false)
+  // Moderation lifecycle for a user's request to publish a template to the
+  // community. PRIVATE (default): owner-only, no request outstanding.
+  // PENDING: the owner asked to go public and it awaits admin review (still
+  // NOT public). APPROVED: an admin approved it; isPublic flips true and it
+  // goes live. A denial reverts to PRIVATE (the owner can resubmit). Every
+  // pre-existing public row (isPublic = true) is backfilled to APPROVED by the
+  // migration so the invariant holds on day one.
+  reviewStatus    TemplateReviewStatus @default(PRIVATE)
   // Premium templates are gated to the Pro plan. Set only by the
   // platform/curator account (DB-only for now — admin console later);
   // regular users' templates stay free. Enforcement is server-side in
@@ -444,6 +456,18 @@ model Template {
   @@index([isPublic, publishedAt(sort: Desc)])
   @@index([ownerId, createdAt(sort: Desc)])
   @@index([featuredOrder])
+  // Admin review queue reads all PENDING rows across every user (oldest first).
+  @@index([reviewStatus])
+}
+
+// Moderation state for a Template's community-publish request. See the
+// reviewStatus field on Template for the full lifecycle. Kept as a small,
+// closed enum so the queue query and the isPublic<=>APPROVED invariant are
+// enforceable at the type level.
+enum TemplateReviewStatus {
+  PRIVATE
+  PENDING
+  APPROVED
 }
 
 model BrandKit {

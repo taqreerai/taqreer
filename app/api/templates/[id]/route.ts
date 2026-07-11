@@ -25,6 +25,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
+import { isAdminSupabaseUser } from "@/lib/api/admin-context";
 import {
   revalidateTemplateSurfaces,
   templateDetailPaths,
@@ -46,11 +47,15 @@ export async function DELETE(
 
   const { id: templateId } = await params;
 
+  // Admins can delete any template (full ownership); everyone else is scoped
+  // to their own. The owner filter also hides existence from non-owners.
+  const admin = await isAdminSupabaseUser(user.id);
+  const scope = admin
+    ? { id: templateId }
+    : { id: templateId, owner: { supabaseUserId: user.id } };
+
   const template = await prisma.template.findFirst({
-    where: {
-      id: templateId,
-      owner: { supabaseUserId: user.id },
-    },
+    where: scope,
     select: {
       id: true,
       isPublic: true,
@@ -99,12 +104,7 @@ export async function DELETE(
     });
   }
 
-  const deleted = await prisma.template.deleteMany({
-    where: {
-      id: templateId,
-      owner: { supabaseUserId: user.id },
-    },
-  });
+  const deleted = await prisma.template.deleteMany({ where: scope });
   if (deleted.count === 0) {
     return NextResponse.json({ error: "Template not found" }, { status: 404 });
   }

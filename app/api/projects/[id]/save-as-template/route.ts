@@ -19,7 +19,9 @@
 //
 // Request body:
 //   {
-//     isPublic: boolean   optional, defaults to false
+//     isPublic: boolean   optional, defaults to false. When true it is a
+//                         REQUEST to publish: the row is created PENDING and
+//                         enters the admin review queue, NOT made public.
 //   }
 //
 // Response:
@@ -50,7 +52,6 @@ import { inngest } from "@/inngest/client";
 import { deriveBrandSnapshot } from "@/lib/template/derive-brand";
 import { SlideManifestSchema } from "@/lib/schema/slide";
 import { MAX_TEMPLATE_SLIDES } from "@/lib/template/constants";
-import { revalidateTemplateSurfaces } from "@/lib/auth/marquee-projects";
 import type { Prisma } from "@prisma/client";
 
 type SaveAsTemplateBody = {
@@ -86,7 +87,11 @@ export async function POST(
   }
   // Boolean coercion is strict — anything other than literal true
   // becomes false. Mirrors the regen-route's `replay` handling.
-  const isPublic = body.isPublic === true;
+  // NOTE: `requestedPublic` is a REQUEST to publish, not a publish. New
+  // templates are never auto-public — an admin approves them (reviewStatus).
+  // So the row is created private+PENDING and only reaches the community feed
+  // once approved. See app/api/admin/templates/[id]/review.
+  const requestedPublic = body.isPublic === true;
 
   // Project payload needed for derive: language + format + the latest
   // completed manifest. We pull these in one query (rather than
@@ -148,7 +153,6 @@ export async function POST(
     ? Math.min(parsedManifest.data.slides.length, MAX_TEMPLATE_SLIDES)
     : Math.min(3, MAX_TEMPLATE_SLIDES);
 
-  const now = new Date();
   const template = await prisma.template.create({
     data: {
       ownerId: ctx.project.user.id,
@@ -157,11 +161,13 @@ export async function POST(
       slideCount,
       brand: brand as unknown as Prisma.InputJsonValue,
       sourceProjectId: project.id,
-      isPublic,
-      // publishedAt is the public-feed ordering key. We set it
-      // synchronously on the create when isPublic=true; the
-      // visibility-toggle route does the same dance on later flips.
-      publishedAt: isPublic ? now : null,
+      // Never auto-public: a create is at most a REQUEST to publish, which
+      // enters the admin review queue (PENDING). isPublic + publishedAt stay
+      // false/null until an admin approves. The isPublic<=>APPROVED invariant
+      // holds: a PENDING row is not public.
+      isPublic: false,
+      reviewStatus: requestedPublic ? "PENDING" : "PRIVATE",
+      publishedAt: null,
       // Seed with the project's real slides so the tile + lightbox show
       // the actual deck immediately. The template-render job then
       // composes the final preview ([cover, typography, palette, ...rest]
@@ -172,11 +178,9 @@ export async function POST(
     select: { id: true },
   });
 
-  // A new PUBLIC template appears on the public surfaces immediately (seeded
-  // with the deck's real slides), so purge them. Private -> not shown, skip.
-  if (isPublic) {
-    await revalidateTemplateSurfaces();
-  }
+  // No public-surface purge here: a brand-new template is never live (it is
+  // PRIVATE or PENDING). The community surfaces are revalidated by the admin
+  // review route when the template is actually approved.
 
   // Fire-and-forget — see header for failure isolation rationale.
   await inngest

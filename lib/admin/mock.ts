@@ -149,6 +149,21 @@ export type AdminTemplate = {
   seo?: AdminTemplateSeo;
 };
 
+// A user's outstanding request to publish a template to the community,
+// awaiting admin approval (Template.reviewStatus === "PENDING"). Rendered in
+// the Pending-review queue at the top of the admin Templates tab. Unlike
+// AdminTemplate this spans EVERY user (not just the curator), so it carries the
+// owner's email for context.
+export type AdminPendingTemplate = {
+  id: string;
+  thumbnail: string | null;
+  format: "16:9" | "9:16";
+  language: string;
+  slideCount: number;
+  ownerEmail: string | null;
+  requestedAt: string; // ISO date (Template.createdAt / updatedAt)
+};
+
 export const MOCK_TEMPLATES: AdminTemplate[] = [
   { id: "t1", name: "Quarterly Business Review", thumbnail: null, format: "16:9", premium: false, featured: true, order: 0 },
   { id: "t2", name: "Product Launch", thumbnail: null, format: "16:9", premium: true, featured: true, order: 1 },

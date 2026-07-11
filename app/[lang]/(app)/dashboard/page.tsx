@@ -140,6 +140,7 @@ export default async function DashboardPage({
         brand: true,
         thumbnailUrls: true,
         isPublic: true,
+        reviewStatus: true,
         isPremium: true,
       },
     }),
@@ -160,6 +161,7 @@ export default async function DashboardPage({
       // 3-dots edit menu + visibility toggle render only for the user's own.
       isMine: t.ownerId === dbUser.id,
       isPublic: t.isPublic,
+      reviewStatus: t.reviewStatus,
       isPremium: t.isPremium,
       thumbnailUrls: t.thumbnailUrls,
       // Drives the auto-refresh hook so a saved template's PNGs appear without

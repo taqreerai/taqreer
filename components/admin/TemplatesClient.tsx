@@ -1,13 +1,19 @@
 "use client";
 
-// Admin > Templates curation (client). The curator account's public templates,
-// split into a Featured set (drives the landing marquee + grid + welcome strip,
-// in manual order) and a pool to feature from, plus a per-template Premium
-// toggle. Every action persists via /api/admin/templates with an optimistic
-// local update and a snapshot-revert on failure. Dark-only, LTR (admin layout).
+// Admin > Templates curation (client). Three sections: (1) a cross-user
+// Pending-review queue (approve => live, deny => back to the owner's private
+// template), then the curator account's public templates split into (2) a
+// Featured set (drives the landing marquee + grid + welcome strip, in manual
+// order) and (3) a pool to feature from, plus a per-template Premium toggle.
+// Every action persists via /api/admin/templates(/[id]/review) with an
+// optimistic local update and a snapshot-revert on failure. Dark-only, LTR.
 
 import { useState } from "react";
-import type { AdminTemplate, AdminTemplateSeo } from "@/lib/admin/mock";
+import type {
+  AdminTemplate,
+  AdminTemplateSeo,
+  AdminPendingTemplate,
+} from "@/lib/admin/mock";
 
 const ACCENT = "var(--tq-purple)";
 const MUTED = "var(--tq-text-muted)";
@@ -51,6 +57,34 @@ function Thumb({ t }: { t: AdminTemplate }) {
       ) : (
         <span className="material-symbols-outlined" style={{ fontSize: 28, color: MUTED }}>
           image
+        </span>
+      )}
+    </div>
+  );
+}
+
+// Queue-card thumbnail. Unlike Thumb (always 16:9 for the curator grid) a
+// pending template can be portrait, so it honours the row's format.
+function PendingThumb({ t }: { t: AdminPendingTemplate }) {
+  return (
+    <div
+      className="grid w-full place-items-center overflow-hidden rounded-lg"
+      style={{
+        aspectRatio: t.format === "9:16" ? "9 / 16" : "16 / 9",
+        maxHeight: 220,
+        background: "var(--tq-overlay-soft)",
+        border: "1px solid var(--tq-border-hairline)",
+      }}
+    >
+      {t.thumbnail ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={t.thumbnail} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <span
+          className="material-symbols-outlined"
+          style={{ fontSize: 28, color: MUTED }}
+        >
+          hourglass_empty
         </span>
       )}
     </div>
@@ -237,13 +271,40 @@ function SeoEditor({
 
 export function TemplatesClient({
   initialTemplates,
+  initialPending = [],
 }: {
   initialTemplates: AdminTemplate[];
+  initialPending?: AdminPendingTemplate[];
 }) {
   const [templates, setTemplates] = useState<AdminTemplate[]>(initialTemplates);
+  // The cross-user approval queue. Approve/deny removes the card optimistically
+  // and restores it (with the error banner) if the request fails.
+  const [pending, setPending] = useState<AdminPendingTemplate[]>(initialPending);
+  const [reviewBusyId, setReviewBusyId] = useState<string | null>(null);
   // Surfaced when an optimistic save fails and the card reverts, so a failed
   // save is visible instead of silently snapping back. Cleared on the next try.
   const [error, setError] = useState<string | null>(null);
+
+  const review = async (id: string, decision: "approve" | "reject") => {
+    setError(null);
+    setReviewBusyId(id);
+    const snapshot = pending;
+    // Optimistic: drop the card immediately.
+    setPending((prev) => prev.filter((p) => p.id !== id));
+    try {
+      const res = await fetch(`/api/admin/templates/${id}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision }),
+      });
+      if (!res.ok) throw new Error("review failed");
+    } catch {
+      setPending(snapshot);
+      setError(SAVE_ERROR);
+    } finally {
+      setReviewBusyId(null);
+    }
+  };
   // Per-card SEO editor state (one open at a time; not optimistic — the form
   // stays open with an error on failure instead of reverting).
   const [seoOpenId, setSeoOpenId] = useState<string | null>(null);
@@ -396,6 +457,91 @@ export function TemplatesClient({
           </button>
         </div>
       ) : null}
+
+      {/* Pending review - every user's outstanding request to publish a
+          template to the community. Approve makes it live; Deny reverts it to
+          the owner's private template. */}
+      <section className="space-y-3">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-sm font-semibold" style={{ color: PRIMARY }}>
+            Pending review
+          </h2>
+          <span className="text-xs" style={{ color: MUTED }}>
+            {pending.length} awaiting approval
+          </span>
+        </div>
+
+        {pending.length === 0 ? (
+          <p
+            className="surface-card rounded-xl p-6 text-center text-sm"
+            style={{ color: MUTED }}
+          >
+            No templates awaiting review.
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+            {pending.map((p) => (
+              <div
+                key={p.id}
+                className="surface-card flex flex-col gap-3 rounded-xl p-3"
+              >
+                <PendingThumb t={p} />
+                <div className="min-w-0">
+                  <div
+                    className="truncate text-sm font-medium"
+                    style={{ color: PRIMARY }}
+                    title={p.ownerEmail ?? undefined}
+                    dir="ltr"
+                  >
+                    {p.ownerEmail ?? "unknown"}
+                  </div>
+                  <div className="text-xs" style={{ color: MUTED }}>
+                    {p.format} · {p.language.toUpperCase()} · {p.slideCount}{" "}
+                    slides
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => review(p.id, "approve")}
+                    disabled={reviewBusyId === p.id}
+                    className="flex flex-1 items-center justify-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50"
+                    style={{ background: ACCENT, color: "#fff" }}
+                  >
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontSize: 15 }}
+                    >
+                      check
+                    </span>
+                    Approve
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => review(p.id, "reject")}
+                    disabled={reviewBusyId === p.id}
+                    className="flex flex-1 items-center justify-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50"
+                    style={{
+                      color: "var(--tq-text-danger)",
+                      background: "var(--tq-overlay-soft)",
+                      border: "1px solid var(--tq-border-hairline)",
+                    }}
+                  >
+                    <span
+                      className="material-symbols-outlined"
+                      style={{ fontSize: 15 }}
+                    >
+                      close
+                    </span>
+                    Deny
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       {/* Featured */}
       <section className="space-y-3">
         <div className="flex items-baseline justify-between">

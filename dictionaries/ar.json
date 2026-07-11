@@ -881,7 +881,7 @@
     },
     "saveTemplate": {
       "title": "حفظ كقالب", "description": "سيتم حفظ ألوان وخطوط هذا العرض كقالب جديد. لن يتم نسخ محتوى الشرائح أو الشعار.",
-      "shareCommunity": "مشاركة مع المجتمع", "shareCommunityDesc": "القوالب العامة تظهر في صفحة قوالب المجتمع ليستخدمها الآخرون. يمكنك تغيير ذلك لاحقا.",
+      "shareCommunity": "طلب النشر للعامة", "shareCommunityDesc": "يرسل طلبا لنشر هذا القالب في قوالب المجتمع. يراجعه المشرف قبل ظهوره للعامة. يمكنك سحب الطلب في أي وقت.",
       "save": "حفظ القالب", "saving": "جاري الحفظ...", "headingLabel": "العنوان الرئيسي", "langArabic": "عربي",
       "errLoadPreview": "تعذر تحميل المعاينة", "errSave": "تعذر الحفظ، حاول مرة أخرى."
     },
@@ -898,7 +898,7 @@
   },
   "menus": {
     "projectActions": { "aria": "خيارات المشروع", "addFavorite": "إضافة إلى المفضلة", "removeFavorite": "إزالة من المفضلة", "copyLink": "نسخ الرابط", "useAsTemplate": "استخدام كقالب", "saveAsTemplate": "حفظ كقالب", "sendToTrash": "نقل إلى المهملات" },
-    "templateActions": { "aria": "خيارات القالب", "makePrivate": "اجعله خاصا", "makePublic": "اجعله عاما", "useAsTemplate": "استخدامه كقالب", "delete": "حذف القالب" },
+    "templateActions": { "aria": "خيارات القالب", "makePrivate": "اجعله خاصا", "makePublic": "اجعله عاما", "submitReview": "طلب النشر للعامة", "cancelReview": "الغاء طلب النشر", "useAsTemplate": "استخدامه كقالب", "delete": "حذف القالب" },
     "brandKitActions": { "aria": "خيارات الهوية البصرية", "use": "استخدام الهوية البصرية", "unsetDefault": "إلغاء التعيين كافتراضية", "setDefault": "تعيين كافتراضية", "delete": "حذف الهوية البصرية" },
     "accessChip": { "aria": "مستوى الوصول", "view": "عرض", "comment": "تعليق", "edit": "تعديل", "viewOnly": "يستطيع المشاهدة فقط", "viewAndComment": "يستطيع المشاهدة والتعليق", "editFull": "يستطيع التعديل الكامل" }
   },
@@ -915,7 +915,7 @@
     "pagination": { "aria": "ترقيم الصفحات", "previousPage": "الصفحة السابقة", "nextPage": "الصفحة التالية", "pageN": "الصفحة {n}" },
     "recentProjects": { "title": "أحدث المشاريع", "emptyTitle": "لا توجد مشاريع بعد", "emptyDesc": "ابدأ بإنشاء أول عرض تقديمي وسيظهر هنا فور حفظه.", "createProject": "إنشاء مشروع" },
     "myTemplates": { "empty": "لا توجد قوالب محفوظة. عند حفظ عرض كقالب سيظهر هنا لتبدأ منه.", "header": "ابدأ من قالب", "subtitle": "ما تراه هو ما تحصل عليه", "viewAll": "عرض الكل" },
-    "templateTile": { "preparing": "جار تجهيز القالب", "labelTemplate": "قالب {format}", "premiumSuffix": " · مميز", "options": "خيارات القالب", "makePublic": "اجعله عاما", "makePrivate": "اجعله خاصا" },
+    "templateTile": { "preparing": "جار تجهيز القالب", "labelTemplate": "قالب {format}", "premiumSuffix": " · مميز", "options": "خيارات القالب", "makePublic": "اجعله عاما", "makePrivate": "اجعله خاصا", "pendingBadge": "قيد المراجعة" },
     "brandKitTile": { "use": "استخدام {name}", "default": "افتراضية", "options": "خيارات الهوية البصرية", "colors": "الألوان", "fonts": "الخطوط" },
     "projectThumbnail": { "open": "افتح {title} · {count} شرائح", "openNoSlides": "افتح {title}", "slideOne": "شريحة", "slideMany": "شرائح", "sharedEdit": "مشترك · تحرير", "sharedComment": "مشترك · تعليق", "creatingPreview": "جاري إنشاء المعاينة", "preparingTemplate": "جار تجهيز القالب", "favorite": "مشروع مفضل", "projectName": "اسم المشروع", "options": "خيارات المشروع" },
     "dashboardWidget": { "viewAll": "عرض الكل" },

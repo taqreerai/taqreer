@@ -172,20 +172,24 @@ export async function resolveProjectAccess(
     }
   }
 
-  // Admin read-only bypass (admin console > Decks). Grants VIEW only, and only
-  // when the route asks for view: an admin without real access hitting an
-  // edit/comment route must keep 404ing exactly as before (existence-hiding).
-  // Role comes from the Prisma row, same trust chain as requireAdminPage;
-  // banned callers were already rejected above. Deliberately not gated on
-  // explicitlyRevoked: a user revoking an old share must not disable oversight.
+  // Admin superuser bypass (admin console). Grants FULL owner-level access to
+  // ANY deck, for ANY required role, so an admin can view + edit + delete +
+  // moderate any user's project from the console (view-only was the old
+  // behaviour). `isAdminObserver` stays true so the admin's presence is still
+  // suppressed downstream (they operate as a ghost; the deck's owner never
+  // sees them navigating/editing). Role comes from the Prisma row, same trust
+  // chain as requireAdminPage; banned callers were already rejected above.
+  // Deliberately not gated on explicitlyRevoked: a user revoking an old share
+  // must not disable oversight. `ctx.user.prismaId` is the ADMIN's own id (not
+  // the owner's), so any authored writes (comments, etc.) attribute correctly.
   let isAdminObserver = false;
-  if (!role && user && requiredRole === "view") {
+  if (!role && user) {
     const adminRow = await prisma.user.findUnique({
       where: { supabaseUserId: user.id },
       select: { id: true, role: true },
     });
     if (adminRow?.role === "admin") {
-      role = "view";
+      role = "owner";
       prismaUserIdForCtx = adminRow.id;
       isAdminObserver = true;
     }

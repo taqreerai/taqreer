@@ -61,10 +61,10 @@ export function SaveAsTemplateDialog({
   const { dir } = useLocale();
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  // Default ON — encourages sharing into the community feed. Users
-  // who want a private template can flip the toggle off before saving;
-  // they can also switch it private later from the tile's 3-dots menu.
-  const [isPublic, setIsPublic] = useState<boolean>(true);
+  // Default OFF — a template is private unless the user explicitly asks to
+  // publish it. Turning it on submits a request that an admin must approve
+  // before the template appears in the community feed (reviewStatus=PENDING).
+  const [isPublic, setIsPublic] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -92,11 +92,9 @@ export function SaveAsTemplateDialog({
     /* eslint-disable react-hooks/set-state-in-effect -- canonical "reset modal-local state on prop change" shape */
     setPreview(null);
     setPreviewError(null);
-    // Reset to the SAME default the initial useState uses — `true`.
-    // Was previously `setIsPublic(false)` which contradicted the
-    // "default ON" intent: every reopen after the first one landed
-    // with the toggle silently flipped off.
-    setIsPublic(true);
+    // Reset to the SAME default the initial useState uses — `false`
+    // (private). The toggle is an opt-in request to publish for review.
+    setIsPublic(false);
     setSaveError(null);
     /* eslint-enable react-hooks/set-state-in-effect */
 

@@ -48,7 +48,7 @@ export function TemplateActionsMenu({
   open,
   triggerRect,
   templateId,
-  isPublic,
+  reviewStatus,
   onClose,
   onToggleVisibility,
   onUseAsTemplate,
@@ -61,7 +61,10 @@ export function TemplateActionsMenu({
   // another tile's trigger. Stamped on the trigger as
   // data-template-menu-trigger.
   templateId: string;
-  isPublic: boolean;
+  // Moderation state of the owner's publish request — drives the first
+  // menu item: PRIVATE => "submit for review", PENDING => "cancel request",
+  // APPROVED => "make private".
+  reviewStatus: "PRIVATE" | "PENDING" | "APPROVED";
   onClose: () => void;
 } & TemplateActionsMenuActions) {
   const dict = useDict();
@@ -146,11 +149,19 @@ export function TemplateActionsMenu({
         >
           <ul className="flex flex-col p-1.5">
             <MenuItem
-              icon={isPublic ? "lock" : "public"}
+              icon={
+                reviewStatus === "APPROVED"
+                  ? "lock"
+                  : reviewStatus === "PENDING"
+                    ? "hourglass_top"
+                    : "public"
+              }
               label={
-                isPublic
+                reviewStatus === "APPROVED"
                   ? dict.menus.templateActions.makePrivate
-                  : dict.menus.templateActions.makePublic
+                  : reviewStatus === "PENDING"
+                    ? dict.menus.templateActions.cancelReview
+                    : dict.menus.templateActions.submitReview
               }
               onClick={onToggleVisibility}
               closeAfter

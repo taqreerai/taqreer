@@ -66,3 +66,21 @@ export async function requireAdminApi(): Promise<
   }
   return ctx;
 }
+
+/**
+ * Lightweight admin predicate for the owner-scoped routes (project/template
+ * delete, rename, visibility) that already have the caller's Supabase user id
+ * in hand and just need to widen their owner filter for a superuser. Same trust
+ * chain as requireAdminApi (Prisma User.role, banned admins excluded), minus the
+ * extra auth.getUser() round-trip. Returns false for a missing/non-admin/banned
+ * row so a non-admin keeps its existing owner-only scope.
+ */
+export async function isAdminSupabaseUser(
+  supabaseUserId: string,
+): Promise<boolean> {
+  const dbUser = await prisma.user.findUnique({
+    where: { supabaseUserId },
+    select: { role: true, bannedAt: true },
+  });
+  return !!dbUser && dbUser.role === "admin" && !dbUser.bannedAt;
+}
