@@ -72,13 +72,23 @@ export async function resolveGenImageFills(args: {
   for (const r of ready) if (r.storageUrl) readyByGenid.set(r.genid, r.storageUrl);
 
   for (const [genid, prompt] of genBoxes) {
+    // Identity is (genid + promptHash): resolve to the CURRENT prompt's image,
+    // never a stale one. The current prompt's file is `${genid}-${hash}.jpg`.
+    const hash = genImageHash(prompt);
+    const fileName = genImageFileName(genid, hash);
+    // A ready DB row wins ONLY when its stored path encodes the CURRENT hash. A
+    // row left over from a since-changed prompt (e.g. an in-place data-genimage
+    // edit that didn't clear it) must NOT beat the warmed file for the new
+    // prompt — that would export a discarded image (its storageUrl for the
+    // matching hash is byte-identical to publicGeneratedImageUrl anyway).
     const dbUrl = readyByGenid.get(genid);
-    if (dbUrl) {
+    if (dbUrl && dbUrl.includes(fileName)) {
       fills.set(genid, dbUrl);
       continue;
     }
-    const hash = genImageHash(prompt);
-    if (warmedFiles.has(genImageFileName(genid, hash))) {
+    // Otherwise the warmed storage file for the CURRENT hash (regen / mid-
+    // stream / lost broadcast — no ready row, but the file is there).
+    if (warmedFiles.has(fileName)) {
       fills.set(genid, publicGeneratedImageUrl(projectId, genid, hash));
     }
   }
