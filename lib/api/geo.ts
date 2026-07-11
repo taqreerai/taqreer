@@ -42,7 +42,26 @@ export function sanitizeCountry(raw: string | null | undefined): string | null {
   return country;
 }
 
-/** Decoded, control-char-stripped, length-capped city name, or null. */
+// HTTP header values reach the runtime decoded as latin-1, so a city whose
+// bytes are raw UTF-8 (Cloudflare doesn't percent-encode every value) surfaces
+// as mojibake: "Ṭaʼif" becomes "Taâ€™if". Re-decode only when the string looks
+// like UTF-8 bytes viewed through latin-1 (lead byte followed by continuation
+// byte) and round-trips cleanly; anything else - including already-correct
+// Arabic or accented-Latin names - passes through untouched.
+function fixMojibake(s: string): string {
+  if (!/[\xC2-\xF4][\x80-\xBF]/.test(s)) return s;
+  const codes = Array.from(s, (c) => c.charCodeAt(0));
+  if (codes.some((n) => n > 0xff)) return s; // not a latin-1 byte view
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(
+      Uint8Array.from(codes),
+    );
+  } catch {
+    return s; // not valid UTF-8 - keep the original
+  }
+}
+
+/** Decoded, mojibake-repaired, control-char-stripped, capped city, or null. */
 export function sanitizeCity(raw: string | null | undefined): string | null {
   if (!raw) return null;
   let city = raw;
@@ -51,8 +70,10 @@ export function sanitizeCity(raw: string | null | undefined): string | null {
   } catch {
     // Malformed percent-encoding - keep the raw value.
   }
-  city = city
-    .replace(/[\x00-\x1f\x7f<>"]/g, "")
+  city = fixMojibake(city)
+    // C1 controls (\x80-\x9f) included: after repair they can only be stray
+    // bytes from an unrepairable value.
+    .replace(/[\x00-\x1f\x7f-\x9f<>"]/g, "")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, CITY_MAX_LEN)

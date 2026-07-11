@@ -5,6 +5,7 @@
 import { requireAdminPage } from "@/lib/api/admin-context";
 import { prisma } from "@/lib/prisma";
 import { getBalance } from "@/lib/credits/server";
+import { sanitizeCity } from "@/lib/api/geo";
 import { UsersClient } from "@/components/admin/UsersClient";
 import type { AdminUser, Plan } from "@/lib/admin/mock";
 
@@ -60,7 +61,10 @@ export default async function AdminUsersPage() {
         banned: !!u.bannedAt,
         signupIp: u.signupIp,
         signupCountry: u.signupCountry,
-        signupCity: u.signupCity,
+        // Re-sanitized on read: rows stored before the mojibake repair in
+        // sanitizeCity carry double-encoded names (UTF-8 bytes read as
+        // latin-1); the repair is idempotent for clean values.
+        signupCity: sanitizeCity(u.signupCity),
         sharedIp: !!u.signupIp && (ipCounts.get(u.signupIp) ?? 0) > 1,
       };
     }),

@@ -325,18 +325,15 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
                 <span className="block truncate text-xs" style={{ color: MUTED }}>
                   {u.email}
                 </span>
-                {u.signupIp || u.signupCity || u.signupCountry ? (
+                {u.signupCity || u.signupCountry ? (
+                  // City/country only - the raw IP stays off-screen (hover
+                  // tooltip here + the Shared IP chip) to keep the list scannable.
                   <span
                     className="block truncate text-xs"
                     style={{ color: MUTED }}
                     title={u.signupIp ?? undefined}
                   >
-                    {[
-                      [u.signupCity, u.signupCountry].filter(Boolean).join(", "),
-                      u.signupIp,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
+                    {[u.signupCity, u.signupCountry].filter(Boolean).join(", ")}
                   </span>
                 ) : null}
               </div>
