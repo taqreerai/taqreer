@@ -545,7 +545,11 @@ export function PreviewActionBar({
         // layout or the child width-spring.
         dir={dir}
         animate={bounceControls}
-        className={`surface-card flex items-center gap-1 rounded-full p-1.5 ${
+        // On phones the full owner toolbar is wider than the viewport, so cap it
+        // to the screen and let it scroll horizontally inside its own pill (every
+        // control stays reachable). Touch devices don't fire the hover tooltips
+        // that the resulting overflow-y clip would hide, so nothing is lost.
+        className={`surface-card flex items-center gap-1 rounded-full p-1.5 max-md:max-w-[calc(100vw-1rem)] max-md:overflow-x-auto hide-scrollbar ${
           horizontal ? "flex-row" : "flex-col"
         }`}
       >
@@ -641,7 +645,7 @@ export function PreviewActionBar({
                         : dict.editor.toolbar.aiPlaceholderNoRegion
                     }
                     disabled={focusedSlideLocked || aiBusy}
-                    className="w-[250px] bg-transparent px-1 text-sm text-foreground outline-none placeholder:text-foreground/35 disabled:opacity-50"
+                    className="w-[min(32vw,250px)] bg-transparent px-1 text-sm text-foreground outline-none placeholder:text-foreground/35 disabled:opacity-50 max-md:text-base"
                   />
                   {/* Send (توليد) — the one mesh button. While applying it keeps
                       its exact shape; the up-arrow morphs into a spinner in place

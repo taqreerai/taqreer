@@ -35,6 +35,7 @@ import { serializeSlideSection } from "@/lib/editor/serialize";
 import { fitArtboard } from "@/lib/editor/canvas-fit";
 import { TopUtilityBar } from "@/components/app/TopUtilityBar";
 import { UserMenu } from "@/components/app/UserMenu";
+import { MobileNav } from "@/components/app/MobileNav";
 import {
   GenImageProvider,
   type GenImageFills,
@@ -1745,22 +1746,38 @@ export function DeckView({
   // ── Editor rail collapse (item 11) ── Both floating rails (Slides on the
   // right, Layers on the left) collapse to a thin reopen handle and the canvas
   // reclaims the freed width. Per-rail state so each toggles independently; a
-  // narrow-viewport media query collapses/expands both. The initial value is
-  // derived in the useState initializer (the repo's set-state-in-effect rule);
-  // the effect only subscribes to later viewport changes.
-  const isNarrowViewport = () =>
-    typeof window !== "undefined" &&
-    window.matchMedia("(max-width: 1280px)").matches;
-  const [layersCollapsed, setLayersCollapsed] = useState(isNarrowViewport);
-  const [slidesCollapsed, setSlidesCollapsed] = useState(isNarrowViewport);
+  // narrow-viewport media query collapses/expands both.
+  //
+  // Seeded COLLAPSED so SSR and the first client render AGREE. Reading matchMedia
+  // in the useState initializer returned false on the server (window undefined,
+  // rails expanded) but true on a narrow client → a hydration mismatch that
+  // regenerated the whole DeckView tree + flashed on every phone load. Starting
+  // collapsed means the server already renders the correct state for the mobile
+  // majority; the mount effect swaps in the real viewport value: phones stay
+  // collapsed (no change, no flash), desktop widens to expanded.
+  // `railTransitionReady` holds the canvas margin transition off until after that
+  // first correction so the canvas doesn't slide/rescale on load.
+  const [layersCollapsed, setLayersCollapsed] = useState(true);
+  const [slidesCollapsed, setSlidesCollapsed] = useState(true);
+  const [railTransitionReady, setRailTransitionReady] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 1280px)");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLayersCollapsed(mq.matches);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSlidesCollapsed(mq.matches);
+    // Enable the margin transition one frame after the initial correction so
+    // user toggles animate but the load-time collapse/expand snaps.
+    const raf = requestAnimationFrame(() => setRailTransitionReady(true));
     const onChange = (e: MediaQueryListEvent) => {
       setLayersCollapsed(e.matches);
       setSlidesCollapsed(e.matches);
     };
     mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
+    return () => {
+      cancelAnimationFrame(raf);
+      mq.removeEventListener("change", onChange);
+    };
   }, []);
 
   // Toolbar is portal'd to document.body so its z-index isn't trapped
@@ -4219,7 +4236,7 @@ export function DeckView({
       style={{
         marginLeft: editMode && layersCollapsed ? 44 : SLIDE_NAV_WIDTH + 56,
         marginRight: slidesCollapsed ? 44 : SLIDE_NAV_WIDTH + 56,
-        transition: "margin 300ms ease",
+        transition: railTransitionReady ? "margin 300ms ease" : "none",
       }}
     >
       {fontAssets}
@@ -4236,6 +4253,10 @@ export function DeckView({
       <div className="fixed inset-x-0 top-0 z-40 h-0">
         <TopUtilityBar
           avatar={<UserMenu />}
+          // Mobile-only hamburger → the app nav drawer, so the editor isn't a
+          // dead end on phones (the desktop home button is hidden there). md:hidden
+          // internally, so desktop keeps the home button instead.
+          leading={<MobileNav />}
           trailing={
             !generating && exportManifest ? (
               <>

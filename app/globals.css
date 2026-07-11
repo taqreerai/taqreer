@@ -626,6 +626,21 @@ textarea.input-dark {
   padding: 12px 16px;
 }
 
+/* iOS Safari auto-zooms the viewport when a focused field's font-size is < 16px.
+   Bump the shared text-entry controls to 16px on small screens (where the zoom
+   fires) so tapping an input doesn't jolt the page; desktop keeps the tighter
+   resting size. Scoped to the design-system field classes so compact number
+   steppers and chips are untouched. */
+@media (max-width: 767px) {
+  /* Element-qualified so this beats the per-field `text-xs`/`text-sm` utilities
+     on specificity (0,1,1 > 0,1,0) without !important. */
+  input.input-dark,
+  textarea.input-dark,
+  input.input-search {
+    font-size: 16px;
+  }
+}
+
 /* Strip the native `<input type="number">` spinner so step controls
    can be rendered as proper `−` / `+` surface buttons instead of the
    tiny default OS arrows that never match the surrounding chrome. */
@@ -2023,6 +2038,20 @@ html.app-shell-scroll body {
   /* §22: the dark gutter that shows around the rounded content panel + behind
      the transparent sidebar rail. */
   background-color: var(--tq-bg);
+}
+
+/* §22 (mobile): the content <main> clears the desktop rail with an inline-start
+   margin. The rail is `hidden md:flex`, so BELOW md the margin drops to 0 and the
+   content spans the full width (the MobileNav drawer replaces the rail there).
+   68px = the rail's w-[60px] + its 8px `start-2` gutter — keep in sync with
+   Sidebar's `w-[60px]`. Logical margin, so RTL/LTR mirror automatically. */
+.tq-shell-main {
+  margin-inline-start: 0;
+}
+@media (min-width: 768px) {
+  .tq-shell-main {
+    margin-inline-start: 68px;
+  }
 }
 
 /* §22: rounded content panel (Lovable-style). The page chrome is just the thin

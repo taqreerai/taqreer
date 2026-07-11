@@ -53,7 +53,8 @@ export function StudioActions({
             <span className="material-symbols-outlined text-[18px]" aria-hidden>
               person_add
             </span>
-            <span>{dict.editor.share}</span>
+            {/* Icon-only on phones (see ExportMenu) — the aria-label carries it. */}
+            <span className="max-md:hidden">{dict.editor.share}</span>
           </button>
           <ShareDialog
             open={shareOpen}

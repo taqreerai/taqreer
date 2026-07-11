@@ -16,6 +16,7 @@ import { ThemeLogo } from "@/components/brand/ThemeLogo";
 import { NewProjectDialog } from "@/components/app/NewProjectDialog";
 import { ProfileAvatar } from "@/components/app/ProfileAvatar";
 import { ProfileMenuContent } from "@/components/app/ProfileMenuContent";
+import { useAppNav } from "@/components/app/useAppNav";
 
 // One sidebar nav link. Each instance owns its own icon ref so the
 // pill's mouseenter / mouseleave can drive the animated icon
@@ -184,32 +185,11 @@ export function Sidebar({
   // new stuff". The "create from a template" entry point will live
   // inside the template's own preview (Phase D), not as a sidebar
   // shortcut.
-  const actionButtons: Array<{
-    label: string;
-    icon: string;
-    path: string;
-    comingSoon?: boolean;
-  }> = [
-    { label: dict.nav.create, icon: 'add_circle', path: '/create' },
-    { label: dict.nav.enhance, icon: 'auto_fix_high', path: '/enhance' },
-    { label: dict.nav.mimic, icon: 'content_copy', path: '/mimic' },
-    { label: dict.nav.fromData, icon: 'dataset', path: '/datasheet' },
-  ];
-
-  const navLinks = [
-    // `/projects` takes the `folder_copy` icon (formerly /folders') —
-    // projects ARE the folder metaphor at the user level; we don't
-    // need a separate folders concept.
-    // `/templates` lives directly below /projects so the user's two
-    // library surfaces sit as a paired group. Moved here from the
-    // "Create" group on 2026-05-22 — see actionButtons docstring.
-    { path: '/projects', icon: 'folder_copy', label: dict.nav.projects },
-    { path: '/templates', icon: 'grid_view', label: dict.nav.templates },
-    { path: '/library', icon: 'photo_library', label: dict.nav.imageLibrary },
-    { path: '/brand-kits', icon: 'id_card', label: dict.nav.brandKits },
-    { path: '/favorites', icon: 'star', label: dict.nav.favorites },
-    { path: '/settings', icon: 'settings', label: dict.nav.settings },
-  ];
+  // Nav model (creation flows + library links) is shared with the mobile drawer
+  // (MobileNav) via useAppNav so the two chromes never drift. Home + Admin stay
+  // local: Home renders standalone above, Admin is server-gated and appended
+  // below. See the actionButtons rationale in useAppNav.ts.
+  const { actionButtons, navLinks } = useAppNav();
 
   return (
     <aside
@@ -217,7 +197,8 @@ export function Sidebar({
       // §22: thin transparent icon rail (always collapsed). No fill, no blur,
       // no separator border — it floats on the dark gutter as the single chrome
       // across the whole app. Labels are hidden; hover shows a tooltip.
-      className={`sidebar-bg fixed start-2 top-0 h-screen z-50 flex flex-col w-[60px] ${transitionClass}`}
+      // The rail is desktop-only chrome; below md the MobileNav drawer takes over.
+      className={`sidebar-bg fixed start-2 top-0 h-screen z-50 hidden md:flex flex-col w-[60px] ${transitionClass}`}
     >
       {/* ── Logo ── */}
       <div className="h-20 flex items-center px-[10px] flex-shrink-0">

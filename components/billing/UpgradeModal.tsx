@@ -109,7 +109,7 @@ export function UpgradeModal({
               }`}
             >
               {/* Header row: title + contextual hint + close. */}
-              <div className="flex items-start justify-between gap-3 px-8 pt-7">
+              <div className="flex items-start justify-between gap-3 px-4 pt-7 md:px-8">
                 <div>
                   <h3 id="upgrade-modal-title" className="text-xl font-bold text-foreground">
                     {done
@@ -153,7 +153,7 @@ export function UpgradeModal({
               </div>
 
               {/* Body - scrolls when the cards overflow short screens. */}
-              <div className="overflow-y-auto px-8 pb-8 pt-6">
+              <div className="overflow-y-auto px-4 pb-8 pt-6 md:px-8">
                 {done ? (
                   <div className="flex flex-col items-center gap-4 py-12 text-center">
                     <span

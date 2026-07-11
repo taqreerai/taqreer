@@ -147,7 +147,11 @@ export function ExportMenu({
         >
           {busy ? "progress_activity" : "ios_share"}
         </span>
-        <span>{dict.editor.export.export}</span>
+        {/* Label hides on phones (icon + caret only) so Export + Share both fit
+            the dense studio top bar; the aria-label keeps it accessible. (The
+            caret keeps `material-symbols-outlined`, whose unlayered display beats
+            Tailwind's `hidden`, so it isn't hidden here - not needed anyway.) */}
+        <span className="max-md:hidden">{dict.editor.export.export}</span>
         <span className="material-symbols-outlined text-[16px] opacity-70" aria-hidden>
           expand_more
         </span>

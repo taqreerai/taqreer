@@ -844,7 +844,7 @@ export default function EnhanceContentPage() {
             Cards keep flex-1 to share row width but each carries a
             min-w so they wrap (rather than infinitely shrink) when
             the container can't fit both side-by-side. */}
-        <div className="flex w-full flex-wrap items-stretch gap-4">
+        <div className="flex w-full flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-stretch">
           {/* ─── Source + Logo card ──────────────────────────
               File dropzone on top (primary action), logo dropzone
               underneath (optional brand asset). One card because
@@ -852,7 +852,7 @@ export default function EnhanceContentPage() {
               the file area needs much more vertical real estate.
               p-4 + gap-4 deliberately tighter than the create-flow
               cards so the row reads compact, not airy. */}
-          <div className="surface-card flex min-h-[440px] min-w-[320px] flex-1 flex-col gap-4 rounded-2xl p-4">
+          <div className="surface-card flex min-h-[440px] min-w-0 flex-1 flex-col gap-4 rounded-2xl p-4 sm:min-w-[320px]">
             <input
               ref={fileInputRef}
               type="file"
@@ -1016,7 +1016,7 @@ export default function EnhanceContentPage() {
               dropdown in the header, palette, single brand-font picker,
               logo row, save toggle. Same min-h / min-w / flex-1 sizing
               as the source card so the two-card row stays balanced. */}
-          <div className="surface-card flex min-h-[440px] min-w-[320px] flex-1 flex-col gap-4 rounded-2xl p-4">
+          <div className="surface-card flex min-h-[440px] min-w-0 flex-1 flex-col gap-4 rounded-2xl p-4 sm:min-w-[320px]">
             {/* Inline header (not CardHeader) so the saved-kit pill can
                 overlay the title row. Mirrors /create's branding header:
                 pb-4 balances the card's p-4 top padding so the title sits

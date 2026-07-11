@@ -565,7 +565,9 @@ export function ShareDialog({
               <header className="flex items-center justify-between gap-3 border-b border-foreground/[0.08] px-5 py-4">
                 <h2
                   id="share-title"
-                  className="text-base font-semibold text-foreground truncate"
+                  // min-w-0 so `truncate` can actually shrink this flex child
+                  // (without it the long deck title overflows the dialog edge).
+                  className="min-w-0 truncate text-base font-semibold text-foreground"
                   title={projectTitle}
                 >
                   {tab === "share" || !showExportTab
@@ -898,7 +900,10 @@ function ShareTabContent({
               placeholder={dict.dialogs.share.emailPlaceholder}
               dir="ltr"
               disabled={inviteBusy || !state}
-              className="flex-1 bg-transparent px-4 text-end text-sm text-foreground placeholder:text-foreground/35 focus:outline-none disabled:opacity-50"
+              // min-w-0 lets the flex input shrink below its placeholder width so
+              // the chip + دعوة button never get pushed past the pill edge.
+              // max-md:text-base keeps it at 16px on phones (no iOS focus-zoom).
+              className="min-w-0 flex-1 bg-transparent px-4 text-end text-sm text-foreground placeholder:text-foreground/35 focus:outline-none disabled:opacity-50 max-md:text-base"
             />
             <AccessChipDropdown
               value={inviteRole}
@@ -1050,7 +1055,7 @@ function PersonRow({
           email (text-end under auto-LTR = right) and the Arabic
           status string (text-end under RTL = left) to disagree —
           the visual right edge was the spec, so pin it physically. */}
-      <div className="min-w-0 flex-1 text-end">
+      <div className="min-w-0 flex-1 text-right">
         <div className="truncate text-sm text-foreground">{displayName}</div>
         <div className="truncate text-[11px] text-foreground/40">{email}</div>
       </div>
