@@ -2844,8 +2844,8 @@ export const deckGenerate = inngest.createFunction(
     // for N). The ledger clamps the charge to the held amount, so the
     // user can never pay more than the estimate they were shown.
     // Idempotent per jobId; legacy uncharged jobs return not_found.
-    await step.run("credit-settle", async () => {
-      if (!jobId) return;
+    const settleCharged = await step.run("credit-settle", async () => {
+      if (!jobId) return 0;
       // Price on the preset actually used, DB-aware: an admin-added preset is
       // valid even though it isn't in the bundled snapshot, and the DB cost is
       // used so an admin cost edit is honoured at settle exactly as it was at
@@ -2894,7 +2894,9 @@ export const deckGenerate = inngest.createFunction(
           charged: result.charged,
           refunded: result.refunded,
         });
+        return result.charged;
       }
+      return 0;
     });
 
     // ─── Auto-refund on a USER-CANCELLED generation (owner decision
@@ -2912,6 +2914,15 @@ export const deckGenerate = inngest.createFunction(
         const pricedPreset: Quality = data.quality ?? defaultPresetKey();
         const base = creditCostFor(pricedPreset).base;
         if (base <= 0) return { refunded: 0, reason: "no-base" };
+        // Hardening (security review 2026-07-11): only refund the base if
+        // the settle ACTUALLY charged at least the base. Today every
+        // user-triggerable generation places a hold, so this always holds;
+        // the gate future-proofs against a hypothetical uncharged flow (a
+        // free-generation promo) where a keep-partial cancel would
+        // otherwise mint base credits from nothing.
+        if (settleCharged < base) {
+          return { refunded: 0, reason: "not-charged", settleCharged };
+        }
         const project = await prisma.project.findUnique({
           where: { id: projectId },
           select: { userId: true, user: { select: { role: true } } },
