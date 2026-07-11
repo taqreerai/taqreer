@@ -148,6 +148,71 @@ export async function sendReceipt(
   return deliver("receipt", input.toEmail, c.subject, html);
 }
 
+// ─── 1b. Credit refund (goodwill / cancelled generation) ──────────────
+
+const REFUND_COPY = {
+  ar: {
+    subject: `تمت إعادة نقاط إلى رصيدك - ${BR}`,
+    preheader: "أعدنا بعض النقاط إلى رصيدك.",
+    title: "أعدنا نقاطك",
+    subCancelled: `لاحظنا أنك أوقفت إنشاء عرضك قبل اكتماله، فأعدنا رسوم الإعداد إلى رصيدك. تدفع فقط مقابل الشرائح التي احتفظت بها. رصيدك الجديد جاهز للاستخدام في ${BR}.`,
+    subGoodwill: `أضفنا نقاطًا إلى رصيدك كتسوية من فريق ${BR}. رصيدك الجديد جاهز للاستخدام مباشرة.`,
+    rows: { credits: "النقاط المعادة", balance: "رصيدك الآن", date: "التاريخ" },
+    button: "افتح لوحة التحكم",
+    footer: `لأي استفسار حول رصيدك، تواصل معنا على ${SUPPORT_LINK}.`,
+  },
+  en: {
+    subject: `Credits refunded to your balance - ${BR}`,
+    preheader: "We returned some credits to your balance.",
+    title: "We refunded your credits",
+    subCancelled: `We noticed you stopped your deck before it finished, so we returned the setup fee to your balance. You only pay for the slides you kept. Your new balance is ready to use on ${BR}.`,
+    subGoodwill: `We added credits to your balance as a goodwill adjustment from the ${BR} team. Your new balance is ready to use right away.`,
+    rows: { credits: "Credits refunded", balance: "Your balance now", date: "Date" },
+    button: "Open your dashboard",
+    footer: `Questions about your balance? Reach us at ${SUPPORT_LINK}.`,
+  },
+} as const;
+
+type RefundInput = Common & {
+  credits: string;
+  reason: "cancelled" | "goodwill";
+  dateLabel: string;
+  balanceLabel: string | null;
+};
+
+// Render only (no send) - shared by sendRefund and the design-preview
+// harness so the previewed email is byte-identical to the sent one.
+export function renderRefundEmail(input: RefundInput): {
+  subject: string;
+  html: string;
+} {
+  const lang = langOf(input.locale);
+  const c = REFUND_COPY[lang];
+  const rows: { label: string; value: string }[] = [
+    { label: c.rows.credits, value: input.credits },
+  ];
+  if (input.balanceLabel)
+    rows.push({ label: c.rows.balance, value: input.balanceLabel });
+  rows.push({ label: c.rows.date, value: input.dateLabel });
+
+  const html = renderEmail({
+    lang,
+    preheader: c.preheader,
+    title: c.title,
+    subHtml: input.reason === "cancelled" ? c.subCancelled : c.subGoodwill,
+    extraHtml: summaryBlock(rows, dirOf(lang)),
+    buttonLabel: c.button,
+    buttonHref: `${input.appOrigin}/${lang}/dashboard`,
+    footerNoteHtml: c.footer,
+  });
+  return { subject: c.subject, html };
+}
+
+export async function sendRefund(input: RefundInput): Promise<SendResult> {
+  const { subject, html } = renderRefundEmail(input);
+  return deliver("refund", input.toEmail, subject, html);
+}
+
 // ─── 2. Payment failed (dunning) ──────────────────────────────────────
 
 const FAILED_COPY = {

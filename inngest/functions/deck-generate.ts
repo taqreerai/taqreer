@@ -2844,8 +2844,8 @@ export const deckGenerate = inngest.createFunction(
     // for N). The ledger clamps the charge to the held amount, so the
     // user can never pay more than the estimate they were shown.
     // Idempotent per jobId; legacy uncharged jobs return not_found.
-    await step.run("credit-settle", async () => {
-      if (!jobId) return;
+    const settleCharged = await step.run("credit-settle", async () => {
+      if (!jobId) return 0;
       // Price on the preset actually used, DB-aware: an admin-added preset is
       // valid even though it isn't in the bundled snapshot, and the DB cost is
       // used so an admin cost edit is honoured at settle exactly as it was at
@@ -2894,8 +2894,61 @@ export const deckGenerate = inngest.createFunction(
           charged: result.charged,
           refunded: result.refunded,
         });
+        return result.charged;
       }
+      return 0;
     });
+
+    // ─── Auto-refund on a USER-CANCELLED generation (owner decision
+    // 2026-07-11) ─── the flat generation BASE is the "commit to design a
+    // full deck" fee; if the user aborted with the deck kept-partial, that
+    // fee is refunded (they still pay per-slide for what they kept + any
+    // images). A visible refund, not a silent discount: it rings the bell
+    // + emails so the user sees "you stopped it, here's the setup fee back."
+    // Only fires when the settle actually charged (admin/waived runs and
+    // 0-slide cancels never reach here charged). Own step, idempotent by
+    // refundKey, best-effort - a mail/bell hiccup must never fail the run.
+    if (stoppedEarly && jobId) {
+      await step.run("refund-cancelled-base", async () => {
+        await ensureFresh();
+        const pricedPreset: Quality = data.quality ?? defaultPresetKey();
+        const base = creditCostFor(pricedPreset).base;
+        if (base <= 0) return { refunded: 0, reason: "no-base" };
+        // Hardening (security review 2026-07-11): only refund the base if
+        // the settle ACTUALLY charged at least the base. Today every
+        // user-triggerable generation places a hold, so this always holds;
+        // the gate future-proofs against a hypothetical uncharged flow (a
+        // free-generation promo) where a keep-partial cancel would
+        // otherwise mint base credits from nothing.
+        if (settleCharged < base) {
+          return { refunded: 0, reason: "not-charged", settleCharged };
+        }
+        const project = await prisma.project.findUnique({
+          where: { id: projectId },
+          select: { userId: true, user: { select: { role: true } } },
+        });
+        // Admin owners are never charged, so nothing to refund.
+        if (!project || project.user.role === "admin") {
+          return { refunded: 0, reason: "waived-or-missing" };
+        }
+        const { refundAndNotify } = await import(
+          "@/lib/credits/refund-remediation"
+        );
+        const res = await refundAndNotify({
+          userId: project.userId,
+          credits: base,
+          refundKey: `refund:cancel:${jobId}`,
+          reason: "cancelled",
+          metadata: { jobId, projectId, kind: "generation.cancelled.base" },
+        });
+        logger.info("credit_refund_cancel", {
+          jobId,
+          refunded: res.refunded,
+          alreadyRefunded: res.alreadyRefunded,
+        });
+        return res;
+      });
+    }
 
     // Images-mode (context/images.md): the deck is now saved with reserved
     // placeholder boxes; kick off the async gpt-image-2 fill. Fire-and-
@@ -2903,6 +2956,14 @@ export const deckGenerate = inngest.createFunction(
     // (the boxes just stay branded gradients), and the fill runs in its own
     // retried function (deck-images-generate). Off-mode decks never reach
     // this branch, so they remain byte-identical to before.
+    // review: ENHANCE decks skip the bake's vision revision pass (owner
+    // decision 2026-07-11): enhance is a 1:1 rebuild of a source the model
+    // already saw, decks run big (up to 75 slides), and one whole-deck
+    // review at that size would burn thousands of credits worth of tokens
+    // before the user touches the deck. The bake still freezes + gates;
+    // regen-triggered bakes keep the review (explicit authoring, subset-
+    // sized). All other flows review as before.
+    const review = data.type !== "enhance";
     if (isImagesMode(data)) {
       await inngest
         .send({
@@ -2911,7 +2972,7 @@ export const deckGenerate = inngest.createFunction(
           // the bake's read-modify-write on slideJson would otherwise race the
           // reconcile's write on the same blob (lost update). deck-images-
           // generate dispatches deck.freeze.bake on its way out when set.
-          data: { projectId, versionId, freezeAfter: true },
+          data: { projectId, versionId, freezeAfter: true, review },
         })
         .catch((err) => {
           logger.warn("deck_images_dispatch_failed", {
@@ -2930,7 +2991,7 @@ export const deckGenerate = inngest.createFunction(
         .send({
           id: `freeze:${projectId}:${versionId}`,
           name: "deck.freeze.bake",
-          data: { projectId, versionId },
+          data: { projectId, versionId, review },
         })
         .catch((err) => {
           logger.warn("deck_freeze_dispatch_failed", {

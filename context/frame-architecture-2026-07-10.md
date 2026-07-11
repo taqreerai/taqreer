@@ -152,6 +152,21 @@ SlideVersion v1 rows) - the dual-store rule.
 - Legacy decks (pre-frame): open unflattened in the existing degraded-but-
   lossless path. Pre-launch rule: disposable, no remediation.
 
+## Review scope per flow (owner decision 2026-07-11)
+
+- ENHANCE decks skip the bake's vision revision pass entirely (event flag
+  `review: false`, threaded deck-generate -> deck-images-generate ->
+  deck-freeze-bake): enhance is a 1:1 rebuild of a source the model
+  already saw, decks run up to 75 slides, and one whole-deck review at
+  that size costs more than the deck. The bake still renders once,
+  freezes, self-verifies, and pixel-gates - only the model interaction
+  (audit + shots + vision call) is skipped.
+- Regen-triggered bakes ALWAYS review, enhance decks included: a regen is
+  an explicit authoring request, subset-sized, and the review is what the
+  regen base pays for. Create / social / mimic / datasheet review as
+  before. NOTE: enhance still CHARGES the vision-layer component of the
+  preset prices (+60/+12) - flow-specific pricing is an open owner call.
+
 ## GenChat (backend-transparency feed) + the studio rail tabs
 
 - ONE continuous feed per version across generation, freeze bake, and partial

@@ -268,6 +268,7 @@ export function PreviewActionBar({
   onSave,
   horizontal = false,
   disabled = false,
+  editing = true,
 }: {
   projectId: string;
   // Phase 15.B — viewer's role on this project. Drives which toolbar
@@ -351,6 +352,12 @@ export function PreviewActionBar({
   // enables when the deck finishes. Applied as `pointer-events-none` + opacity
   // on the pill so we don't have to thread it through every button.
   disabled?: boolean;
+  // Object-editing posture. Desktop owners: always true → full toolbar. Phones
+  // (view-first): false → the object-edit tools (add-text, undo/redo, history,
+  // lock, save) are dropped so the pill fits the viewport and centers; the
+  // slide is a plain SlideRenderer there, so those controls have nothing to act
+  // on anyway. AI-instruct + comment + home stay (they work in the viewer).
+  editing?: boolean;
 }) {
   const router = useRouter();
   const dict = useDict();
@@ -545,7 +552,11 @@ export function PreviewActionBar({
         // layout or the child width-spring.
         dir={dir}
         animate={bounceControls}
-        className={`surface-card flex items-center gap-1 rounded-full p-1.5 ${
+        // On phones the full owner toolbar is wider than the viewport, so cap it
+        // to the screen and let it scroll horizontally inside its own pill (every
+        // control stays reachable). Touch devices don't fire the hover tooltips
+        // that the resulting overflow-y clip would hide, so nothing is lost.
+        className={`surface-card flex items-center gap-1 rounded-full p-1.5 max-md:w-fit max-md:max-w-[calc(100vw-1rem)] max-md:overflow-x-auto hide-scrollbar ${
           horizontal ? "flex-row" : "flex-col"
         }`}
       >
@@ -554,8 +565,10 @@ export function PreviewActionBar({
           <div className="flex items-center gap-1">
             <SegmentedToggle
               options={[
-                { value: "edit", label: dict.editor.toolbar.edit, icon: "edit" },
-                { value: "ai", label: dict.editor.toolbar.ai, icon: "auto_awesome" },
+                // Icon-only on phones (labels hidden) so the toggle stops being
+                // the pill's widest element and AI mode fits with Home visible.
+                { value: "edit", label: <span className="max-md:hidden">{dict.editor.toolbar.edit}</span>, icon: "edit" },
+                { value: "ai", label: <span className="max-md:hidden">{dict.editor.toolbar.ai}</span>, icon: "auto_awesome" },
               ]}
               value={studioMode}
               onChange={onSetStudioMode}
@@ -641,7 +654,7 @@ export function PreviewActionBar({
                         : dict.editor.toolbar.aiPlaceholderNoRegion
                     }
                     disabled={focusedSlideLocked || aiBusy}
-                    className="w-[250px] bg-transparent px-1 text-sm text-foreground outline-none placeholder:text-foreground/35 disabled:opacity-50"
+                    className="w-[min(32vw,250px)] bg-transparent px-1 text-sm text-foreground outline-none placeholder:text-foreground/35 disabled:opacity-50 max-md:text-base"
                   />
                   {/* Send (توليد) — the one mesh button. While applying it keeps
                       its exact shape; the up-arrow morphs into a spinner in place
@@ -669,8 +682,11 @@ export function PreviewActionBar({
                     </span>
                   </button>
                 </div>
-                {/* Regenerate THIS slide — clean, no-instruction redesign. */}
-                {onRegenSlide ? (
+                {/* Regenerate THIS slide — clean, no-instruction redesign.
+                    View-first (mobile): dropped so the AI slot is just the
+                    composer + send and Home stays on-screen; the instruction
+                    input covers "redesign this" via a typed prompt. */}
+                {editing && onRegenSlide ? (
                   <ToolButton
                     icon="auto_fix_high"
                     label={dict.editor.toolbar.redesignSlide}
@@ -681,14 +697,17 @@ export function PreviewActionBar({
                 {/* Regen the whole deck. Applying AI comments is NOT here
                     anymore — it lives on the obvious in-canvas button in the
                     comment overlay (user direction). This button always means
-                    "redesign the whole deck". */}
-                <ToolButton
-                  icon="autorenew"
-                  label={dict.editor.toolbar.redesignAll}
-                  running={regen.status === "running"}
-                  onClick={handleRegenerate}
-                  disabled={applying || commentMode}
-                />
+                    "redesign the whole deck". Desktop-only (view-first): a
+                    full-deck redesign is a heavy action, not a phone tap. */}
+                {editing ? (
+                  <ToolButton
+                    icon="autorenew"
+                    label={dict.editor.toolbar.redesignAll}
+                    running={regen.status === "running"}
+                    onClick={handleRegenerate}
+                    disabled={applying || commentMode}
+                  />
+                ) : null}
               </motion.div>
             ) : null}
             {/* Edit — user comments. Plain comment glyph for ALL roles now; the
@@ -709,7 +728,7 @@ export function PreviewActionBar({
               {/* Add a text box — edit-mode only, owners/edit. Leads the edit
                   cluster (it's a content-creation action, distinct from the
                   history + comment controls beside it). */}
-              {canEdit && onAddText ? (
+              {canEdit && onAddText && editing ? (
                 <ToolButton
                   icon="text_fields"
                   label={dict.editor.toolbar.addText}
@@ -722,7 +741,7 @@ export function PreviewActionBar({
                   than the always-visible shared cluster. Forced `dir=ltr` so the
                   pair always reads back-on-the-left, forward-on-the-right in BOTH
                   languages (nav controls, not locale-mirrored). */}
-              {onUndo || onRedo ? (
+              {editing && (onUndo || onRedo) ? (
                 <div dir="ltr" className="flex items-center gap-1">
                   {onUndo ? (
                     <ToolButton
@@ -765,8 +784,10 @@ export function PreviewActionBar({
 
         {/* Shared cluster (§16) — divider + History + Lock + Save, visible in
             both modes. owners/edit only (History needs onOpenHistory, Lock
-            onToggleLock). Reflows via flex as the mode content width animates. */}
-        {canEdit ? (
+            onToggleLock). Reflows via flex as the mode content width animates.
+            Dropped in the view-first (mobile) posture: history/lock/save act on
+            the object editor, which isn't mounted there. */}
+        {canEdit && editing ? (
           <div className="flex items-center gap-1">
             <ToolbarDivider horizontal={horizontal} />
             {onOpenHistory ? (

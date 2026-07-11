@@ -33,6 +33,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { PremiumBadge } from "@/components/app/PremiumBadge";
 import type { SlideFormat } from "@/lib/schema/slide";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { useSwipeNav } from "@/hooks/useSwipeNav";
 
 // Stage dimensions — driven by the actual rendered showcase WebP
 // width (800 px from thumbnail-render's THUMBNAIL_WIDTH_PX). 450 px
@@ -110,6 +111,9 @@ export function TemplateLightbox({
     () => setIndex((i) => Math.min(total - 1, i + 1)),
     [total],
   );
+
+  // Swipe the stage to change slides on touch (arrows are hidden on phones).
+  const swipe = useSwipeNav({ onNext: goNext, onPrev: goPrev, dir });
 
   // Keyboard + body-scroll lock — single effect so listeners and
   // overflow install/teardown atomically. Mirrors ProjectLightbox
@@ -201,7 +205,7 @@ export function TemplateLightbox({
               aria-modal="true"
               aria-labelledby="tpl-lbx-title"
               onClick={(e) => e.stopPropagation()}
-              style={{ maxWidth: stageWidth + STAGE_CHROME_PX }}
+              style={{ maxWidth: `min(${stageWidth + STAGE_CHROME_PX}px, calc(100vw - 2rem))` }}
               className="surface-modal pointer-events-auto flex max-h-[90vh] flex-col overflow-hidden rounded-2xl"
             >
               {/* Header */}
@@ -236,7 +240,7 @@ export function TemplateLightbox({
                   fixed-size based on the brand's format; arrows hug
                   the stage edges so they sit at a natural reach
                   distance regardless of how big the modal grows. */}
-              <div className="flex items-center gap-3 px-5 py-5">
+              <div className="flex items-center justify-center gap-3 px-3 py-5 md:px-5">
                 {/* Visual-right arrow = PREV (RTL: previous lives to
                     the right of the current slide). Mapped to "right
                     arrow" key in the keyboard handler above. */}
@@ -245,10 +249,23 @@ export function TemplateLightbox({
                   enabled={canPrev}
                   onClick={goPrev}
                   ariaLabel={dict.common.previous}
+                  // Hidden on phones: the thumbnail strip + swipe navigate there,
+                  // and dropping the two arrows lets the slide use the full width.
+                  className="max-md:hidden"
                 />
                 <div
-                  className="relative shrink-0 overflow-hidden rounded-xl bg-black/30"
-                  style={{ width: stageWidth, height: stageHeight }}
+                  {...swipe}
+                  className="relative shrink-0 overflow-hidden rounded-xl bg-black/30 touch-pan-y"
+                  // Width caps to the viewport (minus the p-4 wrapper + the
+                  // arrows/padding chrome) so the stage never overflows a phone
+                  // and crops the slide; height follows via aspect-ratio.
+                  style={{
+                    // Desktop keeps the arrows beside the stage (STAGE_CHROME_PX);
+                    // on phones they're hidden, so the stage only backs off the
+                    // p-4 wrapper + px-3 body padding and fills the modal width.
+                    width: `min(${stageWidth}px, calc(100vw - 3.5rem))`,
+                    aspectRatio: `${stageWidth} / ${stageHeight}`,
+                  }}
                 >
                   {currentSrc ? (
                     <img
@@ -279,6 +296,7 @@ export function TemplateLightbox({
                   enabled={canNext}
                   onClick={goNext}
                   ariaLabel={dict.common.next}
+                  className="max-md:hidden"
                 />
               </div>
 
@@ -376,11 +394,13 @@ function ArrowButton({
   enabled,
   onClick,
   ariaLabel,
+  className = "",
 }: {
   side: "left" | "right";
   enabled: boolean;
   onClick: () => void;
   ariaLabel: string;
+  className?: string;
 }) {
   return (
     <button
@@ -388,7 +408,7 @@ function ArrowButton({
       onClick={onClick}
       disabled={!enabled}
       aria-label={ariaLabel}
-      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-foreground/25"
+      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-foreground/70 transition-colors hover:bg-foreground/10 hover:text-foreground disabled:opacity-25 disabled:hover:bg-transparent disabled:hover:text-foreground/25 ${className}`}
     >
       <span className="material-symbols-outlined">
         {side === "left" ? "chevron_left" : "chevron_right"}

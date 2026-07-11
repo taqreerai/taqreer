@@ -99,7 +99,9 @@ const DEFAULT_PALETTE = ["#000000", "#FFFFFF"];
 // max-w-3xl container (768 px - 32 px padding - 16 px gap) / 2 ≈ 360 px.
 // Inline arbitrary value so the value is local to this file; if we
 // later promote a shared "flow card" primitive we can hoist this.
-const CARD_W_CLASS = "w-[360px]";
+// Full-width single column on phones; fixed 360px at sm+ so the desktop
+// wrapping row is preserved (see the card-row flex-col→flex-row switch below).
+const CARD_W_CLASS = "w-full sm:w-[360px]";
 // Fixed card height — pinned to /enhance's empty-state card height
 // measured live (2026-05-25, after /enhance content page polish):
 // 387 px. The static-math estimate from the section breakdown
@@ -812,7 +814,7 @@ export default function MimicFlow({
             narrows. Same responsive pattern /create + /enhance use:
             cards wrap into multiple rows when total width exceeds
             container; items-stretch still equalizes per-row heights. */}
-        <div className="flex flex-wrap items-stretch justify-center gap-4">
+        <div className="flex w-full flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-stretch sm:justify-center">
           {/* ═══════════════════════════════════════════════════════
               CONTENT CARD (DOM 1st, visual right)
               ═══════════════════════════════════════════════════════ */}

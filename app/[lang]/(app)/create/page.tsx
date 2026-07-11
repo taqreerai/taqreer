@@ -709,24 +709,16 @@ export default function CreatePage() {
           <p className="tq-subhead mt-2">{t.create.subtitle}</p>
         </header>
 
-        {/* Responsive grid — explicit breakpoints (instead of
-            auto-fit) so the layout JUMPS from 4 columns to 2 (and
-            then 1) with no 3-column intermediate. User direction
-            2026-05-26: "the next view point from the full should
-            stack 2 cards not one". Breakpoints picked from the
-            actual content-row width at each viewport (sidebar +
-            shell padding factored in):
-              • ≥ 1280 viewport → row ≥ 1184 → 4 columns fit
-              • ≥ 760  viewport → row ≥ 576  → 2 columns fit
-              • < 760  viewport → single column stack
-            `-mx-4 w-[calc(100%+2rem)]` still reclaims the parent's
-            px-4 padding for the cards row only. */}
-        <div className="flex flex-wrap justify-center gap-4">
+        {/* Card row: a single full-width column on phones (flex-col) so nothing
+            overflows the ~311px content width, switching to a centered wrapping
+            row of fixed 360px cards at sm+ (flex-wrap collapses 3→2→1 by width),
+            which preserves the desktop 3-across layout. */}
+        <div className="flex w-full flex-col gap-4 sm:flex-row sm:flex-wrap sm:justify-center">
           {/* ═══════════════════════════════════════════════════════
               CONTENT CARD (DOM 1st, visual right)
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`surface-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card flex w-full shrink-0 sm:w-[360px] ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <CardHeader icon="subject" title={t.contentCard} />
 
@@ -818,7 +810,7 @@ export default function CreatePage() {
               BRANDING CARD (DOM 2nd) — palette + one font + logo
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`surface-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card flex w-full shrink-0 sm:w-[360px] ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             {/* Mirrors CardHeader exactly (icon + title + pb-4 hairline) so
                 the separator and title sit at the same heights as the other
@@ -967,7 +959,7 @@ export default function CreatePage() {
               EXPORT SETTINGS CARD (DOM 3rd, visual left)
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`surface-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card flex w-full shrink-0 sm:w-[360px] ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <CardHeader icon="settings" title={t.outputCard} />
 

@@ -3,15 +3,11 @@
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/app/Sidebar";
+import { MobileNav } from "@/components/app/MobileNav";
 import { MagneticGlow } from "@/components/app/MagneticGlow";
 import { TopUtilityBar } from "@/components/app/TopUtilityBar";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import { stripLocale, localizedHref } from "@/lib/i18n/navigation";
-
-// §22: the sidebar is a fixed-width, always-collapsed thin rail (no expand) —
-// one chrome across the whole app. Keep this in sync with the rail's `w-[60px]`
-// in Sidebar.tsx.
-const SIDEBAR_WIDTH = 60;
 
 export function DashboardShell({
   children,
@@ -78,16 +74,20 @@ export function DashboardShell({
       window.removeEventListener("taqreer:share-revoked", onRevoked);
   }, [pathname, router, locale]);
 
+  // Padding tightens on mobile (px-4) and relaxes on desktop (md:px-8); the
+  // top padding clears the absolutely-positioned TopUtilityBar cluster.
   const contentClasses = isFlowRoute
-    ? "mx-auto max-w-[1280px] pt-10 px-8 pb-8 space-y-16"
+    // Extra bottom padding on phones so the generate CTA at the end of the flow
+    // clears the mobile browser's bottom toolbar (which overlaps the viewport).
+    ? "mx-auto max-w-[1280px] pt-8 px-4 pb-28 space-y-16 md:pt-10 md:px-8 md:pb-8"
     : isGlowRoute
       // Home: content is vertically centered, so the top icons overlap empty
       // space above it — no extra top padding needed.
-      ? "pt-10 px-8 pb-8 space-y-16"
+      ? "pt-8 px-4 pb-8 space-y-16 md:pt-10 md:px-8"
       // List pages (templates / projects / library / …): the headline sits at
       // the top, so add enough top padding to clear the absolutely-positioned
       // TopUtilityBar icons (search / theme / language).
-      : "pt-20 px-8 pb-8 space-y-16";
+      : "pt-16 px-4 pb-8 space-y-16 md:pt-20 md:px-8";
 
   // Panel background variant: flows get the static bottom glow (dots only), home
   // (+ any other glow route) gets the animated aurora, everything else is flat gray.
@@ -119,11 +119,10 @@ export function DashboardShell({
           owns the toasts; no headless mount needed. */}
 
       <main
-        className="min-h-screen text-on-background relative"
-        // +8: the rail floats 8px off the inline-start edge (Sidebar `start-2`),
-        // and we offset the content with `marginInlineStart`, so it clears the
-        // rail AND that gap in both directions.
-        style={{ marginInlineStart: `${SIDEBAR_WIDTH + 8}px`, marginInlineEnd: 0, zIndex: 1 }}
+        // `.tq-shell-main` offsets the content past the desktop rail (md+) and
+        // drops to 0 below md, where the MobileNav drawer replaces the rail.
+        className="tq-shell-main min-h-screen text-on-background relative"
+        style={{ zIndex: 1 }}
       >
         {/* §22/§24: rounded content panel floating on the dark gutter. Home gets
             the animated JS aurora + dots (tq-panel-glow); the flows get the dots
@@ -134,8 +133,9 @@ export function DashboardShell({
             <MagneticGlow glowYOffset={0.1} aurora={!isFlowRoute} />
           ) : null}
           {/* §24: search + theme + language cluster, pinned to the panel's
-              top-start corner. */}
-          <TopUtilityBar />
+              top-start corner. On mobile it also leads with the hamburger that
+              opens the MobileNav drawer (the rail is hidden below md). */}
+          <TopUtilityBar leading={<MobileNav isAdmin={isAdmin} />} />
           <div className={contentClasses}>{children}</div>
         </div>
       </main>

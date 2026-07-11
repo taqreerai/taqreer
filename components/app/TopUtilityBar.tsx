@@ -74,7 +74,7 @@ function HealthDot() {
   }[status.level];
   return (
     <Tooltip label={meta.label} placement="bottom">
-      <span className="flex h-9 items-center rounded-lg px-2.5" role="status" aria-label={meta.label}>
+      <span className="hidden h-9 items-center rounded-lg px-2.5 md:flex" role="status" aria-label={meta.label}>
         <span className={`h-2.5 w-2.5 rounded-full ${meta.dot}`} aria-hidden />
       </span>
     </Tooltip>
@@ -89,9 +89,14 @@ export function TopUtilityBar({
   // studio header puts the avatar menu here (next to the tier pill,
   // user direction 2026-06-12).
   avatar,
+  // Rendered at the very START of the start cluster (before the avatar/plan
+  // badge) - the dashboard shell passes the mobile hamburger (MobileNav) here.
+  // It's `md:hidden` internally, so the desktop bar is unchanged.
+  leading,
 }: {
   trailing?: React.ReactNode;
   avatar?: React.ReactNode;
+  leading?: React.ReactNode;
 } = {}) {
   const [searchOpen, setSearchOpen] = useState(false);
   const dict = useDict();
@@ -116,7 +121,7 @@ export function TopUtilityBar({
           RTL). `pointer-events-none` on the rail + `auto` on the buttons lets
           clicks pass through the empty stretch to the content beneath. */}
       <div
-        className="pointer-events-none absolute inset-x-0 top-3 z-30 flex items-center justify-between px-5"
+        className="pointer-events-none absolute inset-x-0 top-3 z-30 flex items-center justify-between px-3 md:px-5"
       >
         {/* Search — pinned to the inline start (right in RTL, left in LTR; the
             cluster inherits direction from the chrome locale). */}
@@ -124,25 +129,37 @@ export function TopUtilityBar({
             (user direction 2026-06-11). AR reads SEARCH | BELL | BADGE
             toward the right edge; EN mirrors. */}
         <div className="pointer-events-auto flex items-center gap-1.5">
+          {/* Mobile hamburger (md:hidden) leads the cluster on the dashboard. */}
+          {leading}
           {/* me-3 makes the avatar→tier-pill gap OPTICALLY equal to the
               pill→bell one: the pill side is gap-1.5 + its me-2 + the
               bell glyph's ~4px inset inside its padded button, while the
               avatar disc+ring fill their box edge-to-edge (user reports
               2026-06-12/13). */}
           {avatar ? <span className="me-3 flex items-center">{avatar}</span> : null}
-          <PlanBadge />
+          {/* Plan badge: in the studio (avatar present) it duplicates the avatar
+              menu's tier chip, so hide it on phones to keep Export/Share in view
+              down to 320px. The dashboard keeps it (upgrade CTA, has room). */}
+          {avatar ? (
+            <span className="hidden md:inline-flex md:items-center">
+              <PlanBadge />
+            </span>
+          ) : (
+            <PlanBadge />
+          )}
           {/* Notifications bell - this instance also boots the
               notification store + owns the live toast stack. */}
           <BellDropdown />
           {/* Home - studio header only (`avatar` is the studio signal; the
-              dashboard already has the sidebar home link). A quick exit back to
-              the dashboard, sitting next to the bell. */}
+              dashboard already has the sidebar home link). Hidden on phones,
+              where the bottom action bar already carries a "back to dashboard"
+              home button and the top-bar space is needed for Export/Share. */}
           {avatar ? (
             <Tooltip label={dict.nav.home} placement="bottom">
               <Link
                 href={localizedHref("/dashboard", locale)}
                 aria-label={dict.nav.home}
-                className="icon-hover flex h-9 w-9 items-center justify-center rounded-lg"
+                className="icon-hover hidden h-9 w-9 items-center justify-center rounded-lg md:flex"
               >
                 <span className="material-symbols-outlined text-[20px]">
                   home
@@ -155,10 +172,15 @@ export function TopUtilityBar({
               type="button"
               onClick={() => setSearchOpen(true)}
               aria-label={dict.topBar.search}
-              className="icon-hover flex h-9 items-center gap-2 rounded-lg ps-2 pe-2.5"
+              // In the dense studio top bar (avatar present) the search palette is
+              // low-value on phones, so hide it there to keep Export/Share in view.
+              // The dashboard keeps search on mobile.
+              className={`icon-hover h-9 items-center gap-2 rounded-lg ps-2 pe-2.5 ${
+                avatar ? "hidden md:flex" : "flex"
+              }`}
             >
               <span className="material-symbols-outlined text-[20px]">search</span>
-              <kbd className="rounded border border-border bg-overlay-soft px-1.5 py-0.5 font-sans text-[10px] font-medium leading-none text-muted">
+              <kbd className="hidden rounded border border-border bg-overlay-soft px-1.5 py-0.5 font-sans text-[10px] font-medium leading-none text-muted md:inline-block">
                 ⌘K
               </kbd>
             </button>
@@ -170,8 +192,20 @@ export function TopUtilityBar({
             translate icon, now a dropdown menu). */}
         <div className="pointer-events-auto flex items-center gap-1">
           <HealthDot />
-          <ThemeToggle />
-          <LanguageMenu />
+          {/* Theme + language: in the studio (avatar present) these duplicate the
+              avatar menu's controls, so hide them on phones to free room for the
+              Export/Share actions passed via `trailing`. The dashboard top bar
+              has space and keeps them visible. */}
+          <span
+            className={
+              avatar
+                ? "hidden items-center gap-1 md:flex"
+                : "flex items-center gap-1"
+            }
+          >
+            <ThemeToggle />
+            <LanguageMenu />
+          </span>
           {trailing}
         </div>
       </div>

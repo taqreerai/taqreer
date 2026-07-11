@@ -565,7 +565,9 @@ export function ShareDialog({
               <header className="flex items-center justify-between gap-3 border-b border-foreground/[0.08] px-5 py-4">
                 <h2
                   id="share-title"
-                  className="text-base font-semibold text-foreground truncate"
+                  // min-w-0 so `truncate` can actually shrink this flex child
+                  // (without it the long deck title overflows the dialog edge).
+                  className="min-w-0 truncate text-base font-semibold text-foreground"
                   title={projectTitle}
                 >
                   {tab === "share" || !showExportTab
@@ -898,7 +900,10 @@ function ShareTabContent({
               placeholder={dict.dialogs.share.emailPlaceholder}
               dir="ltr"
               disabled={inviteBusy || !state}
-              className="flex-1 bg-transparent px-4 text-end text-sm text-foreground placeholder:text-foreground/35 focus:outline-none disabled:opacity-50"
+              // min-w-0 lets the flex input shrink below its placeholder width so
+              // the chip + دعوة button never get pushed past the pill edge.
+              // max-md:text-base keeps it at 16px on phones (no iOS focus-zoom).
+              className="min-w-0 flex-1 bg-transparent px-4 text-end text-sm text-foreground placeholder:text-foreground/35 focus:outline-none disabled:opacity-50 max-md:text-base"
             />
             <AccessChipDropdown
               value={inviteRole}
@@ -1043,14 +1048,11 @@ function PersonRow({
         seedId={avatarSeedId}
         size={28}
       />
-      {/* Use PHYSICAL `text-right` (not logical `text-end`) so both
-          lines always anchor to the visual right, regardless of the
-          content's own directionality. Mixing logical `text-end`
-          with `dir="auto"` / `dir="rtl"` per-line caused the LTR
-          email (text-end under auto-LTR = right) and the Arabic
-          status string (text-end under RTL = left) to disagree —
-          the visual right edge was the spec, so pin it physically. */}
-      <div className="min-w-0 flex-1 text-end">
+      {/* Logical `text-start` so the name + email anchor to the SAME edge as the
+          avatar in both directions (right in RTL, left in LTR). The earlier
+          `text-end` resolved to the wrong edge under RTL, and physical
+          `text-right` would misalign on /en and breaks the logical-CSS rule. */}
+      <div className="min-w-0 flex-1 text-start">
         <div className="truncate text-sm text-foreground">{displayName}</div>
         <div className="truncate text-[11px] text-foreground/40">{email}</div>
       </div>

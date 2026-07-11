@@ -1,6 +1,7 @@
 {
   "nav": {
     "home": "الرئيسية",
+    "menu": "القائمة",
     "create": "إنشاء",
     "enhance": "تحسين",
     "mimic": "محاكاة",
@@ -51,7 +52,7 @@
     "share": "مشاركة",
     "export": "تصدير"
   },
-  "notifications": { "account": { "emailChangedTitle": "تم تحديث بريدك الإلكتروني", "emailChangedDesc": "بريد تسجيل الدخول الآن {email}" }, "billing": { "planChangedTitle": "تم تفعيل خطة {plan}", "planChangedDesc": "أضفنا {credits} نقطة شهرية إلى حسابك", "creditedTitle": "تمت إضافة {credits} نقطة إلى حسابك", "creditedRenewal": "تجديد الخطة", "creditedTopup": "شراء باقة شحن", "creditedWelcome": "هدية الترحيب", "paymentFailedTitle": "فشل الدفع - حدث وسيلة الدفع", "paymentFailedDesc": "سنعيد المحاولة خلال الأيام القادمة", "endingTitle": "ينتهي اشتراكك في {date}", "endingDesc": "يبقى رصيدك قابلا للاستخدام حتى ذلك الحين" },
+  "notifications": { "account": { "emailChangedTitle": "تم تحديث بريدك الإلكتروني", "emailChangedDesc": "بريد تسجيل الدخول الآن {email}" }, "billing": { "planChangedTitle": "تم تفعيل خطة {plan}", "planChangedDesc": "أضفنا {credits} نقطة شهرية إلى حسابك", "creditedTitle": "تمت إضافة {credits} نقطة إلى حسابك", "creditedRenewal": "تجديد الخطة", "creditedTopup": "شراء باقة شحن", "creditedWelcome": "هدية الترحيب", "refundTitle": "تمت إعادة {credits} نقطة إلى رصيدك", "refundCancelled": "أوقفت الإنشاء، فأعدنا رسوم الإعداد", "refundGoodwill": "تسوية من فريق taqreer.ai", "paymentFailedTitle": "فشل الدفع - حدث وسيلة الدفع", "paymentFailedDesc": "سنعيد المحاولة خلال الأيام القادمة", "endingTitle": "ينتهي اشتراكك في {date}", "endingDesc": "يبقى رصيدك قابلا للاستخدام حتى ذلك الحين" },
     "actorFallback": "أحد المتعاونين",
     "projectFallback": "أحد العروض",
     "finished": { "create": "عرضك جاهز", "enhance": "تم تحسين العرض", "mimic": "تم تطبيق نمط القالب", "datasheet": "عرض البيانات جاهز", "fallback": "عرضك جاهز" },

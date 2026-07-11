@@ -35,6 +35,7 @@ import { serializeSlideSection } from "@/lib/editor/serialize";
 import { fitArtboard } from "@/lib/editor/canvas-fit";
 import { TopUtilityBar } from "@/components/app/TopUtilityBar";
 import { UserMenu } from "@/components/app/UserMenu";
+import { MobileNav } from "@/components/app/MobileNav";
 import {
   GenImageProvider,
   type GenImageFills,
@@ -54,6 +55,7 @@ import {
 import { CancelGenerationDialog } from "@/components/preview/CancelGenerationDialog";
 import { CommentsPanel } from "@/components/preview/CommentsPanel";
 import { HeroCommentOverlay } from "@/components/preview/HeroCommentOverlay";
+import { useSwipeNav } from "@/hooks/useSwipeNav";
 import { PreviewActionBar, type StudioMode } from "@/components/slides/PreviewActionBar";
 import { StudioActions } from "./StudioActions";
 import { createClient } from "@/lib/supabase/client";
@@ -670,10 +672,20 @@ export function DeckView({
   // BOTH side panels hide (the canvas is the comment surface), so there's no
   // auto-switch to Comments — it would just be hidden anyway.
   const [navTab, setNavTab] = useState<"slides" | "comments">("slides");
+  // Phones get a VIEW-FIRST studio (view+light-edit posture): precise object
+  // dragging is a desktop experience, and a real finger on the editor iframe
+  // swallows the swipe-to-navigate gesture. So on mobile the edit-capable user
+  // lands in the plain SlideRenderer viewer (swipe works, AI-instruct + comment
+  // still work — they ride the same overlay in both layouts). `false` on the
+  // server + first client paint keeps DESKTOP identical (no editor remount); a
+  // mount effect flips it for narrow viewports (same recipe as the rail collapse
+  // below). See [[project_mobile_responsive_app]].
+  const [isMobileStudio, setIsMobileStudio] = useState(false);
   // Edit mode = the DEFAULT working surface for edit-capable users (plan §0.6 — you
   // land in the editor). Mutually exclusive with commentMode: the comment overlay
   // needs the plain SlideRenderer beneath it, so commenting temporarily wins.
-  const editMode = canEdit;
+  // Gated OFF on phones (view-first) so owners view + swipe instead of dragging.
+  const editMode = canEdit && !isMobileStudio;
   // The editor's selection SET (plan-editor §20 multi-select). Single-click → one
   // element; a marquee drag → the intersected set; bg-click / slide-change → [].
   // StylePill + LayersPanel read it; the empty array is a stable sentinel so
@@ -1745,20 +1757,50 @@ export function DeckView({
   // ── Editor rail collapse (item 11) ── Both floating rails (Slides on the
   // right, Layers on the left) collapse to a thin reopen handle and the canvas
   // reclaims the freed width. Per-rail state so each toggles independently; a
-  // narrow-viewport media query collapses/expands both. The initial value is
-  // derived in the useState initializer (the repo's set-state-in-effect rule);
-  // the effect only subscribes to later viewport changes.
-  const isNarrowViewport = () =>
-    typeof window !== "undefined" &&
-    window.matchMedia("(max-width: 1280px)").matches;
-  const [layersCollapsed, setLayersCollapsed] = useState(isNarrowViewport);
-  const [slidesCollapsed, setSlidesCollapsed] = useState(isNarrowViewport);
+  // narrow-viewport media query collapses/expands both.
+  //
+  // Seeded COLLAPSED so SSR and the first client render AGREE. Reading matchMedia
+  // in the useState initializer returned false on the server (window undefined,
+  // rails expanded) but true on a narrow client → a hydration mismatch that
+  // regenerated the whole DeckView tree + flashed on every phone load. Starting
+  // collapsed means the server already renders the correct state for the mobile
+  // majority; the mount effect swaps in the real viewport value: phones stay
+  // collapsed (no change, no flash), desktop widens to expanded.
+  // `railTransitionReady` holds the canvas margin transition off until after that
+  // first correction so the canvas doesn't slide/rescale on load.
+  const [layersCollapsed, setLayersCollapsed] = useState(true);
+  const [slidesCollapsed, setSlidesCollapsed] = useState(true);
+  const [railTransitionReady, setRailTransitionReady] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 1280px)");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLayersCollapsed(mq.matches);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSlidesCollapsed(mq.matches);
+    // Enable the margin transition one frame after the initial correction so
+    // user toggles animate but the load-time collapse/expand snaps.
+    const raf = requestAnimationFrame(() => setRailTransitionReady(true));
     const onChange = (e: MediaQueryListEvent) => {
       setLayersCollapsed(e.matches);
       setSlidesCollapsed(e.matches);
     };
+    mq.addEventListener("change", onChange);
+    return () => {
+      cancelAnimationFrame(raf);
+      mq.removeEventListener("change", onChange);
+    };
+  }, []);
+
+  // View-first switch for `isMobileStudio` — phones (< md, 768px) drop the
+  // editor iframe for the SlideRenderer viewer. Same effect-not-initializer
+  // recipe as the rail collapse above (matchMedia in a useState initializer
+  // desyncs SSR vs client and flashes); default false keeps the server + first
+  // paint on the desktop editor, so desktop never remounts.
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsMobileStudio(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setIsMobileStudio(e.matches);
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
   }, []);
@@ -1826,6 +1868,24 @@ export function DeckView({
     },
     [],
   );
+
+  // Touch swipe → prev/next slide (phones). Direction-aware via `dir` so the
+  // gesture follows the reading flow. Clamped to the slide range; navigateToSlide
+  // saves any dirty edit before flipping. The spread is gated in the JSX to the
+  // "consume" posture (see `swipeEnabled`) so it never fights the AI/comment
+  // region-draw or the editor's in-iframe object drag.
+  const deckSwipe = useSwipeNav({
+    onNext: () =>
+      navigateToSlide((prev) => {
+        const count = manifest?.slides.length ?? 0;
+        return count ? Math.min(count - 1, prev + 1) : prev;
+      }),
+    onPrev: () => navigateToSlide((prev) => Math.max(0, prev - 1)),
+    // Follow the DECK's reading flow, not the UI locale, so an Arabic-UI viewer
+    // reading an English deck still swipes LTR. Mirrors the keyboard-nav mapping
+    // (`isLtr = manifest.language === "en"`).
+    dir: (manifest?.language ?? "ar") === "en" ? "ltr" : "rtl",
+  });
 
   useEffect(() => {
     if (!currentUserId) return;
@@ -4213,13 +4273,19 @@ export function DeckView({
       // of SLIDE_NAV_WIDTH + 56 leaves a comfortable ~40px breathing gap
       // between the canvas and each panel (was +24 → only ~8px, too tight).
       // Each gutter shrinks to a thin handle when its rail is collapsed so the
-      // canvas reclaims the width (item 11). Layers (left) only mounts in edit
-      // mode, so its gutter only collapses there. `RAIL_GUTTER` (44) leaves room
-      // for the reopen handle.
+      // canvas reclaims the width (item 11). Layers (left) only mounts in EDIT
+      // mode, so in the view-first posture (editMode false, e.g. phones) there's
+      // no left panel to reserve for — the left gutter then MIRRORS the right
+      // (slides) gutter so the slide stays centered instead of getting shoved
+      // into a 336px phantom margin (which collapsed the hero to ~4px on phones).
+      // `RAIL_GUTTER` (44) leaves room for the reopen handle.
       style={{
-        marginLeft: editMode && layersCollapsed ? 44 : SLIDE_NAV_WIDTH + 56,
+        marginLeft:
+          (editMode ? layersCollapsed : slidesCollapsed)
+            ? 44
+            : SLIDE_NAV_WIDTH + 56,
         marginRight: slidesCollapsed ? 44 : SLIDE_NAV_WIDTH + 56,
-        transition: "margin 300ms ease",
+        transition: railTransitionReady ? "margin 300ms ease" : "none",
       }}
     >
       {fontAssets}
@@ -4236,6 +4302,10 @@ export function DeckView({
       <div className="fixed inset-x-0 top-0 z-40 h-0">
         <TopUtilityBar
           avatar={<UserMenu />}
+          // Mobile-only hamburger → the app nav drawer, so the editor isn't a
+          // dead end on phones (the desktop home button is hidden there). md:hidden
+          // internally, so desktop keeps the home button instead.
+          leading={<MobileNav />}
           trailing={
             !generating && exportManifest ? (
               <>
@@ -4460,6 +4530,11 @@ export function DeckView({
                   horizontal
                   // Generating: present but inert + dimmed; enables on completion.
                   disabled={generating}
+                  // View-first on phones: the object-edit tools (add-text, undo/
+                  // redo, history, lock, save) are dropped so the pill fits + stays
+                  // centered; AI-instruct, comment, home stay. Desktop = always
+                  // editing (canEdit) so the full toolbar is unchanged.
+                  editing={editMode}
                   projectId={projectId}
                   role={role}
                   studioMode={studioMode}
@@ -4662,6 +4737,15 @@ export function DeckView({
       >
         <motion.div
           ref={gridRef}
+          // Phone swipe-to-navigate. Enabled only in the "consume" posture:
+          // OFF while generating (nothing to flip to), in comment mode, and in
+          // AI mode (both draw a region on this same canvas via HeroCommentOverlay,
+          // which a horizontal swipe would hijack). In object-edit mode the slide
+          // is an iframe that captures its own touches, so margin swipes still flip
+          // safely. Non-owner viewers are always in consume posture → full swipe.
+          {...(!generating && !commentMode && studioMode !== "ai"
+            ? deckSwipe
+            : {})}
           variants={slideCardVariants}
           initial="hidden"
           animate="visible"

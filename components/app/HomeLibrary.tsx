@@ -75,7 +75,10 @@ export function HomeLibrary({
       {tab === "projects" ? (
         <ProjectsGrid
           projects={projects}
-          gridClassName="grid-cols-2 gap-x-8 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+          // Match the templates grid (MyTemplates) exactly so the two toggle
+          // tabs render as one coherent widget — one tile per row on phones,
+          // widening in lockstep to 5-up on desktop.
+          gridClassName="grid-cols-1 gap-x-8 gap-y-8 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5"
           emptyState={
             <p className="py-10 text-center text-sm text-muted">
               {dict.homeLibrary.noProjects}

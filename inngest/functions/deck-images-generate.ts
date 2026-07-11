@@ -72,7 +72,7 @@ export const deckImagesGenerate = inngest.createFunction(
     // run leaves placeholder gradients + regenerable boxes (Phase 4).
   },
   async ({ event, step, logger }) => {
-    const { projectId, versionId, freezeAfter } = event.data as {
+    const { projectId, versionId, freezeAfter, review } = event.data as {
       projectId: string;
       versionId: string;
       // FRAME decks (context/frame-architecture-2026-07-10.md): the freeze
@@ -81,6 +81,9 @@ export const deckImagesGenerate = inngest.createFunction(
       // the same blob (lost update). deck-generate sets this flag instead of
       // dispatching the bake itself; we dispatch on every exit path.
       freezeAfter?: boolean;
+      // Forwarded to deck.freeze.bake: false = skip the vision revision
+      // pass (enhance decks; owner decision 2026-07-11).
+      review?: boolean;
     };
     if (!projectId || !versionId) {
       throw new Error(
@@ -97,7 +100,7 @@ export const deckImagesGenerate = inngest.createFunction(
         .send({
           id: `freeze:${projectId}:${versionId}`,
           name: "deck.freeze.bake",
-          data: { projectId, versionId },
+          data: { projectId, versionId, review },
         })
         .catch((err) => {
           logger.warn("deck_freeze_dispatch_failed", {

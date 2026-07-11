@@ -550,6 +550,64 @@ export async function setSubscriptionBalance(args: {
 }
 
 /**
+ * Goodwill / remediation REFUND: add `amount` credits back to the
+ * subscription bucket and log `credit.refund` (+amount) so the ledger
+ * invariant holds. Refunds preferentially restore the subscription
+ * bucket (per the module policy: a refund must never convert an
+ * expiring top-up into resettable subscription credits or vice versa;
+ * this path is for goodwill credits that are NOT reversing a specific
+ * hold's exact sources - use settleHold's built-in refund for that).
+ * ADD, not set: stacks with the current balance. Idempotent per
+ * `refundKey` (a repeat with the same key is a no-op) so an Inngest
+ * retry of an auto-refund step can never double-credit.
+ */
+export async function refundCredits(args: {
+  userId: string;
+  amount: number;
+  refundKey: string;
+  reason: string;
+  metadata?: Prisma.InputJsonValue;
+  now?: Date;
+  notify?: boolean;
+}): Promise<{ refunded: number; alreadyRefunded: boolean }> {
+  const now = args.now ?? new Date();
+  if (!Number.isInteger(args.amount) || args.amount <= 0) {
+    throw new Error(
+      `[credits] refund amount must be a positive integer, got ${args.amount}`,
+    );
+  }
+  const result = await prisma.$transaction(async (tx) => {
+    await lockAccount(tx, args.userId);
+    // Idempotency: a prior refund with this key means we already paid it.
+    const prior = await tx.usageEvent.findFirst({
+      where: {
+        userId: args.userId,
+        eventType: "credit.refund",
+        metadata: { path: ["refundKey"], equals: args.refundKey },
+      },
+      select: { id: true },
+    });
+    if (prior) return { refunded: 0, alreadyRefunded: true };
+    await tx.creditAccount.update({
+      where: { userId: args.userId },
+      data: { subscriptionBalance: { increment: args.amount } },
+    });
+    await logEvent(tx, args.userId, "credit.refund", args.amount, {
+      refundKey: args.refundKey,
+      reason: args.reason,
+      ...(typeof args.metadata === "object" && args.metadata !== null
+        ? (args.metadata as Record<string, unknown>)
+        : {}),
+    });
+    return { refunded: args.amount, alreadyRefunded: false };
+  }, SERIALIZED);
+  if (!result.alreadyRefunded) {
+    await notifyBalance(args.userId, now, args.notify ?? true);
+  }
+  return result;
+}
+
+/**
  * Apply a plan's cycle grant - used on purchase/upgrade (immediate new
  * allotment, paid now) and by the renewal path. Sets, not adds: the
  * subscription bucket becomes exactly the tier allotment (no rollover).
