@@ -55,6 +55,7 @@ import {
 import { CancelGenerationDialog } from "@/components/preview/CancelGenerationDialog";
 import { CommentsPanel } from "@/components/preview/CommentsPanel";
 import { HeroCommentOverlay } from "@/components/preview/HeroCommentOverlay";
+import { useSwipeNav } from "@/hooks/useSwipeNav";
 import { PreviewActionBar, type StudioMode } from "@/components/slides/PreviewActionBar";
 import { StudioActions } from "./StudioActions";
 import { createClient } from "@/lib/supabase/client";
@@ -1843,6 +1844,24 @@ export function DeckView({
     },
     [],
   );
+
+  // Touch swipe → prev/next slide (phones). Direction-aware via `dir` so the
+  // gesture follows the reading flow. Clamped to the slide range; navigateToSlide
+  // saves any dirty edit before flipping. The spread is gated in the JSX to the
+  // "consume" posture (see `swipeEnabled`) so it never fights the AI/comment
+  // region-draw or the editor's in-iframe object drag.
+  const deckSwipe = useSwipeNav({
+    onNext: () =>
+      navigateToSlide((prev) => {
+        const count = manifest?.slides.length ?? 0;
+        return count ? Math.min(count - 1, prev + 1) : prev;
+      }),
+    onPrev: () => navigateToSlide((prev) => Math.max(0, prev - 1)),
+    // Follow the DECK's reading flow, not the UI locale, so an Arabic-UI viewer
+    // reading an English deck still swipes LTR. Mirrors the keyboard-nav mapping
+    // (`isLtr = manifest.language === "en"`).
+    dir: (manifest?.language ?? "ar") === "en" ? "ltr" : "rtl",
+  });
 
   useEffect(() => {
     if (!currentUserId) return;
@@ -4683,6 +4702,15 @@ export function DeckView({
       >
         <motion.div
           ref={gridRef}
+          // Phone swipe-to-navigate. Enabled only in the "consume" posture:
+          // OFF while generating (nothing to flip to), in comment mode, and in
+          // AI mode (both draw a region on this same canvas via HeroCommentOverlay,
+          // which a horizontal swipe would hijack). In object-edit mode the slide
+          // is an iframe that captures its own touches, so margin swipes still flip
+          // safely. Non-owner viewers are always in consume posture → full swipe.
+          {...(!generating && !commentMode && studioMode !== "ai"
+            ? deckSwipe
+            : {})}
           variants={slideCardVariants}
           initial="hidden"
           animate="visible"

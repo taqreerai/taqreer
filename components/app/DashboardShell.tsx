@@ -77,7 +77,9 @@ export function DashboardShell({
   // Padding tightens on mobile (px-4) and relaxes on desktop (md:px-8); the
   // top padding clears the absolutely-positioned TopUtilityBar cluster.
   const contentClasses = isFlowRoute
-    ? "mx-auto max-w-[1280px] pt-8 px-4 pb-8 space-y-16 md:pt-10 md:px-8"
+    // Extra bottom padding on phones so the generate CTA at the end of the flow
+    // clears the mobile browser's bottom toolbar (which overlaps the viewport).
+    ? "mx-auto max-w-[1280px] pt-8 px-4 pb-28 space-y-16 md:pt-10 md:px-8 md:pb-8"
     : isGlowRoute
       // Home: content is vertically centered, so the top icons overlap empty
       // space above it — no extra top padding needed.

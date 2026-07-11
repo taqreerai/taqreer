@@ -549,7 +549,7 @@ export function PreviewActionBar({
         // to the screen and let it scroll horizontally inside its own pill (every
         // control stays reachable). Touch devices don't fire the hover tooltips
         // that the resulting overflow-y clip would hide, so nothing is lost.
-        className={`surface-card flex items-center gap-1 rounded-full p-1.5 max-md:max-w-[calc(100vw-1rem)] max-md:overflow-x-auto hide-scrollbar ${
+        className={`surface-card flex items-center gap-1 rounded-full p-1.5 max-md:w-fit max-md:max-w-[calc(100vw-1rem)] max-md:overflow-x-auto hide-scrollbar ${
           horizontal ? "flex-row" : "flex-col"
         }`}
       >
