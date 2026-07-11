@@ -693,7 +693,7 @@
     "comingSoon": { "title": "Coming soon", "body": "We are building something special. Taqreer is launching soon." },
     "hero": {
       "statusCount": "More than {count} presentations created so far",
-      "poweredBy": "Powered by Claude",
+      "poweredBy": "The best platform for designing Arabic presentations",
       "titleLine1": "Design presentations",
       "titleLine2": "with AI",
       "subtitle": "taqreer.ai turns your ideas and files into designed presentations and reports with AI, in Arabic and English, while keeping your brand identity, with an advanced editor to fine-tune every slide.",
