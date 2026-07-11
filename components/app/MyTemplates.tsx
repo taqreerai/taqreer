@@ -45,9 +45,12 @@ export function MyTemplates({
   // §22: when embedded (inside HomeLibrary's toggle), render only the grid +
   // lightbox — no card wrapper, no header (the host card owns those).
   embedded = false,
+  viewerIsAdmin = false,
 }: {
   templates: MyTemplatesTemplate[];
   embedded?: boolean;
+  // Admins get the 3-dots Delete affordance on every tile, not just their own.
+  viewerIsAdmin?: boolean;
 }) {
   const dict = useDict();
   const { dir, locale } = useLocale();
@@ -122,6 +125,7 @@ export function MyTemplates({
             <li key={tpl.id}>
               <TemplateTile
                 template={tpl}
+                viewerIsAdmin={viewerIsAdmin}
                 onClick={() => {
                   // Skip if showcase render hasn't completed yet —
                   // opening the lightbox would show an empty stage.

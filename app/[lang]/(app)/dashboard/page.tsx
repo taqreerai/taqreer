@@ -54,6 +54,7 @@ export default async function DashboardPage({
       id: true,
       email: true,
       name: true,
+      role: true,
       creditAccount: { select: { signupGrantedAt: true } },
     },
   });
@@ -228,7 +229,11 @@ export default async function DashboardPage({
 
       {/* §22: bottom "library" card — always-visible toggle (مشاريعي ⇄ القوالب)
           over the matching grid. */}
-      <HomeLibrary projects={homeProjects} templates={templateTiles} />
+      <HomeLibrary
+        projects={homeProjects}
+        templates={templateTiles}
+        viewerIsAdmin={dbUser.role === "admin"}
+      />
     </div>
   );
 }

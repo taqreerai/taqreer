@@ -67,6 +67,7 @@ export function TemplateTile({
   template,
   onClick,
   href,
+  viewerIsAdmin = false,
 }: {
   template: TemplateTileData;
   // If provided, the tile becomes a <button>; the lightbox opens at
@@ -75,6 +76,11 @@ export function TemplateTile({
   // If provided (and `onClick` is not), the tile becomes a <Link>.
   // Dashboard widget passes "/templates" so a tap routes through.
   href?: string;
+  // True when the viewing user is an admin. Admins get the 3-dots menu on
+  // EVERY tile (not just their own) with a Delete action, so they can remove
+  // any user's template. Owner-only actions (publish toggle, use-as-template)
+  // still render only on the admin's own tiles. Server-enforced regardless.
+  viewerIsAdmin?: boolean;
 }) {
   const router = useRouter();
   const dict = useDict();
@@ -131,6 +137,9 @@ export function TemplateTile({
   };
 
   const { brand, isMine, id, thumbnailUrls, isPremium } = template;
+  // Admins manage every tile (delete any user's template); owners manage
+  // their own. Drives whether the 3-dots trigger + menu render at all.
+  const canManage = isMine || viewerIsAdmin;
   const primary = brand.palette[0] ?? brand.text;
   const secondary = brand.palette[1] ?? brand.text;
   const accent = brand.palette[2] ?? primary;
@@ -342,7 +351,7 @@ export function TemplateTile({
     <div className="group relative">
       {clickableTile}
 
-      {isMine ? (
+      {canManage ? (
         <button
           ref={triggerRef}
           type="button"
@@ -375,16 +384,20 @@ export function TemplateTile({
         </button>
       ) : null}
 
-      {isMine ? (
+      {canManage ? (
         <>
           <TemplateActionsMenu
             open={menuRect !== null}
             triggerRect={menuRect}
             templateId={id}
             reviewStatus={statusLocal}
+            // Owner-only actions (publish toggle, use-as-template) render only
+            // on the viewer's own tiles. An admin on someone else's tile gets
+            // Delete only.
+            ownerActions={isMine}
             onClose={closeMenu}
-            onToggleVisibility={handleToggleVisibility}
-            onUseAsTemplate={handleUseAsTemplate}
+            onToggleVisibility={isMine ? handleToggleVisibility : undefined}
+            onUseAsTemplate={isMine ? handleUseAsTemplate : undefined}
             onDelete={() => setDeleteOpen(true)}
           />
           <TemplateDeleteConfirmDialog

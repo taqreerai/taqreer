@@ -49,6 +49,7 @@ export function TemplateActionsMenu({
   triggerRect,
   templateId,
   reviewStatus,
+  ownerActions = true,
   onClose,
   onToggleVisibility,
   onUseAsTemplate,
@@ -65,6 +66,10 @@ export function TemplateActionsMenu({
   // menu item: PRIVATE => "submit for review", PENDING => "cancel request",
   // APPROVED => "make private".
   reviewStatus: "PRIVATE" | "PENDING" | "APPROVED";
+  // When false, the owner-only items (publish toggle + use-as-template) are
+  // hidden and the menu shows Delete only — the admin-on-another-user's-tile
+  // case, where the only meaningful action is removing the template.
+  ownerActions?: boolean;
   onClose: () => void;
 } & TemplateActionsMenuActions) {
   const dict = useDict();
@@ -148,38 +153,44 @@ export function TemplateActionsMenu({
           style={{ top, bottom, left, width: MENU_WIDTH }}
         >
           <ul className="flex flex-col p-1.5">
-            <MenuItem
-              icon={
-                reviewStatus === "APPROVED"
-                  ? "lock"
-                  : reviewStatus === "PENDING"
-                    ? "hourglass_top"
-                    : "public"
-              }
-              label={
-                reviewStatus === "APPROVED"
-                  ? dict.menus.templateActions.makePrivate
-                  : reviewStatus === "PENDING"
-                    ? dict.menus.templateActions.cancelReview
-                    : dict.menus.templateActions.submitReview
-              }
-              onClick={onToggleVisibility}
-              closeAfter
-              onClose={onClose}
-            />
-            {/* Use-as-template (Phase D wired 2026-05-22). When the
-                parent doesn't pass onUseAsTemplate, falls back to the
-                disabled placeholder so the row stays greppable + the
-                menu's vertical rhythm is stable. */}
-            <MenuItem
-              icon="dashboard_customize"
-              label={dict.menus.templateActions.useAsTemplate}
-              onClick={onUseAsTemplate}
-              disabled={!onUseAsTemplate}
-              closeAfter
-              onClose={onClose}
-            />
-            <li aria-hidden className="my-1 h-px bg-foreground/[0.08]" />
+            {/* Owner-only actions. Hidden for an admin acting on someone
+                else's template, where only Delete applies. */}
+            {ownerActions ? (
+              <>
+                <MenuItem
+                  icon={
+                    reviewStatus === "APPROVED"
+                      ? "lock"
+                      : reviewStatus === "PENDING"
+                        ? "hourglass_top"
+                        : "public"
+                  }
+                  label={
+                    reviewStatus === "APPROVED"
+                      ? dict.menus.templateActions.makePrivate
+                      : reviewStatus === "PENDING"
+                        ? dict.menus.templateActions.cancelReview
+                        : dict.menus.templateActions.submitReview
+                  }
+                  onClick={onToggleVisibility}
+                  closeAfter
+                  onClose={onClose}
+                />
+                {/* Use-as-template (Phase D wired 2026-05-22). When the
+                    parent doesn't pass onUseAsTemplate, falls back to the
+                    disabled placeholder so the row stays greppable + the
+                    menu's vertical rhythm is stable. */}
+                <MenuItem
+                  icon="dashboard_customize"
+                  label={dict.menus.templateActions.useAsTemplate}
+                  onClick={onUseAsTemplate}
+                  disabled={!onUseAsTemplate}
+                  closeAfter
+                  onClose={onClose}
+                />
+                <li aria-hidden className="my-1 h-px bg-foreground/[0.08]" />
+              </>
+            ) : null}
             <MenuItem
               icon="delete"
               label={dict.menus.templateActions.delete}

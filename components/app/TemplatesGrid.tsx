@@ -36,6 +36,9 @@ type Props = {
   padTo?: number;
   staggerKey?: string | number;
   emptyState: React.ReactNode;
+  // Admins get the 3-dots Delete affordance on every tile (not just their
+  // own), so they can remove any user's template from the browse grid.
+  viewerIsAdmin?: boolean;
   // Fires when the user clicks a tile — parent opens TemplateLightbox
   // with the clicked template's data.
   onOpen: (template: TemplateForBrowse) => void;
@@ -54,6 +57,7 @@ export function TemplatesGrid({
   padTo,
   staggerKey,
   emptyState,
+  viewerIsAdmin = false,
   onOpen,
   selection,
 }: Props) {
@@ -82,6 +86,7 @@ export function TemplatesGrid({
           >
           <TemplateTile
             template={tpl}
+            viewerIsAdmin={viewerIsAdmin}
             // Skip opening the lightbox if showcase render hasn't
             // completed yet (no slides to show). Phase D will add a
             // "rendering…" overlay on the tile so this case is

@@ -25,9 +25,12 @@ type Tab = "projects" | "templates";
 export function HomeLibrary({
   projects,
   templates,
+  viewerIsAdmin = false,
 }: {
   projects: ProjectsGridProject[];
   templates: MyTemplatesTemplate[];
+  // Admins can delete any template from the widget's grid.
+  viewerIsAdmin?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("templates");
   const dict = useDict();
@@ -86,7 +89,7 @@ export function HomeLibrary({
           }
         />
       ) : (
-        <MyTemplates templates={templates} embedded />
+        <MyTemplates templates={templates} viewerIsAdmin={viewerIsAdmin} embedded />
       )}
     </div>
   );

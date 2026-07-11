@@ -39,11 +39,14 @@ export default async function TemplatesPage({
 
   const dbUser = await prisma.user.findFirst({
     where: { supabaseUserId: user.id },
-    select: { id: true },
+    select: { id: true, role: true },
   });
   if (!dbUser) {
     redirect(`/${lang}/login?next=/${lang}/templates`);
   }
+  // Admins get the Delete affordance on every tile (server-enforced in the
+  // DELETE route via isAdminSupabaseUser).
+  const viewerIsAdmin = dbUser.role === "admin";
 
   const selectShape = {
     id: true,
@@ -90,6 +93,7 @@ export default async function TemplatesPage({
       templates={all}
       ownCount={own.length}
       communityCount={community.length}
+      viewerIsAdmin={viewerIsAdmin}
     />
   );
 }

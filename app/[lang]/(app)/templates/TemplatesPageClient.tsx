@@ -49,10 +49,13 @@ export function TemplatesPageClient({
   templates,
   ownCount,
   communityCount,
+  viewerIsAdmin = false,
 }: {
   templates: TemplateForBrowse[];
   ownCount: number;
   communityCount: number;
+  // Admins can delete any template from the grid (3-dots on every tile).
+  viewerIsAdmin?: boolean;
 }) {
   const dict = useDict();
   const t = dict.pages.templates;
@@ -261,6 +264,7 @@ export function TemplatesPageClient({
         <TemplatesGrid
           selection={{ active: sel.active, selected: sel.selected, onToggle: sel.toggle }}
           templates={paginated}
+          viewerIsAdmin={viewerIsAdmin}
           padTo={PAGE_SIZE}
           staggerKey={activePage}
           gridClassName="grid-cols-2 gap-x-10 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
