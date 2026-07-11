@@ -126,6 +126,12 @@ type ExtractCompletedResult = {
   pageCount: number;
   format: "16:9" | "9:16";
   language: "ar" | "en" | null;
+  // The content PDF's extracted text layer (2026-07-11). Present +
+  // non-empty for a normal text PDF; absent/empty for a scanned PDF.
+  // When present, /mimic sends the content as TEXT (userContent) instead
+  // of a vision document block, so Claude reads FACTS not the document's
+  // own layout. Empty → fall back to the vision block.
+  fullText?: string;
 };
 
 type ExtractStatusResponse =
@@ -694,16 +700,32 @@ export default function MimicFlow({
         },
       };
 
+      // Content file: PREFER its extracted TEXT (2026-07-11). When the
+      // content PDF has a text layer, send it as `userContent` and drop
+      // `uglyAnthropicFileId` — the content then rides the text path (no
+      // vision document block), so Claude reads the FACTS and cannot
+      // reproduce the source document's own boxes/layout as content, and
+      // keeps its ORIGINAL LANGUAGE. Scanned/image-only PDFs extract no
+      // text → fall back to the vision-block path (uglyAnthropicFileId).
+      const contentFileText = contentExtracted?.fullText?.trim() ?? "";
+      const contentFonts = [
+        ...designExtracted.fonts,
+        ...(contentExtracted?.fonts ?? []),
+      ];
       const source: SourceMeta = contentFileReady
-        ? {
-            kind: "mimic",
-            uglyAnthropicFileId: contentExtracted!.anthropicFileId,
-            designAnthropicFileId: designExtracted.anthropicFileId,
-            fonts: [
-              ...designExtracted.fonts,
-              ...(contentExtracted?.fonts ?? []),
-            ],
-          }
+        ? contentFileText
+          ? {
+              kind: "mimic",
+              userContent: contentFileText,
+              designAnthropicFileId: designExtracted.anthropicFileId,
+              fonts: contentFonts,
+            }
+          : {
+              kind: "mimic",
+              uglyAnthropicFileId: contentExtracted!.anthropicFileId,
+              designAnthropicFileId: designExtracted.anthropicFileId,
+              fonts: contentFonts,
+            }
         : {
             kind: "mimic",
             userContent: contentText.trim(),
@@ -832,6 +854,15 @@ export default function MimicFlow({
             />
 
             <CardHeader icon="subject" title={dict.flows.contentCard} />
+
+            {/* Verbatim promise: the content is used as-is in its own
+                language; the design file governs only the look. Sets the
+                expectation that mimic never translates or reflows the
+                content into the reference's structure (owner direction
+                2026-07-11). */}
+            <p className="text-muted -mt-1 mb-1 text-[11px] leading-snug">
+              {dict.flows.mimicVerbatimNote}
+            </p>
 
             {/* Textarea — primary content input. Disabled while a
                 file is picked; the two are mutually exclusive.

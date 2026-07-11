@@ -1268,7 +1268,7 @@ function buildSourceTextDirective(
     lines.push(
       `${refClause} Create a deck with the same visual direction as the reference, but use the brand variables: colour \`var(--brand-1)\`…\`var(--brand-N)\` and type \`var(--font-heading)\` / \`var(--font-body)\`.`,
       ``,
-      `CONTENT FIDELITY (two hard limits): (1) Never invent — every number, name, claim, and fact on a slide must come from the source; do not add statistics, examples, or detail that isn't there. (2) Never drop real information — every distinct fact in the source must survive somewhere in the deck; you may relocate, compress, or reword it, but not delete it.`,
+      `CONTENT FIDELITY (three hard limits): (1) Never invent — every number, name, claim, and fact on a slide must come from the source; do not add statistics, examples, or detail that isn't there. (2) Never drop real information — every distinct fact in the source must survive somewhere in the deck; you may relocate, compress, or reword it, but not delete it. (3) Use the content VERBATIM in its ORIGINAL LANGUAGE — do NOT translate or transliterate. The reference document may be in a different language; that governs the LOOK only, never the words.`,
     );
 
     if (hasContentText) {

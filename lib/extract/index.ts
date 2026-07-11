@@ -36,7 +36,9 @@ import { pptxToPdf, docxToPdf } from "./pptx-to-pdf";
 import { extractFontsFromPptx } from "./fonts-pptx";
 import { extractColorsFromPptx } from "./colors-pptx";
 import { detectPptxLanguage } from "./language-pptx";
+import { detectStringLanguage } from "./language-text";
 import { extractTextPerSlide } from "./text-pptx";
+import { pdfToText } from "./pdf-to-text";
 
 // ─── Public types ─────────────────────────────────────────────────
 
@@ -80,21 +82,27 @@ export type ExtractionResult = {
   colors: string[];
   /**
    * Detected dominant language of the source file. PPTX inputs go
-   * through `detectPptxLanguage()` (zip text sampling). PDF inputs
-   * return null — no zip to walk, and PDF text extraction would
-   * need a separate dep. Threaded into the brief so the generating-
-   * phase preview UI (SlideNavSidebar direction + lang) matches the
-   * source from the first paint instead of defaulting to Arabic
-   * and switching mid-stream when Claude emits the manifest.
+   * through `detectPptxLanguage()` (zip text sampling); PDF inputs now
+   * go through `pdfToText()` + `detectStringLanguage()` (2026-07-11 —
+   * previously null, which silently defaulted /mimic to Arabic and
+   * translated English content). Threaded into the brief so the deck's
+   * language/direction follow the SOURCE from the first paint.
    */
   language: "ar" | "en" | null;
   /**
    * Verbatim text per slide in PRESENTATION order (PPTX only — empty
-   * for PDFs until the PDF text-layer path lands). Index `i` maps to
-   * rendered page `i + 1`. Fed to Claude per slide so the redesign
-   * reproduces content word-for-word.
+   * for PDFs). Index `i` maps to rendered page `i + 1`. Fed to Claude
+   * per slide so the /enhance redesign reproduces content word-for-word.
    */
   textPerSlide: string[];
+  /**
+   * The whole PDF's text layer as one string (2026-07-11). Empty for
+   * PPTX (use textPerSlide) and for scanned/image-only PDFs (no text
+   * layer). /mimic inlines this as the content instead of attaching the
+   * PDF as a vision block, so Claude reads FACTS and can't reproduce the
+   * source document's own boxes/layout as content.
+   */
+  fullText: string;
 };
 
 // ─── Public API ────────────────────────────────────────────────────
@@ -145,6 +153,7 @@ export async function extract(
   let themeColors: string[] | null = null;
   let language: "ar" | "en" | null = null;
   let textPerSlide: string[] = [];
+  let fullText = "";
   if (isPptx) {
     const [fontsResult, colorsResult, langResult, textResult] =
       await Promise.allSettled([
@@ -157,6 +166,21 @@ export async function extract(
     if (colorsResult.status === "fulfilled") themeColors = colorsResult.value;
     if (langResult.status === "fulfilled") language = langResult.value;
     if (textResult.status === "fulfilled") textPerSlide = textResult.value;
+  } else if (isPdf || isDocx) {
+    // PDF (native) + DOCX (already converted to pdfBytes above) text
+    // layer → language + the full content text. Best-effort like the
+    // PPTX extractors: a poppler hiccup or a scanned/image-only PDF
+    // (no text layer) leaves language null + fullText "" and the flow
+    // falls back to the vision document block. 2026-07-11.
+    try {
+      const text = await pdfToText(pdfBytes);
+      if (text) {
+        fullText = text;
+        language = detectStringLanguage(text);
+      }
+    } catch {
+      /* no text layer / poppler blip → vision-block fallback */
+    }
   }
 
   // Step 3: read PDF metadata for slide count + format.
@@ -196,5 +220,6 @@ export async function extract(
     colors: themeColors ?? [],
     language,
     textPerSlide,
+    fullText,
   };
 }

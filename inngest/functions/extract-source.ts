@@ -94,6 +94,13 @@ type ExtractCompletedOutput = {
    */
   textPerSlide: string[];
   /**
+   * The whole PDF's text layer (2026-07-11). Empty for PPTX + scanned
+   * PDFs. /mimic forwards this as the content text so Claude reads the
+   * FACTS, not a picture of the source document's layout. Absent field
+   * (older in-flight jobs) → the client keeps the vision-block path.
+   */
+  fullText?: string;
+  /**
    * Supabase staging object key + MIME of the ORIGINAL upload.
    * deck-generate re-fetches it to rasterize the per-slide PNGs at
    * generation time (transient — flushed after the run).
@@ -245,6 +252,7 @@ async function runExtractionPipeline(args: {
     format: ext.format,
     language: ext.language,
     textPerSlide: ext.textPerSlide,
+    fullText: ext.fullText,
     // Re-fetch keys for generation-time rasterization (transient).
     sourcePath: fileBucketPath,
     sourceMime: mime,

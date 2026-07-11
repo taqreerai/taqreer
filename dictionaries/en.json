@@ -527,6 +527,7 @@
     "langArabic": "Arabic",
     "langEnglish": "English",
     "contentPlaceholder": "Write your presentation content here...",
+    "mimicVerbatimNote": "Your content is used as-is, in its original language. The design file sets the look only.",
     "or": "or",
     "dropTitle": "Drag or click to choose a file",
     "dropSubtitle": "PDF / PPTX / DOCX · up to 100 MB",
