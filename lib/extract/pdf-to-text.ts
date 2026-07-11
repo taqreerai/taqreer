@@ -56,8 +56,12 @@ const CANDIDATE_BINS = [
  * (scanned/image-only) — callers treat "" as "fall back to vision".
  *
  * Throws with a clear, install-guidance message when poppler isn't on the
- * host (caller wraps as NonRetriableError so Inngest doesn't loop). Other
- * failures (timeout, malformed PDF) throw with the CLI's message.
+ * host; other failures (timeout, malformed PDF) throw with the CLI's
+ * message. Callers decide how to handle it: the /mimic + language path in
+ * lib/extract/index.ts logs and DEGRADES to the vision document block (a
+ * best-effort enrichment must never fail the whole extraction), whereas a
+ * caller that hard-requires the text layer should surface it as a
+ * NonRetriableError so Inngest doesn't loop.
  */
 export async function pdfToText(pdfBuffer: Buffer): Promise<string> {
   const workDir = await mkdtemp(path.join(tmpdir(), "taqreer-pdftxt-"));

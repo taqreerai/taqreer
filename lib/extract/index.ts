@@ -178,8 +178,13 @@ export async function extract(
         fullText = text;
         language = detectStringLanguage(text);
       }
-    } catch {
-      /* no text layer / poppler blip → vision-block fallback */
+    } catch (err) {
+      // A missing text layer returns "" (no throw); reaching here means a
+      // REAL failure - poppler missing on the host, a malformed PDF, or a
+      // timeout. Non-fatal (we fall back to the vision document block), but
+      // LOG it: a silently-degraded prod (e.g. poppler uninstalled) would
+      // otherwise regress language + text fidelity with no signal.
+      console.error("[extract] pdfToText failed, falling back to vision:", err);
     }
   }
 
