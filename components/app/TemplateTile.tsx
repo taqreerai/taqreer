@@ -18,7 +18,7 @@
 // 3-dots button at all — those actions don't apply to someone else's
 // template.
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TemplateActionsMenu } from "@/components/app/TemplateActionsMenu";
@@ -88,10 +88,14 @@ export function TemplateTile({
   const canonicalStatus =
     template.reviewStatus ?? (template.isPublic ? "APPROVED" : "PRIVATE");
   const [statusLocal, setStatusLocal] = useState(canonicalStatus);
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical "resync local mirror when canonical prop changes" shape; useMemo can't store mutable local state for the optimistic toggle case
+  // Resync the mirror during render (not a mount effect) when the canonical
+  // prop changes — React's recommended "adjust state on prop change" shape,
+  // which also keeps us clear of the repo's set-state-in-effect ban.
+  const [prevCanonicalStatus, setPrevCanonicalStatus] = useState(canonicalStatus);
+  if (canonicalStatus !== prevCanonicalStatus) {
+    setPrevCanonicalStatus(canonicalStatus);
     setStatusLocal(canonicalStatus);
-  }, [canonicalStatus]);
+  }
 
   // Menu trigger state. menuRect = null means menu closed.
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -106,6 +110,11 @@ export function TemplateTile({
   // two seed requests + two router.push calls (which would race the
   // sessionStorage write against the next page's hydrate).
   const [useBusy, setUseBusy] = useState(false);
+
+  // Visibility-toggle busy gate. Blocks overlapping PATCHes from rapid
+  // re-clicks (reopen menu -> click again before the first resolves), whose
+  // responses could otherwise settle out of order.
+  const [visibilityBusy, setVisibilityBusy] = useState(false);
 
   const handleUseAsTemplate = async () => {
     if (useBusy) return;
@@ -133,11 +142,13 @@ export function TemplateTile({
   const cover = slides[scrub.displayIndex] ?? null;
 
   const handleToggleVisibility = async () => {
+    if (visibilityBusy) return;
     const prevStatus = statusLocal;
     // PRIVATE -> request review (enters the admin queue as PENDING).
     // PENDING or APPROVED -> withdraw back to PRIVATE. Publishing is never
     // self-service, so we only ever send a request; the server sets PENDING.
     const wantPublic = prevStatus === "PRIVATE";
+    setVisibilityBusy(true);
     setStatusLocal(wantPublic ? "PENDING" : "PRIVATE"); // optimistic
     try {
       const res = await fetch(
@@ -161,6 +172,8 @@ export function TemplateTile({
     } catch (err) {
       setStatusLocal(prevStatus);
       console.warn("[TemplateTile] visibility PATCH error", err);
+    } finally {
+      setVisibilityBusy(false);
     }
   };
 

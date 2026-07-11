@@ -288,7 +288,11 @@ export function TemplatesClient({
   const review = async (id: string, decision: "approve" | "reject") => {
     setError(null);
     setReviewBusyId(id);
-    const snapshot = pending;
+    // Capture only the reverted item, not the whole array: re-inserting just
+    // this card on failure (via a functional update) leaves any other
+    // concurrent in-flight review's optimistic change intact, where a
+    // whole-array snapshot restore could clobber it.
+    const reverted = pending.find((p) => p.id === id);
     // Optimistic: drop the card immediately.
     setPending((prev) => prev.filter((p) => p.id !== id));
     try {
@@ -299,7 +303,11 @@ export function TemplatesClient({
       });
       if (!res.ok) throw new Error("review failed");
     } catch {
-      setPending(snapshot);
+      if (reverted) {
+        setPending((prev) =>
+          prev.some((p) => p.id === id) ? prev : [reverted, ...prev],
+        );
+      }
       setError(SAVE_ERROR);
     } finally {
       setReviewBusyId(null);

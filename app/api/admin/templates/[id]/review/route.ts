@@ -63,9 +63,17 @@ export async function POST(
 
   // An approval makes the template visible in the in-app community feed +
   // dashboard widget, so bust the cached template surfaces. A rejection never
-  // changed public state, so skip the purge.
+  // changed public state, so skip the purge. Failure-isolated: the transition
+  // already committed, so a purge error must not 500 the response (a retry
+  // would then hit 409 not_pending) - log and carry on, matching the
+  // save-as-template route's best-effort side-effect precedent.
   if (decision === "approve") {
-    await revalidateTemplateSurfaces();
+    await revalidateTemplateSurfaces().catch((err) => {
+      console.error(
+        "[admin/templates/review] revalidateTemplateSurfaces failed:",
+        err,
+      );
+    });
   }
 
   return NextResponse.json({ ok: true, decision });
