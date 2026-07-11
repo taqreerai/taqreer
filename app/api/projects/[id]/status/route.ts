@@ -1,12 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
-import {
-  listWarmedImageFiles,
-  publicGeneratedImageUrl,
-  genImageHash,
-  genImageFileName,
-} from "@/lib/images/store";
+import { resolveGenImageFills } from "@/lib/images/resolve-fills";
 import { scanGenImages } from "@/lib/images/slide-images";
 
 type Progress = {
@@ -302,62 +297,22 @@ export async function GET(
   // image the instant the warm fill lands.
   let imageFills: Record<string, string> | null = null;
   if (includeImageFills) {
-    imageFills = {};
     // genid → prompt for every reserved box the client is rendering. Canonical
     // slides first, then streamingPreview overlaid (the live prompt wins).
     const genBoxes = collectGenBoxes(slideJson?.slides);
     for (const [genid, prompt] of collectGenBoxes(slideJson?.streamingPreview)) {
       genBoxes.set(genid, prompt);
     }
-    if (genBoxes.size > 0) {
-      // Two independent sources, read concurrently (every-6s poll, per viewer):
-      //   1. `ready` GeneratedImage rows — authoritative post-reconcile; their
-      //      storageUrl already encodes the FINAL prompt's hash.
-      //   2. WARM image FILENAMES stored mid-stream by `deck-image-warm` (no DB
-      //      row yet). We match each live box's `${genid}-${hash}.png` against
-      //      this set — a stale draft hash simply isn't present, so it can't be
-      //      surfaced. This is the live path: broadcasts don't replay / don't
-      //      arrive in local dev, so without it images only showed on refresh.
-      const [ready, warmedFiles] = await Promise.all([
-        latestVersion?.id
-          ? prisma.generatedImage.findMany({
-              where: {
-                presentationVersionId: latestVersion.id,
-                status: "ready",
-                storageUrl: { not: null },
-              },
-              select: { genid: true, storageUrl: true },
-            })
-          : Promise.resolve(
-              [] as { genid: string; storageUrl: string | null }[],
-            ),
-        listWarmedImageFiles(id).catch((err) => {
-          // Storage-list blip — DB-ready fills are still returned. Log it (every
-          // other image path logs its failures) so a persistent failure that
-          // would silently break live fill in dev isn't invisible.
-          console.warn(
-            `[status] listWarmedImageFiles failed for ${id}:`,
-            err instanceof Error ? err.message : String(err),
-          );
-          return new Set<string>();
-        }),
-      ]);
-      const readyByGenid = new Map<string, string>();
-      for (const r of ready) {
-        if (r.storageUrl) readyByGenid.set(r.genid, r.storageUrl);
-      }
-      for (const [genid, prompt] of genBoxes) {
-        const dbUrl = readyByGenid.get(genid);
-        if (dbUrl) {
-          imageFills[genid] = dbUrl;
-          continue;
-        }
-        const hash = genImageHash(prompt);
-        if (warmedFiles.has(genImageFileName(genid, hash))) {
-          imageFills[genid] = publicGeneratedImageUrl(id, genid, hash);
-        }
-      }
-    }
+    // ONE shared resolver (resolve-fills.ts) — the SAME two sources (ready DB
+    // rows + warmed storage files) the server export path uses, so the live
+    // poll and PNG/PDF export can never surface different images (a regen used
+    // to show live but vanish on export).
+    const fills = await resolveGenImageFills({
+      projectId: id,
+      versionId: latestVersion?.id ?? null,
+      genBoxes,
+    });
+    imageFills = Object.fromEntries(fills);
   }
 
   return NextResponse.json({

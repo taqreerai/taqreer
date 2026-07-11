@@ -139,7 +139,7 @@ export async function POST(
   // Re-inject ready generated-image src's the durable slideJson may be
   // missing (flatten/edit race — see hydrateManifestImages). Format- and
   // flow-agnostic; a no-op for decks without gen-images.
-  const manifest = await hydrateManifestImages(versionId, parsed.data);
+  const manifest = await hydrateManifestImages(projectId, versionId, parsed.data);
   if (manifest.slides.length === 0) {
     return NextResponse.json(
       { error: "Manifest has no slides" },

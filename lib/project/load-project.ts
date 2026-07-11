@@ -442,7 +442,7 @@ export async function loadProject(
     // editor and export imageless PPTX/HTML. Mid-session the client covers it
     // via the status route's imageFills merge.
     if (parsed.success) {
-      manifest = await hydrateManifestImages(version.id, parsed.data);
+      manifest = await hydrateManifestImages(projectId, version.id, parsed.data);
     }
   }
 
