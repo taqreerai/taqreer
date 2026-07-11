@@ -89,6 +89,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid flow kind." }, { status: 400 });
     }
 
+    // Optional mimic role: /mimic uploads TWO files under kind:"mimic" - the
+    // CONTENT file (facts) and the DESIGN reference (look). extract-source
+    // uses this to skip the Anthropic Files upload for a content file whose
+    // text layer is used directly (the design file always uploads for its
+    // vision block). Absent/other values → no skip (upload proceeds).
+    const rawMimicRole = String(formData.get("mimicRole") ?? "");
+    const mimicRole =
+      rawMimicRole === "content" || rawMimicRole === "design"
+        ? rawMimicRole
+        : undefined;
+
     if (!(file instanceof File)) {
       return NextResponse.json(
         { error: "File is required" },
@@ -176,6 +187,7 @@ export async function POST(request: Request) {
           fileName: file.name,
           mime: resolvedMime,
           flowKind: rawKind, // "enhance" | "mimic" — for downstream consumer
+          ...(mimicRole ? { mimicRole } : {}),
           format,
         },
       },
@@ -235,6 +247,9 @@ export async function POST(request: Request) {
           // Lets extract-source skip the Anthropic PDF upload for
           // enhance (it rasterizes per-slide PNGs at generation time).
           flowKind: rawKind,
+          // "content" | "design" for /mimic — lets extract-source skip the
+          // upload for a content file consumed as text (see route above).
+          ...(mimicRole ? { mimicRole } : {}),
         },
       });
     } catch (err) {

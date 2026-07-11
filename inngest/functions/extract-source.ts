@@ -62,6 +62,9 @@ type ExtractRequestedEvent = {
   // so the upload is skipped for enhance to avoid orphaning a PDF on
   // every run. Optional for backward-compat with in-flight events.
   flowKind?: string;
+  // /mimic file role ("content" | "design"). Lets the pipeline skip the
+  // Anthropic upload for a content file consumed as text. Optional.
+  mimicRole?: string;
 };
 
 // What we persist to Job.outputJson on completion. Mirrors the
@@ -202,8 +205,9 @@ async function runExtractionPipeline(args: {
   fileName: string;
   mime: string;
   flowKind?: string;
+  mimicRole?: string;
 }): Promise<ExtractCompletedOutput> {
-  const { jobId, fileBucketPath, fileName, mime, flowKind } = args;
+  const { jobId, fileBucketPath, fileName, mime, flowKind, mimicRole } = args;
   const admin = getSupabaseAdmin();
   const { data: download, error: dlError } = await admin.storage
     .from(SOURCE_FILES_BUCKET)
@@ -233,10 +237,17 @@ async function runExtractionPipeline(args: {
   // block in deck-generate) for /create + /mimic. SKIPPED for enhance:
   // that flow rasterizes per-slide PNGs at GENERATION time and never
   // uses a PDF document block, so an extract-time upload would orphan a
-  // PDF on Anthropic every run. Filename keeps the original (minus any
-  // .pptx → .pdf swap so the dashboard label matches).
+  // PDF on Anthropic every run. ALSO skipped for a /mimic CONTENT file
+  // whose text layer was extracted (2026-07-11): MimicFlow then inlines
+  // that text as `userContent` and never references the fileId, so the
+  // upload would orphan a PDF too. The DESIGN reference (mimicRole
+  // "design") always uploads - it IS the vision block - and a scanned
+  // content file (empty fullText) still uploads for its vision fallback.
+  // Filename keeps the original (minus any .pptx → .pdf swap).
+  const contentTextUsed =
+    flowKind === "mimic" && mimicRole === "content" && ext.fullText.length > 0;
   const anthropicFileId =
-    flowKind === "enhance"
+    flowKind === "enhance" || contentTextUsed
       ? undefined
       : await uploadFileToAnthropic({
           bytes: ext.pdfBytes,
@@ -298,7 +309,7 @@ export const extractSource = inngest.createFunction(
   },
   async ({ event, step, logger }) => {
     const data = parseExtractRequestedEvent(event.data);
-    const { jobId, fileBucketPath, fileName, mime, flowKind } = data;
+    const { jobId, fileBucketPath, fileName, mime, flowKind, mimicRole } = data;
 
     // ─── Step 1: mark job processing ─────────────────────────────────
     await step.run("mark-processing", () =>
@@ -317,7 +328,14 @@ export const extractSource = inngest.createFunction(
     // Errors bubble up to the `onFailure` hook above for the
     // mark-failed bookkeeping.
     const result = await step.run("extract-and-upload", () =>
-      runExtractionPipeline({ jobId, fileBucketPath, fileName, mime, flowKind }),
+      runExtractionPipeline({
+        jobId,
+        fileBucketPath,
+        fileName,
+        mime,
+        flowKind,
+        mimicRole,
+      }),
     );
     logger.info("extract-source pipeline complete", {
       jobId,

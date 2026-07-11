@@ -476,6 +476,7 @@ export default function MimicFlow({
         const formData = new FormData();
         formData.append("file", designFile);
         formData.append("kind", "mimic");
+        formData.append("mimicRole", "design");
         formData.append("format", "16:9");
         const startRes = await fetch("/api/extract", {
           method: "POST",
@@ -535,6 +536,7 @@ export default function MimicFlow({
         const formData = new FormData();
         formData.append("file", contentFile);
         formData.append("kind", "mimic");
+        formData.append("mimicRole", "content");
         formData.append("format", "16:9");
         const startRes = await fetch("/api/extract", {
           method: "POST",
