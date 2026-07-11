@@ -63,7 +63,6 @@ function DrawerNavRow({
 export function MobileNav({ isAdmin }: { isAdmin?: boolean }) {
   const [open, setOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const { locale, dir } = useLocale();
   const dict = useDict();
   const { actionButtons, navLinks } = useAppNav();
@@ -74,10 +73,6 @@ export function MobileNav({ isAdmin }: { isAdmin?: boolean }) {
   const showAdmin = isAdmin ?? Boolean(credits?.isAdmin);
   const rawPathname = usePathname() ?? "";
   const pathname = stripLocale(rawPathname);
-
-  useEffect(() => {
-    queueMicrotask(() => setMounted(true));
-  }, []);
 
   // Every nav row + profile-menu link calls closeDrawer on tap, so navigation
   // always dismisses the drawer without a route-change effect (which would trip
@@ -104,8 +99,8 @@ export function MobileNav({ isAdmin }: { isAdmin?: boolean }) {
       : pathname === path || pathname.startsWith(`${path}/`);
 
   const closeDrawer = () => setOpen(false);
-  const menuLabel = locale === "ar" ? "القائمة" : "Menu";
-  const closeLabel = locale === "ar" ? "إغلاق" : "Close";
+  const menuLabel = dict.nav.menu;
+  const closeLabel = dict.common.close;
 
   const homeItem: AppNavItem = {
     path: "/dashboard",
@@ -139,7 +134,7 @@ export function MobileNav({ isAdmin }: { isAdmin?: boolean }) {
         </svg>
       </button>
 
-      {mounted &&
+      {typeof document !== "undefined" &&
         createPortal(
           <AnimatePresence>
             {open ? (

@@ -1,24 +1,18 @@
-// /project/[projectId] — WORKING-SESSION route.
+// /project/[projectId] — the deck studio / viewer route.
 //
-// Canonical URL for a completed deck. Owns the post-generation
-// chrome: slide pill (regen / history / lock), comments, save,
-// exports, lightbox. Bookmarks, share links, the "Copy link" 3-dots
-// menu action, bell notifications, and dashboard tile clicks all
-// point here.
+// Canonical URL for a deck in ANY state (queued, generating, mid-regen,
+// completed). Owns the post-generation chrome: slide pill (regen / history /
+// lock), comments, save, exports, lightbox. Bookmarks, share links, the "Copy
+// link" 3-dots action, bell notifications, and dashboard tile clicks all point
+// here; legacy /preview links now just redirect here.
 //
-// Lifecycle gate (inverse of /preview's): if the deck is NOT yet in
-// the "completed" version state — still queued, generating, or
-// mid-partial-regen — server-redirect to /preview. Together with
-// /preview's redirect when completed, bookmarks of either URL
-// always land the user on the right route for their deck's current
-// state. New decks naturally enter at /preview during /create flow;
-// completed bookmarks naturally land at /project.
+// Lives in the (studio) route group, deliberately OUTSIDE the auth-gated (app)
+// group, so an anonymous "anyone with the link" public viewer can reach it;
+// access is enforced below by resolveProjectAccess() + notFound().
 //
-// For now this route re-uses the existing `<DeckView />` component
-// (which internally branches on status). A follow-up will extract
-// the working-session half into a dedicated `<ProjectView />` and
-// slim DeckView down to its generation-only path; that's pure code
-// reorg and doesn't change route semantics.
+// Re-uses the existing `<DeckView />` component, which internally branches on
+// the deck's status (a disabled "generating" editor that flips to the live
+// editor in place, with no route hop / remount on completion).
 
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
@@ -44,27 +38,28 @@ export default async function ProjectPage({
   // affordances for non-edit viewers (Phase 15.B).
   const access = await resolveProjectAccess(projectId, "view");
   if ("error" in access) notFound();
-  const data = await loadProject(projectId);
+  // Single-URL Studio (2026-06-07): /project serves EVERY deck state —
+  // generating, completed, mid-regen. DeckView renders one shell that flips from
+  // a disabled "generating" editor to the live editor in place, so there's no
+  // route hop / remount on completion. No redirect-when-not-ready anymore.
+  //
+  // These three reads only depend on `access`, not on each other, so run them in
+  // parallel. Phase 16.B presence: the profile fetch is null for anonymous
+  // public-view callers (skips presence tracking entirely).
+  const [data, cookieStore, profile] = await Promise.all([
+    loadProject(projectId),
+    cookies(),
+    access.user.prismaId
+      ? prisma.user.findUnique({
+          where: { id: access.user.prismaId },
+          select: { name: true, image: true },
+        })
+      : Promise.resolve(null),
+  ]);
   if (!data) notFound();
 
-  // Single-URL Studio (2026-06-07): /project serves EVERY deck state —
-  // generating, completed, mid-regen. DeckView renders one shell that flips
-  // from a disabled "generating" editor to the live editor in place, so there's
-  // no route hop / remount on completion. (/preview now just redirects here for
-  // back-compat with old links.) No redirect-when-not-ready anymore.
-
-  const cookieStore = await cookies();
   const isCollapsed = cookieStore.get(SIDEBAR_COLLAPSED_COOKIE)?.value === "1";
   const initialMainSidebarWidth = isCollapsed ? 80 : 260;
-
-  // Phase 16.B presence — same profile fetch as /preview's page. Null
-  // for anonymous public-view (skips presence tracking entirely).
-  const profile = access.user.prismaId
-    ? await prisma.user.findUnique({
-        where: { id: access.user.prismaId },
-        select: { name: true, image: true },
-      })
-    : null;
 
   const deckKey = `${data.initialVersionId ?? "none"}:${data.initialVersionStatus ?? "pending"}:${data.initialManifest ? "1" : "0"}`;
   return (
