@@ -71,6 +71,7 @@ import {
 } from "@/lib/schema/slide";
 import { buildHtmlDocumentServer } from "@/lib/export/html-document-server";
 import { FREEZE_SCRIPT } from "@/lib/deck/freeze-script";
+import { LEADING_NORMALIZE_SCRIPT } from "@/lib/deck/leading-normalize";
 import { AUDIT_SCRIPT, type FrameAuditFinding } from "@/lib/deck/audit-script";
 import {
   frameSystemPrompt,
@@ -210,9 +211,13 @@ export const deckFreezeBake = inngest.createFunction(
           versionId,
           pending: pendingIds.length,
         });
+        // Enhance skips the vision render, so no leading normalization here
+        // either (it would need its own render); the freeze uses stored html.
         return {
           revisions: {} as Record<string, string>,
           fixWorthyBefore: {} as Record<string, number>,
+          overflowBefore: {} as Record<string, number>,
+          normalized: {} as Record<string, string>,
         };
       }
       // 2a. One clean render: audit findings + a downscaled shot per
@@ -223,10 +228,45 @@ export const deckFreezeBake = inngest.createFunction(
       const shots = new Map<string, string>();
       const thumbs: string[] = [];
       let findings: Record<string, FrameAuditFinding[]> = {};
+      // Deterministic Arabic-leading fix (crowded headlines → line-height 1.3,
+      // measured-fit, never overflow). Runs BEFORE the audit so crowding is
+      // already resolved: the audit stops flagging it and the vision round is
+      // spent on real design issues. The normalized html (only for slides it
+      // changed) becomes the base the freeze composes + freezes.
+      const normalized: Record<string, string> = {};
       {
         const browser = await launchGuardedBrowser();
         try {
           const page = await openRenderedDeck(browser, manifest, dims);
+          // Best-effort: a normalizer fault must NEVER fail a bake (it runs on
+          // every deck). On any error, skip normalization and audit the deck
+          // as-authored - the crowding finding then simply routes to the
+          // vision pass as it did before.
+          try {
+            const normResult = await normalizeLeading(page, pendingIds);
+            for (const sid of pendingIds) {
+              if (normResult[sid]?.html) normalized[sid] = normResult[sid].html;
+            }
+            const normStats = pendingIds.reduce(
+              (a, sid) => {
+                a.adjusted += normResult[sid]?.adjusted ?? 0;
+                a.shrunk += normResult[sid]?.shrunk ?? 0;
+                return a;
+              },
+              { adjusted: 0, shrunk: 0 },
+            );
+            if (normStats.adjusted > 0)
+              logger.info("deck_leading_normalized", {
+                versionId,
+                ...normStats,
+              });
+          } catch (err) {
+            logger.warn("deck_leading_normalize_failed", {
+              versionId,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+          // Audit the NORMALIZED DOM (crowding is pre-fixed here).
           findings = await auditSlides(page, pendingIds, manifest.direction);
           for (const sid of pendingIds) {
             const png = await shoot(page, sid);
@@ -309,21 +349,25 @@ export const deckFreezeBake = inngest.createFunction(
 
           const visionInputs: FrameVisionSlideInput[] = [];
           for (const s of pending) {
+            // Feed the model the NORMALIZED html (leading already fixed) so it
+            // reviews what was actually rendered + audited, and its revision
+            // builds on the corrected leading instead of re-introducing it.
+            const sourceHtml = normalized[s.slideId] ?? s.html;
             // Fallback for structurally-corrupt slides (the boundary regex
             // can't find the well when a malformed attribute swallowed it):
             // hand the model the raw DOM part of the stored html instead.
             // The revision rebuilds the structure by construction, so this
             // is exactly the path that HEALS such slides.
             const wellHtml =
-              extractStoredWell(s.html) ??
-              s.html.slice(s.html.indexOf("</style>") + 8).slice(0, 12_000);
+              extractStoredWell(sourceHtml) ??
+              sourceHtml.slice(sourceHtml.indexOf("</style>") + 8).slice(0, 12_000);
             const imageBase64 = shots.get(s.slideId);
             if (!wellHtml || !imageBase64) continue;
             visionInputs.push({
               position:
                 manifest.slides.findIndex((x) => x.slideId === s.slideId) + 1,
               total: manifest.slides.length,
-              sectionTag: extractStoredSectionTag(s.html),
+              sectionTag: extractStoredSectionTag(sourceHtml),
               wellHtml,
               findings: (findings[s.slideId] ?? []).map((f) =>
                 f.type === "underfill" ? `advisory: ${f.detail}` : f.detail,
@@ -528,6 +572,18 @@ export const deckFreezeBake = inngest.createFunction(
         fixWorthyBefore: Object.fromEntries(
           pendingIds.map((sid) => [sid, fixWorthy(findings[sid] ?? [])]),
         ) as Record<string, number>,
+        // Per-type baseline used by the regression guard's overflow veto: a
+        // revision must never introduce a NEW overflow (content clipped/lost),
+        // even when it keeps the total fix-worthy count flat.
+        overflowBefore: Object.fromEntries(
+          pendingIds.map((sid) => [
+            sid,
+            (findings[sid] ?? []).filter((f) => f.type === "overflow").length,
+          ]),
+        ) as Record<string, number>,
+        // Leading-normalized html per changed slide — the base the freeze
+        // composes + freezes (so the deterministic leading fix persists).
+        normalized,
       };
     });
 
@@ -536,11 +592,21 @@ export const deckFreezeBake = inngest.createFunction(
       // Compose the final deck in memory: pending slides with an accepted
       // revision swap to the revised html, everything else keeps its
       // stored html.
-      const composed = manifest.slides.map((s) =>
-        observed.revisions[s.slideId]
-          ? { ...s, html: observed.revisions[s.slideId] }
-          : s,
+      // Base html per slide: the leading-normalized version when the observe
+      // pass changed it, else the stored html. Revisions (authored against the
+      // normalized render) win over the base; a slide with neither is stored
+      // unchanged.
+      const composeBaseById = new Map(
+        manifest.slides.map((s) => [
+          s.slideId,
+          observed.normalized[s.slideId] ?? s.html,
+        ]),
       );
+      const composed = manifest.slides.map((s) => {
+        const html =
+          observed.revisions[s.slideId] ?? composeBaseById.get(s.slideId)!;
+        return html === s.html ? s : { ...s, html };
+      });
       const composedManifest = { ...manifest, slides: composed };
 
       // Label the last quiet stretch (render + freeze + write has nothing
@@ -576,21 +642,34 @@ export const deckFreezeBake = inngest.createFunction(
             manifest.direction,
           );
           for (const sid of revisedIds) {
-            const now = (reFindings[sid] ?? []).filter(
+            const after = reFindings[sid] ?? [];
+            const now = after.filter(
               (f) =>
                 f.type === "overflow" ||
                 f.type === "anchor" ||
                 f.type === "structure" ||
                 f.type === "contrast" ||
-            f.type === "crowding",
+                f.type === "crowding",
             ).length;
             const before = observed.fixWorthyBefore[sid] ?? 0;
-            if (now > before) {
+            // Overflow VETO (2026-07-11): a total-count comparison let a
+            // revision trade one fix-worthy finding for another of a DIFFERENT
+            // type - the real bug was a crowding→overflow trade (line-height
+            // fix pushed content out of the well) that kept the count flat and
+            // shipped. Overflow means content clipped/LOST, never an
+            // acceptable trade, so revert whenever the revision introduces or
+            // increases overflow, independent of the total count.
+            const overflowNow = after.filter((f) => f.type === "overflow")
+              .length;
+            const overflowBefore = observed.overflowBefore[sid] ?? 0;
+            if (now > before || overflowNow > overflowBefore) {
               reverted.add(sid);
               logger.warn("deck_vision_regressed", {
                 slideId: sid,
                 before,
                 after: now,
+                overflowBefore,
+                overflowNow,
               });
             }
           }
@@ -706,12 +785,12 @@ export const deckFreezeBake = inngest.createFunction(
             finalHtml.set(sid, stampAudited(composedById.get(sid)!));
           }
         }
-        // Reverted revisions: original stored html, stamped audited.
-        const storedById = new Map(
-          manifest.slides.map((s) => [s.slideId, s.html]),
-        );
+        // Reverted revisions: fall back to the leading-normalized base (NOT
+        // the raw original), so discarding a bad revision still keeps the
+        // deterministic leading fix. Stamped audited; kept-flow (its geometry
+        // isn't in this render, so it can't freeze this run).
         for (const sid of reverted) {
-          finalHtml.set(sid, stampAudited(storedById.get(sid)!));
+          finalHtml.set(sid, stampAudited(composeBaseById.get(sid)!));
         }
       } finally {
         await closeGuardedBrowser(browser);
@@ -956,6 +1035,57 @@ async function auditSlides(
     slideIds,
     direction,
   )) as Record<string, FrameAuditFinding[]>;
+}
+
+// Deterministic Arabic-leading normalization, in-page, BEFORE the audit +
+// vision pass. Mutates each well's crowded headlines (raise line-height,
+// measured-fit shrink, never overflow — see leading-normalize.ts), then
+// captures the section's outerHTML so the change persists into the frozen
+// slide (same capture mechanism the freeze uses). Returns the new html ONLY
+// for slides it actually changed; an unchanged/reverted slide maps to "".
+async function normalizeLeading(
+  page: Page,
+  slideIds: string[],
+): Promise<Record<string, { html: string; adjusted: number; shrunk: number }>> {
+  await page.evaluate(
+    `${LEADING_NORMALIZE_SCRIPT}; window.__tqNormLead = __tqNormalizeLeadingWell;`,
+  );
+  return (await page.evaluate((ids) => {
+    const out: Record<
+      string,
+      { html: string; adjusted: number; shrunk: number }
+    > = {};
+    for (const sid of ids) {
+      const escaped = sid.replace(/[^a-zA-Z0-9_-]/g, "\\$&");
+      const sec = document
+        .querySelector(`[data-slide-id="${escaped}"]`)
+        ?.querySelector("section");
+      const well = sec?.querySelector(":scope > .tq-well");
+      if (!sec || !well) {
+        out[sid] = { html: "", adjusted: 0, shrunk: 0 };
+        continue;
+      }
+      const res = (
+        window as unknown as {
+          __tqNormLead: (w: Element) => {
+            adjusted: number;
+            shrunk: number;
+            reverted: number;
+          };
+        }
+      ).__tqNormLead(well);
+      // Capture only when the DOM actually changed; else keep the stored html.
+      out[sid] = {
+        html: res.adjusted > 0 ? sec.outerHTML : "",
+        adjusted: res.adjusted,
+        shrunk: res.shrunk,
+      };
+    }
+    return out;
+  }, slideIds)) as Record<
+    string,
+    { html: string; adjusted: number; shrunk: number }
+  >;
 }
 
 // Screenshot one slide's host box (scrolled into view) as a PNG buffer.
