@@ -123,12 +123,36 @@ function __tqNormalizeLeadingWell(well) {
   // Baseline: the authored overflow BEFORE we touch anything. The normalizer
   // must never EXCEED it - adding leading may not push out content that wasn't
   // already out (a clean 0px slide must stay ~0px, never drift out). SLACK
-  // absorbs sub-pixel measurement jitter.
+  // absorbs sub-pixel measurement jitter. AUDIT_TOL mirrors the audit's
+  // overflow threshold (worst > 12 flags): capping the target there keeps an
+  // audit-SILENT slide silent - without the cap, authored ~11px + SLACK could
+  // land at ~13px and flip the slide into a measured overflow finding the
+  // vision is then FORCED to revise (proven repro 2026-07-13). An already-
+  // flagged slide (authored > 12) keeps its authored baseline - never worsened.
   var SLACK = 2;
-  var target = Math.max(wellOverflow(), 0) + SLACK;
+  var AUDIT_TOL = 12;
+  var over0 = Math.max(wellOverflow(), 0);
+  var target = Math.min(over0 + SLACK, Math.max(over0, AUDIT_TOL));
 
   // 2. Raise line-height to the target on every candidate.
   for (var c = 0; c < cands.length; c++) cands[c].el.style.lineHeight = String(TARGET_LH);
+
+  // 2b. Drop candidates where the inline style did NOT take (a deck-css rule
+  // with !important outranks it): restore their authored style so the captured
+  // html carries no inert mutation, and the stats stay honest. The audit still
+  // flags those as crowding - the vision pass handles them as before.
+  var took = [];
+  for (var t = 0; t < cands.length; t++) {
+    var tc = cands[t];
+    var tcs = view.getComputedStyle(tc.el);
+    var tlh = parseFloat(tcs.lineHeight);
+    var tfs = parseFloat(tcs.fontSize);
+    if (tfs && tlh && tlh / tfs >= 1.25) { took.push(tc); continue; }
+    if (tc.origStyle === null) tc.el.removeAttribute("style");
+    else tc.el.setAttribute("style", tc.origStyle);
+  }
+  cands = took;
+  if (!cands.length) return { adjusted: 0, shrunk: 0, reverted: 0 };
 
   // 3. Still within the authored baseline → keep full size (leading added).
   if (wellOverflow() <= target) return { adjusted: cands.length, shrunk: 0, reverted: 0 };
