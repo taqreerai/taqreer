@@ -30,7 +30,6 @@ export const LEADING_NORMALIZE_SCRIPT = `
 function __tqNormalizeLeadingWell(well) {
   var TARGET_LH = 1.3;      // audit minimum is 1.25; 1.3 gives margin + matches the audit's advice copy
   var MIN_FS_RATIO = 0.72;  // never shrink a headline below 72% of its authored size
-  var TOL = 12;             // overflow tolerance — identical to the audit's threshold
   var view = well.ownerDocument.defaultView;
 
   function directText(el) {
@@ -121,23 +120,31 @@ function __tqNormalizeLeadingWell(well) {
   }
   if (!cands.length) return { adjusted: 0, shrunk: 0, reverted: 0 };
 
+  // Baseline: the authored overflow BEFORE we touch anything. The normalizer
+  // must never EXCEED it - adding leading may not push out content that wasn't
+  // already out (a clean 0px slide must stay ~0px, never drift out). SLACK
+  // absorbs sub-pixel measurement jitter.
+  var SLACK = 2;
+  var target = Math.max(wellOverflow(), 0) + SLACK;
+
   // 2. Raise line-height to the target on every candidate.
   for (var c = 0; c < cands.length; c++) cands[c].el.style.lineHeight = String(TARGET_LH);
 
-  // 3. Fits as-is → keep full size (leading added, nothing shrunk).
-  if (wellOverflow() <= TOL) return { adjusted: cands.length, shrunk: 0, reverted: 0 };
+  // 3. Still within the authored baseline → keep full size (leading added).
+  if (wellOverflow() <= target) return { adjusted: cands.length, shrunk: 0, reverted: 0 };
 
-  // 4. Overflows → largest uniform font-size factor in [MIN_FS_RATIO, 1] that fits.
+  // 4. Worsened → largest uniform font-size factor in [MIN_FS_RATIO, 1] that
+  //    brings overflow back to the authored baseline.
   var lo = MIN_FS_RATIO, hi = 1.0;
   for (var it = 0; it < 7; it++) {
     var mid = (lo + hi) / 2;
     for (var s = 0; s < cands.length; s++) cands[s].el.style.fontSize = (cands[s].fs0 * mid) + "px";
-    if (wellOverflow() > TOL) hi = mid; else lo = mid;
+    if (wellOverflow() > target) hi = mid; else lo = mid;
   }
   for (var s2 = 0; s2 < cands.length; s2++) cands[s2].el.style.fontSize = (cands[s2].fs0 * lo) + "px";
 
-  // 5. Even the floor can't fit (slide already over-packed) → revert entirely.
-  if (wellOverflow() > TOL) {
+  // 5. Even the floor can't return to the baseline → revert entirely.
+  if (wellOverflow() > target) {
     for (var r2 = 0; r2 < cands.length; r2++) {
       var cc = cands[r2];
       if (cc.origStyle === null) cc.el.removeAttribute("style");

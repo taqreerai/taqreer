@@ -216,7 +216,7 @@ export const deckFreezeBake = inngest.createFunction(
         return {
           revisions: {} as Record<string, string>,
           fixWorthyBefore: {} as Record<string, number>,
-          overflowBefore: {} as Record<string, number>,
+          overflowPxBefore: {} as Record<string, number>,
           normalized: {} as Record<string, string>,
         };
       }
@@ -237,7 +237,7 @@ export const deckFreezeBake = inngest.createFunction(
       {
         const browser = await launchGuardedBrowser();
         try {
-          const page = await openRenderedDeck(browser, manifest, dims);
+          let page = await openRenderedDeck(browser, manifest, dims);
           // Best-effort: a normalizer fault must NEVER fail a bake (it runs on
           // every deck). On any error, skip normalization and audit the deck
           // as-authored - the crowding finding then simply routes to the
@@ -265,6 +265,12 @@ export const deckFreezeBake = inngest.createFunction(
               versionId,
               error: err instanceof Error ? err.message : String(err),
             });
+            // A mid-loop fault can leave EARLIER slides mutated in the live
+            // page while `normalized` captured nothing - the audit/shots would
+            // then see mutated slides the freeze won't use. Re-render the
+            // authored deck so audit + shots + freeze all agree on as-authored.
+            await page.close().catch(() => undefined);
+            page = await openRenderedDeck(browser, manifest, dims);
           }
           // Audit the NORMALIZED DOM (crowding is pre-fixed here).
           findings = await auditSlides(page, pendingIds, manifest.direction);
@@ -572,14 +578,12 @@ export const deckFreezeBake = inngest.createFunction(
         fixWorthyBefore: Object.fromEntries(
           pendingIds.map((sid) => [sid, fixWorthy(findings[sid] ?? [])]),
         ) as Record<string, number>,
-        // Per-type baseline used by the regression guard's overflow veto: a
-        // revision must never introduce a NEW overflow (content clipped/lost),
-        // even when it keeps the total fix-worthy count flat.
-        overflowBefore: Object.fromEntries(
-          pendingIds.map((sid) => [
-            sid,
-            (findings[sid] ?? []).filter((f) => f.type === "overflow").length,
-          ]),
+        // Overflow MAGNITUDE (worst px) baseline for the regression guard's
+        // veto: a revision must never introduce or WORSEN overflow (content
+        // clipped/lost), even when it keeps the total fix-worthy count flat and
+        // the overflow COUNT flat.
+        overflowPxBefore: Object.fromEntries(
+          pendingIds.map((sid) => [sid, worstOverflowPx(findings[sid] ?? [])]),
         ) as Record<string, number>,
         // Leading-normalized html per changed slide — the base the freeze
         // composes + freezes (so the deterministic leading fix persists).
@@ -656,20 +660,24 @@ export const deckFreezeBake = inngest.createFunction(
             // revision trade one fix-worthy finding for another of a DIFFERENT
             // type - the real bug was a crowding→overflow trade (line-height
             // fix pushed content out of the well) that kept the count flat and
-            // shipped. Overflow means content clipped/LOST, never an
-            // acceptable trade, so revert whenever the revision introduces or
-            // increases overflow, independent of the total count.
-            const overflowNow = after.filter((f) => f.type === "overflow")
-              .length;
-            const overflowBefore = observed.overflowBefore[sid] ?? 0;
-            if (now > before || overflowNow > overflowBefore) {
+            // shipped. Overflow means content clipped/LOST, never an acceptable
+            // trade, so revert whenever the revision introduces or WORSENS it.
+            // Compare MAGNITUDE (px), not count: a single overflow can balloon
+            // (15px→200px) at the same count. OVERFLOW_SLACK absorbs jitter.
+            const OVERFLOW_SLACK = 4;
+            const overflowPxNow = worstOverflowPx(after);
+            const overflowPxBefore = observed.overflowPxBefore[sid] ?? 0;
+            if (
+              now > before ||
+              overflowPxNow > overflowPxBefore + OVERFLOW_SLACK
+            ) {
               reverted.add(sid);
               logger.warn("deck_vision_regressed", {
                 slideId: sid,
                 before,
                 after: now,
-                overflowBefore,
-                overflowNow,
+                overflowPxBefore,
+                overflowPxNow,
               });
             }
           }
@@ -1035,6 +1043,20 @@ async function auditSlides(
     slideIds,
     direction,
   )) as Record<string, FrameAuditFinding[]>;
+}
+
+// Worst overflow MAGNITUDE (px) across a slide's findings. The audit's
+// overflow detail is "...extends Npx past the well edge"; the regression guard
+// compares magnitude (not COUNT) so a single overflow that BALLOONS - same
+// count, far worse clipping - is still vetoed. 0 when the slide has none.
+function worstOverflowPx(findings: FrameAuditFinding[]): number {
+  let worst = 0;
+  for (const f of findings) {
+    if (f.type !== "overflow") continue;
+    const m = /extends (\d+)px/.exec(f.detail);
+    if (m) worst = Math.max(worst, Number(m[1]));
+  }
+  return worst;
 }
 
 // Deterministic Arabic-leading normalization, in-page, BEFORE the audit +
