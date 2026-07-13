@@ -249,8 +249,13 @@ function PricingCard({
   return (
     // Standard card border (hairline, same as our other cards). Hover = a gentle
     // zoom + slide-up; the popular badge lives INSIDE so it scales WITH the card.
-    // No glow / no lift on the popular card (user direction).
-    <div className="surface-card relative flex w-full flex-col rounded-2xl p-8 transition-transform duration-300 hover:-translate-y-1 hover:scale-[1.02]">
+    // Popular tier carries the animated aura halo (.tq-aura, user direction
+    // 2026-07-13 - supersedes the old "no glow on the popular card" call).
+    <div
+      className={`surface-card relative flex w-full flex-col rounded-2xl p-8 transition-transform duration-300 hover:-translate-y-1 hover:scale-[1.02] ${
+        tier.popular ? "tq-aura" : ""
+      }`}
+    >
       {tier.popular && (
         // Same look as the hero's social-proof pill (.hero-stat-pill): a SOLID
         // opaque accent fill (purple in dark / blue in light) with white text +

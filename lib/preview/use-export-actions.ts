@@ -1,9 +1,10 @@
 "use client";
 
 // Shared export-actions hook — single source of truth for the
-// four export pipelines (PPTX / PDF / PNG / HTML). Extracted from
-// PreviewActionBar 2026-05-23 so the new ShareDialog Export tab
-// can drive the SAME handlers + share their busy / error state.
+// four export pipelines (PPTX / PDF / PNG / Google Slides, the
+// last riding the PPTX pipeline). Extracted from PreviewActionBar
+// 2026-05-23 so the new ShareDialog Export tab can drive the SAME
+// handlers + share their busy / error state.
 //
 // Cross-instance busy serialisation
 // ---------------------------------
@@ -24,7 +25,13 @@ import { useState, useSyncExternalStore } from "react";
 import posthog from "posthog-js";
 import type { SlideManifest, SlideFormat } from "@/lib/schema/slide";
 import { exportManifestAsPptx } from "@/lib/export/html-export";
-import { downloadHtmlDocument } from "@/lib/export/html-document";
+import {
+  ensureDriveToken,
+  uploadPptxAsGoogleSlides,
+  rasterizeSvgsForSlides,
+  GoogleSlidesConfigError,
+  GoogleAuthDeclinedError,
+} from "@/lib/export/google-slides";
 
 // ─── Shared cross-instance busy store ───────────────────────────────
 
@@ -65,7 +72,11 @@ function setBusy(projectId: string, value: boolean): void {
 export type ExportStatus = "idle" | "running" | "success" | "error";
 export type ExportButtonState = { status: ExportStatus; message?: string };
 
-export type ExportKind = "pptx" | "pdf" | "png" | "html";
+// "gslides" replaced "html" 2026-07-13 (user direction): the deck lands in
+// the user's Google Drive as a NATIVE Google Slides presentation. The
+// artifact still comes from the SAME dom-to-pptx pipeline (keeping the
+// BiDi/RTL fixes); Drive converts it on upload. See lib/export/google-slides.
+export type ExportKind = "pptx" | "pdf" | "png" | "gslides";
 
 export type UseExportActionsResult = {
   states: Record<ExportKind, ExportButtonState>;
@@ -73,10 +84,15 @@ export type UseExportActionsResult = {
   busy: boolean;
   /** First error message across the four pipelines, for toast surfacing. */
   lastError: string | null;
+  /** Set when a Google Slides upload completed - the caller renders the
+   *  "deck is ready → Open" dialog (a click-gesture open dodges popup
+   *  blockers; an async window.open after the upload would be eaten). */
+  gslidesUrl: string | null;
+  clearGslidesUrl: () => void;
   runPptx: () => Promise<void>;
   runPdf: () => Promise<void>;
   runPng: () => Promise<void>;
-  runHtml: () => Promise<void>;
+  runGslides: () => Promise<void>;
 };
 
 // Filename sanitiser — same recipe PreviewActionBar used inline.
@@ -112,9 +128,10 @@ export function useExportActions({
   const [exportPng, setExportPng] = useState<ExportButtonState>({
     status: "idle",
   });
-  const [exportHtml, setExportHtml] = useState<ExportButtonState>({
+  const [exportGslides, setExportGslides] = useState<ExportButtonState>({
     status: "idle",
   });
+  const [gslidesUrl, setGslidesUrl] = useState<string | null>(null);
 
   // Cross-instance busy — subscribes both this instance (which sets
   // it inside each runner) AND any OTHER `useExportActions` hook
@@ -152,17 +169,22 @@ export function useExportActions({
     }
   };
 
-  // ── PPTX (client-side via dom-to-pptx + BiDi post-processor) ─────
-  const runPptx = () =>
+  // ── PPTX (client-side, dom-to-pptx + BiDi post-processor) ────────
+  // Also the engine under the Google Slides entry below (which uploads
+  // the same artifact to Drive instead of downloading it).
+  const runPptxPipeline = (
+    kind: "pptx",
+    setState: (s: ExportButtonState) => void,
+  ) =>
     guard(async () => {
       // 3:4 social-post decks are PDF/PNG only. The UI hides this entry
       // (ExportMenu / ShareDialog); this is the belt-and-braces stop for
       // any stale surface that still offers it.
       if (exportManifest.format === "3:4") {
-        setExportPptx({ status: "error", message: "تعذر التصدير" });
+        setState({ status: "error", message: "تعذر التصدير" });
         return;
       }
-      setExportPptx({ status: "running", message: "جار التصدير..." });
+      setState({ status: "running", message: "جار التصدير..." });
       try {
         const fileName = `${baseFileName(manifest.title || projectTitle)}.pptx`;
         await exportManifestAsPptx(exportManifest, fileName);
@@ -171,13 +193,86 @@ export function useExportActions({
         // client capture; distinct_id is the identified user (= Supabase uid),
         // so it lines up with the server-side funnel events.
         posthog.capture("deck_exported", {
-          format: "pptx",
+          format: kind,
           project_id: projectId,
           slide_count: manifest.slides.length,
         });
-        setExportPptx({ status: "idle" });
+        setState({ status: "idle" });
       } catch (error) {
-        setExportPptx({
+        setState({
+          status: "error",
+          message: error instanceof Error ? error.message : "تعذر التصدير",
+        });
+      }
+    });
+  const runPptx = () => runPptxPipeline("pptx", setExportPptx);
+
+  // ── Google Slides (dom-to-pptx blob → Drive upload → native Slides) ──
+  // Token FIRST: the GIS consent popup must ride the click gesture; the
+  // multi-second PPTX build would outlive the browser's activation window.
+  // Declined consent / missing config falls back to the plain PPTX
+  // download so the menu entry never dead-ends.
+  const runGslides = () =>
+    guard(async () => {
+      if (exportManifest.format === "3:4") {
+        setExportGslides({ status: "error", message: "تعذر التصدير" });
+        return;
+      }
+      setExportGslides({ status: "running", message: "جار التصدير..." });
+      const title = baseFileName(manifest.title || projectTitle);
+      let token: string;
+      try {
+        token = await ensureDriveToken();
+      } catch (error) {
+        if (
+          error instanceof GoogleSlidesConfigError ||
+          error instanceof GoogleAuthDeclinedError
+        ) {
+          try {
+            await exportManifestAsPptx(exportManifest, `${title}.pptx`);
+            posthog.capture("deck_exported", {
+              format: "gslides_fallback_pptx",
+              project_id: projectId,
+              slide_count: manifest.slides.length,
+            });
+            setExportGslides({ status: "idle" });
+          } catch (fallbackError) {
+            setExportGslides({
+              status: "error",
+              message:
+                fallbackError instanceof Error
+                  ? fallbackError.message
+                  : "تعذر التصدير",
+            });
+          }
+          return;
+        }
+        setExportGslides({
+          status: "error",
+          message: error instanceof Error ? error.message : "تعذر التصدير",
+        });
+        return;
+      }
+      try {
+        const { blob } = await exportManifestAsPptx(
+          exportManifest,
+          `${title}.pptx`,
+          { skipDownload: true },
+        );
+        if (!blob) throw new Error("PPTX build produced no blob");
+        // Slides can't render SVG - swap the upload copy to the raster
+        // fallbacks (see rasterizeSvgsForSlides). Download path untouched.
+        const slidesSafe = await rasterizeSvgsForSlides(blob);
+        const { url } = await uploadPptxAsGoogleSlides(slidesSafe, title, token);
+        posthog.capture("deck_exported", {
+          format: "gslides",
+          project_id: projectId,
+          slide_count: manifest.slides.length,
+        });
+        setGslidesUrl(url);
+        setExportGslides({ status: "idle" });
+      } catch (error) {
+        setExportGslides({
           status: "error",
           message: error instanceof Error ? error.message : "تعذر التصدير",
         });
@@ -237,33 +332,12 @@ export function useExportActions({
       }
     });
 
-  // ── HTML (client-side, raw standalone bundle) ────────────────────
-  const runHtml = () =>
-    guard(async () => {
-      // Same 3:4 lock as runPptx above.
-      if (exportManifest.format === "3:4") {
-        setExportHtml({ status: "error", message: "تعذر التحميل" });
-        return;
-      }
-      setExportHtml({ status: "running", message: "جار التحميل..." });
-      try {
-        const fileName = `${baseFileName(manifest.title || projectTitle)}.html`;
-        downloadHtmlDocument(exportManifest, fileName);
-        setExportHtml({ status: "idle" });
-      } catch (error) {
-        setExportHtml({
-          status: "error",
-          message: error instanceof Error ? error.message : "تعذر التحميل",
-        });
-      }
-    });
-
   // First error across pipelines — caller can surface as a toast.
   // Order matches the toolbar's visibleMessage precedence so the
   // toast text is consistent across the two entry points.
   const lastError =
     (exportPptx.status === "error" ? exportPptx.message : null) ??
-    (exportHtml.status === "error" ? exportHtml.message : null) ??
+    (exportGslides.status === "error" ? exportGslides.message : null) ??
     (exportPng.status === "error" ? exportPng.message : null) ??
     (exportPdf.status === "error" ? exportPdf.message : null) ??
     null;
@@ -273,14 +347,16 @@ export function useExportActions({
       pptx: exportPptx,
       pdf: exportPdf,
       png: exportPng,
-      html: exportHtml,
+      gslides: exportGslides,
     },
     busy,
     lastError,
+    gslidesUrl,
+    clearGslidesUrl: () => setGslidesUrl(null),
     runPptx,
     runPdf,
     runPng,
-    runHtml,
+    runGslides,
   };
 }
 

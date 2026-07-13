@@ -170,6 +170,15 @@
   --tq-purple:       #3380FF;            /* dark: brighter blue accent */
   --tq-purple-rgb:   51, 128, 255;
   --tq-purple-hover: #0057FF;            /* dark: deeper blue (rest of .btn-gradient) */
+  /* CTA button blue — the ONE solid-blue button fill (.btn-gradient). Fixed
+     across BOTH themes (defined only here in :root; :root.light does NOT
+     override), so the primary CTA reads identical in light + dark: deep
+     #0057FF at rest, darker #0046CC on hover (user direction 2026-07-14 — the
+     button must not look lighter on dark). Distinct from --tq-purple, which
+     flips brighter on dark for general accents/icons where contrast on dark
+     surfaces matters. */
+  --tq-cta-blue:       #0057FF;
+  --tq-cta-blue-hover: #0046CC;
   --tq-blue:        var(--tq-purple);
   --tq-blue-rgb:    51, 128, 255;
   --tq-magenta:     var(--tq-purple);
@@ -183,7 +192,7 @@
      multi-colour. */
   --tq-export-pdf:        rgba(239, 68, 68, 0.18);   /* PDF — red */
   --tq-export-pptx:       rgba(255, 159, 64, 0.20);  /* PowerPoint — orange */
-  --tq-export-html:       rgba(125, 45, 255, 0.22);  /* HTML — violet */
+  --tq-export-gslides:    rgba(244, 180, 0, 0.20);   /* Google Slides — brand yellow */
   --tq-export-png:        rgba(147, 38, 201, 0.20);  /* PNGs — magenta */
 
   /* 2. Surfaces */
@@ -255,6 +264,11 @@
   --tq-status-down-text:   #fca5a5;
   --tq-status-down-bg:     rgba(239, 68, 68, 0.12);
   --tq-status-down-border: rgba(239, 68, 68, 0.30);
+  /* 4c. Premium gold - the crown glyph on tier-gated affordances (gated
+     export formats, future premium upsells). Distinct from the warn triad:
+     an upsell accent, not a status. Amber-400 on dark, amber-500 on light
+     (the light override sits with the other light tokens below). */
+  --tq-premium-gold: #fbbf24;
   /* §22 elevation scale (flat, opaque — no glass). Lowest → highest:
        --tq-bg      #0A0A0A  page gutter (behind the rounded content panel)
        --tq-panel   #161616  the rounded content panel (gray pages)
@@ -429,6 +443,8 @@
   --tq-status-down-text:   #b91c1c;
   --tq-status-down-bg:     rgba(239, 68, 68, 0.10);
   --tq-status-down-border: rgba(239, 68, 68, 0.40);
+  /* Premium gold: amber-500 so the crown keeps contrast on white surfaces. */
+  --tq-premium-gold: #f59e0b;
   /* Disabled controls dim toward WHITE here, so 0.4 reads as a near-invisible
      ghost; raise the floor so disabled pills/buttons stay legible in light. */
   --tq-disabled-opacity:   0.6;
@@ -1069,11 +1085,12 @@ html.app-shell-scroll body {
 
 /* ─── Buttons ─── */
 .btn-gradient {
-  /* §21: solid purple, NOT a gradient (the brand gradient is reserved for AI
-     buttons only now). Name kept so the ~24 CTA call sites don't need edits.
-     §24: colours FLIPPED — rest = the deeper purple, hover = the lighter one
-     (user direction: make the inverted pricing-CTA style the app-wide default). */
-  background: var(--tq-purple-hover);
+  /* Solid blue CTA (NOT a gradient — the brand gradient is reserved for AI
+     buttons). Name kept so the ~24 CTA call sites don't need edits.
+     Uses the fixed --tq-cta-blue pair (same value in both themes), so the
+     button reads IDENTICAL in light + dark and on the pro-tier aura card:
+     deep #0057FF at rest, darker #0046CC on hover. No theme override needed. */
+  background: var(--tq-cta-blue);
   /* Fixed white — the button bg is purple in BOTH themes, so the text must stay
      white (not --tq-text-primary, which flips dark on light). */
   color: #fff;
@@ -1096,18 +1113,10 @@ html.app-shell-scroll body {
   transition: background 0.2s ease;
 }
 
-/* §24: hover = the lighter purple (flipped — see `.btn-gradient` above). */
+/* Hover darkens in BOTH themes (rest #0057FF → #0046CC). Fixed token, no
+   theme override — the button is theme-agnostic by design. */
 .btn-gradient:hover:not(:disabled) {
-  background: var(--tq-purple);
-}
-/* Light mode flips the rest/hover shades (user direction): rest = the normal
-   blue, hover = the darker blue (the reverse of the dark theme's deep-rest /
-   light-hover). --tq-purple is the normal blue, --tq-purple-hover the darker. */
-:root.light .btn-gradient {
-  background: var(--tq-purple);
-}
-:root.light .btn-gradient:hover:not(:disabled) {
-  background: var(--tq-purple-hover);
+  background: var(--tq-cta-blue-hover);
 }
 
 /* ─── Animated Mesh-Gradient Button ─────────────────────────────────
@@ -1239,6 +1248,152 @@ html.app-shell-scroll body {
   /* No `box-shadow` on hover — buttons are flat app-wide. The
      full mesh fill + brightness shift already give the hover
      state strong enough affordance. */
+}
+
+/* ─── Aura glow — the "Popular" pricing tier ─────────────────────────
+   `.tq-aura`: the popular tier's card FACE is a living aura (user
+   direction 2026-07-13, applied on PricingTiers + BillingSection,
+   demoed on /brand §05). Third sanctioned home for color energy, next
+   to the aurora and the AI mesh - and it stays all-blue: the SAME
+   registered --mesh-* drift properties + mx/my keyframes the AI button
+   uses, at calmer card-scale durations.
+
+   Geometry: the ::before occupies the card's BOTTOM ~60% (like the
+   aurora's bottom-anchored wash) and feathers into the face through an
+   eased mask fade - no hard start line. No blur filter needed, the wide
+   radial falloffs are inherently soft and stay inside the rounded
+   corners. Within the card's own stacking context (isolation) the
+   negative-z pseudo paints above the surface base but below every
+   child, so text, ticks and the Popular pill all stay crisp on top.
+   `--tq-aura-alpha` caps the mesh strength per theme (breathe pulses
+   beneath the cap) so copy keeps contrast on both surfaces. */
+.tq-aura {
+  position: relative;
+  isolation: isolate;
+  --tq-aura-alpha: 0.5;
+  /* Same drift keyframes as .btn-gradient-anim (the four blobs the aura
+     uses), slowed ~5x for card scale. Prime-ish durations again - the
+     pattern never visibly loops. */
+  animation:
+    mx1 5.3s ease-in-out infinite alternate,
+    my1 8.9s ease-in-out infinite alternate,
+    mx2 9.7s ease-in-out infinite alternate,
+    my2 6.7s ease-in-out infinite alternate,
+    mx3 12.1s ease-in-out infinite alternate,
+    my3 4.9s ease-in-out infinite alternate,
+    mx4 7.9s ease-in-out infinite alternate,
+    my4 10.3s ease-in-out infinite alternate;
+}
+
+/* Light theme: the popular card flips to a DARK ISLAND (user direction
+   2026-07-13): the aura mesh washed out on white, so instead the card
+   keeps its dark-mode face - dark surface, white text, full-strength
+   glow - and pops against the light siblings. Done by re-scoping the
+   SURFACE tokens the card's subtree consumes (surface, text, hairline,
+   overlays) to the dark :root values, so utilities flip without touching
+   markup. Values MIRROR :root - keep in sync.
+   NOTE (2026-07-14): the blue ACCENT tokens (--tq-purple/-hover/-rgb) are
+   deliberately NOT re-scoped - the CTA + Popular pill must be the SAME
+   blue as every other blue button (user direction: blue-button
+   consistency), so they resolve the light-theme #0057FF/#0046CC like the
+   Plus/Max cards rather than the brighter dark-mode blue. */
+:root.light .tq-aura {
+  --tq-surface: oklch(0.205 0 0);
+  --tq-text-primary: #ffffff;
+  --tq-text-muted: #b4b4b4;
+  --tq-border-hairline: rgba(255, 255, 255, 0.1);
+  --tq-overlay-soft: rgba(255, 255, 255, 0.05);
+  --tq-overlay: rgba(255, 255, 255, 0.10);
+  --tq-overlay-strong: rgba(255, 255, 255, 0.18);
+  color: var(--tq-text-primary);
+}
+
+.tq-aura::before {
+  content: "";
+  position: absolute;
+  /* Bottom ~60% of the card. Top corners never show (feathered away
+     below), bottom corners follow the card radius. */
+  inset: 40% 0 0 0;
+  border-radius: inherit;
+  /* SATURATED blues only (user direction 2026-07-13) - the pale
+     highlight tints (#66A3FF / #7DB8FF) washed the aura out. Wide
+     70-75% falloffs = the soft "aura" read without a blur filter
+     (nothing to leak past the card edge). */
+  background:
+    radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #0042E0 0%, transparent 75%),
+    radial-gradient(circle at var(--mesh-x2) var(--mesh-y2), #0057FF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #1E6BFF 0%, transparent 75%),
+    radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #3380FF 0%, transparent 70%);
+  filter: saturate(1.3);
+  /* The top feather: an eased multi-stop fade (not a 2-stop linear,
+     whose abrupt start reads as a band) so the wash merges cleanly
+     into the card face. */
+  -webkit-mask-image: linear-gradient(
+    to top,
+    #000 0%,
+    #000 22%,
+    rgba(0, 0, 0, 0.72) 45%,
+    rgba(0, 0, 0, 0.38) 65%,
+    rgba(0, 0, 0, 0.14) 83%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to top,
+    #000 0%,
+    #000 22%,
+    rgba(0, 0, 0, 0.72) 45%,
+    rgba(0, 0, 0, 0.38) 65%,
+    rgba(0, 0, 0, 0.14) 83%,
+    transparent 100%
+  );
+  z-index: -1;
+  pointer-events: none;
+  /* Breathing pulse on top of the drift - the "aura" read. var() keeps
+     the pulse under the per-theme alpha cap. */
+  animation: tq-aura-breathe 4.5s ease-in-out infinite alternate;
+}
+
+@keyframes tq-aura-breathe {
+  from { opacity: calc(var(--tq-aura-alpha) * 0.62); }
+  to   { opacity: var(--tq-aura-alpha); }
+}
+
+/* ─── Free-tier branding watermark ───────────────────────────────────
+   "Designed by taqreer.ai" pill pinned to the canvas bottom end for
+   free-plan deck owners (BrandWatermark.tsx; the PNG export stamps the
+   same treatment server-side). Dark scrim + white text + faint white
+   hairline reads over ANY slide color: the scrim carries it on light
+   slides, the hairline separates it on dark ones. pointer-events
+   re-enabled here because its host frames are pointer-events:none
+   overlays; click = upsell. Same values both themes on purpose - it
+   overlays SLIDE content, not app chrome. */
+.tq-watermark {
+  position: absolute;
+  inset-inline-end: 12px;
+  bottom: 12px;
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  /* White pill, black text, at 40% opacity (user direction 2026-07-14:
+     bg white, text black, opacity reduced 60%). The whole pill fades
+     together so it stays a subtle mark over any slide color; hover lifts
+     it toward full so the upsell affordance is discoverable. */
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  color: #000;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  opacity: 0.8;
+  transition: opacity 0.2s ease;
+}
+.tq-watermark:hover {
+  opacity: 1;
 }
 
 .btn-gradient-anim:hover::before { opacity: 0; }
@@ -1813,13 +1968,14 @@ html.app-shell-scroll body {
    as the brand colour. Folded out of an inline `style` in Hero.tsx
    so the surface stays token-driven, no hardcoded color. */
 .hero-stat-pill {
-  /* Opaque purple + white text (was a faint violet tint that read low-contrast
-     on light). Solid reads clearly in both themes. Uses the SAME fill as
-     `.btn-gradient` (--tq-purple-hover) so the pill matches the CTA blue exactly
-     (user direction 2026-06-14, they read as different blues otherwise). */
-  background: var(--tq-purple-hover);
+  /* Opaque blue + white text (was a faint tint that read low-contrast on
+     light). Uses the SAME fixed CTA fill as `.btn-gradient` (--tq-cta-blue)
+     so the pill matches the button blue EXACTLY in both themes (user
+     direction 2026-06-14, reinforced 2026-07-14 when the CTA moved to the
+     theme-agnostic --tq-cta-blue token). */
+  background: var(--tq-cta-blue);
   color: #fff;
-  border: 1px solid var(--tq-purple-hover);
+  border: 1px solid var(--tq-cta-blue);
 }
 
 /* ─── Hero fold composition (landing only, 2026-06-11) ───
@@ -1876,8 +2032,31 @@ html.app-shell-scroll body {
 .hero-enter {
   animation: hero-rise 0.7s ease-out both;
 }
+/* The hero CTA combines `.hero-enter` with `.btn-gradient-anim`. Both set
+   the `animation` SHORTHAND, and this rule sits after PATTERN 4 in the
+   file - so at equal specificity it was clobbering the mesh drift: the
+   CTA rose in once and froze (user-flagged 2026-07-13). The combined
+   selector runs the entry rise AND the full drift list together. Keep
+   the drift list in sync with .btn-gradient-anim. */
+.hero-enter.btn-gradient-anim {
+  animation:
+    hero-rise 0.7s ease-out both,
+    mx1 1.0s ease-in-out infinite alternate,
+    my1 1.6s ease-in-out infinite alternate,
+    mx2 1.9s ease-in-out infinite alternate,
+    my2 1.3s ease-in-out infinite alternate,
+    mx3 2.5s ease-in-out infinite alternate,
+    my3 0.7s ease-in-out infinite alternate,
+    mx4 1.2s ease-in-out infinite alternate,
+    my4 1.8s ease-in-out infinite alternate,
+    mx5 0.9s ease-in-out infinite alternate,
+    my5 1.5s ease-in-out infinite alternate,
+    mx6 2.0s ease-in-out infinite alternate,
+    my6 2.3s ease-in-out infinite alternate;
+}
 @media (prefers-reduced-motion: reduce) {
-  .hero-enter { animation: none; }
+  .hero-enter,
+  .hero-enter.btn-gradient-anim { animation: none; }
 }
 
 .group:hover .nav-icon {

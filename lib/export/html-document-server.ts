@@ -38,6 +38,15 @@ export type HtmlDocumentServerOptions = {
   // single long page they screenshot from, not paginated print
   // output.
   printPageBreaks?: boolean;
+  // Free-tier branding (2026-07-13): stamp a "Designed by taqreer.ai"
+  // pill on each slide's bottom end. STRICTLY opt-in and default false:
+  // the bake/vision-revision loop and the thumbnail pipeline share this
+  // builder and must render the TRUE deck (the vision model may never
+  // see a watermark it would try to "fix"). Only the export routes pass
+  // true, gated on the deck OWNER being on the free plan. The badge is
+  // emitted OUTSIDE sanitizeSlideHtmlServer's output, so it is never
+  // part of (or persisted into) the slide HTML itself.
+  watermark?: boolean;
 };
 
 export function buildHtmlDocumentServer(
@@ -99,6 +108,13 @@ export function buildHtmlDocumentServer(
     .map(([k, v]) => `    ${k}: ${escapeCssValue(v)};`)
     .join("\n");
 
+  // Trusted literal (never user content), appended after the sanitized
+  // slide HTML inside each .hx-slide. Same visual treatment as the
+  // studio's .tq-watermark pill, at canvas scale.
+  const watermarkHtml = options.watermark
+    ? `<div class="hx-watermark">Designed by taqreer.ai</div>`
+    : "";
+
   const slides = manifest.slides
     .map(
       (s) =>
@@ -106,7 +122,7 @@ export function buildHtmlDocumentServer(
           manifest.language
         }" data-slide-id="${escapeAttr(s.slideId)}">\n${sanitizeSlideHtmlServer(
           s.html,
-        )}\n</div>`,
+        )}\n${watermarkHtml}</div>`,
     )
     .join("\n\n");
 
@@ -159,6 +175,30 @@ ${cssVars}
     background: var(--brand-bg);
     position: relative;
     overflow: hidden;
+  }${
+    options.watermark
+      ? `
+  /* Free-tier branding pill - white bg, black text, 40% opacity (mirror
+     of the studio's .tq-watermark, scaled up for the 1920px canvas).
+     inset-inline-end follows the slide's dir attribute. */
+  .hx-watermark {
+    position: absolute;
+    inset-inline-end: 32px;
+    bottom: 32px;
+    z-index: 2147483647;
+    padding: 8px 18px;
+    border-radius: 9999px;
+    background: #fff;
+    border: 2px solid rgba(0, 0, 0, 0.10);
+    color: #000;
+    font-family: system-ui, sans-serif;
+    font-size: 20px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    opacity: 0.8;
+  }`
+      : ""
   }${pageBreakCss}
 </style>
 </head>

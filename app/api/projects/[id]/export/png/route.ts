@@ -33,6 +33,9 @@ import {
 } from "@/lib/schema/slide";
 import { hydrateManifestImages } from "@/lib/images/hydrate-manifest";
 import { buildHtmlDocumentServer } from "@/lib/export/html-document-server";
+import { exporterHasPaidExports } from "@/lib/export/export-entitlement";
+import { EXPORT_GATE_TIER } from "@/lib/export/export-gating";
+import { isPaidPlan } from "@/lib/plan";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -91,6 +94,10 @@ export async function POST(
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     include: {
+      // Owner plan + role: free-plan owners' PNG exports carry the
+      // "Designed by taqreer.ai" watermark (owner-gated, not exporter-
+      // gated - upgrading the OWNER unbrands their decks everywhere).
+      user: { select: { plan: true, role: true } },
       presentation: {
         include: {
           versions: {
@@ -137,10 +144,36 @@ export async function POST(
     );
   }
 
+  // Tier gate (2026-07-13): PNG stays free on standard decks, but on 3:4
+  // social decks (whose only export formats are PDF + PNG) it's a paid
+  // format - free and anonymous callers get a 402. Gated on the
+  // EXPORTER's plan, not the deck owner's. Checked after the manifest
+  // parse because the FORMAT decides the gate, and before Puppeteer so a
+  // gated call never pays the render cost.
+  if (
+    (manifest.format ?? "16:9") === "3:4" &&
+    !(await exporterHasPaidExports(access.user.id))
+  ) {
+    return NextResponse.json(
+      {
+        error: "Exporting social decks requires a paid plan",
+        code: "export_gated",
+        requiredTier: EXPORT_GATE_TIER,
+      },
+      { status: 402 },
+    );
+  }
+
   const { width: canvasW, height: canvasH } = dimensionsForFormat(
     manifest.format,
   );
-  const html = buildHtmlDocumentServer(manifest);
+  // Free-tier branding: watermark PNG exports of decks whose OWNER is on
+  // the free plan (admins exempt). Opt-in flag - the bake + thumbnail
+  // pipelines share this builder and must stay watermark-free.
+  const html = buildHtmlDocumentServer(manifest, {
+    watermark:
+      !isPaidPlan(project.user.plan) && project.user.role !== "admin",
+  });
 
   // Puppeteer + Chrome. Args identical to the thumbnail pipeline so
   // the runtime contract is single-sourced. Container deployments

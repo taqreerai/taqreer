@@ -30,6 +30,15 @@ export function isProPlan(plan: string | null | undefined): boolean {
 }
 
 /**
+ * Any paid tier (plus and up). Gates the paid export formats (user
+ * direction 2026-07-13: free keeps PNG only, and loses even PNG on
+ * 3:4 social decks). Unknown/absent plans normalize to free.
+ */
+export function isPaidPlan(plan: string | null | undefined): boolean {
+  return normalizePlan(plan) !== "free";
+}
+
+/**
  * Localized tier label from the planUsage dict slice (which carries the
  * free/plus/pro/max strings). Centralizes the per-plan name lookup that
  * the sidebar ring, plan badge, plan banner, and billing cards all share,

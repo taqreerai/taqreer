@@ -14,6 +14,7 @@ import {
   type SlideFormat,
 } from "@/lib/schema/slide";
 import { hydrateManifestImages } from "@/lib/images/hydrate-manifest";
+import { isPaidPlan } from "@/lib/plan";
 
 // Per-slide state shared with DeckView for the pill (lock badge,
 // undo affordance, version count, cached comments). Stays a flat
@@ -90,6 +91,14 @@ export type InitialState = {
   // the generating-state placeholder grid (when the manifest isn't ready
   // yet) so the cards have the correct orientation from the first paint.
   initialFormat: SlideFormat;
+  /**
+   * Free-tier branding (2026-07-13): true when the deck OWNER is on the
+   * free plan (admins exempt). DeckView renders the "Designed by
+   * taqreer.ai" watermark over the canvas - a render-time overlay only,
+   * never part of the stored slide HTML, gated on the owner's plan (not
+   * the viewer's) so upgrading removes it from all the owner's decks.
+   */
+  brandingWatermark: boolean;
   /**
    * Reload-defense for partial-slide regen (2026-05-27). When a Job
    * row of type `deck.regenerate.partial` is still in flight (status:
@@ -409,6 +418,9 @@ export async function loadProject(
       // generating-state placeholder grid in DeckView shows the correct
       // orientation BEFORE the manifest finishes streaming.
       format: true,
+      // Owner plan + role for the free-tier branding watermark (see
+      // InitialState.brandingWatermark).
+      user: { select: { plan: true, role: true } },
       presentation: {
         select: {
           id: true,
@@ -468,6 +480,8 @@ export async function loadProject(
     initialSlideStates,
     initialFormat: narrowFormat(project.format),
     initialActiveRegen,
+    brandingWatermark:
+      !isPaidPlan(project.user.plan) && project.user.role !== "admin",
   };
 }
 

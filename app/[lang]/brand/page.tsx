@@ -811,6 +811,30 @@ export default async function BrandPage() {
                   AI action, it gets no glow.
                 </p>
               </Frame>
+              <Frame className="space-y-4">
+                <Label>Aura (popular tier)</Label>
+                <div className="flex h-56 items-center justify-center">
+                  <div className="tq-aura surface-card relative w-56 rounded-2xl p-6 text-center">
+                    <div className="hero-stat-pill absolute -top-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full px-3 py-1 text-[11px] font-medium">
+                      <span
+                        className="h-1.5 w-1.5 rounded-full"
+                        style={{ background: "#fff" }}
+                      />
+                      Popular
+                    </div>
+                    <p className="mt-2 text-lg font-medium">Pro</p>
+                    <p className="mt-1 text-[13px] text-muted-foreground">
+                      10,000 credits / month
+                    </p>
+                  </div>
+                </div>
+                <p className="text-[12px] leading-relaxed text-muted-foreground">
+                  <Tag>.tq-aura</Tag> - the popular pricing tier&apos;s card
+                  face is a living aura: the AI button&apos;s all-blue mesh,
+                  slowed to card scale, breathing under the content. Third and
+                  final sanctioned home for color energy.
+                </p>
+              </Frame>
             </div>
           </Section>
 

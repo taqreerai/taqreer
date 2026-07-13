@@ -50,7 +50,7 @@ export default function GlobalError({
         <p className="text-muted">{t.subtitle}</p>
         <button
           onClick={reset}
-          className="rounded-lg bg-[var(--tq-blue)] px-6 py-3 text-base text-foreground cursor-pointer"
+          className="btn-gradient px-6 py-3 text-base cursor-pointer"
         >
           {t.retry}
         </button>

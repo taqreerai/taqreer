@@ -26,6 +26,7 @@ import {
   type ThemeType,
 } from "@/lib/schema/slide";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
+import { BrandWatermark } from "@/components/preview/BrandWatermark";
 import { SlideEditor } from "@/components/preview/editor/SlideEditor";
 import { StylePill } from "@/components/preview/editor/StylePill";
 import { LayersPanel } from "@/components/preview/editor/LayersPanel";
@@ -213,6 +214,14 @@ type Props = {
     versionId: string;
     targetSlideIds: string[];
   } | null;
+  /**
+   * Free-tier branding (2026-07-13): the deck OWNER is on the free plan,
+   * so the "Designed by taqreer.ai" watermark pins to the canvas. A
+   * render-time overlay in THIS document - never inside the editor
+   * iframe's <section>, so it can't be selected, edited, serialized or
+   * baked. Clicking it upsells (UpgradeModal).
+   */
+  brandingWatermark?: boolean;
 };
 
 type DerivedStatus = "generating" | "completed" | "failed" | "cancelled";
@@ -336,6 +345,7 @@ export function DeckView({
   initialFormat,
   initialMainSidebarWidth = 260,
   initialActiveRegen = null,
+  brandingWatermark = false,
 }: Props) {
   // Capability flags derived from role — passed/used wherever the
   // UI gates a mutation affordance. View-only sees the deck and
@@ -5041,9 +5051,19 @@ export function DeckView({
               {canComment && !isFocusedRegenerating
                 ? heroCommentOverlay(artboardFit.scale)
                 : null}
+              {/* Free-tier watermark, EDIT mode: rides the same pinned
+                  fit-rect frame as the comment overlay - parent-document
+                  chrome, never inside the iframe <section>, so the layers
+                  panel / serialize / bake can't see it. */}
+              {brandingWatermark ? <BrandWatermark /> : null}
             </div>
           ) : !generating && canComment && !isFocusedRegenerating ? (
             heroCommentOverlay(gridScale)
+          ) : null}
+          {/* Free-tier watermark, VIEWER mode: the motion.div IS the
+              artboard, so pin directly to it. */}
+          {!artboardFit && !generating && brandingWatermark ? (
+            <BrandWatermark />
           ) : null}
         </motion.div>
       </div>

@@ -1,7 +1,7 @@
 "use client";
 
 // Studio top-header Export control: ONE "تصدير" button → a portal'd glass
-// dropdown with the four formats (PPTX / PDF / PNG / HTML). Replaces the four
+// dropdown with the four formats (PPTX / PDF / Google Slides / PNG). Replaces the four
 // separate export buttons that used to live in the bottom toolbar — those moved
 // up to the header and collapsed here (command-bar redesign, plan-editor §16).
 //
@@ -20,17 +20,24 @@ import { motion, AnimatePresence } from "framer-motion";
 import type { SlideManifest, SlideFormat } from "@/lib/schema/slide";
 import { useExportActions, type ExportKind } from "@/lib/preview/use-export-actions";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { useCreditBalance } from "@/lib/credits/store";
+import { isExportGated, EXPORT_GATE_TIER } from "@/lib/export/export-gating";
+import { UpgradeModal } from "@/components/billing/UpgradeModal";
+import { GoogleSlidesReadyDialog } from "@/components/export/GoogleSlidesReadyDialog";
+import { planLabel } from "@/lib/plan";
 
 const MENU_WIDTH = 220;
 const ANCHOR_GAP_PX = 8;
 const VIEWPORT_EDGE_INSET_PX = 12;
 
-// Fixed order (locked 2026-05-21): PPTX → PDF → PNG → HTML.
+// Fixed order (2026-07-13, user direction): PPTX → PDF → Google Slides →
+// PNG. Google Slides replaced HTML and rides the same dom-to-pptx pipeline
+// (BiDi fixes included); PNG moved last.
 const FORMATS: { kind: ExportKind; icon: string }[] = [
   { kind: "pptx", icon: "download" },
   { kind: "pdf", icon: "picture_as_pdf" },
+  { kind: "gslides", icon: "description" },
   { kind: "png", icon: "image" },
-  { kind: "html", icon: "code" },
 ];
 
 export function ExportMenu({
@@ -50,10 +57,22 @@ export function ExportMenu({
   const { dir } = useLocale();
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState<DOMRect | null>(null);
+  // Tier-gated format clicked → upgrade modal (same pattern as the gated
+  // presets in GenerateSplitButton; user direction 2026-07-13).
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const surfaceRef = useRef<HTMLDivElement | null>(null);
 
-  const { states, busy, runPptx, runPdf, runPng, runHtml } = useExportActions({
+  const {
+    states,
+    busy,
+    gslidesUrl,
+    clearGslidesUrl,
+    runPptx,
+    runPdf,
+    runPng,
+    runGslides,
+  } = useExportActions({
     projectId,
     projectTitle,
     manifest,
@@ -63,7 +82,7 @@ export function ExportMenu({
     pptx: runPptx,
     pdf: runPdf,
     png: runPng,
-    html: runHtml,
+    gslides: runGslides,
   };
 
   // 3:4 social-post decks export as PDF/PNG only — PPTX has no sane 3:4
@@ -73,6 +92,27 @@ export function ExportMenu({
     effectiveFormat === "3:4"
       ? FORMATS.filter((f) => f.kind === "pdf" || f.kind === "png")
       : FORMATS;
+
+  // Export tier gate: free keeps PNG only (and nothing on 3:4 social
+  // decks). Gated rows stay visible with a gold crown and upsell on
+  // click; the exporter's OWN plan decides, so shared/public viewers
+  // gate on their plan, not the deck owner's. `credits` is null for
+  // anonymous public-link viewers → gated (isExportGated treats null
+  // plan as free).
+  const credits = useCreditBalance();
+  const gateUser = {
+    plan: credits?.plan ?? null,
+    isAdmin: credits?.isAdmin ?? false,
+  };
+  const gatedKinds = new Set(
+    formats
+      .filter((f) => isExportGated(f.kind, effectiveFormat, gateUser))
+      .map((f) => f.kind),
+  );
+  // Crown the TRIGGER whenever any listed format is gated (i.e. for every
+  // free user - user direction 2026-07-13): the gold crown on the Export
+  // button itself signals the premium upsell before the menu even opens.
+  const anyGated = gatedKinds.size > 0;
 
   // Outside-click + Esc to close; own trigger excluded so its click toggles via
   // this component rather than instantly reopening (the ProjectActionsMenu bug).
@@ -143,9 +183,10 @@ export function ExportMenu({
       >
         <span
           className={`material-symbols-outlined text-[18px] ${busy ? "animate-spin" : ""}`}
+          style={!busy && anyGated ? { color: "var(--tq-premium-gold)" } : undefined}
           aria-hidden
         >
-          {busy ? "progress_activity" : "ios_share"}
+          {busy ? "progress_activity" : anyGated ? "crown" : "ios_share"}
         </span>
         {/* Label hides on phones (icon + caret only) so Export + Share both fit
             the dense studio top bar; the aria-label keeps it accessible. (The
@@ -179,6 +220,7 @@ export function ExportMenu({
                   <ul className="flex flex-col p-1.5">
                     {formats.map((f) => {
                       const running = states[f.kind].status === "running";
+                      const gated = gatedKinds.has(f.kind);
                       return (
                         <li key={f.kind} role="none">
                           <button
@@ -186,7 +228,12 @@ export function ExportMenu({
                             role="menuitem"
                             disabled={busy}
                             onClick={() => {
-                              void run[f.kind]();
+                              // A gated format doesn't export - it upsells.
+                              if (gated) {
+                                setUpgradeOpen(true);
+                              } else {
+                                void run[f.kind]();
+                              }
                               setOpen(false);
                             }}
                             className={`dropdown-item ${
@@ -202,6 +249,17 @@ export function ExportMenu({
                             <span className="flex-1 text-start">
                               {dict.editor.export[f.kind]}
                             </span>
+                            {gated ? (
+                              // Gold crown = tier-gated affordance (clicking
+                              // opens the upgrade modal, same as gated presets).
+                              <span
+                                className="material-symbols-outlined text-[18px]"
+                                style={{ color: "var(--tq-premium-gold)" }}
+                                aria-hidden
+                              >
+                                crown
+                              </span>
+                            ) : null}
                           </button>
                         </li>
                       );
@@ -213,6 +271,21 @@ export function ExportMenu({
             document.body,
           )
         : null}
+
+      <GoogleSlidesReadyDialog url={gslidesUrl} onClose={clearGslidesUrl} />
+
+      <UpgradeModal
+        open={upgradeOpen}
+        requiredTier={EXPORT_GATE_TIER}
+        gateContext={{
+          title: dict.components.creditGate.exportLockedTitle,
+          body: dict.components.creditGate.exportLockedBody.replace(
+            "{tier}",
+            planLabel(dict.components.planUsage, EXPORT_GATE_TIER),
+          ),
+        }}
+        onClose={() => setUpgradeOpen(false)}
+      />
     </>
   );
 }

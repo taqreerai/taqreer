@@ -227,7 +227,8 @@ export function BillingSection({
                 key={tier}
                 // Current plan = ONE clean accent border (not an outline ON TOP
                 // of the hairline, which read as a doubled/muted extra border).
-                className={`surface-card relative flex w-full flex-col rounded-2xl p-8 ${belowGate ? "opacity-50" : ""}`}
+                // Popular tier carries the animated aura halo (.tq-aura).
+                className={`surface-card relative flex w-full flex-col rounded-2xl p-8 ${belowGate ? "opacity-50" : ""} ${popular ? "tq-aura" : ""}`}
                 style={isCurrent ? { borderColor: "var(--tq-purple)" } : undefined}
               >
                 {popular && (

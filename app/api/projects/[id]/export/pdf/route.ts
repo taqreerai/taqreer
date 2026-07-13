@@ -34,6 +34,8 @@ import {
 } from "@/lib/schema/slide";
 import { hydrateManifestImages } from "@/lib/images/hydrate-manifest";
 import { buildHtmlDocumentServer } from "@/lib/export/html-document-server";
+import { exporterHasPaidExports } from "@/lib/export/export-entitlement";
+import { EXPORT_GATE_TIER } from "@/lib/export/export-gating";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -95,6 +97,22 @@ export async function POST(
   const access = await resolveProjectAccess(projectId, "view");
   if ("error" in access) {
     return NextResponse.json({ error: access.error }, { status: access.status });
+  }
+
+  // Tier gate (2026-07-13): PDF export is a paid format - free and
+  // anonymous callers get a 402. Gated on the EXPORTER's plan, not the
+  // deck owner's, so a public-link viewer can't ride a paid owner's
+  // entitlement. The client UI crowns the row and never calls here for
+  // gated users; this is the enforcement behind it.
+  if (!(await exporterHasPaidExports(access.user.id))) {
+    return NextResponse.json(
+      {
+        error: "PDF export requires a paid plan",
+        code: "export_gated",
+        requiredTier: EXPORT_GATE_TIER,
+      },
+      { status: 402 },
+    );
   }
 
   // Resolve project + version. Same fallback logic as the PNG route:

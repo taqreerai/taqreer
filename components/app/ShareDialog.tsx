@@ -11,7 +11,7 @@
 //             View / Comment / Edit roles. No public-access pill
 //             picker — public link is always view-only.
 //   Export →  same four export pipelines the preview toolbar exposes
-//             (PPTX / PDF / HTML / PNGs). The modal consumes the
+//             (PDF / PPTX / Google Slides / PNGs). The modal consumes the
 //             `useExportActions` hook so both surfaces run the same
 //             handlers / serialise via the same `busy` flag.
 //             LinkedIn share button at the bottom of this tab.
@@ -36,6 +36,11 @@ import { useExportActions } from "@/lib/preview/use-export-actions";
 import { Avatar } from "@/components/common/Avatar";
 import { Toggle } from "@/components/create/controls";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { useCreditBalance } from "@/lib/credits/store";
+import { isExportGated, EXPORT_GATE_TIER } from "@/lib/export/export-gating";
+import { UpgradeModal } from "@/components/billing/UpgradeModal";
+import { GoogleSlidesReadyDialog } from "@/components/export/GoogleSlidesReadyDialog";
+import { planLabel } from "@/lib/plan";
 
 type ShareRow = {
   id: string;
@@ -1189,7 +1194,31 @@ function ExportTabBody({
   });
   // 3:4 social-post decks export as PDF/PNG only — mirror ExportMenu's
   // filter so both surfaces hide PowerPoint + HTML for them.
-  const isCarousel = (manifest?.format ?? formatFallback ?? "16:9") === "3:4";
+  const effectiveFormat = manifest?.format ?? formatFallback ?? "16:9";
+  const isCarousel = effectiveFormat === "3:4";
+  // Export tier gate — mirror ExportMenu: free keeps PNG only (nothing on
+  // 3:4 social decks); gated rows crown + upsell instead of exporting.
+  const credits = useCreditBalance();
+  const gateUser = {
+    plan: credits?.plan ?? null,
+    isAdmin: credits?.isAdmin ?? false,
+  };
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const rowProps = (kind: "pptx" | "pdf" | "png" | "gslides") => {
+    const gated = isExportGated(kind, effectiveFormat, gateUser);
+    const run = {
+      pptx: actions.runPptx,
+      pdf: actions.runPdf,
+      png: actions.runPng,
+      gslides: actions.runGslides,
+    }[kind];
+    return {
+      gated,
+      running: actions.states[kind].status === "running",
+      disabled: actions.busy && actions.states[kind].status !== "running",
+      onClick: gated ? () => setUpgradeOpen(true) : run,
+    };
+  };
   return (
     <div className="space-y-4">
       <h3 className="text-sm font-medium text-foreground">
@@ -1204,9 +1233,7 @@ function ExportTabBody({
           accent="var(--tq-export-pdf)"
           label="PDF"
           sub={dict.dialogs.share.fmtPdf}
-          running={actions.states.pdf.status === "running"}
-          disabled={actions.busy && actions.states.pdf.status !== "running"}
-          onClick={actions.runPdf}
+          {...rowProps("pdf")}
         />
         {isCarousel ? null : (
           <ExportRow
@@ -1214,20 +1241,16 @@ function ExportTabBody({
             accent="var(--tq-export-pptx)"
             label="PowerPoint"
             sub={dict.dialogs.share.fmtPptx}
-            running={actions.states.pptx.status === "running"}
-            disabled={actions.busy && actions.states.pptx.status !== "running"}
-            onClick={actions.runPptx}
+            {...rowProps("pptx")}
           />
         )}
         {isCarousel ? null : (
           <ExportRow
-            icon="code"
-            accent="var(--tq-export-html)"
-            label="HTML"
-            sub={dict.dialogs.share.fmtHtml}
-            running={actions.states.html.status === "running"}
-            disabled={actions.busy && actions.states.html.status !== "running"}
-            onClick={actions.runHtml}
+            icon="description"
+            accent="var(--tq-export-gslides)"
+            label="Google Slides"
+            sub={dict.dialogs.share.fmtGslides}
+            {...rowProps("gslides")}
           />
         )}
         <ExportRow
@@ -1235,9 +1258,7 @@ function ExportTabBody({
           accent="var(--tq-export-png)"
           label="PNGs"
           sub={dict.dialogs.share.fmtPng}
-          running={actions.states.png.status === "running"}
-          disabled={actions.busy && actions.states.png.status !== "running"}
-          onClick={actions.runPng}
+          {...rowProps("png")}
         />
       </ul>
 
@@ -1251,6 +1272,28 @@ function ExportTabBody({
         <p className="text-xs text-foreground/50">{dict.dialogs.share.orShareOn}</p>
         <LinkedInShareButton projectId={projectId} />
       </div>
+
+      {/* Google Slides success — Open button rides a fresh click gesture
+          (popup-safe). z-[1200] portal, stacks above this dialog. */}
+      <GoogleSlidesReadyDialog
+        url={actions.gslidesUrl}
+        onClose={actions.clearGslidesUrl}
+      />
+
+      {/* Gated-format upsell — z-[1200] portal, stacks above this dialog
+          (z-[1001]). Same gateContext copy the studio ExportMenu uses. */}
+      <UpgradeModal
+        open={upgradeOpen}
+        requiredTier={EXPORT_GATE_TIER}
+        gateContext={{
+          title: dict.components.creditGate.exportLockedTitle,
+          body: dict.components.creditGate.exportLockedBody.replace(
+            "{tier}",
+            planLabel(dict.components.planUsage, EXPORT_GATE_TIER),
+          ),
+        }}
+        onClose={() => setUpgradeOpen(false)}
+      />
     </div>
   );
 }
@@ -1262,6 +1305,7 @@ function ExportRow({
   sub,
   running,
   disabled,
+  gated,
   onClick,
 }: {
   icon: string;
@@ -1270,6 +1314,9 @@ function ExportRow({
   sub: string;
   running: boolean;
   disabled: boolean;
+  // Tier-gated format: the trailing download glyph becomes a gold crown
+  // and the click upsells (UpgradeModal) instead of exporting.
+  gated: boolean;
   onClick: () => void;
 }) {
   return (
@@ -1299,13 +1346,23 @@ function ExportRow({
           <div className="text-sm text-foreground">{label}</div>
           <div className="text-[11px] text-foreground/45">{sub}</div>
         </div>
-        <span
-          className="material-symbols-outlined text-foreground/40 transition-colors group-hover:text-foreground"
-          style={{ fontSize: 20 }}
-          aria-hidden
-        >
-          {running ? "progress_activity" : "download"}
-        </span>
+        {gated && !running ? (
+          <span
+            className="material-symbols-outlined"
+            style={{ fontSize: 20, color: "var(--tq-premium-gold)" }}
+            aria-hidden
+          >
+            crown
+          </span>
+        ) : (
+          <span
+            className="material-symbols-outlined text-foreground/40 transition-colors group-hover:text-foreground"
+            style={{ fontSize: 20 }}
+            aria-hidden
+          >
+            {running ? "progress_activity" : "download"}
+          </span>
+        )}
       </button>
     </li>
   );
