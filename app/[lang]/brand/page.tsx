@@ -824,7 +824,7 @@ export default async function BrandPage() {
                     </div>
                     <p className="mt-2 text-lg font-medium">Pro</p>
                     <p className="mt-1 text-[13px] text-muted-foreground">
-                      10,000 credits / month
+                      {proAllotment.toLocaleString("en-US")} credits / month
                     </p>
                   </div>
                 </div>

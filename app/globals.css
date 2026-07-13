@@ -1305,6 +1305,7 @@ html.app-shell-scroll body {
   --tq-overlay-soft: rgba(255, 255, 255, 0.05);
   --tq-overlay: rgba(255, 255, 255, 0.10);
   --tq-overlay-strong: rgba(255, 255, 255, 0.18);
+
   color: var(--tq-text-primary);
 }
 
@@ -1376,10 +1377,9 @@ html.app-shell-scroll body {
   align-items: center;
   padding: 3px 8px;
   border-radius: 9999px;
-  /* White pill, black text, at 40% opacity (user direction 2026-07-14:
-     bg white, text black, opacity reduced 60%). The whole pill fades
-     together so it stays a subtle mark over any slide color; hover lifts
-     it toward full so the upsell affordance is discoverable. */
+  /* White pill, black text, at 80% opacity (user direction 2026-07-14).
+     The whole pill fades together so it reads over any slide color; hover
+     lifts it to full so the upsell affordance is discoverable. */
   background: #fff;
   border: 1px solid rgba(0, 0, 0, 0.10);
   color: #000;

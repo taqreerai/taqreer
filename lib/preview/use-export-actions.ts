@@ -29,9 +29,8 @@ import {
   ensureDriveToken,
   uploadPptxAsGoogleSlides,
   rasterizeSvgsForSlides,
-  GoogleSlidesConfigError,
-  GoogleAuthDeclinedError,
 } from "@/lib/export/google-slides";
+import { useDict } from "@/components/i18n/LocaleProvider";
 
 // ─── Shared cross-instance busy store ───────────────────────────────
 
@@ -132,6 +131,12 @@ export function useExportActions({
     status: "idle",
   });
   const [gslidesUrl, setGslidesUrl] = useState<string | null>(null);
+  const dict = useDict();
+  // Localized copy for the server's `export_gated` 402 so the toast is
+  // never English on an Arabic deck. The UI normally crowns gated formats
+  // + opens the upgrade modal before ever calling the route, so this is
+  // the defensive path (plan changed mid-session, devtools, etc.).
+  const gatedExportMessage = dict.components.creditGate.exportLockedTitle;
 
   // Cross-instance busy — subscribes both this instance (which sets
   // it inside each runner) AND any OTHER `useExportActions` hook
@@ -223,34 +228,29 @@ export function useExportActions({
       let token: string;
       try {
         token = await ensureDriveToken();
-      } catch (error) {
-        if (
-          error instanceof GoogleSlidesConfigError ||
-          error instanceof GoogleAuthDeclinedError
-        ) {
-          try {
-            await exportManifestAsPptx(exportManifest, `${title}.pptx`);
-            posthog.capture("deck_exported", {
-              format: "gslides_fallback_pptx",
-              project_id: projectId,
-              slide_count: manifest.slides.length,
-            });
-            setExportGslides({ status: "idle" });
-          } catch (fallbackError) {
-            setExportGslides({
-              status: "error",
-              message:
-                fallbackError instanceof Error
-                  ? fallbackError.message
-                  : "تعذر التصدير",
-            });
-          }
-          return;
+      } catch {
+        // ANY token-acquisition failure falls back to the plain PPTX
+        // download so the export never dead-ends: declined / unconfigured
+        // consent (GoogleSlidesConfigError / GoogleAuthDeclinedError) AND
+        // a blocked or unreachable GIS script (plain Error). The upload
+        // path below owns the post-token failures.
+        try {
+          await exportManifestAsPptx(exportManifest, `${title}.pptx`);
+          posthog.capture("deck_exported", {
+            format: "gslides_fallback_pptx",
+            project_id: projectId,
+            slide_count: manifest.slides.length,
+          });
+          setExportGslides({ status: "idle" });
+        } catch (fallbackError) {
+          setExportGslides({
+            status: "error",
+            message:
+              fallbackError instanceof Error
+                ? fallbackError.message
+                : "تعذر التصدير",
+          });
         }
-        setExportGslides({
-          status: "error",
-          message: error instanceof Error ? error.message : "تعذر التصدير",
-        });
         return;
       }
       try {
@@ -289,9 +289,13 @@ export function useExportActions({
         });
         if (!response.ok) {
           const data = (await response.json().catch(() => null)) as
-            | { error?: string }
+            | { error?: string; code?: string }
             | null;
-          throw new Error(data?.error ?? "PDF export failed");
+          throw new Error(
+            data?.code === "export_gated"
+              ? gatedExportMessage
+              : (data?.error ?? "PDF export failed"),
+          );
         }
         const blob = await response.blob();
         downloadBlob(blob, `${baseFileName(manifest.title || projectTitle)}.pdf`);
@@ -314,9 +318,13 @@ export function useExportActions({
         });
         if (!response.ok) {
           const data = (await response.json().catch(() => null)) as
-            | { error?: string }
+            | { error?: string; code?: string }
             | null;
-          throw new Error(data?.error ?? "PNG export failed");
+          throw new Error(
+            data?.code === "export_gated"
+              ? gatedExportMessage
+              : (data?.error ?? "PNG export failed"),
+          );
         }
         const blob = await response.blob();
         downloadBlob(

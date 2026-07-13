@@ -178,7 +178,7 @@ ${cssVars}
   }${
     options.watermark
       ? `
-  /* Free-tier branding pill - white bg, black text, 40% opacity (mirror
+  /* Free-tier branding pill - white bg, black text, 80% opacity (mirror
      of the studio's .tq-watermark, scaled up for the 1920px canvas).
      inset-inline-end follows the slide's dir attribute. */
   .hx-watermark {
