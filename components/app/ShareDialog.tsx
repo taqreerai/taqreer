@@ -32,7 +32,8 @@ import {
   AccessChipDropdown,
   type AccessRole,
 } from "@/components/app/AccessChipDropdown";
-import { useExportActions } from "@/lib/preview/use-export-actions";
+import { useExportActions, type ExportKind } from "@/lib/preview/use-export-actions";
+import { FormatIcon } from "@/components/export/FormatIcon";
 import { Avatar } from "@/components/common/Avatar";
 import { Toggle } from "@/components/create/controls";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
@@ -1225,20 +1226,17 @@ function ExportTabBody({
         {dict.dialogs.share.exportFormat}
       </h3>
       <ul className="space-y-2">
-        {/* Format accents come from `--tq-export-*` tokens in
-            globals.css so future palette tweaks propagate without
-            grepping for component-local rgba literals. */}
+        {/* Colored file-type icons (FormatIcon, 2026-07-14) on a neutral
+            chip — the icon itself carries the format's brand color now. */}
         <ExportRow
-          icon="picture_as_pdf"
-          accent="var(--tq-export-pdf)"
+          kind="pdf"
           label="PDF"
           sub={dict.dialogs.share.fmtPdf}
           {...rowProps("pdf")}
         />
         {isCarousel ? null : (
           <ExportRow
-            icon="slideshow"
-            accent="var(--tq-export-pptx)"
+            kind="pptx"
             label="PowerPoint"
             sub={dict.dialogs.share.fmtPptx}
             {...rowProps("pptx")}
@@ -1246,16 +1244,14 @@ function ExportTabBody({
         )}
         {isCarousel ? null : (
           <ExportRow
-            icon="description"
-            accent="var(--tq-export-gslides)"
+            kind="gslides"
             label="Google Slides"
             sub={dict.dialogs.share.fmtGslides}
             {...rowProps("gslides")}
           />
         )}
         <ExportRow
-          icon="image"
-          accent="var(--tq-export-png)"
+          kind="png"
           label="PNGs"
           sub={dict.dialogs.share.fmtPng}
           {...rowProps("png")}
@@ -1299,8 +1295,7 @@ function ExportTabBody({
 }
 
 function ExportRow({
-  icon,
-  accent,
+  kind,
   label,
   sub,
   running,
@@ -1308,8 +1303,7 @@ function ExportRow({
   gated,
   onClick,
 }: {
-  icon: string;
-  accent: string;
+  kind: ExportKind;
   label: string;
   sub: string;
   running: boolean;
@@ -1330,17 +1324,13 @@ function ExportRow({
           border: "1px solid var(--tq-border-hairline)",
         }}
       >
+        {/* Neutral chip — the FormatIcon carries the format color, so the
+            tile is a faint theme-aware surface, not a colored fill. */}
         <span
           className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
-          style={{ background: accent }}
+          style={{ background: "var(--tq-overlay-soft)" }}
         >
-          <span
-            className="material-symbols-outlined text-foreground"
-            style={{ fontSize: 22 }}
-            aria-hidden
-          >
-            {icon}
-          </span>
+          <FormatIcon kind={kind} size={24} />
         </span>
         <div className="flex-1 min-w-0">
           <div className="text-sm text-foreground">{label}</div>

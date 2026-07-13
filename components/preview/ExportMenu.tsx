@@ -24,20 +24,22 @@ import { useCreditBalance } from "@/lib/credits/store";
 import { isExportGated, EXPORT_GATE_TIER } from "@/lib/export/export-gating";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import { GoogleSlidesReadyDialog } from "@/components/export/GoogleSlidesReadyDialog";
+import { FormatIcon } from "@/components/export/FormatIcon";
 import { planLabel } from "@/lib/plan";
 
-const MENU_WIDTH = 220;
+const MENU_WIDTH = 224;
 const ANCHOR_GAP_PX = 8;
 const VIEWPORT_EDGE_INSET_PX = 12;
 
 // Fixed order (2026-07-13, user direction): PPTX → PDF → Google Slides →
 // PNG. Google Slides replaced HTML and rides the same dom-to-pptx pipeline
-// (BiDi fixes included); PNG moved last.
-const FORMATS: { kind: ExportKind; icon: string }[] = [
-  { kind: "pptx", icon: "download" },
-  { kind: "pdf", icon: "picture_as_pdf" },
-  { kind: "gslides", icon: "description" },
-  { kind: "png", icon: "image" },
+// (BiDi fixes included); PNG moved last. Each row shows the colored
+// file-type FormatIcon (2026-07-14).
+const FORMATS: { kind: ExportKind }[] = [
+  { kind: "pptx" },
+  { kind: "pdf" },
+  { kind: "gslides" },
+  { kind: "png" },
 ];
 
 export function ExportMenu({
@@ -236,16 +238,20 @@ export function ExportMenu({
                               }
                               setOpen(false);
                             }}
-                            className={`dropdown-item ${
+                            className={`dropdown-item export-menu-item ${
                               busy ? "cursor-not-allowed opacity-40 hover:bg-transparent!" : ""
                             }`}
                           >
-                            <span
-                              className={`material-symbols-outlined text-[18px] ${running ? "animate-spin" : ""}`}
-                              aria-hidden
-                            >
-                              {running ? "progress_activity" : f.icon}
-                            </span>
+                            {running ? (
+                              <span
+                                className="material-symbols-outlined animate-spin text-[26px]"
+                                aria-hidden
+                              >
+                                progress_activity
+                              </span>
+                            ) : (
+                              <FormatIcon kind={f.kind} size={28} />
+                            )}
                             <span className="flex-1 text-start">
                               {dict.editor.export[f.kind]}
                             </span>
@@ -253,7 +259,7 @@ export function ExportMenu({
                               // Gold crown = tier-gated affordance (clicking
                               // opens the upgrade modal, same as gated presets).
                               <span
-                                className="material-symbols-outlined text-[18px]"
+                                className="material-symbols-outlined text-[16px]"
                                 style={{ color: "var(--tq-premium-gold)" }}
                                 aria-hidden
                               >

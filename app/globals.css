@@ -2586,6 +2586,15 @@ html.app-shell-scroll body {
   color: var(--tq-text-primary);
 }
 
+/* Export-menu rows: taller + roomier than the default dropdown-item so the
+   colored file-type icons read clearly (user direction 2026-07-14). Defined
+   after .dropdown-item so it wins the overridden props at equal specificity. */
+.export-menu-item {
+  gap: 12px;
+  padding: 12px 14px;
+  font-size: 1rem;
+}
+
 /* ─── Status Messages ─── */
 .status-success {
   /* Token-backed inline success feedback (flips with the theme via the status
