@@ -48,6 +48,24 @@ function slideToJson(slide: SlideType): Prisma.InputJsonValue {
   return slide as unknown as Prisma.InputJsonValue;
 }
 
+// A USER-authored write (in-canvas edit, history restore) is a TERMINAL,
+// user-approved state for a frame slide: stamp data-tq-audited so the draft
+// derivation (missing bake marker = "awaiting bake") can never trap it.
+// Proven prod case 2026-07-13 (deck cmrigyfm...): an edit landing mid-bake
+// made the bake's stale-write guard skip that slide, and since nothing else
+// ever stamps html and the bake has no afterfix chain, the slide stayed
+// draft-chipped + edit-disabled FOREVER. Stamping at this write layer covers
+// every client path. Frame slides only (legacy decks carry no markers and
+// never chip); already-stamped html (frozen or audited) passes unchanged.
+// Same section-attribute stamp as the bake's stampAudited (deck-freeze-bake).
+function stampUserWriteAudited(html: string): string {
+  if (!html.includes("data-tq-frame")) return html;
+  if (html.includes("data-tq-frozen") || html.includes("data-tq-audited")) {
+    return html;
+  }
+  return html.replace(/<section /, '<section data-tq-audited="1" ');
+}
+
 /**
  * Seeds version 1 for every slide in a freshly-generated manifest.
  * Called from deck-generate's save step.
@@ -359,6 +377,13 @@ export async function restoreSlideToVersion(
       `Target slide JSON failed validation: ${JSON.stringify(parsed.error.issues).slice(0, 400)}`,
     );
   }
+  // Restoring an UNSTAMPED historical version (e.g. a pre-bake snapshot)
+  // would re-trap the slide in permanent draft — a restore is a user-approved
+  // terminal state, so it gets the same audited stamp as a manual edit.
+  const restored: SlideType = {
+    ...parsed.data,
+    html: stampUserWriteAudited(parsed.data.html),
+  };
 
   // Atomic: pointer + manifest update commit together. Without the
   // transaction a splice failure mid-way could leave
@@ -373,12 +398,12 @@ export async function restoreSlideToVersion(
       tx,
       presentationId,
       slideKey,
-      parsed.data,
+      restored,
     );
   });
 
   return {
-    slide: parsed.data,
+    slide: restored,
     currentVersionNumber: targetVersionNumber,
   };
 }
@@ -420,11 +445,14 @@ export async function updateSlideContentInPlace(
     (s) => s.slideId === slideKey,
   );
   if (!existing) return null;
+  // Stamp BEFORE the no-op comparison: an edit that re-sends a draft slide's
+  // exact html still writes the audited version (heals a stuck-draft slide).
+  const stampedHtml = stampUserWriteAudited(newHtml);
   // No-op: identical HTML already active.
-  if (existing.html === newHtml) return { slide: existing };
+  if (existing.html === stampedHtml) return { slide: existing };
 
   // Only `html` changes; role/slideId carry over from the live slide.
-  const newSlide: SlideType = { ...existing, html: newHtml };
+  const newSlide: SlideType = { ...existing, html: stampedHtml };
   const validated = SlideSchema.safeParse(newSlide);
   if (!validated.success) {
     throw new Error(
