@@ -515,28 +515,20 @@ async function main() {
   // ─── Section 3 - Low credits vs oversized content ────────────────
 
   {
-    // Free user burned down to exactly a 6-slide balance drops in a
-    // 2800-word brief (worth ~30 raw, capped at FREE_CAP for the Free
-    // tier). Scenario shape: the balance affords a reduced deck but not
-    // the capped hold.
+    // Free user burned down to a low balance drops in a 2800-word brief
+    // (capped at FREE_CAP for the Free tier). Scenario shape: the balance
+    // affords a reduced deck but not the capped hold. All sizes derive from
+    // the live FREE_GRANT / FREE_CAP so this survives repricing.
     const user = await makeUser("free"); // FREE_GRANT
-    const reducedTarget = 6; // the reduce offer the block must surface
-    const lowBalance = genCost("opus-fast", reducedTarget); // affords exactly 6 slides
+    const reducedTarget = Math.max(1, FREE_CAP - 1); // reduce offer, under the cap
+    const lowBalance = genCost("opus-fast", reducedTarget); // affords exactly reducedTarget slides
     const capHold = genCost("opus-fast", FREE_CAP); // the capped-brief hold
-    // Spend down: one small real deck, then a manual charge to land
-    // exactly on lowBalance.
-    await fakeGenerate({
-      userId: user.id,
-      plan: "free",
-      flow: "create",
-      preset: "opus-fast",
-      slideInput: { kind: "fixed", count: 7 },
-      outcome: { kind: "success", produce: 7 },
-    });
+    // The free grant only affords ~1 deck, so charge straight down to the
+    // target balance rather than spending a real deck first.
     await ledger.chargeCredits({
       userId: user.id,
       chargeKey: `sim-burn-${user.id}`,
-      amount: FREE_GRANT - genCost("opus-fast", 7) - lowBalance,
+      amount: FREE_GRANT - lowBalance,
       metadata: { reason: "sim burn-down" },
       ...quiet,
     }); // → lowBalance left
@@ -829,9 +821,21 @@ async function main() {
   {
     // 4.4 Two simultaneous generations racing one balance: only one wins.
     const user = await makeUser("free"); // FREE_GRANT
-    // Two identical full-cap decks; leave 1.5 jobs' worth of credits so
-    // both preflights pass but only ONE hold can fit the balance.
-    const jobCost = genCost("opus-fast", FREE_CAP);
+    // Two identical decks racing one balance; leave 1.5 jobs' worth of
+    // credits so both preflights pass but only ONE hold can fit. Deck size
+    // derives from the live grant/cap: the largest deck (<= FREE_CAP) whose
+    // 1.5x cost still fits FREE_GRANT (the small free grant may not afford
+    // 1.5 full-cap decks).
+    let raceSlides = FREE_CAP;
+    while (
+      raceSlides > 1 &&
+      genCost("opus-fast", raceSlides) +
+        Math.floor(genCost("opus-fast", raceSlides) / 2) >
+        FREE_GRANT
+    ) {
+      raceSlides -= 1;
+    }
+    const jobCost = genCost("opus-fast", raceSlides);
     const raceBalance = jobCost + Math.floor(jobCost / 2);
     await ledger.chargeCredits({
       userId: user.id,
@@ -846,16 +850,16 @@ async function main() {
         plan: "free",
         flow: "create",
         preset: "opus-fast",
-        slideInput: { kind: "fixed", count: FREE_CAP },
-        outcome: { kind: "success", produce: FREE_CAP },
+        slideInput: { kind: "fixed", count: raceSlides },
+        outcome: { kind: "success", produce: raceSlides },
       }),
       fakeGenerate({
         userId: user.id,
         plan: "free",
         flow: "create",
         preset: "opus-fast",
-        slideInput: { kind: "fixed", count: FREE_CAP },
-        outcome: { kind: "success", produce: FREE_CAP },
+        slideInput: { kind: "fixed", count: raceSlides },
+        outcome: { kind: "success", produce: raceSlides },
       }),
     ]);
     const wins = [a, b].filter((r) => r.status === "succeeded").length;

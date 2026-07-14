@@ -40,16 +40,16 @@ export type PriceSpec = {
 };
 
 // Per-month price (USD) when billed YEARLY - a uniform 15% off the
-// monthly price (2026-07 repricing; user direction 2026-07-07: 15%
-// base, and promo codes top yearly up to 25% total - see the coupon
+// monthly price (2026-07-14 Gamma-parity repricing $12/$25/$100; 15%
+// base held, and promo codes top yearly up to 25% total - see the coupon
 // guidance in app/api/stripe/checkout/route.ts). Fractional dollars
 // are fine: the ×12×100 yearly amounts are integer cents
-// (9180/19380/49980). The yearly Stripe Price charges interval=year
+// (12240/25500/102000). The yearly Stripe Price charges interval=year
 // at ×12.
 const YEARLY_PER_MONTH_USD: Record<"plus" | "pro" | "max", number> = {
-  plus: 7.65,
-  pro: 16.15,
-  max: 41.65,
+  plus: 10.2,
+  pro: 21.25,
+  max: 85,
 };
 
 const PAID_PLANS = KNOWN_PLANS.filter(

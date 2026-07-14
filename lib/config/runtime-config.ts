@@ -66,10 +66,10 @@ export const SEED_PRESETS: readonly PresetConfig[] = [
 // Preset ladder per tier (user direction 2026-07-08): free stays on the
 // no-thinking draft preset; Plus adds balanced; Pro/Max unlock medium.
 export const SEED_TIERS: readonly TierConfigRow[] = [
-  { plan: "free", priceUsd: 0,  monthlyAllotment: 0,     signupGrant: 1000, slideCap: 10, unlockedPresetKeys: ["opus-fast"], flows: ["create"], sortOrder: 0 },
-  { plan: "plus", priceUsd: 9,  monthlyAllotment: 4000,  signupGrant: 0,    slideCap: 30, unlockedPresetKeys: ["opus-fast", "opus-balanced"], flows: ["create", "enhance", "mimic", "datasheet"], sortOrder: 1 },
-  { plan: "pro",  priceUsd: 19, monthlyAllotment: 10000, signupGrant: 0,    slideCap: 60, unlockedPresetKeys: ["opus-fast", "opus-balanced", "opus-medium"], flows: ["create", "enhance", "mimic", "datasheet"], sortOrder: 2 },
-  { plan: "max",  priceUsd: 49, monthlyAllotment: 28000, signupGrant: 0,    slideCap: 75, unlockedPresetKeys: ["opus-fast", "opus-balanced", "opus-medium"], flows: ["create", "enhance", "mimic", "datasheet"], sortOrder: 3 },
+  { plan: "free", priceUsd: 0,   monthlyAllotment: 0,     signupGrant: 400, slideCap: 5,  unlockedPresetKeys: ["opus-fast"], flows: ["create"], sortOrder: 0 },
+  { plan: "plus", priceUsd: 12,  monthlyAllotment: 4000,  signupGrant: 0,   slideCap: 30, unlockedPresetKeys: ["opus-fast", "opus-balanced"], flows: ["create", "enhance", "mimic", "datasheet"], sortOrder: 1 },
+  { plan: "pro",  priceUsd: 25,  monthlyAllotment: 10000, signupGrant: 0,   slideCap: 60, unlockedPresetKeys: ["opus-fast", "opus-balanced", "opus-medium"], flows: ["create", "enhance", "mimic", "datasheet"], sortOrder: 2 },
+  { plan: "max",  priceUsd: 100, monthlyAllotment: 21000, signupGrant: 0,   slideCap: 75, unlockedPresetKeys: ["opus-fast", "opus-balanced", "opus-medium"], flows: ["create", "enhance", "mimic", "datasheet"], sortOrder: 3 },
 ];
 
 // Seed default + regen preset, mirroring DEFAULT_QUALITY / REGEN_QUALITY.
@@ -78,7 +78,7 @@ const SEED_DEFAULT_KEY = "opus-fast";
 // Mirrors IMAGE_CREDITS_PER_IMAGE (lib/credits/cost.ts) - kept as a
 // literal here to avoid a config->cost import cycle; parity is asserted
 // by scripts/check-config-parity.ts.
-const SEED_IMAGE_CREDITS = 5;
+const SEED_IMAGE_CREDITS = 10;
 
 // Mirrors REGEN_BASE_CREDITS (lib/credits/cost.ts) - same import-cycle
 // rationale + parity assertion as SEED_IMAGE_CREDITS.

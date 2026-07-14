@@ -53,12 +53,14 @@ const defaultCostLookup: CostLookup = (preset) =>
 // Haiku title/name generation - flat (§3).
 export const NAME_GEN_COST = 5;
 
-// Credits per GENERATED IMAGE on images-mode decks (2026-07 repricing:
-// gpt-image-2 costs ~$0.05-0.08/image and was previously uncharged -
-// the biggest unpriced COGS, see context/pricing-study-2026-07.md).
+// Credits per GENERATED IMAGE on images-mode decks. 2026-07-14 repricing:
+// bumped 5 -> 10. Measured prod COGS is ~$0.053/image (gpt-image-2) at
+// ~3.36 images/deck, so 5 credits (~$0.011 revenue) sold images ~5x below
+// cost; 10 halves the subsidy while keeping images cheap. Still below the
+// ~24-credit full break-even (deliberate, growth-first).
 // This is the CLIENT-SAFE fallback; the server reads the DB-backed
 // admin knob via getImageCredits() (lib/config/runtime-config).
-export const IMAGE_CREDITS_PER_IMAGE = 5;
+export const IMAGE_CREDITS_PER_IMAGE = 10;
 
 /**
  * The image surcharge a generation HOLDS for: one image per slide, capped
@@ -93,24 +95,30 @@ export type TierConfig = {
   flows: readonly Flow[];
 };
 
-// The tier ladder - growth-first repricing 2026-07-07 (see
-// context/pricing-study-2026-07.md §1): undercuts Gamma on every tier
-// with ~2x its credits; free = 1,000 one-time (~4 decks incl. images).
+// The tier ladder. 2026-07-14 repricing to Gamma parity (see
+// context/pricing-study-2026-07.md + the 2026-07-14 re-eval): prices match
+// Gamma's $12/$25/$100 (was $9/$19/$49), keeping our own credit scale
+// (Gamma credits are a ~10x-different unit). Max allotment 28,000 -> 21,000
+// targets ~60% full-burn gross margin at $100 on measured ~$0.0019/credit
+// COGS. Plus/Pro credits held generous as acquisition tiers. free = 400 /
+// 5-cap (admin-set 2026-07-14; ~1 deck, ~$0.76 worst-case COGS/user).
 // Names Free/Plus/Pro/Max per user direction 2026-06-11. Keys match
-// lib/plan.ts KNOWN_PLANS.
+// lib/plan.ts KNOWN_PLANS. NOTE: live charges come from Stripe (priceUsd is
+// display-only) and live allotments from the DB Tier rows; these constants
+// are the seed + client-safe fallback (parity asserted vs SEED_TIERS).
 export const TIERS: Record<KnownPlan, TierConfig> = {
   // Preset ladder 2026-07-08: free = draft only (no thinking); Plus adds
   // balanced; Pro/Max unlock the medium "professional design" preset.
   free: {
     priceUsd: 0,
     monthlyAllotment: 0,
-    signupGrant: 1000,
-    slideCap: 10,
+    signupGrant: 400,
+    slideCap: 5,
     presets: ["opus-fast"],
     flows: ["create"],
   },
   plus: {
-    priceUsd: 9,
+    priceUsd: 12,
     monthlyAllotment: 4000,
     signupGrant: 0,
     slideCap: 30,
@@ -118,7 +126,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     flows: ALL_FLOWS,
   },
   pro: {
-    priceUsd: 19,
+    priceUsd: 25,
     monthlyAllotment: 10000,
     signupGrant: 0,
     slideCap: 60,
@@ -126,8 +134,8 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     flows: ALL_FLOWS,
   },
   max: {
-    priceUsd: 49,
-    monthlyAllotment: 28000,
+    priceUsd: 100,
+    monthlyAllotment: 21000,
     signupGrant: 0,
     slideCap: 75,
     presets: ["opus-fast", "opus-balanced", "opus-medium"],
