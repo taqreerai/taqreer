@@ -65,6 +65,16 @@ function startPostHog(): boolean {
     // Anonymous visitors stay profile-less (privacy + quota); identify() on
     // login upgrades them to a real person profile.
     person_profiles: "identified_only",
+    // Persist in localStorage ONLY, never a cookie. posthog-js defaults to
+    // `localStorage+cookie` with `cross_subdomain_cookie: true`, which writes a
+    // `ph_*` cookie scoped to `.taqreer.ai` that then rides EVERY request to the
+    // origin, including the login POST. Stacked on the Supabase auth-token
+    // chunks + Cloudflare cookies that pushed the Cookie header past nginx's
+    // request-header buffer -> intermittent 400 "Request Header Or Cookie Too
+    // Large" on login. distinct_id in localStorage is shared across tabs on the
+    // origin; d.taqreer.ai is ingest-only (no pages) so cross-subdomain cookie
+    // identity buys us nothing. Keeps the auth request path cookie-lean.
+    persistence: "localStorage",
   });
   started = true;
   return true;
