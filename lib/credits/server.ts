@@ -464,25 +464,54 @@ export async function chargeCredits(args: {
   return result;
 }
 
-/** One-time Free signup grant. Idempotent via signupGrantedAt. */
-export async function grantSignupCredits(args: {
+/**
+ * One-time Free signup grant, wrapped in a single serialized critical
+ * section so the abuse guards in lib/credits/signup.ts can't be raced.
+ *
+ * Before ANY guard read, this acquires transaction-scoped advisory locks
+ * on the caller's collision keys (signup IP / inbox / device). Two
+ * concurrent signups that share a key therefore run one-after-another:
+ * the second blocks on the lock until the first commits, then its `guard`
+ * reads see the first's just-committed grant and reject the duplicate.
+ * The locks are xact-scoped (pg_advisory_xact_lock), so they release at
+ * commit/rollback and survive the Supabase transaction pooler - session
+ * advisory locks would not (see reference_supabase_pooler_modes).
+ *
+ * `guard` runs inside the lock, after the per-user row lock + the
+ * signupGrantedAt idempotency check; it returns a block reason (grant
+ * denied, 0 credits) or null to grant. It owns writing its own block
+ * audit event via the passed tx.
+ */
+export async function grantSignupCreditsGuarded<B extends string>(args: {
   userId: string;
   now?: Date;
   notify?: boolean;
-  // Audit trail extras (e.g. the signup request IP for the velocity
-  // guard in lib/credits/signup.ts).
+  // Audit trail extras (e.g. the signup request IP) for the grant event.
   metadata?: Prisma.InputJsonValue;
-}): Promise<{ granted: number; alreadyGranted: boolean }> {
+  // Collision keys serialized before the guard runs. De-duped + sorted
+  // internally so every caller acquires shared locks in the same global
+  // order (deadlock-free regardless of which keys are present).
+  lockKeys?: string[];
+  guard?: (tx: Tx) => Promise<B | null>;
+}): Promise<{ granted: number; alreadyGranted: boolean; blocked: B | null }> {
   const now = args.now ?? new Date();
   await ensureFresh();
   const amount = getFreeCredits();
+  const keys = [...new Set(args.lockKeys ?? [])].sort();
   const result = await prisma.$transaction(async (tx) => {
+    for (const key of keys) {
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
+    }
     await lockAccount(tx, args.userId);
     const account = await tx.creditAccount.findUniqueOrThrow({
       where: { userId: args.userId },
     });
     if (account.signupGrantedAt) {
-      return { granted: 0, alreadyGranted: true };
+      return { granted: 0, alreadyGranted: true, blocked: null as B | null };
+    }
+    const blocked = args.guard ? await args.guard(tx) : null;
+    if (blocked) {
+      return { granted: 0, alreadyGranted: false, blocked };
     }
     await tx.creditAccount.update({
       where: { userId: args.userId },
@@ -498,12 +527,25 @@ export async function grantSignupCredits(args: {
       amount,
       args.metadata ?? {},
     );
-    return { granted: amount, alreadyGranted: false };
+    return { granted: amount, alreadyGranted: false, blocked: null as B | null };
   }, SERIALIZED);
-  if (!result.alreadyGranted) {
+  if (result.granted > 0) {
     await notifyBalance(args.userId, now, args.notify ?? true);
   }
   return result;
+}
+
+/** One-time Free signup grant. Idempotent via signupGrantedAt. Thin
+ * wrapper over grantSignupCreditsGuarded with no guards (direct grant for
+ * scripts / non-abuse paths). */
+export async function grantSignupCredits(args: {
+  userId: string;
+  now?: Date;
+  notify?: boolean;
+  metadata?: Prisma.InputJsonValue;
+}): Promise<{ granted: number; alreadyGranted: boolean }> {
+  const { granted, alreadyGranted } = await grantSignupCreditsGuarded(args);
+  return { granted, alreadyGranted };
 }
 
 /**

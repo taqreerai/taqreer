@@ -1,6 +1,10 @@
-// Signup-grant gate (billing plan §2 / gap #1 cheap layer). Wraps
-// grantSignupCredits with the three abuse guards the ledger itself can't
-// see:
+// Signup-grant gate (billing plan §2 / gap #1 cheap layer). Runs four
+// abuse guards the ledger itself can't see. The cross-account guards read
+// then grant, so they run INSIDE grantSignupCreditsGuarded's serialized
+// transaction, behind advisory locks on the collision keys (IP / inbox /
+// device): two concurrent signups sharing a key run one-after-another, so
+// the second sees the first's committed grant instead of racing past a
+// stale read. The guards:
 //
 //   1. EMAIL-ALIAS DEDUPE - gmail dots and +suffixes make infinite
 //      "different" addresses for one inbox. If ANOTHER user whose
@@ -10,28 +14,28 @@
 //   2. IP VELOCITY - more than 3 signup grants from one IP in 24h is
 //      farming, not a household; further grants from that IP are
 //      blocked (audit event, no grant).
-//   3. DEVICE DEDUPE - one grant per browser, ever, keyed on the
+//   3. SAME-PERSON (IP + NAME) - the other guards each miss a determined
+//      duplicate who pairs a fresh inbox with a second browser and is only
+//      the 2nd signup from the IP. What still links them is the human: same
+//      signup IP + same real name. Block when a prior GRANTED account from
+//      this exact IP carries a matching normalized name. Names with fewer
+//      than two tokens are ignored (a lone first name is too weak to
+//      identify a person), so a differently-named housemate on the same
+//      router still gets credits.
+//   4. DEVICE DEDUPE - one grant per browser, ever, keyed on the
 //      middleware-minted `tq_did` cookie (lib/device-cookie.ts). Catches
-//      the wifi-to-mobile-data hop the IP guard can't. A grant attempt
-//      with NO device cookie is blocked fail-closed: the middleware sets
-//      the cookie on every matched request, so a cookie-less grant is a
-//      non-browser client, and a legit race self-heals because the grant
-//      re-attempts on the next sync/pageload (blocks never stamp
-//      signupGrantedAt).
-//   4. SAME-PERSON (IP + NAME) - the three guards above each miss a
-//      determined duplicate who pairs a fresh inbox with a second browser
-//      and is only the 2nd signup from the IP. What still links them is the
-//      human: same signup IP + same real name. Block when a prior GRANTED
-//      account from this exact IP carries a matching normalized name. Names
-//      with fewer than two tokens are ignored (a lone first name is too
-//      weak to identify a person), so a differently-named housemate on the
-//      same router still gets credits.
+//      the wifi-to-mobile-data hop the IP guard can't. A grant attempt with
+//      NO device cookie is blocked fail-closed BEFORE the serialized section
+//      (a cookie-less grant is a non-browser client); a legit race
+//      self-heals because the grant re-attempts on the next sync/pageload
+//      (blocks never stamp signupGrantedAt).
 //
 // Blocked accounts still work - they just start at 0 credits. Payment-
 // method dedupe remains the stronger future layer (billing plan §8/§9).
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { grantSignupCredits } from "@/lib/credits/server";
+import { grantSignupCreditsGuarded } from "@/lib/credits/server";
 
 const IP_VELOCITY_LIMIT = 3;
 const IP_VELOCITY_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -92,27 +96,86 @@ export async function maybeGrantSignupCredits(args: {
   geo?: { country: string | null; city: string | null };
 }): Promise<{
   granted: number;
-  blocked:
-    | "email_alias"
-    | "ip_velocity"
-    | "device_dup"
-    | "device_missing"
-    | "same_person"
-    | null;
+  blocked: BlockReason | null;
 }> {
   const normalized = normalizeEmail(args.email);
   const at = normalized.lastIndexOf("@");
   const domain = at > 0 ? normalized.slice(at + 1) : null;
+  const selfName = normalizeName(args.name);
 
-  // 1. Alias dedupe - look for another already-granted account on the
-  //    same normalized inbox. Domain-scoped fetch + in-JS normalize
-  //    (no normalized-email column yet; fine at current user counts,
-  //    revisit with an indexed column if the table grows).
+  // Device cookie must be present (fail-closed, self-healing - see header
+  // comment). A pure cookie-presence check: no DB, no cross-user race, so
+  // reject here before opening the guarded transaction.
+  if (!args.deviceId) {
+    await prisma.usageEvent.create({
+      data: {
+        userId: args.userId,
+        eventType: "credit.signup.blocked",
+        amount: 0,
+        metadata: {
+          reason: "device_missing",
+          ...(args.ip ? { ip: args.ip } : {}),
+        },
+      },
+    });
+    return { granted: 0, blocked: "device_missing" };
+  }
+  // Capture the narrowed (non-null) device id in a const so it stays
+  // `string` inside the guard closure below.
+  const deviceId = args.deviceId;
+
+  // Collision keys: any two concurrent signups that share an inbox, a
+  // signup IP, or a device are serialized so each guard below observes the
+  // other's committed grant instead of racing past a stale read.
+  const lockKeys = [
+    args.ip ? `signup:ip:${args.ip}` : null,
+    domain ? `signup:email:${normalized}` : null,
+    `signup:device:${deviceId}`,
+  ].filter((k): k is string => k !== null);
+
+  const result = await grantSignupCreditsGuarded<BlockReason>({
+    userId: args.userId,
+    lockKeys,
+    metadata: {
+      deviceId,
+      ...(args.ip ? { ip: args.ip } : {}),
+      ...(args.geo?.country ? { country: args.geo.country } : {}),
+    },
+    guard: (tx) => runSignupGuards(tx, args, normalized, domain, selfName, deviceId),
+  });
+  return { granted: result.granted, blocked: result.blocked };
+}
+
+type BlockReason =
+  | "email_alias"
+  | "ip_velocity"
+  | "device_dup"
+  | "device_missing"
+  | "same_person";
+
+/**
+ * The cross-account abuse guards, run INSIDE the serialized grant
+ * transaction (so their reads are race-free - see grantSignupCreditsGuarded).
+ * Returns the first block reason hit (and writes its audit event via `tx`),
+ * or null to let the grant proceed. `deviceId` is guaranteed present here -
+ * the device_missing fail-closed check happens before the transaction.
+ */
+async function runSignupGuards(
+  tx: Prisma.TransactionClient,
+  args: { userId: string; ip?: string | null },
+  normalized: string,
+  domain: string | null,
+  selfName: string | null,
+  deviceId: string,
+): Promise<BlockReason | null> {
+  // 1. Alias dedupe - another already-granted account on the same
+  //    normalized inbox. Domain-scoped fetch + in-JS normalize (no
+  //    normalized-email column yet; fine at current user counts).
   if (domain) {
     // gmail + googlemail are the same inbox space - search both.
     const domains =
       domain === "gmail.com" ? ["gmail.com", "googlemail.com"] : [domain];
-    const candidates = await prisma.user.findMany({
+    const candidates = await tx.user.findMany({
       where: {
         id: { not: args.userId },
         OR: domains.map((d) => ({
@@ -128,7 +191,7 @@ export async function maybeGrantSignupCredits(args: {
         normalizeEmail(u.email) === normalized,
     );
     if (match) {
-      await prisma.usageEvent.create({
+      await tx.usageEvent.create({
         data: {
           userId: args.userId,
           eventType: "credit.signup.blocked",
@@ -136,14 +199,14 @@ export async function maybeGrantSignupCredits(args: {
           metadata: { reason: "email_alias", matchedUserId: match.id },
         },
       });
-      return { granted: 0, blocked: "email_alias" };
+      return "email_alias";
     }
   }
 
   // 2. IP velocity - cap grants per IP per 24h.
   if (args.ip) {
     const since = new Date(Date.now() - IP_VELOCITY_WINDOW_MS);
-    const recent = await prisma.usageEvent.count({
+    const recent = await tx.usageEvent.count({
       where: {
         eventType: "credit.grant.signup",
         createdAt: { gte: since },
@@ -151,7 +214,7 @@ export async function maybeGrantSignupCredits(args: {
       },
     });
     if (recent >= IP_VELOCITY_LIMIT) {
-      await prisma.usageEvent.create({
+      await tx.usageEvent.create({
         data: {
           userId: args.userId,
           eventType: "credit.signup.blocked",
@@ -159,56 +222,17 @@ export async function maybeGrantSignupCredits(args: {
           metadata: { reason: "ip_velocity", ip: args.ip },
         },
       });
-      return { granted: 0, blocked: "ip_velocity" };
+      return "ip_velocity";
     }
   }
 
-  // 3. Device dedupe - one grant per `tq_did` browser id, ever; no cookie,
-  //    no grant (fail-closed, self-healing - see header comment).
-  if (!args.deviceId) {
-    await prisma.usageEvent.create({
-      data: {
-        userId: args.userId,
-        eventType: "credit.signup.blocked",
-        amount: 0,
-        metadata: {
-          reason: "device_missing",
-          ...(args.ip ? { ip: args.ip } : {}),
-        },
-      },
-    });
-    return { granted: 0, blocked: "device_missing" };
-  }
-  const priorFromDevice = await prisma.usageEvent.count({
-    where: {
-      eventType: "credit.grant.signup",
-      metadata: { path: ["deviceId"], equals: args.deviceId },
-    },
-  });
-  if (priorFromDevice >= 1) {
-    await prisma.usageEvent.create({
-      data: {
-        userId: args.userId,
-        eventType: "credit.signup.blocked",
-        amount: 0,
-        metadata: {
-          reason: "device_dup",
-          deviceId: args.deviceId,
-          ...(args.ip ? { ip: args.ip } : {}),
-        },
-      },
-    });
-    return { granted: 0, blocked: "device_dup" };
-  }
-
-  // 4. Same-person - a prior GRANTED account from this exact signup IP that
+  // 3. Same-person - a prior GRANTED account from this exact signup IP that
   //    carries a matching normalized name is the same human on a second
-  //    inbox + browser (the combo that slips past guards 1-3). IP-scoped so
-  //    two strangers who merely share a name never collide; name-gated (>= 2
-  //    tokens) so a differently-named housemate on the same router is spared.
-  const selfName = normalizeName(args.name);
+  //    inbox + browser (the combo that slips past the other guards).
+  //    IP-scoped so two strangers who merely share a name never collide;
+  //    name-gated (>= 2 tokens) so a differently-named housemate is spared.
   if (args.ip && selfName) {
-    const sameIp = await prisma.user.findMany({
+    const sameIp = await tx.user.findMany({
       where: {
         id: { not: args.userId },
         signupIp: args.ip,
@@ -220,7 +244,7 @@ export async function maybeGrantSignupCredits(args: {
     });
     const twin = sameIp.find((u) => normalizeName(u.name) === selfName);
     if (twin) {
-      await prisma.usageEvent.create({
+      await tx.usageEvent.create({
         data: {
           userId: args.userId,
           eventType: "credit.signup.blocked",
@@ -228,17 +252,32 @@ export async function maybeGrantSignupCredits(args: {
           metadata: { reason: "same_person", ip: args.ip, matchedUserId: twin.id },
         },
       });
-      return { granted: 0, blocked: "same_person" };
+      return "same_person";
     }
   }
 
-  const result = await grantSignupCredits({
-    userId: args.userId,
-    metadata: {
-      deviceId: args.deviceId,
-      ...(args.ip ? { ip: args.ip } : {}),
-      ...(args.geo?.country ? { country: args.geo.country } : {}),
+  // 4. Device dedupe - one grant per `tq_did` browser id, ever.
+  const priorFromDevice = await tx.usageEvent.count({
+    where: {
+      eventType: "credit.grant.signup",
+      metadata: { path: ["deviceId"], equals: deviceId },
     },
   });
-  return { granted: result.granted, blocked: null };
+  if (priorFromDevice >= 1) {
+    await tx.usageEvent.create({
+      data: {
+        userId: args.userId,
+        eventType: "credit.signup.blocked",
+        amount: 0,
+        metadata: {
+          reason: "device_dup",
+          deviceId,
+          ...(args.ip ? { ip: args.ip } : {}),
+        },
+      },
+    });
+    return "device_dup";
+  }
+
+  return null;
 }
