@@ -26,11 +26,12 @@ export type SendResult =
   | { ok: true; provider: "resend" | "stub"; messageId?: string }
   | { ok: false; error: string };
 
-// Billing emails go from a dedicated billing@ address (user direction
-// 2026-06-15), distinct from the shared RESEND_FROM_EMAIL (share@) the other
-// transactional emails use. Override via RESEND_FROM_BILLING if needed.
+// All automated emails send from noreply@ (user direction 2026-07-14) - the
+// shared RESEND_FROM_EMAIL and this billing default now both use noreply@ (the
+// old share@ / billing@ senders are retired). Override via RESEND_FROM_BILLING
+// only if a dedicated, real billing sender is ever reinstated.
 const BILLING_FROM =
-  process.env.RESEND_FROM_BILLING ?? "taqreer.ai <billing@taqreer.ai>";
+  process.env.RESEND_FROM_BILLING ?? "taqreer.ai <noreply@taqreer.ai>";
 
 async function deliver(
   tag: string,
