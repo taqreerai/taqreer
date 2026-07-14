@@ -69,7 +69,7 @@ export const SEED_TIERS: readonly TierConfigRow[] = [
   { plan: "free", priceUsd: 0,   monthlyAllotment: 0,     signupGrant: 400, slideCap: 5,  unlockedPresetKeys: ["opus-fast"], flows: ["create"], sortOrder: 0 },
   { plan: "plus", priceUsd: 12,  monthlyAllotment: 4000,  signupGrant: 0,   slideCap: 30, unlockedPresetKeys: ["opus-fast", "opus-balanced"], flows: ["create", "enhance", "mimic", "datasheet"], sortOrder: 1 },
   { plan: "pro",  priceUsd: 25,  monthlyAllotment: 10000, signupGrant: 0,   slideCap: 60, unlockedPresetKeys: ["opus-fast", "opus-balanced", "opus-medium"], flows: ["create", "enhance", "mimic", "datasheet"], sortOrder: 2 },
-  { plan: "max",  priceUsd: 100, monthlyAllotment: 21000, signupGrant: 0,   slideCap: 75, unlockedPresetKeys: ["opus-fast", "opus-balanced", "opus-medium"], flows: ["create", "enhance", "mimic", "datasheet"], sortOrder: 3 },
+  { plan: "max",  priceUsd: 100, monthlyAllotment: 35000, signupGrant: 0,   slideCap: 75, unlockedPresetKeys: ["opus-fast", "opus-balanced", "opus-medium"], flows: ["create", "enhance", "mimic", "datasheet"], sortOrder: 3 },
 ];
 
 // Seed default + regen preset, mirroring DEFAULT_QUALITY / REGEN_QUALITY.

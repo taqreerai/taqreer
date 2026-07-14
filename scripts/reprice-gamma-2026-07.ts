@@ -11,8 +11,9 @@
 //   run on the prod box after deploy (DATABASE_URL from the prod env)
 //
 // Changes (2026-07-14 re-eval, owner-approved): prices matched to Gamma
-// ($12/$25/$100), Max allotment 28,000 -> 21,000 (~60% full-burn margin on
-// measured ~$0.0019/credit COGS), image credits 5 -> 10. free is set to
+// ($12/$25/$100), Max allotment 28,000 -> 35,000 (~33% full-burn margin on
+// measured ~$0.0019/credit COGS; keeps Max's credits-per-$ between Plus and
+// Pro), image credits 5 -> 10. free is set to
 // 400/5 too (already the live prod value; a no-op there, brings local/fresh
 // DBs into line). Plus/Pro credits unchanged.
 //
@@ -29,7 +30,7 @@ const TIER_UPDATES: Record<
   free: { priceUsd: 0, signupGrant: 400, slideCap: 5 },
   plus: { priceUsd: 12 },
   pro: { priceUsd: 25 },
-  max: { priceUsd: 100, monthlyAllotment: 21000 },
+  max: { priceUsd: 100, monthlyAllotment: 35000 },
 };
 const NEW_IMAGE_CREDITS = 10;
 
