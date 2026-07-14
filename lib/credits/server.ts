@@ -688,7 +688,10 @@ export async function grantSubscriptionCycle(args: {
     });
     await tx.user.update({
       where: { id: args.userId },
-      data: { plan },
+      // Clear any complimentary-tier stamp: a real subscription takes over,
+      // so the maintenance cron must NOT later revert this paying user to
+      // free on a stale comp expiry.
+      data: { plan, planCompExpiresAt: null },
     });
     await logEvent(
       tx,
@@ -735,14 +738,26 @@ export async function changePlanKeepBalance(args: {
 }
 
 /**
+ * Thrown by grantCompTier when the target turns out to have a live Stripe
+ * subscription at grant time (the in-transaction guard that closes the race
+ * the route's pre-check can't). The admin route maps it to a 409.
+ */
+export class CompActiveSubscriptionError extends Error {
+  constructor() {
+    super("has_active_subscription");
+    this.name = "CompActiveSubscriptionError";
+  }
+}
+
+/**
  * Complimentary tier grant (admin, no Stripe). Sets the account to the tier's
  * allotment and flips User.plan, exactly like a purchase, but for a fixed
  * comp window: `allotmentResetAt` is left NULL so the monthly drip never
  * refills a comp, and `planCompExpiresAt` is stamped so the daily
  * credits-maintenance cron reverts the user to free once it passes
  * (endCompTier). Overwrites the subscription bucket (no rollover); top-ups
- * are untouched. Guard callers to non-subscribers so a Stripe webhook can't
- * clobber the comp.
+ * are untouched. Re-checks (and is serialized against) the subscription
+ * state inside the transaction so a Stripe activation can't be clobbered.
  */
 export async function grantCompTier(args: {
   userId: string;
@@ -758,6 +773,17 @@ export async function grantCompTier(args: {
   const tier = getTier(plan);
   await prisma.$transaction(async (tx) => {
     await lockAccount(tx, args.userId);
+    // Race-safe re-check: lockAccount serializes this against the webhook
+    // credit-grant path on the same CreditAccount row, so a subscription
+    // committed just before we took the lock is visible here. Abort rather
+    // than overwrite a real paid plan (rolls back the whole grant).
+    const sub = await tx.subscription.findUnique({
+      where: { userId: args.userId },
+      select: { status: true, stripeSubscriptionId: true },
+    });
+    if (sub?.stripeSubscriptionId && sub.status !== "canceled") {
+      throw new CompActiveSubscriptionError();
+    }
     const account = await tx.creditAccount.findUniqueOrThrow({
       where: { userId: args.userId },
     });

@@ -80,8 +80,17 @@ export const creditsMaintenance = inngest.createFunction(
       });
       let count = 0;
       for (const { id } of due) {
-        await endCompTier({ userId: id });
-        count += 1;
+        // Isolate per-user failures so one bad comp record can't fail the
+        // step and block the monthly-drip reset for everyone else.
+        try {
+          await endCompTier({ userId: id });
+          count += 1;
+        } catch (err) {
+          logger.warn("comp_revert_failed", {
+            userId: id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
       return count;
     });

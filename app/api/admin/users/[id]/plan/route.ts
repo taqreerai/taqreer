@@ -11,7 +11,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/api/admin-context";
 import { prisma } from "@/lib/prisma";
-import { grantCompTier } from "@/lib/credits/server";
+import { grantCompTier, CompActiveSubscriptionError } from "@/lib/credits/server";
 import { dispatchCompTierEmail } from "@/lib/email/send-comp-tier";
 import { normalizePlan } from "@/lib/plan";
 
@@ -24,6 +24,18 @@ const TIER_LABEL: Record<"plus" | "pro" | "max", string> = {
   pro: "Pro",
   max: "Max",
 };
+
+// Add whole months, clamping the day so a late-month grant (e.g. Jan 31)
+// lands on the last day of the target month, not spilling into the next.
+function addMonthsClamped(from: Date, months: number): Date {
+  const d = new Date(from);
+  const day = d.getDate();
+  d.setDate(1);
+  d.setMonth(d.getMonth() + months);
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  d.setDate(Math.min(day, lastDay));
+  return d;
+}
 
 export async function POST(
   request: Request,
@@ -65,16 +77,28 @@ export async function POST(
     );
   }
 
-  const expiresAt = new Date();
-  expiresAt.setMonth(expiresAt.getMonth() + COMP_MONTHS);
+  const expiresAt = addMonthsClamped(new Date(), COMP_MONTHS);
 
-  const balance = await grantCompTier({
-    userId: id,
-    plan,
-    expiresAt,
-    adminUserId: ctx.userId,
-    notify: true,
-  });
+  let balance;
+  try {
+    balance = await grantCompTier({
+      userId: id,
+      plan,
+      expiresAt,
+      adminUserId: ctx.userId,
+      notify: true,
+    });
+  } catch (err) {
+    // The in-transaction guard found a live subscription that slipped in
+    // after the pre-check above - same 409 as the pre-check.
+    if (err instanceof CompActiveSubscriptionError) {
+      return NextResponse.json(
+        { error: "has_active_subscription" },
+        { status: 409 },
+      );
+    }
+    throw err;
+  }
 
   // Announcement email - fire-and-forget, never blocks (or fails) the grant.
   void dispatchCompTierEmail({
