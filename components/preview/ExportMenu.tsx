@@ -63,7 +63,6 @@ export function ExportMenu({
   // presets in GenerateSplitButton; user direction 2026-07-13).
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const surfaceRef = useRef<HTMLDivElement | null>(null);
 
   const {
     states,
@@ -116,26 +115,17 @@ export function ExportMenu({
   // button itself signals the premium upsell before the menu even opens.
   const anyGated = gatedKinds.size > 0;
 
-  // Outside-click + Esc to close; own trigger excluded so its click toggles via
-  // this component rather than instantly reopening (the ProjectActionsMenu bug).
+  // Esc closes. Outside-click dismissal is owned entirely by the scrim below
+  // (a viewport layer above the deck <iframe>): a parent-document mousedown
+  // listener can't see clicks inside the iframe, and keeping one alongside the
+  // scrim just double-fired setOpen on every outside press, so it's gone.
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      const t = e.target as Element | null;
-      if (!t) return;
-      if (surfaceRef.current?.contains(t)) return;
-      if (triggerRef.current?.contains(t)) return;
-      setOpen(false);
-    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
-    document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
+    return () => document.removeEventListener("keydown", onKey);
   }, [open]);
 
   const toggle = () => {
@@ -204,25 +194,20 @@ export function ExportMenu({
         ? createPortal(
             <>
               {/* Invisible scrim (NOT a visual overlay - a dropdown must not
-                  dim the studio, so no bg-overlay token): an outside click
-                  ANYWHERE dismisses the menu, including over the deck <iframe>,
-                  whose clicks never reach the parent-document mousedown listener
-                  above. stopPropagation so the bubbled mousedown doesn't ALSO
-                  hit that listener (one press = one close). */}
+                  dim the studio, so no bg-overlay token): the SOLE outside-click
+                  dismissal. An outside click ANYWHERE hits it, including over the
+                  deck <iframe> (whose in-iframe clicks a parent-document listener
+                  can't see - which is why the old document listener is gone). */}
               {open && rect ? (
                 <div
                   className="fixed inset-0 z-[1099]"
                   aria-hidden
-                  onMouseDown={(e) => {
-                    e.stopPropagation();
-                    setOpen(false);
-                  }}
+                  onMouseDown={() => setOpen(false)}
                 />
               ) : null}
               <AnimatePresence>
               {open && rect ? (
                 <motion.div
-                  ref={surfaceRef}
                   dir={dir}
                   role="menu"
                   aria-label={dict.editor.export.exportPresentation}

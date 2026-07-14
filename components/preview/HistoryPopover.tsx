@@ -22,7 +22,7 @@
 //
 // Closes when the user picks a row, clicks outside, or hits Esc.
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatDistanceToNow } from "date-fns";
@@ -77,35 +77,21 @@ export function HistoryPopover({
 }) {
   const dict = useDict();
   const { dir } = useLocale();
-  const surfaceRef = useRef<HTMLDivElement | null>(null);
-
-  // Close on outside click / Esc — matches the bell dropdown
-  // affordances. Outside click is gated to the surface AND the
-  // trigger button (any element with `data-history-trigger`): the
-  // trigger owns its own toggle handler in the parent (DeckView's
-  // onOpenHistory). If we close here on mousedown, the following
-  // `click` hits the trigger which re-opens the popover — the user
-  // sees "click = always open" instead of toggle. The earlier
-  // comment claimed the exclusion existed but the code didn't
-  // actually do it (user-flagged 2026-05-20).
+  // Esc closes. Outside-click dismissal is owned entirely by the scrim below
+  // (a viewport layer above the deck <iframe>): a parent-document mousedown
+  // listener can't see clicks inside the iframe, and keeping one alongside the
+  // scrim double-fired onClose on every outside press. The old listener also
+  // had to special-case the [data-history-trigger] button to dodge a
+  // close-then-reopen (user-flagged 2026-05-20); the scrim covers the trigger,
+  // so a press there dismisses cleanly (the mousedown removes the scrim, so the
+  // trailing click retargets to <body>, never re-triggering the button).
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      const target = e.target as Element | null;
-      if (!target) return;
-      if (surfaceRef.current?.contains(target)) return;
-      if (target.closest?.("[data-history-trigger]")) return;
-      onClose();
-    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
-    document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
+    return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
   if (typeof document === "undefined") return null;
@@ -159,19 +145,15 @@ export function HistoryPopover({
   return createPortal(
     <>
       {/* Invisible scrim (NOT a visual overlay - a popover must not dim the
-          studio, so no bg-overlay token): dismiss on any outside click,
-          including over the deck <iframe>, whose clicks never reach the
-          parent-document mousedown listener above. stopPropagation so the
-          bubbled mousedown doesn't ALSO hit that listener (one press = one
-          onClose). */}
+          studio, so no bg-overlay token): the SOLE outside-click dismissal. An
+          outside click ANYWHERE hits it, including over the deck <iframe> (whose
+          in-iframe clicks a parent-document listener can't see - which is why
+          the old document listener is gone). */}
       {open && triggerRect ? (
         <div
           className="fixed inset-0 z-[1099]"
           aria-hidden
-          onMouseDown={(e) => {
-            e.stopPropagation();
-            onClose();
-          }}
+          onMouseDown={() => onClose()}
         />
       ) : null}
       {/* AnimatePresence wraps the conditional so the popover animates OUT
@@ -182,7 +164,6 @@ export function HistoryPopover({
       {open && triggerRect ? (
         <motion.div
           key="history-popover"
-          ref={surfaceRef}
           dir={dir}
           data-history-popover
           initial={{ opacity: 0, y: flipUp ? 6 : -6, scale: 0.98 }}
