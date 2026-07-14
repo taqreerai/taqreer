@@ -500,7 +500,12 @@ export async function grantSignupCreditsGuarded<B extends string>(args: {
   const keys = [...new Set(args.lockKeys ?? [])].sort();
   const result = await prisma.$transaction(async (tx) => {
     for (const key of keys) {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
+      // $executeRaw, not $queryRaw: pg_advisory_xact_lock returns `void`,
+      // which Prisma's $queryRaw cannot deserialize ("Failed to deserialize
+      // column of type 'void'") - it throws and the whole grant fails.
+      // $executeRaw runs the statement without materializing the result
+      // column. Still parameterized (safe); the lock side-effect executes.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
     }
     await lockAccount(tx, args.userId);
     const account = await tx.creditAccount.findUniqueOrThrow({
