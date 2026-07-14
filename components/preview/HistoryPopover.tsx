@@ -157,12 +157,22 @@ export function HistoryPopover({
     : versions;
 
   return createPortal(
-    // AnimatePresence wraps the conditional so the popover
-    // animates OUT smoothly when `open` flips to false (e.g.
-    // after a restore commits and the parent clears
-    // historyAnchor). Without this, the popover unmounted
-    // instantly — visible glitch the user flagged 2026-05-20.
-    <AnimatePresence onExitComplete={onExitComplete}>
+    <>
+      {/* Transparent scrim: dismiss on any outside click, including over the
+          deck <iframe>, whose clicks never reach the parent-document
+          mousedown listener above. */}
+      {open && triggerRect ? (
+        <div
+          className="fixed inset-0 z-[1099]"
+          aria-hidden
+          onMouseDown={() => onClose()}
+        />
+      ) : null}
+      {/* AnimatePresence wraps the conditional so the popover animates OUT
+          smoothly when `open` flips to false (e.g. after a restore commits and
+          the parent clears historyAnchor). Without this the popover unmounted
+          instantly — visible glitch the user flagged 2026-05-20. */}
+      <AnimatePresence onExitComplete={onExitComplete}>
       {open && triggerRect ? (
         <motion.div
           key="history-popover"
@@ -220,7 +230,8 @@ export function HistoryPopover({
           ) : null}
         </motion.div>
       ) : null}
-    </AnimatePresence>,
+      </AnimatePresence>
+    </>,
     document.body,
   );
 }

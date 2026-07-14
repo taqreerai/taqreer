@@ -202,7 +202,18 @@ export function ExportMenu({
 
       {typeof document !== "undefined"
         ? createPortal(
-            <AnimatePresence>
+            <>
+              {/* Transparent scrim: an outside click ANYWHERE dismisses the
+                  menu - including over the deck <iframe>, whose clicks never
+                  reach the parent-document mousedown listener above. */}
+              {open && rect ? (
+                <div
+                  className="fixed inset-0 z-[1099]"
+                  aria-hidden
+                  onMouseDown={() => setOpen(false)}
+                />
+              ) : null}
+              <AnimatePresence>
               {open && rect ? (
                 <motion.div
                   ref={surfaceRef}
@@ -273,7 +284,8 @@ export function ExportMenu({
                   </ul>
                 </motion.div>
               ) : null}
-            </AnimatePresence>,
+              </AnimatePresence>
+            </>,
             document.body,
           )
         : null}

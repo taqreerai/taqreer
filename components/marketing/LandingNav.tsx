@@ -6,7 +6,7 @@
 // chrome direction: in RTL the logo reads at the start (right); in LTR it leads
 // from the left. Strings come from the active-locale dictionary.
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLocale, useDict } from "@/components/i18n/LocaleProvider";
@@ -27,6 +27,29 @@ export function LandingNav() {
   const pathname = usePathname();
   const isAuthed = useIsAuthed();
   const [menuOpen, setMenuOpen] = useState(false);
+  const navRef = useRef<HTMLElement>(null);
+
+  // Close the mobile menu on an outside click or Escape, matching the app's
+  // popup convention (the landing has no iframe, so a document listener is
+  // enough - the menu panel lives inside <nav>, so a click outside the nav
+  // closes it; links inside close via their own onClick).
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node | null;
+      if (t && navRef.current?.contains(t)) return;
+      setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
 
   // On the landing the links are in-page smooth-scroll anchors; on any other
   // page (the legal pages share this nav) they jump back to the landing's
@@ -45,7 +68,7 @@ export function LandingNav() {
   ];
 
   return (
-    <nav className="absolute top-0 right-0 left-0 z-50">
+    <nav ref={navRef} className="absolute top-0 right-0 left-0 z-50">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* relative so the link group can be absolutely centred on the page
             regardless of the logo / actions widths (was drifting off-centre
