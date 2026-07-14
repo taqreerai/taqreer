@@ -735,6 +735,93 @@ export async function changePlanKeepBalance(args: {
 }
 
 /**
+ * Complimentary tier grant (admin, no Stripe). Sets the account to the tier's
+ * allotment and flips User.plan, exactly like a purchase, but for a fixed
+ * comp window: `allotmentResetAt` is left NULL so the monthly drip never
+ * refills a comp, and `planCompExpiresAt` is stamped so the daily
+ * credits-maintenance cron reverts the user to free once it passes
+ * (endCompTier). Overwrites the subscription bucket (no rollover); top-ups
+ * are untouched. Guard callers to non-subscribers so a Stripe webhook can't
+ * clobber the comp.
+ */
+export async function grantCompTier(args: {
+  userId: string;
+  plan: string;
+  expiresAt: Date;
+  adminUserId: string;
+  now?: Date;
+  notify?: boolean;
+}): Promise<BalanceSnapshot> {
+  const now = args.now ?? new Date();
+  const plan = normalizePlan(args.plan);
+  await ensureFresh();
+  const tier = getTier(plan);
+  await prisma.$transaction(async (tx) => {
+    await lockAccount(tx, args.userId);
+    const account = await tx.creditAccount.findUniqueOrThrow({
+      where: { userId: args.userId },
+    });
+    await tx.creditAccount.update({
+      where: { userId: args.userId },
+      data: {
+        subscriptionBalance: tier.monthlyAllotment,
+        monthlyAllotment: tier.monthlyAllotment,
+        allotmentResetAt: null,
+      },
+    });
+    await tx.user.update({
+      where: { id: args.userId },
+      data: { plan, planCompExpiresAt: args.expiresAt },
+    });
+    await logEvent(
+      tx,
+      args.userId,
+      "credit.comp.granted",
+      tier.monthlyAllotment - account.subscriptionBalance,
+      {
+        plan,
+        allotment: tier.monthlyAllotment,
+        expiresAt: args.expiresAt.toISOString(),
+        adminUserId: args.adminUserId,
+      },
+    );
+  }, SERIALIZED);
+  await notifyBalance(args.userId, now, args.notify ?? true);
+  return getBalance(args.userId, now);
+}
+
+/**
+ * End a complimentary tier: revert User.plan to free, stop the drip
+ * (allotmentResetAt -> null), and clear the comp stamp. The leftover balance
+ * is KEPT - an admin-granted comp is not a fraud surface, so the tester keeps
+ * any unused credits (top-ups untouched). Run by the daily cron once
+ * planCompExpiresAt passes; safe to call again (a no-op-ish reset to free).
+ */
+export async function endCompTier(args: {
+  userId: string;
+  now?: Date;
+  notify?: boolean;
+}): Promise<BalanceSnapshot> {
+  const now = args.now ?? new Date();
+  await ensureFresh();
+  const freeTier = getTier("free");
+  await prisma.$transaction(async (tx) => {
+    await lockAccount(tx, args.userId);
+    await tx.creditAccount.update({
+      where: { userId: args.userId },
+      data: { monthlyAllotment: freeTier.monthlyAllotment, allotmentResetAt: null },
+    });
+    await tx.user.update({
+      where: { id: args.userId },
+      data: { plan: "free", planCompExpiresAt: null },
+    });
+    await logEvent(tx, args.userId, "credit.comp.expired", 0, {});
+  }, SERIALIZED);
+  await notifyBalance(args.userId, now, args.notify ?? true);
+  return getBalance(args.userId, now);
+}
+
+/**
  * Purchased top-up pack: stacks on the balance, survives monthly
  * resets, expires 12 months from purchase. Idempotent per sourceKey
  * (the Stripe event id once billing is live).

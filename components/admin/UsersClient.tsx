@@ -71,6 +71,10 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
   const [banning, setBanning] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [settingCredits, setSettingCredits] = useState(false);
+  // Grant test tier (a complimentary paid plan for 1 month).
+  const [compTarget, setCompTarget] = useState<AdminUser | null>(null);
+  const [compPlan, setCompPlan] = useState<"plus" | "pro" | "max">("plus");
+  const [compingTier, setCompingTier] = useState(false);
 
   const filtered = users.filter((u) => {
     const q = query.trim().toLowerCase();
@@ -201,6 +205,49 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
       // leave the modal open so the admin can retry
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const applyCompTier = async () => {
+    if (!compTarget || compingTier) return;
+    setCompingTier(true);
+    try {
+      const res = await fetch(`/api/admin/users/${compTarget.id}/plan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: compPlan }),
+      });
+      const json = (await res.json().catch(() => null)) as {
+        ok?: boolean;
+        expiresAt?: string;
+        balance?: { total?: number; subscription?: number };
+        error?: string;
+      } | null;
+      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "comp failed");
+      const total = json.balance?.total;
+      const subscription = json.balance?.subscription;
+      const expiresAt = json.expiresAt ? json.expiresAt.slice(0, 10) : null;
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === compTarget.id
+            ? {
+                ...u,
+                plan: compPlan,
+                compExpiresAt: expiresAt,
+                credits: typeof total === "number" ? total : u.credits,
+                subscriptionCredits:
+                  typeof subscription === "number"
+                    ? subscription
+                    : u.subscriptionCredits,
+              }
+            : u,
+        ),
+      );
+      setCompTarget(null);
+    } catch {
+      // leave the modal open so the admin can retry / see the failure
+    } finally {
+      setCompingTier(false);
     }
   };
 
@@ -340,6 +387,15 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
 
               <div className="hidden w-16 sm:block">
                 <PlanBadge plan={u.plan} />
+                {u.compExpiresAt ? (
+                  <div
+                    className="mt-0.5 text-[10px] leading-tight"
+                    style={{ color: MUTED }}
+                    title={`Complimentary tier until ${u.compExpiresAt}`}
+                  >
+                    comp {u.compExpiresAt}
+                  </div>
+                ) : null}
               </div>
 
               <div className="hidden w-24 text-end sm:block">
@@ -382,6 +438,21 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
                     tune
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCompPlan("plus");
+                    setCompTarget(u);
+                  }}
+                  aria-label="Grant test tier"
+                  title="Grant test tier (1 month, free)"
+                  className="grid h-8 w-8 place-items-center rounded-full transition-colors"
+                  style={{ color: MUTED, background: "var(--tq-overlay-soft)" }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                    workspace_premium
                   </span>
                 </button>
                 <button
@@ -553,6 +624,57 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
               className="btn-gradient flex-1 rounded-full px-4 py-2.5 text-sm font-medium disabled:opacity-50"
             >
               {settingCredits ? "Setting..." : "Set credits"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Grant test tier (complimentary paid plan, 1 month) */}
+      <Modal
+        open={compTarget !== null}
+        title={`Grant test tier to ${compTarget?.name ?? ""}`}
+        onClose={() => setCompTarget(null)}
+      >
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <label className="text-xs font-medium" style={{ color: MUTED }}>
+              Tier
+            </label>
+            <select
+              value={compPlan}
+              onChange={(e) =>
+                setCompPlan(e.target.value as "plus" | "pro" | "max")
+              }
+              className="h-10 w-full rounded-lg px-3 text-sm outline-none"
+              style={inputStyle}
+              autoFocus
+            >
+              <option value="plus">Plus</option>
+              <option value="pro">Pro</option>
+              <option value="max">Max</option>
+            </select>
+          </div>
+          <p className="text-xs" style={{ color: MUTED }}>
+            Activates {PLAN_LABEL[compPlan]} free for 1 month with that tier&apos;s
+            credits, no Stripe. The user is emailed (in their language) and
+            auto-reverts to Free when the month ends. A user with an active paid
+            subscription can&apos;t be comped.
+          </p>
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setCompTarget(null)}
+              className="btn-pill flex-1 px-4 py-2.5 text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={applyCompTier}
+              disabled={compingTier}
+              className="btn-gradient flex-1 rounded-full px-4 py-2.5 text-sm font-medium disabled:opacity-50"
+            >
+              {compingTier ? "Granting..." : "Grant tier"}
             </button>
           </div>
         </div>

@@ -99,11 +99,19 @@ export type AdminUser = {
   signupCity: string | null;
   // Same signupIp as at least one other listed user (multi-account signal).
   sharedIp: boolean;
+  // Complimentary-tier expiry (User.planCompExpiresAt) as an ISO date, or
+  // null when the plan is not a comp. Drives the "comp until X" badge note.
+  compExpiresAt: string | null;
 };
 
 const MOCK_USERS_BASE: Omit<
   AdminUser,
-  "signupIp" | "signupCountry" | "signupCity" | "sharedIp" | "subscriptionCredits"
+  | "signupIp"
+  | "signupCountry"
+  | "signupCity"
+  | "sharedIp"
+  | "subscriptionCredits"
+  | "compExpiresAt"
 >[] = [
   { id: "u1", name: "Noura Al-Otaibi", email: "noura@example.com", plan: "pro", credits: 4120, joinedAt: "2026-06-14", banned: false },
   { id: "u2", name: "Khalid Hassan", email: "khalid@example.com", plan: "max", credits: 11380, joinedAt: "2026-06-12", banned: false },
@@ -124,6 +132,7 @@ export const MOCK_USERS: AdminUser[] = MOCK_USERS_BASE.map((u) => ({
   signupCountry: null,
   signupCity: null,
   sharedIp: false,
+  compExpiresAt: null,
 }));
 
 // ─── Templates ────────────────────────────────────────────────────────────

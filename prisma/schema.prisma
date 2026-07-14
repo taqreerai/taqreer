@@ -22,6 +22,10 @@ model User {
   // Admin ban (set by the admin console). Non-null = banned; blocks app access.
   bannedAt       DateTime?
   banReason      String?
+  // Complimentary tier: an admin granted a paid tier for a fixed window (no
+  // Stripe). Non-null = the tier is comped until this time; the daily
+  // credits-maintenance cron reverts the user to free once it passes.
+  planCompExpiresAt DateTime?
   // Signup forensics, stamped once at provisioning from Cloudflare headers
   // (cf-connecting-ip / cf-ipcountry / cf-ipcity) and backfilled for older
   // rows from the credit.grant.signup event metadata. Never updated after.

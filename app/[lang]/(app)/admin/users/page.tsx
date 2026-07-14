@@ -32,6 +32,7 @@ export default async function AdminUsersPage() {
       plan: true,
       createdAt: true,
       bannedAt: true,
+      planCompExpiresAt: true,
       signupIp: true,
       signupCountry: true,
       signupCity: true,
@@ -66,6 +67,9 @@ export default async function AdminUsersPage() {
         // latin-1); the repair is idempotent for clean values.
         signupCity: sanitizeCity(u.signupCity),
         sharedIp: !!u.signupIp && (ipCounts.get(u.signupIp) ?? 0) > 1,
+        compExpiresAt: u.planCompExpiresAt
+          ? u.planCompExpiresAt.toISOString().slice(0, 10)
+          : null,
       };
     }),
   );

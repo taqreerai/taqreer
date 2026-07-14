@@ -7,7 +7,12 @@
 //      refund). settleHold is idempotent - if the real settle somehow
 //      raced in first, this is a no-op.
 //   2. TOP-UP EXPIRY - zero out packs past their 12-month expiresAt.
-//   3. MONTHLY DRIP - reset subscription allotments whose resetAt has
+//   3. COMP EXPIRY - revert users whose complimentary tier window
+//      (User.planCompExpiresAt) has passed back to free (endCompTier).
+//      Runs before the drip; comps carry a NULL allotmentResetAt so the
+//      drip never touches them regardless, but reverting first keeps the
+//      ordering honest.
+//   4. MONTHLY DRIP - reset subscription allotments whose resetAt has
 //      passed. Monthly Stripe subscribers reset via the renewal webhook
 //      (Phase B); this cron is the trigger for YEARLY subscribers
 //      (credits drip monthly, §8.2) and the webhook's safety net.
@@ -15,6 +20,7 @@
 import { inngest } from "@/inngest/client";
 import { prisma } from "@/lib/prisma";
 import {
+  endCompTier,
   expireTopups,
   resetMonthlyAllotment,
   settleHold,
@@ -65,6 +71,21 @@ export const creditsMaintenance = inngest.createFunction(
       return { users: dueUsers.length, credits: total };
     });
 
+    const compsReverted = await step.run("revert-expired-comps", async () => {
+      const now = new Date();
+      const due = await prisma.user.findMany({
+        where: { planCompExpiresAt: { lte: now } },
+        select: { id: true },
+        take: 500,
+      });
+      let count = 0;
+      for (const { id } of due) {
+        await endCompTier({ userId: id });
+        count += 1;
+      }
+      return count;
+    });
+
     const reset = await step.run("monthly-drip", async () => {
       const now = new Date();
       const due = await prisma.creditAccount.findMany({
@@ -80,7 +101,12 @@ export const creditsMaintenance = inngest.createFunction(
       return count;
     });
 
-    logger.info("credits_maintenance_done", { released, expired, reset });
-    return { released, expired, reset };
+    logger.info("credits_maintenance_done", {
+      released,
+      expired,
+      compsReverted,
+      reset,
+    });
+    return { released, expired, compsReverted, reset };
   },
 );
