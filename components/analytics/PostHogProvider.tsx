@@ -29,6 +29,34 @@ function consentAccepted(): boolean {
     .some((c) => c === `${CONSENT_COOKIE}=accept`);
 }
 
+// One-time sweep of legacy PostHog cookies. Before we moved to
+// `persistence: "localStorage"` (see startPostHog), posthog-js wrote a
+// `ph_<key>_posthog` cookie that rode EVERY request to the origin, including
+// the login POST, stacking on the Supabase auth chunks + Cloudflare cookies to
+// push the Cookie header past nginx's request-header buffer -> 400 "Request
+// Header Or Cookie Too Large". Switching persistence stops NEW writes, but
+// posthog-js does not delete the already-set cookie, so returning visitors keep
+// carrying ~950 bytes of dead weight (observed: two keys, the current one plus
+// one stale from a past key rotation). Expire any `ph_*_posthog` cookie across
+// the path/domain variants PostHog may have used. Cheap no-op once clean; safe
+// because all PostHog state now lives in localStorage.
+function clearLegacyPostHogCookies(): void {
+  if (typeof document === "undefined") return;
+  const names = document.cookie
+    .split("; ")
+    .map((c) => c.split("=")[0])
+    .filter((n) => /^ph_.*_posthog$/.test(n));
+  if (names.length === 0) return;
+  const host = location.hostname;
+  const apex = "." + host.split(".").slice(-2).join(".");
+  const past = "Thu, 01 Jan 1970 00:00:00 GMT";
+  for (const n of names) {
+    document.cookie = `${n}=; expires=${past}; path=/`;
+    document.cookie = `${n}=; expires=${past}; path=/; domain=${host}`;
+    document.cookie = `${n}=; expires=${past}; path=/; domain=${apex}`;
+  }
+}
+
 // Module-level so a remount (Fast Refresh, route group swap) never double-inits.
 let started = false;
 
@@ -104,6 +132,13 @@ export function PostHogProvider({
     }
     window.addEventListener(ACCEPT_EVENT, onAccept);
     return () => window.removeEventListener(ACCEPT_EVENT, onAccept);
+  }, []);
+
+  // Retire any pre-existing `ph_*_posthog` cookie once, for every visitor,
+  // regardless of consent. We are localStorage-only now, so these are dead
+  // weight on the request path (see clearLegacyPostHogCookies).
+  useEffect(() => {
+    clearLegacyPostHogCookies();
   }, []);
 
   // Boot PostHog once consent is granted; capture the entry pageview. The
