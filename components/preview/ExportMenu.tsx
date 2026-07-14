@@ -203,14 +203,20 @@ export function ExportMenu({
       {typeof document !== "undefined"
         ? createPortal(
             <>
-              {/* Transparent scrim: an outside click ANYWHERE dismisses the
-                  menu - including over the deck <iframe>, whose clicks never
-                  reach the parent-document mousedown listener above. */}
+              {/* Invisible scrim (NOT a visual overlay - a dropdown must not
+                  dim the studio, so no bg-overlay token): an outside click
+                  ANYWHERE dismisses the menu, including over the deck <iframe>,
+                  whose clicks never reach the parent-document mousedown listener
+                  above. stopPropagation so the bubbled mousedown doesn't ALSO
+                  hit that listener (one press = one close). */}
               {open && rect ? (
                 <div
                   className="fixed inset-0 z-[1099]"
                   aria-hidden
-                  onMouseDown={() => setOpen(false)}
+                  onMouseDown={(e) => {
+                    e.stopPropagation();
+                    setOpen(false);
+                  }}
                 />
               ) : null}
               <AnimatePresence>

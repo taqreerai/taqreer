@@ -158,14 +158,20 @@ export function HistoryPopover({
 
   return createPortal(
     <>
-      {/* Transparent scrim: dismiss on any outside click, including over the
-          deck <iframe>, whose clicks never reach the parent-document
-          mousedown listener above. */}
+      {/* Invisible scrim (NOT a visual overlay - a popover must not dim the
+          studio, so no bg-overlay token): dismiss on any outside click,
+          including over the deck <iframe>, whose clicks never reach the
+          parent-document mousedown listener above. stopPropagation so the
+          bubbled mousedown doesn't ALSO hit that listener (one press = one
+          onClose). */}
       {open && triggerRect ? (
         <div
           className="fixed inset-0 z-[1099]"
           aria-hidden
-          onMouseDown={() => onClose()}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
         />
       ) : null}
       {/* AnimatePresence wraps the conditional so the popover animates OUT

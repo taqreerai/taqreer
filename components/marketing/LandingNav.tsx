@@ -68,7 +68,7 @@ export function LandingNav() {
   ];
 
   return (
-    <nav ref={navRef} className="absolute top-0 right-0 left-0 z-50">
+    <nav ref={navRef} className="absolute top-0 start-0 end-0 z-50">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* relative so the link group can be absolutely centred on the page
             regardless of the logo / actions widths (was drifting off-centre
