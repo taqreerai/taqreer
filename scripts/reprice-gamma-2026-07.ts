@@ -1,8 +1,11 @@
 // One-off: apply the 2026-07-14 Gamma-parity repricing to the LIVE config
 // rows. seedConfig() is create-only by design, so existing DBs keep their old
-// numbers until this runs. Idempotent (updates to ABSOLUTE values, not
-// increments) and prod-safe (only touches the fields that changed). Bumps
-// configVersion so every worker's ensureFresh picks it up within the 30s TTL.
+// numbers until this runs. Runs in ONE transaction and aborts if any expected
+// Tier row is missing or duplicated, so a mid-run failure never leaves prod
+// half-repriced. The values it writes are idempotent (absolute, not
+// increments); configVersion is intentionally bumped on each run so every
+// worker's ensureFresh picks the change up within the 30s TTL. Requires a
+// seeded DB (run scripts/seed-config.ts first on a fresh one).
 //
 //   npx tsx scripts/reprice-gamma-2026-07.ts          # local (docker DB)
 //   run on the prod box after deploy (DATABASE_URL from the prod env)
@@ -32,19 +35,26 @@ const NEW_IMAGE_CREDITS = 10;
 
 async function main() {
   const { prisma } = await import("@/lib/prisma");
-  for (const [plan, data] of Object.entries(TIER_UPDATES)) {
-    const res = await prisma.tier.updateMany({ where: { plan }, data });
-    console.log(
-      res.count > 0
-        ? `updated ${plan}: ${JSON.stringify(data)}`
-        : `SKIPPED ${plan}: no row (unseeded DB serves the new SEED anyway)`,
-    );
-  }
-  const settings = await prisma.platformSettings.upsert({
-    where: { id: "singleton" },
-    create: { id: "singleton", configVersion: 1, imageCredits: NEW_IMAGE_CREDITS },
-    update: { imageCredits: NEW_IMAGE_CREDITS, configVersion: { increment: 1 } },
-    select: { configVersion: true, imageCredits: true, regenBaseCredits: true },
+  // One transaction: tier updates + the settings bump commit or roll back
+  // together, so a mid-run failure can never leave prod half-repriced.
+  const settings = await prisma.$transaction(async (tx) => {
+    for (const [plan, data] of Object.entries(TIER_UPDATES)) {
+      const res = await tx.tier.updateMany({ where: { plan }, data });
+      // plan is the PK, so exactly one row must match. 0 means the DB isn't
+      // seeded as expected - abort loudly rather than partially reprice.
+      if (res.count !== 1) {
+        throw new Error(
+          `expected exactly 1 "${plan}" Tier row, updated ${res.count} - aborting (seed the DB first)`,
+        );
+      }
+      console.log(`updated ${plan}: ${JSON.stringify(data)}`);
+    }
+    return tx.platformSettings.upsert({
+      where: { id: "singleton" },
+      create: { id: "singleton", configVersion: 1, imageCredits: NEW_IMAGE_CREDITS },
+      update: { imageCredits: NEW_IMAGE_CREDITS, configVersion: { increment: 1 } },
+      select: { configVersion: true, imageCredits: true, regenBaseCredits: true },
+    });
   });
   console.log("platform settings:", JSON.stringify(settings));
   await prisma.$disconnect();

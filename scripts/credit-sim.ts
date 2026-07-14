@@ -523,6 +523,14 @@ async function main() {
     const reducedTarget = Math.max(1, FREE_CAP - 1); // reduce offer, under the cap
     const lowBalance = genCost("opus-fast", reducedTarget); // affords exactly reducedTarget slides
     const capHold = genCost("opus-fast", FREE_CAP); // the capped-brief hold
+    // Floor guard: a future repricing where the reduce target costs more than
+    // the whole grant would make the burn-down negative. Fail fast instead.
+    if (lowBalance > FREE_GRANT) {
+      throw new Error(
+        `3.1 sim: free grant ${FREE_GRANT} cannot afford the reduce target ` +
+          `(${lowBalance}); update this scenario for the new tier`,
+      );
+    }
     // The free grant only affords ~1 deck, so charge straight down to the
     // target balance rather than spending a real deck first.
     await ledger.chargeCredits({
@@ -837,6 +845,15 @@ async function main() {
     }
     const jobCost = genCost("opus-fast", raceSlides);
     const raceBalance = jobCost + Math.floor(jobCost / 2);
+    // Floor guard: if a repricing ever makes even a 1-slide deck cost more
+    // than FREE_GRANT / 1.5, the loop bottoms out at raceSlides === 1 and the
+    // burn-down would go negative. Fail fast with a clear message instead.
+    if (raceBalance > FREE_GRANT) {
+      throw new Error(
+        `4.4 sim: free grant ${FREE_GRANT} cannot fund 1.5x even a 1-slide deck ` +
+          `(${raceBalance}); update this scenario for the new tier`,
+      );
+    }
     await ledger.chargeCredits({
       userId: user.id,
       chargeKey: `sim-burn-${user.id}`,
