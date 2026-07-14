@@ -63,7 +63,18 @@ function stampUserWriteAudited(html: string): string {
   if (html.includes("data-tq-frozen") || html.includes("data-tq-audited")) {
     return html;
   }
-  return html.replace(/<section /, '<section data-tq-audited="1" ');
+  const stamped = html.replace(/<section /, '<section data-tq-audited="1" ');
+  if (stamped === html) {
+    // Can't happen for system-assembled frame html - data-tq-frame lives ON
+    // the section opening tag (lib/deck/frame.ts), so an attributed
+    // `<section ` always exists. But this function is the single guard
+    // against the stuck-draft state, so a failed attach must be LOUD, never
+    // a silent no-op (CR #135).
+    console.warn(
+      "[slide-versioning] frame html had no <section > tag to stamp audited",
+    );
+  }
+  return stamped;
 }
 
 /**
