@@ -99,6 +99,7 @@ export async function POST(request: Request) {
       const grant = await maybeGrantSignupCredits({
         userId: dbUser.id,
         email: profile.email,
+        name: profile.name,
         ip: geo.ip,
         deviceId: deviceIdFromCookies(await cookies()),
         geo,

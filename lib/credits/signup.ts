@@ -18,6 +18,14 @@
 //      non-browser client, and a legit race self-heals because the grant
 //      re-attempts on the next sync/pageload (blocks never stamp
 //      signupGrantedAt).
+//   4. SAME-PERSON (IP + NAME) - the three guards above each miss a
+//      determined duplicate who pairs a fresh inbox with a second browser
+//      and is only the 2nd signup from the IP. What still links them is the
+//      human: same signup IP + same real name. Block when a prior GRANTED
+//      account from this exact IP carries a matching normalized name. Names
+//      with fewer than two tokens are ignored (a lone first name is too
+//      weak to identify a person), so a differently-named housemate on the
+//      same router still gets credits.
 //
 // Blocked accounts still work - they just start at 0 credits. Payment-
 // method dedupe remains the stronger future layer (billing plan §8/§9).
@@ -46,20 +54,51 @@ export function normalizeEmail(email: string): string {
   return `${local}@${domain}`;
 }
 
+/**
+ * Identity key for same-person detection. Lowercases, strips Arabic
+ * tashkeel + tatweel and Latin combining accents, drops punctuation, and
+ * token-SORTS so word order ("Rawan Abdulshafi" == "Abdulshafi Rawan")
+ * doesn't matter. Returns null for names with fewer than two tokens - a
+ * lone first name is too weak to identify a person and would false-block
+ * a same-named housemate on the same router.
+ */
+export function normalizeName(name: string | null | undefined): string | null {
+  if (!name) return null;
+  const cleaned = name
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "") // Latin combining accents
+    .replace(/[ـً-ْٰ]/g, "") // tatweel + Arabic harakat
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ") // punctuation -> space
+    .trim();
+  const tokens = cleaned.split(/\s+/).filter(Boolean);
+  if (tokens.length < 2) return null;
+  return tokens.sort().join(" ");
+}
+
 export async function maybeGrantSignupCredits(args: {
   userId: string;
   email: string;
   // Request IP (cf-connecting-ip chain) when available; null skips the
-  // velocity guard rather than failing the signup.
+  // velocity + same-person guards rather than failing the signup.
   ip?: string | null;
   // Validated `tq_did` cookie (lib/device-cookie.ts). null/undefined =
   // absent or malformed, which BLOCKS the grant (see header comment).
   deviceId?: string | null;
+  // Display name (Supabase user_metadata). Feeds the same-person guard;
+  // null / single-token names skip it (see normalizeName).
+  name?: string | null;
   // Audit-trail extras for the grant event metadata.
   geo?: { country: string | null; city: string | null };
 }): Promise<{
   granted: number;
-  blocked: "email_alias" | "ip_velocity" | "device_dup" | "device_missing" | null;
+  blocked:
+    | "email_alias"
+    | "ip_velocity"
+    | "device_dup"
+    | "device_missing"
+    | "same_person"
+    | null;
 }> {
   const normalized = normalizeEmail(args.email);
   const at = normalized.lastIndexOf("@");
@@ -160,6 +199,37 @@ export async function maybeGrantSignupCredits(args: {
       },
     });
     return { granted: 0, blocked: "device_dup" };
+  }
+
+  // 4. Same-person - a prior GRANTED account from this exact signup IP that
+  //    carries a matching normalized name is the same human on a second
+  //    inbox + browser (the combo that slips past guards 1-3). IP-scoped so
+  //    two strangers who merely share a name never collide; name-gated (>= 2
+  //    tokens) so a differently-named housemate on the same router is spared.
+  const selfName = normalizeName(args.name);
+  if (args.ip && selfName) {
+    const sameIp = await prisma.user.findMany({
+      where: {
+        id: { not: args.userId },
+        signupIp: args.ip,
+        name: { not: null },
+        creditAccount: { is: { signupGrantedAt: { not: null } } },
+      },
+      select: { id: true, name: true },
+      take: 500,
+    });
+    const twin = sameIp.find((u) => normalizeName(u.name) === selfName);
+    if (twin) {
+      await prisma.usageEvent.create({
+        data: {
+          userId: args.userId,
+          eventType: "credit.signup.blocked",
+          amount: 0,
+          metadata: { reason: "same_person", ip: args.ip, matchedUserId: twin.id },
+        },
+      });
+      return { granted: 0, blocked: "same_person" };
+    }
   }
 
   const result = await grantSignupCredits({
