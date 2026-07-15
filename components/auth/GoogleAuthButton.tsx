@@ -8,10 +8,9 @@
 // drift between the two pages. The parent (auth) group is `force-dynamic`, so
 // useSearchParams here needs no Suspense boundary.
 
-import { useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
-import { localizedHref } from "@/lib/i18n/navigation";
+import { useDict } from "@/components/i18n/LocaleProvider";
+import { useAuthNext } from "@/components/auth/useAuthNext";
 
 const googleIcon = (
   <svg className="h-5 w-5" viewBox="0 0 24 24">
@@ -37,21 +36,10 @@ export function GoogleAuthButton({
   /** Mirror the OAuth-initiation busy state into the host page's loading flag. */
   onBusyChange?: (busy: boolean) => void;
 }) {
-  const { locale } = useLocale();
   const dict = useDict();
   const t = dict.auth;
-  const searchParams = useSearchParams();
+  const { nextUrl, templateId } = useAuthNext();
   const supabase = createClient();
-
-  // `next` is user-controlled; only honour internal relative paths (one leading
-  // slash, never "//" or absolute) to avoid open-redirects. Mirrors the login
-  // email flow's guard so both auth entry points behave identically.
-  const rawNext = searchParams.get("next");
-  const nextUrl =
-    rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//")
-      ? rawNext
-      : localizedHref("/dashboard", locale);
-  const templateId = searchParams.get("template");
 
   const handleGoogle = async () => {
     onBusyChange?.(true);

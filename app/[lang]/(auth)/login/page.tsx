@@ -17,6 +17,7 @@ import {
   TURNSTILE_ENABLED,
 } from "@/components/auth/TurnstileWidget";
 import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton";
+import { useAuthNext } from "@/components/auth/useAuthNext";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,14 +26,8 @@ export default function LoginPage() {
   const dict = useDict();
   const t = dict.auth;
 
-  // `next` is user-controlled; only honour internal relative paths (one leading
-  // slash, never "//" or absolute) to avoid open-redirects.
-  const rawNext = searchParams.get("next");
-  const nextUrl =
-    rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//")
-      ? rawNext
-      : localizedHref("/dashboard", locale);
-  const templateId = searchParams.get("template");
+  // Post-auth redirect target (open-redirect guard lives in useAuthNext).
+  const { nextUrl, templateId } = useAuthNext();
   const deleted = searchParams.get("deleted") === "true";
 
   const [email, setEmail] = useState("");

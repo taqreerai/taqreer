@@ -22,6 +22,7 @@ import {
   TURNSTILE_ENABLED,
 } from "@/components/auth/TurnstileWidget";
 import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton";
+import { useAuthNext } from "@/components/auth/useAuthNext";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -51,7 +52,16 @@ export default function SignupPage() {
   const [resent, setResent] = useState(false);
 
   const supabase = createClient();
-  const dashboardHref = localizedHref("/dashboard", locale);
+  // Post-auth redirect target (open-redirect guard lives in useAuthNext). The
+  // Google button (GoogleAuthButton) resolves the SAME target, so email and
+  // Google signup land in the same place, matching the login email flow.
+  const { nextUrl, templateId } = useAuthNext();
+  // Callback URL for the email-confirmation / resend links, forwarding
+  // next + template. Called only inside handlers, so window is defined.
+  const buildCallbackUrl = () =>
+    `${window.location.origin}/callback?next=${encodeURIComponent(nextUrl)}${
+      templateId ? `&template=${encodeURIComponent(templateId)}` : ""
+    }`;
 
   // Tick the resend cooldown down to 0 (setTimeout keeps the setState in an
   // async callback, not a mount effect — avoids the set-state-in-effect rule).
@@ -104,7 +114,7 @@ export default function SignupPage() {
         password,
         options: {
           data: { full_name: name, name, lang: locale },
-          emailRedirectTo: `${window.location.origin}/callback?next=${encodeURIComponent(dashboardHref)}`,
+          emailRedirectTo: buildCallbackUrl(),
           ...(captchaToken ? { captchaToken } : {}),
         },
       });
@@ -129,7 +139,7 @@ export default function SignupPage() {
           setError(t.accountPrepFailed);
           return;
         }
-        router.push(dashboardHref);
+        router.push(templateId ? `${nextUrl}?template=${templateId}` : nextUrl);
         router.refresh();
       } else {
         // Email confirmation required - show the confirm screen and arm the
@@ -157,7 +167,7 @@ export default function SignupPage() {
         type: "signup",
         email,
         options: {
-          emailRedirectTo: `${window.location.origin}/callback?next=${encodeURIComponent(dashboardHref)}`,
+          emailRedirectTo: buildCallbackUrl(),
           ...(captchaToken ? { captchaToken } : {}),
         },
       });
