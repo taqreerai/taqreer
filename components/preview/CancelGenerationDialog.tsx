@@ -18,10 +18,11 @@
 // any partially-generated slides will be removed. Matches the
 // product call (2026-05-27, "cancel means start over").
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 
 export function CancelGenerationDialog({
   open,
@@ -41,6 +42,8 @@ export function CancelGenerationDialog({
 }) {
   const dict = useDict();
   const { dir } = useLocale();
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(panelRef, open);
   // Body-scroll lock while open — same shape as ShareDialog uses.
   // Restoring `overflow` to its prior value (vs. forcing "auto")
   // respects whatever upstream style the page may have set.
@@ -95,6 +98,7 @@ export function CancelGenerationDialog({
             className="pointer-events-none fixed inset-0 z-[1001] flex items-center justify-center p-4"
           >
             <div
+              ref={panelRef}
               dir={dir}
               role="dialog"
               aria-modal="true"

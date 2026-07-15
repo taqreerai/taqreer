@@ -15,13 +15,14 @@
 // Sibling-overlay pattern (dim + panel as siblings) per the canonical
 // dialogs (TemplateDeleteConfirmDialog et al).
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { BillingSection } from "@/components/billing/BillingSection";
 import { EmbeddedCheckout } from "@/components/billing/EmbeddedCheckout";
 import { planLabel, type KnownPlan } from "@/lib/plan";
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 
 export function UpgradeModal({
   open,
@@ -49,6 +50,8 @@ export function UpgradeModal({
   // null = plans step; a lookupKey = checkout step; "done" = success.
   const [lookupKey, setLookupKey] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(panelRef, open);
 
   // Fresh steps every open — adjust during render (React's "reset state when a
   // prop changes" pattern) instead of an effect, so it can't cascade. The guard
@@ -92,6 +95,7 @@ export function UpgradeModal({
             className="pointer-events-none fixed inset-0 z-[1201] flex items-center justify-center p-4"
           >
             <motion.div
+              ref={panelRef}
               dir={dir}
               role="dialog"
               aria-modal="true"

@@ -41,6 +41,7 @@ import { useCreditBalance } from "@/lib/credits/store";
 import { isExportGated, EXPORT_GATE_TIER } from "@/lib/export/export-gating";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import { GoogleSlidesReadyDialog } from "@/components/export/GoogleSlidesReadyDialog";
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 import { planLabel } from "@/lib/plan";
 
 type ShareRow = {
@@ -113,6 +114,12 @@ export function ShareDialog({
   const [tab, setTab] = useState<ShareDialogTab>(initialTab);
   const [state, setState] = useState<ShareState | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // Focus trap — the modal panel is shown only when both `open` and a
+  // `projectId` are present (see the render guard below), so trap on the
+  // same condition.
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(panelRef, open && projectId !== null);
 
   // Tab content height — measured per tab via ResizeObserver so the
   // body wrapper can animate height between them with framer-motion
@@ -560,6 +567,7 @@ export function ShareDialog({
                 below). Panel naturally reflows via flex-col when its
                 body child resizes. */}
             <div
+              ref={panelRef}
               dir={dir}
               role="dialog"
               aria-modal="true"

@@ -9,10 +9,11 @@
 // Sibling-overlay pattern (dim + panel) per the canonical dialogs; z-1200
 // pair so it stacks above ShareDialog (z-1000/1001), same as UpgradeModal.
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 
 export function GoogleSlidesReadyDialog({
   url,
@@ -24,6 +25,8 @@ export function GoogleSlidesReadyDialog({
   const dict = useDict();
   const { dir } = useLocale();
   const open = url !== null;
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(panelRef, open);
 
   useEffect(() => {
     if (!open) return;
@@ -54,6 +57,7 @@ export function GoogleSlidesReadyDialog({
             className="pointer-events-none fixed inset-0 z-[1201] flex items-center justify-center p-4"
           >
             <motion.div
+              ref={panelRef}
               dir={dir}
               role="dialog"
               aria-modal="true"

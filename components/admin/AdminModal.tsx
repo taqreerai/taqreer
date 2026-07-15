@@ -4,8 +4,9 @@
 // other dialogs are bespoke per-feature confirms, so this is the one generic
 // modal the admin screens reuse. English/LTR, dark-only.
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 
 export function AdminModal({
   open,
@@ -18,6 +19,8 @@ export function AdminModal({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(panelRef, open);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -33,6 +36,7 @@ export function AdminModal({
       <div className="modal-dim fixed inset-0 z-[1200]" onClick={onClose} />
       <div className="pointer-events-none fixed inset-0 z-[1201] flex items-start justify-center p-4">
         <div
+          ref={panelRef}
           dir="ltr"
           className="surface-modal pointer-events-auto mt-[18vh] w-full max-w-md rounded-2xl p-6"
           onClick={(e) => e.stopPropagation()}

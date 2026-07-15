@@ -11,11 +11,12 @@
 // Canonical sibling-overlay dialog recipe (TemplateDeleteConfirmDialog
 // et al). Shared by /create and /datasheet.
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { useState } from "react";
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 
 // Option label -> dict desc key. Labels mirror DESIGN_STYLE_OPTIONS in
 // OutputCards.tsx (the prompt anchors - keep in sync).
@@ -165,6 +166,8 @@ export function DesignStylePicker({
   const { dir } = useLocale();
   const t = dict.flows.stylePicker;
   const [open, setOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(panelRef, open);
 
   const current = STYLES.find((s) => s.label === value) ?? null;
 
@@ -226,6 +229,7 @@ export function DesignStylePicker({
                     className="pointer-events-none fixed inset-0 z-[1201] flex items-center justify-center p-4"
                   >
                     <motion.div
+                      ref={panelRef}
                       dir={dir}
                       role="dialog"
                       aria-modal="true"

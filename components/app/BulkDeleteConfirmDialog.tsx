@@ -5,10 +5,11 @@
 // per-type dialogs keep their single-item flows). Canonical
 // sibling-overlay recipe per TemplateDeleteConfirmDialog.
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 
 export function BulkDeleteConfirmDialog({
   open,
@@ -29,6 +30,8 @@ export function BulkDeleteConfirmDialog({
 }) {
   const dict = useDict();
   const { dir } = useLocale();
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(panelRef, open);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -60,6 +63,7 @@ export function BulkDeleteConfirmDialog({
             className="pointer-events-none fixed inset-0 z-[1201] flex items-start justify-center p-4"
           >
             <motion.div
+              ref={panelRef}
               dir={dir}
               role="alertdialog"
               aria-modal="true"

@@ -12,10 +12,11 @@
 // in dict.flows.generate.slideCapUpsell (bilingual); the cap / max numbers are
 // injected from config, never hardcoded.
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 
 export function SlideCapUpsellDialog({
   open,
@@ -41,6 +42,8 @@ export function SlideCapUpsellDialog({
   const dict = useDict();
   const { dir } = useLocale();
   const t = dict.flows.generate.slideCapUpsell;
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(panelRef, open);
 
   // Body-scroll lock while open — same shape CancelGenerationDialog uses.
   useEffect(() => {
@@ -91,6 +94,7 @@ export function SlideCapUpsellDialog({
             className="pointer-events-none fixed inset-0 z-[1001] flex items-center justify-center p-4"
           >
             <div
+              ref={panelRef}
               dir={dir}
               role="dialog"
               aria-modal="true"

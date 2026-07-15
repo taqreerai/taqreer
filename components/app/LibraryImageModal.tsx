@@ -14,11 +14,12 @@
 // clicked. RTL keyboard mapping mirrors TemplateLightbox: ← = next,
 // → = prev. Esc / click-outside close.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import type { LibraryImage } from "@/components/app/LibraryImageCard";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 
 export function LibraryImageModal({
   open,
@@ -35,6 +36,10 @@ export function LibraryImageModal({
   const { dir } = useLocale();
   const total = images.length;
   const [index, setIndex] = useState(initialIndex);
+  const panelRef = useRef<HTMLDivElement>(null);
+  // Mirror the panel's render guard ({open && image}); `image` resolves from a
+  // non-empty `images`, so trap exactly when the panel is shown.
+  useFocusTrap(panelRef, open && total > 0);
 
   // Seed at the clicked tile each time the modal opens.
   useEffect(() => {
@@ -103,6 +108,7 @@ export function LibraryImageModal({
             className="pointer-events-none fixed inset-0 z-[2001] flex items-center justify-center p-4"
           >
             <div
+              ref={panelRef}
               dir={dir}
               role="dialog"
               aria-modal="true"

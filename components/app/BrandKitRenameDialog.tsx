@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 
 export function BrandKitRenameDialog({
   open,
@@ -29,6 +30,8 @@ export function BrandKitRenameDialog({
   const [value, setValue] = useState(currentName);
   const [prevOpen, setPrevOpen] = useState(open);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const panelRef = useRef<HTMLFormElement>(null);
+  useFocusTrap(panelRef, open);
 
   // Reseed the input to the current name each time the dialog opens.
   // Adjusting state during render (guarded by the open transition) per
@@ -81,6 +84,7 @@ export function BrandKitRenameDialog({
             className="pointer-events-none fixed inset-0 z-[1201] flex items-start justify-center p-4"
           >
             <motion.form
+              ref={panelRef}
               dir={dir}
               role="dialog"
               aria-modal="true"

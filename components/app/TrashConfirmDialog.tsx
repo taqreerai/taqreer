@@ -12,10 +12,11 @@
 // a project" semantics so the copy reads naturally without props
 // for every string.
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 
 export function TrashConfirmDialog({
   open,
@@ -39,6 +40,8 @@ export function TrashConfirmDialog({
 }) {
   const dict = useDict();
   const { dir } = useLocale();
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(panelRef, open);
   // Esc closes the dialog — but ONLY while not busy. Closing
   // mid-delete would dismiss the spinner without aborting the
   // request, leaving the user without feedback when it lands.
@@ -73,6 +76,7 @@ export function TrashConfirmDialog({
         >
           <motion.div
             key="trash-confirm-card"
+            ref={panelRef}
             dir={dir}
             initial={{ opacity: 0, scale: 0.95, y: -16 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}

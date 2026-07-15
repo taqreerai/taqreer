@@ -20,13 +20,14 @@
 // overlay pattern (dim + panel as AnimatePresence siblings) per the
 // CR 2026-05-22 finding — preserves the panel's glass refraction.
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { BRAND_FLOW_CARDS, flowCopyKey } from "@/components/app/brandFlowCards";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 
 export function NewProjectDialog({
   open,
@@ -37,6 +38,8 @@ export function NewProjectDialog({
 }) {
   const dict = useDict();
   const { locale } = useLocale();
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(panelRef, open);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -67,6 +70,7 @@ export function NewProjectDialog({
             className="pointer-events-none fixed inset-0 z-[1201] flex items-center justify-center p-4"
           >
             <motion.div
+              ref={panelRef}
               role="dialog"
               aria-modal="true"
               aria-labelledby="new-project-title"

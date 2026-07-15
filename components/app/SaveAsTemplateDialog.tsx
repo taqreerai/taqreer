@@ -31,12 +31,13 @@
 //   • Save fails → toast-style inline error above the buttons, modal
 //     stays open so the user can retry or cancel.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Toggle } from "@/components/create/controls";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 import type { BrandSnapshot } from "@/lib/template/derive-brand";
 
 type PreviewResponse = {
@@ -72,6 +73,9 @@ export function SaveAsTemplateDialog({
   // save so the new template tile appears in /templates + dashboard
   // widget immediately, without a manual reload.
   const router = useRouter();
+
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(panelRef, open && !!projectId);
 
   // Body-scroll lock while open — matches AllNotificationsModal so the
   // page behind the modal doesn't scroll under the user's pointer
@@ -243,6 +247,7 @@ export function SaveAsTemplateDialog({
             className="pointer-events-none fixed inset-0 z-[1001] flex items-center justify-center p-4"
           >
             <div
+              ref={panelRef}
               dir={dir}
               role="dialog"
               aria-modal="true"

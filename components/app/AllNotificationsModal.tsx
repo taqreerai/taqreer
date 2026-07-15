@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 import { NotificationRow } from "@/components/app/BellDropdown";
 import {
   notificationStore,
@@ -29,6 +30,8 @@ export function AllNotificationsModal({
   const dict = useDict();
   const { dir, locale } = useLocale();
   const router = useRouter();
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(panelRef, open);
   // The bell already calls setUser → store is hydrated. This modal just
   // reads the same snapshot via the `items` prop.
 
@@ -165,6 +168,7 @@ export function AllNotificationsModal({
             className="pointer-events-none fixed inset-0 z-[1001] flex items-center justify-center p-4"
           >
           <div
+            ref={panelRef}
             dir={dir}
             role="dialog"
             aria-modal="true"

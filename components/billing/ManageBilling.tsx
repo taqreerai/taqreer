@@ -9,7 +9,7 @@
 // The past_due dunning banner sits on top and points at the card
 // section. Rows reuse the `.settings-row` recipe.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { format } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -26,6 +26,7 @@ import { getStripe } from "@/lib/billing/stripe-client";
 import { checkoutAppearance, CHECKOUT_FONTS } from "@/lib/billing/appearance";
 import { NoticeCard } from "@/components/common/NoticeCard";
 import { PlanUsage } from "@/components/app/PlanUsage";
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 import Link from "next/link";
 
 type Summary = {
@@ -80,6 +81,8 @@ export function ManageBilling() {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [adding, setAdding] = useState(false);
   const [cardNotice, setCardNotice] = useState<string | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(panelRef, confirmCancel);
 
   const refreshSummary = useCallback(() => {
     fetch("/api/billing/summary", { credentials: "same-origin" })
@@ -391,6 +394,7 @@ export function ManageBilling() {
             }}
           >
             <motion.div
+              ref={panelRef}
               initial={{ opacity: 0, scale: 0.95, y: -16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: -16 }}

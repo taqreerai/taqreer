@@ -14,12 +14,13 @@
 // panel's `` glass refraction. Same recipe as
 // `TemplateDeleteConfirmDialog` and `SaveAsTemplateDialog`.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { BRAND_FLOW_CARDS, flowCopyKey } from "@/components/app/brandFlowCards";
 import type { BrandKitTargetFlow } from "@/lib/create/seed-from-brand-kit";
 import { useDict } from "@/components/i18n/LocaleProvider";
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 
 export function UseBrandKitDialog({
   open,
@@ -48,6 +49,8 @@ export function UseBrandKitDialog({
   // cascading-render risk.
   const dict = useDict();
   const [picking, setPicking] = useState<BrandKitTargetFlow | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(panelRef, open);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- internal-state reset on external prop change
     if (!busy || !open) setPicking(null);
@@ -89,6 +92,7 @@ export function UseBrandKitDialog({
             className="pointer-events-none fixed inset-0 z-[1201] flex items-center justify-center p-4"
           >
             <motion.div
+              ref={panelRef}
               role="dialog"
               aria-modal="true"
               aria-labelledby="use-brand-kit-title"

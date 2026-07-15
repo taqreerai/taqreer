@@ -34,6 +34,7 @@ import { PremiumBadge } from "@/components/app/PremiumBadge";
 import type { SlideFormat } from "@/lib/schema/slide";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { useSwipeNav } from "@/hooks/useSwipeNav";
+import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 
 // Stage dimensions — driven by the actual rendered showcase WebP
 // width (800 px from thumbnail-render's THUMBNAIL_WIDTH_PX). 450 px
@@ -84,6 +85,8 @@ export function TemplateLightbox({
   // Points at the currently-active thumbnail so the strip can scroll it
   // into view as the user navigates (see effect below).
   const activeThumbRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(panelRef, open);
 
   // Stage box. In 16:9 the WIDTH is fixed at TEMPLATE_STAGE_PX and
   // height derives from the aspect. In 9:16 the HEIGHT is fixed and
@@ -200,6 +203,7 @@ export function TemplateLightbox({
             className="pointer-events-none fixed inset-0 z-[2001] flex items-center justify-center p-4"
           >
             <div
+              ref={panelRef}
               dir={dir}
               role="dialog"
               aria-modal="true"
