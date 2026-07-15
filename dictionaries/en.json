@@ -680,7 +680,7 @@
         "close": "Close",
         "body": "The maximum allowed is {cap} slides. Upgrade to raise the limit to {max} slides.",
         "upgrade": "Upgrade now",
-        "continue": "Continue"
+        "continue": "Create {cap} slides"
       }
     },
     "fonts": {

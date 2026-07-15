@@ -136,7 +136,7 @@ export function SlideCapUpsellDialog({
                   onClick={onContinue}
                   className="btn-pill px-5 py-2 text-sm"
                 >
-                  {t.continue}
+                  {t.continue.replace("{cap}", String(cap))}
                 </button>
                 <button
                   type="button"
