@@ -331,11 +331,16 @@ export default function SignupPage() {
         <>
           <button
             type="button"
+            // Disabled while a submit is in flight — same as the other controls.
+            // Otherwise Back could return to step 1 (and let the email be
+            // edited) while signUp is still pending, so the resolving request
+            // flips to the confirm screen / navigates with a now-stale email.
+            disabled={loading}
             onClick={() => {
               setStep(1);
               setError(null);
             }}
-            className="inline-flex cursor-pointer items-center gap-1 text-sm text-muted transition-colors hover:text-foreground"
+            className="inline-flex cursor-pointer items-center gap-1 text-sm text-muted transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
           >
             <span
               className={`material-symbols-outlined text-[18px] ${dir === "rtl" ? "rotate-180" : ""}`}
