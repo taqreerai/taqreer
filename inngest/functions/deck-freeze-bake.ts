@@ -72,7 +72,16 @@ import {
 import { buildHtmlDocumentServer } from "@/lib/export/html-document-server";
 import { FREEZE_SCRIPT } from "@/lib/deck/freeze-script";
 import { LEADING_NORMALIZE_SCRIPT } from "@/lib/deck/leading-normalize";
-import { AUDIT_SCRIPT, type FrameAuditFinding } from "@/lib/deck/audit-script";
+import {
+  AUDIT_SCRIPT,
+  type FrameAuditFinding,
+  type FrameAuditResult,
+} from "@/lib/deck/audit-script";
+import {
+  samplePixelContrast,
+  measurePixelContrast,
+  backstopInk,
+} from "@/lib/deck/pixel-contrast";
 import {
   frameSystemPrompt,
   frameSystemCss,
@@ -273,9 +282,32 @@ export const deckFreezeBake = inngest.createFunction(
             page = await openRenderedDeck(browser, manifest, dims);
           }
           // Audit the NORMALIZED DOM (crowding is pre-fixed here).
-          findings = await auditSlides(page, pendingIds, manifest.direction);
+          const auditRes = await auditSlides(
+            page,
+            pendingIds,
+            manifest.direction,
+          );
+          findings = Object.fromEntries(
+            pendingIds.map((sid) => [sid, auditRes[sid]?.findings ?? []]),
+          );
           for (const sid of pendingIds) {
             const png = await shoot(page, sid);
+            // Pixel-sampled contrast over ambiguous grounds (photo/scrim/
+            // panel) - the CSS walk is blind there and the vision cannot see
+            // invisible text; measure the SAME shot the reviewer gets. Merged
+            // BEFORE fixWorthy/vision inputs so an invisible block is a
+            // MEASURED defect the model must revise.
+            const checks = auditRes[sid]?.pixelChecks ?? [];
+            if (checks.length > 0) {
+              const pixelFindings = await samplePixelContrast(
+                png,
+                dims.width,
+                checks,
+              );
+              if (pixelFindings.length > 0) {
+                findings[sid] = [...(findings[sid] ?? []), ...pixelFindings];
+              }
+            }
             const jpeg = await sharp(png)
               .resize({
                 width: VISION_IMAGE_EDGE,
@@ -639,14 +671,34 @@ export const deckFreezeBake = inngest.createFunction(
         const revisedIds = pendingIds.filter(
           (sid) => observed.revisions[sid] !== undefined,
         );
+        // Shots for the revised slides, taken pre-freeze so the pixel-
+        // contrast re-check measures what the revision actually renders;
+        // reused below as the flow shots for the ones that go on to freeze
+        // (no double capture - the page is unmutated in between).
+        const revisedShots = new Map<string, Buffer>();
         if (revisedIds.length > 0) {
-          const reFindings = await auditSlides(
+          const reAudit = await auditSlides(
             page,
             revisedIds,
             manifest.direction,
           );
           for (const sid of revisedIds) {
-            const after = reFindings[sid] ?? [];
+            revisedShots.set(sid, await shoot(page, sid));
+          }
+          for (const sid of revisedIds) {
+            const entry = reAudit[sid];
+            // Same pixel pass as observe: without it, a revision that KEEPS
+            // the invisible text would re-audit cleaner than `before` (which
+            // includes the pixel finding) and ship unfixed.
+            const rePixel =
+              entry?.pixelChecks?.length && revisedShots.has(sid)
+                ? await samplePixelContrast(
+                    revisedShots.get(sid)!,
+                    dims.width,
+                    entry.pixelChecks,
+                  )
+                : [];
+            const after = [...(entry?.findings ?? []), ...rePixel];
             const now = after.filter(
               (f) =>
                 f.type === "overflow" ||
@@ -685,9 +737,84 @@ export const deckFreezeBake = inngest.createFunction(
 
         const toFreeze = pendingIds.filter((sid) => !reverted.has(sid));
 
-        // Flow ground-truth shots for the pixel gate.
+        // ── DETERMINISTIC CONTRAST BACKSTOP (2026-07-15) ── nothing freezes
+        // with measured-invisible text. The vision gets first shot at a
+        // design-quality fix; the incident e2e proved a revision can rebuild
+        // the layout yet KEEP the unreadable class ink (deck css is fixed),
+        // and the guard's count parity (1 unfixed finding -> 1) ships it. So
+        // the FINAL composed state is re-measured here and any still-
+        // invisible box gets an explicit ink the system chose from the
+        // sampled ground (backstopInk: farthest palette color, else
+        // black/white by luminance) - same philosophy as the leading
+        // normalizer and latinizeDigits: deterministic enforcement when the
+        // model doesn't deliver. The freeze then captures the fixed ink into
+        // the stored html; kept-flow slides carry it via `composed`.
+        const preShots = revisedShots;
+        const finalAudit = await auditSlides(page, toFreeze, manifest.direction);
+        await page.evaluate(
+          `${AUDIT_SCRIPT}; window.__tqFixText = __tqFixInvisibleText;`,
+        );
+        for (const sid of toFreeze) {
+          const checks = finalAudit[sid]?.pixelChecks ?? [];
+          if (checks.length === 0) continue;
+          if (!preShots.has(sid)) preShots.set(sid, await shoot(page, sid));
+          const measured = await measurePixelContrast(
+            preShots.get(sid)!,
+            dims.width,
+            checks,
+          );
+          const invisible = measured.filter((m) => m.invisible && m.ground);
+          if (invisible.length === 0) continue;
+          const fixes = invisible.map((m) => ({
+            x: m.check.x,
+            y: m.check.y,
+            w: m.check.w,
+            h: m.check.h,
+            ink: m.check.ink,
+            color: backstopInk(m.ground!, manifest.theme.palette),
+          }));
+          const res = (await page.evaluate(
+            (id, fxs) => {
+              const escaped = id.replace(/[^a-zA-Z0-9_-]/g, "\\$&");
+              const sec = document
+                .querySelector(`[data-slide-id="${escaped}"]`)
+                ?.querySelector("section");
+              const well = sec?.querySelector(":scope > .tq-well");
+              if (!sec || !well) return { fixed: 0, html: "" };
+              const fixed = (
+                window as unknown as {
+                  __tqFixText: (w: Element, f: unknown[]) => number;
+                }
+              ).__tqFixText(well, fxs);
+              return { fixed, html: fixed > 0 ? sec.outerHTML : "" };
+            },
+            sid,
+            fixes,
+          )) as { fixed: number; html: string };
+          if (res.fixed > 0) {
+            // The DOM changed: the cached shot is stale (flow shot re-taken
+            // below), and the composed html must carry the fix so the
+            // kept-flow fallback + dual-store write ship it too.
+            preShots.delete(sid);
+            const ci = composed.findIndex((s) => s.slideId === sid);
+            if (ci >= 0 && res.html) {
+              composed[ci] = { ...composed[ci], html: res.html };
+            }
+            logger.info("deck_contrast_backstop", {
+              slideId: sid,
+              fixed: res.fixed,
+              colors: fixes.map((f) => f.color).join(","),
+            });
+          }
+        }
+
+        // Flow ground-truth shots for the pixel gate (unmutated slides reuse
+        // the earlier shots - same render state; backstop-fixed slides were
+        // invalidated above and re-shoot here).
         const flowShots = new Map<string, Buffer>();
-        for (const sid of toFreeze) flowShots.set(sid, await shoot(page, sid));
+        for (const sid of toFreeze) {
+          flowShots.set(sid, preShots.get(sid) ?? (await shoot(page, sid)));
+        }
 
         // Freeze each well in-page + stamp frozen.
         await page.evaluate(
@@ -1008,11 +1135,14 @@ async function auditSlides(
   page: Page,
   slideIds: string[],
   direction: string,
-): Promise<Record<string, FrameAuditFinding[]>> {
+): Promise<Record<string, FrameAuditResult>> {
   await page.evaluate(`${AUDIT_SCRIPT}; window.__tqAudit = __tqAuditWell;`);
   return (await page.evaluate(
     (ids, dir) => {
-      const out: Record<string, unknown[]> = {};
+      const out: Record<
+        string,
+        { findings: unknown[]; pixelChecks: unknown[] }
+      > = {};
       for (const sid of ids) {
         const escaped = sid.replace(/[^a-zA-Z0-9_-]/g, "\\$&");
         const sec = document
@@ -1020,15 +1150,18 @@ async function auditSlides(
           ?.querySelector("section");
         const well = sec?.querySelector(":scope > .tq-well");
         const chrome = sec?.querySelector(":scope > .tq-chrome");
-        const findings: unknown[] = well
+        const res = well
           ? (
               window as unknown as {
-                __tqAudit: (w: Element, d: string) => unknown[];
+                __tqAudit: (
+                  w: Element,
+                  d: string,
+                ) => { findings: unknown[]; pixelChecks: unknown[] };
               }
             ).__tqAudit(well, dir)
-          : [];
+          : { findings: [] as unknown[], pixelChecks: [] as unknown[] };
         if (sec && (!well || !chrome)) {
-          findings.push({
+          res.findings.push({
             type: "structure",
             detail:
               "the slide markup is MALFORMED (likely an unterminated attribute quote swallowing the layer boundary): the " +
@@ -1036,13 +1169,13 @@ async function auditSlides(
               " layer is missing from the parsed DOM - re-emit the ENTIRE slide with clean, fully-quoted markup",
           });
         }
-        out[sid] = findings;
+        out[sid] = res;
       }
       return out;
     },
     slideIds,
     direction,
-  )) as Record<string, FrameAuditFinding[]>;
+  )) as Record<string, FrameAuditResult>;
 }
 
 // Worst overflow MAGNITUDE (px) across a slide's findings. The audit's

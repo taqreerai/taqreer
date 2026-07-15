@@ -39,11 +39,44 @@ export type FrameAuditFinding = {
   detail: string;
 };
 
+// A text element the CSS contrast walk SKIPPED as ambiguous (photo tq-bg
+// ground, background-image ancestor, panel overlap, translucent ground) -
+// CSS cannot know those pixels, so the bake samples the slide's EXISTING
+// screenshot instead (lib/deck/pixel-contrast.ts). Added 2026-07-15 after a
+// real deck shipped an invisible rose-on-rose lead over a photo: the CSS
+// path was blind by design and the vision reviewer cannot see text that
+// isn't visible - measurement over the rendered pixels closes the hole.
+// Rect is relative to the [data-slide-id] HOST box (the exact clip the
+// bake's shoot() captures), in CSS px (render runs at deviceScaleFactor 1).
+export type PixelContrastCheck = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  // Opaque computed ink [r, g, b].
+  ink: [number, number, number];
+  // TAG.firstClass + a short text snippet, for the finding detail.
+  tag: string;
+  snippet: string;
+};
+
+// __tqAuditWell returns this shape (findings + the pixel-check candidates).
+export type FrameAuditResult = {
+  findings: FrameAuditFinding[];
+  pixelChecks: PixelContrastCheck[];
+};
+
 export const AUDIT_SCRIPT = `
 function __tqAuditWell(well, dir) {
   var findings = [];
+  // Text the CSS contrast walk cannot judge (photo/gradient/panel grounds):
+  // collected for the bake's pixel-sampling pass instead of silently skipped.
+  // Rects are relative to the [data-slide-id] host - the shoot() clip box.
+  var pixelChecks = [];
   var wr = well.getBoundingClientRect();
   var view = well.ownerDocument.defaultView;
+  var hostEl = well.closest("[data-slide-id]");
+  var hostRect = hostEl ? hostEl.getBoundingClientRect() : null;
 
   var hasInk = function (el) {
     var t = el.tagName.toLowerCase();
@@ -235,6 +268,22 @@ function __tqAuditWell(well, dir) {
     var panelRects = [];
     var panels = sec.querySelectorAll(":scope > .tq-panel");
     for (var pp = 0; pp < panels.length; pp++) panelRects.push(panels[pp].getBoundingClientRect());
+    // Queue an ambiguous-ground text element for the pixel-sampling pass.
+    // Capped: a pathological slide can't force unbounded sampling work.
+    var pushPixelCheck = function (el, ink, txt) {
+      if (!hostRect || pixelChecks.length >= 24) return;
+      var pr = el.getBoundingClientRect();
+      if (pr.width < 8 || pr.height < 8) return;
+      pixelChecks.push({
+        x: pr.left - hostRect.left,
+        y: pr.top - hostRect.top,
+        w: pr.width,
+        h: pr.height,
+        ink: [ink[0], ink[1], ink[2]],
+        tag: el.tagName + (el.className ? "." + String(el.className).split(" ")[0] : ""),
+        snippet: txt.slice(0, 40),
+      });
+    };
     var contrastCount = 0;
     var contrastSamples = [];
     var cEls = well.querySelectorAll("*");
@@ -269,17 +318,26 @@ function __tqAuditWell(well, dir) {
         if (walkN === well) break;
         walkN = walkN.parentElement;
       }
-      if (ambiguous) continue;
+      if (ambiguous) {
+        // background-image between the text and the well: CSS can't know the
+        // pixels - hand it to the pixel-sampling pass.
+        pushPixelCheck(cel, ink, direct);
+        continue;
+      }
       if (!bg) {
         // no local fill: the text sits on the slide GROUND - unless it
-        // overlaps a photo panel (scrim territory, skip).
+        // overlaps a photo panel or the ground itself is a photo/translucent,
+        // where CSS is blind: queue those for the pixel-sampling pass.
         var cr2 = cel.getBoundingClientRect();
         var onPanel = false;
         for (var pr2 = 0; pr2 < panelRects.length; pr2++) {
           var p2 = panelRects[pr2];
           if (cr2.left < p2.right && cr2.right > p2.left && cr2.top < p2.bottom && cr2.bottom > p2.top) { onPanel = true; break; }
         }
-        if (onPanel || groundAmbiguous || !ground || ground[3] < 0.9) continue;
+        if (onPanel || groundAmbiguous || !ground || ground[3] < 0.9) {
+          pushPixelCheck(cel, ink, direct);
+          continue;
+        }
         bg = ground;
       }
       var dist =
@@ -429,6 +487,55 @@ function __tqAuditWell(well, dir) {
     }
   }
 
-  return findings;
+  return { findings: findings, pixelChecks: pixelChecks };
+}
+
+// Deterministic ink BACKSTOP (2026-07-15): applied in the freeze step to any
+// text box that STILL measures invisible after the vision pass (the incident
+// e2e proved a revision can rebuild the layout yet keep the unreadable class
+// ink - the guard's count parity then ships it). Matches each fix back to
+// its element by geometry + computed ink (the audit's own pixelCheck rect,
+// so the pair can't drift), then sets an explicit inline color the caller
+// chose from the sampled ground (lib/deck/pixel-contrast.ts backstopInk).
+// Returns the number of elements recolored; unmatched fixes are skipped
+// (never guess an element).
+function __tqFixInvisibleText(well, fixes) {
+  var view = well.ownerDocument.defaultView;
+  var hostEl = well.closest("[data-slide-id]");
+  if (!hostEl) return 0;
+  var hostRect = hostEl.getBoundingClientRect();
+  var fixed = 0;
+  var els = well.querySelectorAll("*");
+  for (var f = 0; f < fixes.length; f++) {
+    var fx = fixes[f];
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      if (el.namespaceURI !== "http://www.w3.org/1999/xhtml") continue;
+      var tn = el.tagName.toUpperCase();
+      if (tn === "STYLE" || tn === "SCRIPT") continue;
+      var r = el.getBoundingClientRect();
+      if (
+        Math.abs(r.left - hostRect.left - fx.x) > 3 ||
+        Math.abs(r.top - hostRect.top - fx.y) > 3 ||
+        Math.abs(r.width - fx.w) > 5 ||
+        Math.abs(r.height - fx.h) > 5
+      ) continue;
+      var cs = view.getComputedStyle(el);
+      var c = cs.color;
+      var k = c.indexOf("(");
+      var j = c.indexOf(")");
+      if (k < 0 || j < k) continue;
+      var parts = c.slice(k + 1, j).split(",").map(function (p) { return parseFloat(p); });
+      if (
+        Math.abs(parts[0] - fx.ink[0]) > 4 ||
+        Math.abs(parts[1] - fx.ink[1]) > 4 ||
+        Math.abs(parts[2] - fx.ink[2]) > 4
+      ) continue;
+      el.style.color = fx.color;
+      fixed++;
+      break;
+    }
+  }
+  return fixed;
 }
 `;
