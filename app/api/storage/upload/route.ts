@@ -3,6 +3,8 @@ import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isBannedSupabaseUser } from "@/lib/api/ban-check";
+import { decodeSvgBytes } from "@/lib/brand/svg-decode";
+import { normalizeLogoViewBox } from "@/lib/brand/normalize-logo-svg";
 
 const allowedBuckets = new Set(["source-files", "brand-assets"]);
 
@@ -60,6 +62,11 @@ export async function POST(request: Request) {
       );
     }
 
+    // The raw file is stored by default; the logo branch below may swap in a
+    // viewBox-normalized copy.
+    let uploadBody: File | Buffer = file;
+    let uploadContentType = file.type || "application/octet-stream";
+
     // Folder-level format gating. The brand-assets/logos path is the logo
     // upload pipeline; per the 2026-05-15 product call we only accept SVG
     // logos so we can recolor per slide for contrast (raster logos can't
@@ -75,6 +82,20 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
+      // Trim any dead margin baked into the logo's viewBox so it fills its
+      // reserved box on every slide instead of rendering tiny (see
+      // normalizeLogoViewBox). Best-effort: on ANY failure we fall through and
+      // store the file verbatim — normalization must never fail an upload.
+      try {
+        const svgText = decodeSvgBytes(await file.arrayBuffer());
+        const normalized = await normalizeLogoViewBox(svgText);
+        if (normalized !== svgText) {
+          uploadBody = Buffer.from(normalized, "utf-8");
+          uploadContentType = "image/svg+xml";
+        }
+      } catch {
+        // keep uploadBody = file
+      }
     }
 
     const admin = createSupabaseAdminClient(
@@ -86,8 +107,8 @@ export async function POST(request: Request) {
     const path = `${user.id}/create/${folder}/${crypto.randomUUID()}-${safeFileName(file.name)}`;
     const { error: uploadError } = await admin.storage
       .from(bucket)
-      .upload(path, file, {
-        contentType: file.type || "application/octet-stream",
+      .upload(path, uploadBody, {
+        contentType: uploadContentType,
         upsert: false,
       });
 
