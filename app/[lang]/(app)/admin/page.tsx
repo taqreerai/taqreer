@@ -12,7 +12,6 @@ import {
   getOnlineNow,
   getTrafficTotals,
   getDeviceBreakdowns,
-  getFunnel,
 } from "@/lib/analytics/posthog";
 import { OverviewClient } from "@/components/admin/OverviewClient";
 
@@ -27,7 +26,6 @@ export default async function AdminOverviewPage() {
     onlineNow,
     traffic,
     device,
-    funnel,
   ] = await Promise.all([
     getOverviewStats(),
     getChannelBreakdown(),
@@ -35,7 +33,6 @@ export default async function AdminOverviewPage() {
     getOnlineNow(),
     getTrafficTotals(),
     getDeviceBreakdowns(),
-    getFunnel(),
   ]);
   return (
     <OverviewClient
@@ -47,7 +44,6 @@ export default async function AdminOverviewPage() {
       onlineNow={onlineNow}
       traffic={traffic}
       device={device}
-      funnel={funnel}
     />
   );
 }

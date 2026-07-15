@@ -42,9 +42,14 @@ export const MOCK_PLAN_SPLIT: Record<Plan, number> = {
 
 export type ActivityItem = {
   id: string;
-  kind: "signup" | "generation" | "purchase";
+  kind: "signup" | "generation" | "regen" | "purchase";
   text: string;
   at: string; // relative, mock
+  // Generation / regen rows only: the generator's email (muted 2nd line), the
+  // charged cost ("1,234 cr" or "Free"), and precise duration ("42s").
+  email?: string;
+  cost?: string | null;
+  duration?: string | null;
 };
 
 export const MOCK_ACTIVITY: ActivityItem[] = [

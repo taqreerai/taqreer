@@ -1783,9 +1783,11 @@ export function DeckView({
   const [railTransitionReady, setRailTransitionReady] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 1280px)");
+    // The rule reports the setState-in-effect once for this effect; one
+    // disable covers both corrections (SSR renders collapsed, this swaps in the
+    // real viewport after mount — matchMedia can't run in the initializer).
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLayersCollapsed(mq.matches);
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSlidesCollapsed(mq.matches);
     // Enable the margin transition one frame after the initial correction so
     // user toggles animate but the load-time collapse/expand snaps.

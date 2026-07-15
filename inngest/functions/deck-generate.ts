@@ -2813,6 +2813,10 @@ export const deckGenerate = inngest.createFunction(
             where: { id: jobId },
             data: {
               status: "succeeded",
+              // Terminal-success timestamp — pairs with the run's
+              // CreditHold.createdAt (taken at generation start) so the admin
+              // activity feed can show precise generation duration.
+              completedAt: new Date(),
               // `_stoppedEarly` marks keeps-partial cancels for
               // analytics - the deck itself is a normal completed
               // (short) deck.

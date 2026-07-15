@@ -377,6 +377,17 @@ model Job {
   // the BETWEEN-steps cancellation; this column handles the
   // INSIDE-step (mid-stream) abort.
   cancelRequestedAt   DateTime?
+  // Set when the run reaches a terminal "succeeded" state, so the admin
+  // activity feed can show precise generation duration. The START of a run is
+  // the moment its CreditHold was created (hold is taken at generation start,
+  // after the queue), so duration = completedAt - CreditHold.createdAt.
+  completedAt         DateTime?
+  // The CreditHold.jobKey this run charged against, so its cost/timing can be
+  // joined back. Full generations charge under jobKey === Job.id (this stays
+  // null for them — the reader falls back to the id). Partial regens charge
+  // under `regen:<versionId>`, which the Job otherwise can't reference, so the
+  // partial-regen worker records it here.
+  holdKey             String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
   project             Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)

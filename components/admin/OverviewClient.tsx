@@ -18,12 +18,10 @@ import type {
   ChannelRow,
   DeviceBreakdowns,
   TrafficTotals,
-  FunnelStep,
 } from "@/lib/analytics/posthog";
 import { IconCircle } from "@/components/admin/IconCircle";
 import { DeviceBreakdown } from "@/components/admin/DeviceBreakdown";
 import { ChannelSources } from "@/components/admin/ChannelSources";
-import { ConversionFunnel } from "@/components/admin/ConversionFunnel";
 
 // Client-only (WebGL / three.js): ssr:false so globe.gl never runs on the server.
 const LiveGlobePanel = dynamic(
@@ -131,6 +129,7 @@ function PlanSplit({ split }: { split: Record<Plan, number> }) {
 const ACTIVITY_ICON: Record<ActivityItem["kind"], string> = {
   signup: "person_add",
   generation: "auto_awesome",
+  regen: "autorenew",
   purchase: "payments",
 };
 
@@ -157,12 +156,33 @@ function ActivityFeed({ items }: { items: ActivityItem[] }) {
               }
             >
               <IconCircle icon={ACTIVITY_ICON[it.kind]} size={32} />
-              <span className="flex-1 text-sm" style={{ color: PRIMARY }}>
-                {it.text}
-              </span>
-              <span className="text-xs" style={{ color: MUTED }}>
-                {it.at}
-              </span>
+              {/* Primary line + (for generation/regen) the generator email as a
+                  muted 2nd line. */}
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-sm" style={{ color: PRIMARY }}>
+                  {it.text}
+                </span>
+                {it.email ? (
+                  <span className="truncate text-xs" style={{ color: MUTED }}>
+                    {it.email}
+                  </span>
+                ) : null}
+              </div>
+              {/* Right meta: cost · duration (generation/regen) over the
+                  relative time. */}
+              <div className="flex shrink-0 flex-col items-end gap-0.5">
+                {it.cost || it.duration ? (
+                  <span
+                    className="text-xs tabular-nums"
+                    style={{ color: PRIMARY }}
+                  >
+                    {[it.cost, it.duration].filter(Boolean).join(" · ")}
+                  </span>
+                ) : null}
+                <span className="text-xs" style={{ color: MUTED }}>
+                  {it.at}
+                </span>
+              </div>
             </div>
           ))}
         </div>
@@ -180,7 +200,6 @@ export function OverviewClient({
   onlineNow,
   traffic,
   device,
-  funnel,
 }: {
   stats: AdminStat[];
   planSplit: Record<Plan, number>;
@@ -190,7 +209,6 @@ export function OverviewClient({
   onlineNow: number;
   traffic: TrafficTotals;
   device: DeviceBreakdowns;
-  funnel: FunnelStep[] | null;
 }) {
   return (
     <div className="space-y-6">
@@ -213,18 +231,16 @@ export function OverviewClient({
         </div>
         <div className="flex flex-col gap-4 lg:col-span-2">
           {/* Channels grows to fill the column height (it lists many rows);
-              device + plan share one row below so they don't steal that space. */}
+              plan split sits below it. Device breakdown moved to the row below
+              (took the removed conversion funnel's slot). */}
           <ChannelSources data={channels} />
-          <div className="grid grid-cols-2 gap-4">
-            <DeviceBreakdown data={device} />
-            <PlanSplit split={planSplit} />
-          </div>
+          <PlanSplit split={planSplit} />
         </div>
       </div>
 
-      {/* Conversion funnel + recent activity */}
+      {/* Traffic by device + recent activity */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <ConversionFunnel data={funnel} />
+        <DeviceBreakdown data={device} />
         <ActivityFeed items={activity} />
       </div>
     </div>

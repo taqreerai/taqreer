@@ -108,36 +108,107 @@ export async function getOverviewStats(): Promise<{
   return { stats, planSplit, activity };
 }
 
-// Recent activity feed - newest signups / generations / purchases, merged.
+// Format a generation duration (ms) compactly: "42s", "3m 20s", "1h 5m".
+function formatDuration(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return s % 60 ? `${m}m ${s % 60}s` : `${m}m`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
+}
+
+const FLOW_LABEL: Record<string, string> = {
+  create: "Create",
+  enhance: "Enhance",
+  mimic: "Mimic",
+  datasheet: "Datasheet",
+};
+
+// Recent activity feed - newest signups / generations / partial regens /
+// purchases, merged newest-first. Generation + regen rows are enriched with the
+// generator's email, the charged cost, and precise duration.
 async function getRecentActivity(): Promise<ActivityItem[]> {
-  const [signups, generations, purchases] = await Promise.all([
+  const [signups, jobs, purchases] = await Promise.all([
     prisma.user.findMany({
       where: { role: { not: "admin" } },
       orderBy: { createdAt: "desc" },
-      take: 6,
+      take: 8,
       select: { id: true, email: true, createdAt: true },
     }),
-    prisma.presentation.findMany({
+    // Full generations (deck.generate — new decks AND full regens) + partial
+    // per-slide regens. One Job row per run; carries the flow type (via
+    // project.type), the generator (project.user.email), completion time, and
+    // the credit-hold key for cost.
+    prisma.job.findMany({
+      where: {
+        type: { in: ["deck.generate", "deck.regenerate.partial"] },
+        status: "succeeded",
+      },
       orderBy: { createdAt: "desc" },
-      take: 6,
-      select: { id: true, createdAt: true },
+      take: 8,
+      select: {
+        id: true,
+        type: true,
+        attempts: true,
+        holdKey: true,
+        completedAt: true,
+        createdAt: true,
+        project: { select: { type: true, user: { select: { email: true } } } },
+      },
     }),
     prisma.topupGrant.findMany({
       orderBy: { createdAt: "desc" },
-      take: 6,
+      take: 8,
       select: { id: true, amountGranted: true, createdAt: true, user: { select: { email: true } } },
     }),
   ]);
+
+  // Join each generation/regen to its CreditHold for cost + start time. Full
+  // generations charge under jobKey === Job.id; partial regens under the stored
+  // holdKey (`regen:<versionId>`). Admin-waived runs have no hold row (free).
+  const holdKeys = jobs.map((j) => j.holdKey ?? j.id);
+  const holds = holdKeys.length
+    ? await prisma.creditHold.findMany({
+        where: { jobKey: { in: holdKeys }, status: "settled" },
+        select: { jobKey: true, amountCharged: true, createdAt: true },
+      })
+    : [];
+  const holdByKey = new Map(holds.map((h) => [h.jobKey, h]));
+
+  const genEvents = jobs.map((j) => {
+    const isPartial = j.type === "deck.regenerate.partial";
+    const hold = holdByKey.get(j.holdKey ?? j.id);
+    // The hold is created at generation start (after the queue), so it doubles
+    // as the precise start time.
+    const cost = hold ? `${fmt(hold.amountCharged ?? 0)} cr` : "Free";
+    const duration =
+      hold && j.completedAt
+        ? formatDuration(j.completedAt.getTime() - hold.createdAt.getTime())
+        : null;
+    const text = isPartial
+      ? `Partial regen · ${fmt(j.attempts)} ${j.attempts === 1 ? "slide" : "slides"}`
+      : `${FLOW_LABEL[j.project?.type ?? "create"] ?? "Deck"} deck generated`;
+    return {
+      date: j.createdAt,
+      item: {
+        id: `j-${j.id}`,
+        kind: (isPartial ? "regen" : "generation") as ActivityItem["kind"],
+        text,
+        at: timeAgo(j.createdAt),
+        email: j.project?.user?.email ?? undefined,
+        cost,
+        duration,
+      },
+    };
+  });
 
   const events: { date: Date; item: ActivityItem }[] = [
     ...signups.map((u) => ({
       date: u.createdAt,
       item: { id: `s-${u.id}`, kind: "signup" as const, text: `${u.email} signed up`, at: timeAgo(u.createdAt) },
     })),
-    ...generations.map((p) => ({
-      date: p.createdAt,
-      item: { id: `g-${p.id}`, kind: "generation" as const, text: "A new deck was generated", at: timeAgo(p.createdAt) },
-    })),
+    ...genEvents,
     ...purchases.map((t) => ({
       date: t.createdAt,
       item: { id: `p-${t.id}`, kind: "purchase" as const, text: `${t.user.email} bought ${fmt(t.amountGranted)} credits`, at: timeAgo(t.createdAt) },
@@ -146,6 +217,6 @@ async function getRecentActivity(): Promise<ActivityItem[]> {
 
   return events
     .sort((a, b) => b.date.getTime() - a.date.getTime())
-    .slice(0, 6)
+    .slice(0, 8)
     .map((e) => e.item);
 }

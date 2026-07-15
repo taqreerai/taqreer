@@ -1173,6 +1173,13 @@ export const deckRegeneratePartial = inngest.createFunction(
           where: { id: data.jobId },
           data: {
             status: "succeeded",
+            // Terminal-success timestamp for the admin feed's duration
+            // (paired with this run's CreditHold.createdAt). `holdKey` records
+            // the regen charge key (`regen:<versionId>`) so the feed can join
+            // this partial-regen Job back to its cost — it charges under the
+            // version, not the Job id.
+            completedAt: new Date(),
+            holdKey: `regen:${versionId}`,
             model: callParams.model,
             quality: eventQuality ?? "medium",
             attempts: regenResults.length,
