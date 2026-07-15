@@ -171,15 +171,23 @@ async function getBalanceTrend(): Promise<{ usd: number | null } & Trend> {
     // Auto-paginate so a busy account doesn't miss older transactions in the
     // window (a single page caps at 100). Hard cap as a runaway backstop.
     const usdTxns: { created: number; amount: number }[] = [];
+    let scanned = 0;
+    let truncated = false;
     for await (const t of client.balanceTransactions.list({
       created: { gte: sinceSec },
       limit: 100,
     })) {
+      if (++scanned > 2000) {
+        truncated = true;
+        break;
+      }
       if (t.currency === "usd") {
         usdTxns.push({ created: t.created, amount: t.amount });
       }
-      if (usdTxns.length >= 5000) break;
     }
+    // A truncated scan means incomplete history, which would draw a misleading
+    // line — keep the current balance figure but drop the sparkline.
+    if (truncated) return { usd: cents / 100, spark: [] };
 
     const spark: number[] = [];
     for (let i = SPARK_DAYS - 1; i >= 0; i--) {
@@ -310,7 +318,10 @@ async function getRecentActivity(): Promise<ActivityItem[]> {
         type: { in: ["deck.generate", "deck.regenerate.partial"] },
         status: "succeeded",
       },
-      orderBy: { createdAt: "desc" },
+      // By completion (nulls last), so a recently-finished job that was queued
+      // earlier isn't dropped; createdAt is the tiebreaker + orders legacy rows
+      // that predate the completedAt column.
+      orderBy: [{ completedAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }],
       take: 8,
       select: {
         id: true,
