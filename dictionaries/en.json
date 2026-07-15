@@ -674,7 +674,14 @@
       "premiumDesignDesc": "Deepest design planning, highest quality",
       "etaMin": "~{eta} min",
       "balance": "Balance: {count} cr",
-      "creditsEstimate": "\u2248 {credits} cr"
+      "creditsEstimate": "\u2248 {credits} cr",
+      "slideCapUpsell": {
+        "title": "Slide limit",
+        "close": "Close",
+        "body": "The maximum allowed is {cap} slides. Upgrade to raise the limit to {max} slides.",
+        "upgrade": "Upgrade now",
+        "continue": "Continue"
+      }
     },
     "fonts": {
       "fonts": "Fonts",

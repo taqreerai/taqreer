@@ -32,15 +32,18 @@ import {
   CREDIT_COST,
   TIERS,
   TIER_ORDER,
+  SYSTEM_SLIDE_CAP,
   imagesSurcharge,
 } from "@/lib/credits/cost";
 import { normalizePlan, planLabel } from "@/lib/plan";
 import {
   useCreditBalance,
+  useSlideCap,
   formatCredits,
   type CreditPreset,
 } from "@/lib/credits/store";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
+import { SlideCapUpsellDialog } from "./SlideCapUpsellDialog";
 import type { KnownPlan } from "@/lib/plan";
 
 // Pre-hydration fallback = the bundled snapshot (matches the seed). Once
@@ -108,6 +111,8 @@ export function GenerateSplitButton({
   // checkout in place, user direction 2026-06-12). Holds the tier
   // that gates the clicked preset; null = closed.
   const [upgradeTier, setUpgradeTier] = useState<KnownPlan | null>(null);
+  // Free-tier slide-cap upsell shown on the Generate click (before generating).
+  const [showSlideCapUpsell, setShowSlideCapUpsell] = useState(false);
   const splitButtonRef = useRef<HTMLDivElement>(null);
 
   // Close the menu on outside click / Escape. Same shape as the
@@ -137,10 +142,14 @@ export function GenerateSplitButton({
   // price in view). Null until the first fetch - rows render without
   // the credit chip rather than with a wrong number.
   const credits = useCreditBalance();
+  // The current user's slide cap (5 for free) — the {cap} in the upsell copy.
+  const freeSlideCap = useSlideCap();
   // Tier gating pill: the lowest tier whose preset list carries each
   // preset. Rows above the user's plan show that tier name as a pill
   // (clicking still works - preflight 402s into the upgrade dialog).
   const userPlan = credits ? normalizePlan(credits.plan) : null;
+  // Free tier gets the slide-cap upsell popup on Generate (every run).
+  const isFree = userPlan === "free";
   // Admin/superuser: every preset is unlocked and no credit cost shows
   // (the run is never charged). Mirrors the server preflight bypass.
   const isAdmin = credits?.isAdmin ?? false;
@@ -209,7 +218,14 @@ export function GenerateSplitButton({
         <motion.button
           layout
           type="button"
-          onClick={onGenerate}
+          onClick={() => {
+            // Free tier: show the slide-cap upsell before generating.
+            if (isFree) {
+              setShowSlideCapUpsell(true);
+              return;
+            }
+            onGenerate();
+          }}
           disabled={disabled || loading}
           aria-label={label}
           className="relative z-10 inline-flex items-center justify-center gap-2 bg-transparent px-6 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
@@ -402,6 +418,23 @@ export function GenerateSplitButton({
           </motion.div>
         ) : null}
       </AnimatePresence>
+
+      {/* Free-tier slide-cap upsell — shown before generating. Reuses the
+          canonical dialog shell + the design-system button primitives. */}
+      <SlideCapUpsellDialog
+        open={showSlideCapUpsell}
+        cap={freeSlideCap}
+        max={SYSTEM_SLIDE_CAP}
+        // Continue: dismiss only for now (test asked NOT to generate). Real
+        // behaviour (proceed at the capped count) is still to be decided.
+        onClose={() => setShowSlideCapUpsell(false)}
+        // Upgrade now: close this and open the pricing modal at the Max tier
+        // (the plan that unlocks the 75-slide ceiling shown in the copy).
+        onUpgrade={() => {
+          setShowSlideCapUpsell(false);
+          setUpgradeTier("max");
+        }}
+      />
 
       <UpgradeModal
         open={upgradeTier !== null}

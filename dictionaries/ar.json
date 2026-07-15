@@ -674,7 +674,14 @@
       "premiumDesignDesc": "أعمق تخطيط للتصميم، أعلى جودة",
       "etaMin": "~{eta} د",
       "balance": "رصيدك: {count} نقطة",
-      "creditsEstimate": "\u2248 {credits} نقطة"
+      "creditsEstimate": "\u2248 {credits} ÙÙØ·Ø©",
+      "slideCapUpsell": {
+        "title": "الحد الأقصى للشرائح",
+        "close": "إغلاق",
+        "body": "الحد الأقصى المسموح به هو {cap} شرائح. قم بالترقية لزيادة الحد إلى {max} شريحة.",
+        "upgrade": "الترقية الآن",
+        "continue": "متابعة"
+      }
     },
     "fonts": {
       "fonts": "الخطوط",
