@@ -430,9 +430,15 @@ export function GenerateSplitButton({
         open={showSlideCapUpsell}
         cap={freeSlideCap}
         max={SYSTEM_SLIDE_CAP}
-        // Continue: dismiss only for now (test asked NOT to generate). Real
-        // behaviour (proceed at the capped count) is still to be decided.
+        // Dismiss (X / Esc / outside-click): cancel, don't generate.
         onClose={() => setShowSlideCapUpsell(false)}
+        // Continue: proceed with generation. The free tier's slide cap is
+        // enforced upstream (slide picker) + server-side (preflight), so this
+        // is just the normal generate path.
+        onContinue={() => {
+          setShowSlideCapUpsell(false);
+          onGenerate();
+        }}
         // Upgrade now: close this and open the pricing modal at the Max tier
         // (the plan that unlocks the 75-slide ceiling shown in the copy).
         onUpgrade={() => {

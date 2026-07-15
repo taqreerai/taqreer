@@ -20,13 +20,18 @@ import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 export function SlideCapUpsellDialog({
   open,
   onClose,
+  onContinue,
   onUpgrade,
   cap,
   max,
 }: {
   open: boolean;
-  // Continue — dismiss the dialog. Parent decides what "continue" does next.
+  // Dismiss WITHOUT proceeding — the X, Esc, and outside-click. Cancels the
+  // Generate the user clicked.
   onClose: () => void;
+  // Continue — the affirmative footer action: proceed with generation (capped).
+  // Distinct from onClose so a dismiss gesture never triggers a generation.
+  onContinue: () => void;
   // Upgrade now — parent closes this and opens the pricing UpgradeModal.
   onUpgrade: () => void;
   // The free tier's slide cap (from config) and the system max (upgrade target).
@@ -124,7 +129,7 @@ export function SlideCapUpsellDialog({
               <footer className="flex items-center justify-end gap-2 border-t border-foreground/[0.08] px-5 py-3">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={onContinue}
                   className="btn-pill px-5 py-2 text-sm"
                 >
                   {t.continue}
