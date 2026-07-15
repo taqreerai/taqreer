@@ -30,9 +30,8 @@ type ViewBox = { x: number; y: number; w: number; h: number };
 // Read the SVG's user-coordinate box: prefer `viewBox`, fall back to the root
 // `width`/`height` attributes. Everything is read from the ROOT `<svg …>`
 // opening tag only, so an inner shape's dims (e.g. a `<rect width="40">`) can
-// never be mistaken for the document box. Percentage dims (`width="100%"`) are
-// rejected — they carry no user-unit coordinate system to map against. Returns
-// null when nothing yields a usable box.
+// never be mistaken for the document box. Returns null when nothing yields a
+// usable box.
 function readViewBox(svg: string): ViewBox | null {
   const rootTag = svg.match(/<svg\b[^>]*>/i)?.[0] ?? "";
   const vb = rootTag.match(/viewBox\s*=\s*["']([\d.\-eE+\s,]+)["']/);
@@ -42,13 +41,22 @@ function readViewBox(svg: string): ViewBox | null {
       return { x: p[0], y: p[1], w: p[2], h: p[3] };
     }
   }
-  const wRaw = rootTag.match(/\bwidth\s*=\s*["']?([\d.]+)(%?)/i);
-  const hRaw = rootTag.match(/\bheight\s*=\s*["']?([\d.]+)(%?)/i);
-  if (wRaw && hRaw && !wRaw[2] && !hRaw[2]) {
-    const w = parseFloat(wRaw[1]);
-    const h = parseFloat(hRaw[1]);
-    if (w > 0 && h > 0) return { x: 0, y: 0, w, h };
-  }
+  // Fall back to the root width/height, but accept ONLY unitless or `px` values.
+  // Absolute units (cm/mm/in/pt), font-relative units (em/ex), and percentages
+  // don't map 1:1 to the user-unit coordinate the trim math assumes — parsing
+  // `10cm` as `10` (parseFloat drops the suffix) would build a bogus box.
+  const asUserUnits = (raw: string | undefined): number | null => {
+    if (raw === undefined) return null;
+    const v = raw.trim();
+    if (!/^\d+(?:\.\d+)?(?:px)?$/i.test(v)) return null;
+    const n = parseFloat(v);
+    return n > 0 ? n : null;
+  };
+  const w = asUserUnits(rootTag.match(/\bwidth\s*=\s*["']?\s*([^"'\s>]+)/i)?.[1]);
+  const h = asUserUnits(
+    rootTag.match(/\bheight\s*=\s*["']?\s*([^"'\s>]+)/i)?.[1],
+  );
+  if (w !== null && h !== null) return { x: 0, y: 0, w, h };
   return null;
 }
 
@@ -66,6 +74,19 @@ function densityFor(vb: ViewBox): number {
 const TRIM_THRESHOLD = 10; // sharp trim tolerance (0-255); tolerate AA fringe
 const MIN_MARGIN = 0.9; // only rewrite when content fills <= 90% of a side
 const PAD = 0.02; // 2% uniform padding so strokes / round caps aren't clipped
+const RASTER_TIMEOUT_MS = 5000; // deadline per sharp render on the upload path
+
+// `densityFor` bounds the raster SIZE, not render TIME — a pathological SVG
+// (thousands of nodes, heavy filters) can still keep librsvg busy. Bound each
+// render with a deadline so such inputs reject and fail open (store the file
+// verbatim) instead of stalling the user-facing upload request.
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("raster timeout")), ms);
+  });
+  return Promise.race([p, deadline]).finally(() => clearTimeout(timer));
+}
 
 /**
  * Return `svg` with its root `viewBox` tightened to the artwork's bounding box
@@ -81,9 +102,10 @@ export async function normalizeLogoViewBox(svg: string): Promise<string> {
     const density = densityFor(vb);
 
     // Full raster dims (the whole viewBox) — used to map px -> user units.
-    const full = await sharp(buf, { density }).png().toBuffer({
-      resolveWithObject: true,
-    });
+    const full = await withTimeout(
+      sharp(buf, { density }).png().toBuffer({ resolveWithObject: true }),
+      RASTER_TIMEOUT_MS,
+    );
     const fullW = full.info.width;
     const fullH = full.info.height;
     if (!fullW || !fullH) return svg;
@@ -93,10 +115,13 @@ export async function normalizeLogoViewBox(svg: string): Promise<string> {
     // way there is no margin to remove, so leave it as-is.
     let trim: sharp.OutputInfo;
     try {
-      const trimmed = await sharp(buf, { density })
-        .png()
-        .trim({ threshold: TRIM_THRESHOLD })
-        .toBuffer({ resolveWithObject: true });
+      const trimmed = await withTimeout(
+        sharp(buf, { density })
+          .png()
+          .trim({ threshold: TRIM_THRESHOLD })
+          .toBuffer({ resolveWithObject: true }),
+        RASTER_TIMEOUT_MS,
+      );
       trim = trimmed.info;
     } catch {
       return svg;
@@ -133,19 +158,22 @@ export async function normalizeLogoViewBox(svg: string): Promise<string> {
     const round = (n: number) => Math.round(n * 1000) / 1000;
     const newVb = `${round(nx)} ${round(ny)} ${round(nw)} ${round(nh)}`;
 
-    let out = svg;
-    if (/viewBox\s*=\s*["'][^"']*["']/i.test(out)) {
-      out = out.replace(/viewBox\s*=\s*["'][^"']*["']/i, `viewBox="${newVb}"`);
-    } else {
-      out = out.replace(/<svg\b/i, `<svg viewBox="${newVb}"`);
-    }
-    // Drop fixed width/height on the ROOT <svg> tag only (never on inner
-    // shapes), so the mark scales to whatever box downstream gives it.
-    out = out.replace(/<svg\b[^>]*>/i, (tag) =>
-      tag.replace(/\s(width|height)\s*=\s*["'][^"']*["']/gi, ""),
-    );
-
-    return out;
+    // Rewrite the ROOT <svg> opening tag ONLY: drop fixed width/height (so the
+    // mark scales to any box) and set the tight viewBox. Scoping every mutation
+    // to the root tag avoids a whole-document replace clobbering an INNER
+    // element's viewBox (nested <svg>/<symbol>/<pattern>) when the root itself
+    // carries width/height instead of a viewBox — which would leave the root
+    // with no sizing box at all.
+    return svg.replace(/<svg\b[^>]*>/i, (tag) => {
+      let t = tag.replace(
+        /\s(?:width|height)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'>]+)/gi,
+        "",
+      );
+      t = /viewBox\s*=\s*["'][^"']*["']/i.test(t)
+        ? t.replace(/viewBox\s*=\s*["'][^"']*["']/i, `viewBox="${newVb}"`)
+        : t.replace(/<svg\b/i, `<svg viewBox="${newVb}"`);
+      return t;
+    });
   } catch {
     return svg;
   }

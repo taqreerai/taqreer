@@ -19,6 +19,10 @@
 
 import { createClient } from "@supabase/supabase-js";
 import * as dotenv from "dotenv";
+// `ws` ships no bundled type declarations (@types/ws isn't installed); it's used
+// only as a runtime WebSocket shim for supabase-js's Realtime client under Node
+// 20, which has no global WebSocket.
+// @ts-expect-error - no types for 'ws'
 import ws from "ws";
 import { decodeSvgBytes } from "../lib/brand/svg-decode";
 import { normalizeLogoViewBox } from "../lib/brand/normalize-logo-svg";
@@ -74,9 +78,14 @@ async function main() {
     const prefix = `${userId}/create/logos`;
     let files: string[];
     try {
+      // A missing logos folder returns [] (no throw), so a throw here is a REAL
+      // error (network / auth / rate limit). Surface it — silently skipping
+      // would understate the fix's completeness in the summary.
       files = await listAll(prefix);
-    } catch {
-      continue; // user has no logos folder
+    } catch (err) {
+      failed += 1;
+      console.warn(`  ! list failed: ${prefix}: ${(err as Error).message}`);
+      continue;
     }
 
     for (const name of files) {
