@@ -180,17 +180,23 @@ export function backstopInk(
   let best: string | null = null;
   let bestDist = 0;
   for (const hex of palette) {
-    const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+    // The manifest schema (HexColor) allows both #abc and #aabbcc - accept
+    // both and normalize shorthand so no palette entry is silently skipped.
+    const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
     if (!m) continue;
+    const h6 =
+      m[1].length === 3
+        ? m[1].split("").map((ch) => ch + ch).join("")
+        : m[1];
     const rgb: [number, number, number] = [
-      parseInt(m[1].slice(0, 2), 16),
-      parseInt(m[1].slice(2, 4), 16),
-      parseInt(m[1].slice(4, 6), 16),
+      parseInt(h6.slice(0, 2), 16),
+      parseInt(h6.slice(2, 4), 16),
+      parseInt(h6.slice(4, 6), 16),
     ];
     const d = dist3(rgb, ground);
     if (d > bestDist) {
       bestDist = d;
-      best = `#${m[1]}`;
+      best = `#${h6}`;
     }
   }
   if (best && bestDist >= 180) return best;
