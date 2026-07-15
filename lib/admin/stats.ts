@@ -36,7 +36,9 @@ function timeAgo(d: Date): string {
 // the metrics that have a natural time-axis: total users (cumulative stock),
 // decks/day and credits-spent/day (flow). Subs + Stripe balance have no
 // historical series in our data, so those cards stay value-only.
-const SPARK_DAYS = 14;
+// Matches the "(30d)" KPI windows so a card's number and its sparkline/delta
+// cover the same period.
+const SPARK_DAYS = 30;
 
 type Trend = { spark: number[]; delta?: string; trend?: "up" | "down" | "flat" };
 
@@ -149,8 +151,9 @@ async function getStatTrends(): Promise<{
 // Live-only: with no live key in this environment (e.g. local dev on test keys)
 // it returns null and the card shows "n/a" rather than a test-mode figure. Also
 // resilient - a Stripe hiccup returns null instead of blanking the Overview.
-// Current LIVE Stripe balance (USD) + an approximate 14-day daily-balance
-// sparkline reconstructed from balance transactions: balance at end of day D =
+// Current LIVE Stripe balance (USD) + an approximate daily-balance sparkline
+// reconstructed from balance transactions over the window: balance at end of
+// day D =
 // current balance minus the net of every transaction created after D. Uses
 // `amount` by `created`, so it ignores available/pending timing — a trend
 // indicator, not an exact ledger. Live-only: null spark (card shows "n/a" and
@@ -165,13 +168,18 @@ async function getBalanceTrend(): Promise<{ usd: number | null } & Trend> {
       .reduce((sum, b) => sum + b.amount, 0);
 
     const sinceSec = Math.floor((Date.now() - SPARK_DAYS * DAY_MS) / 1000);
-    const txns = await client.balanceTransactions.list({
+    // Auto-paginate so a busy account doesn't miss older transactions in the
+    // window (a single page caps at 100). Hard cap as a runaway backstop.
+    const usdTxns: { created: number; amount: number }[] = [];
+    for await (const t of client.balanceTransactions.list({
       created: { gte: sinceSec },
       limit: 100,
-    });
-    const usdTxns = txns.data
-      .filter((t) => t.currency === "usd")
-      .map((t) => ({ created: t.created, amount: t.amount }));
+    })) {
+      if (t.currency === "usd") {
+        usdTxns.push({ created: t.created, amount: t.amount });
+      }
+      if (usdTxns.length >= 5000) break;
+    }
 
     const spark: number[] = [];
     for (let i = SPARK_DAYS - 1; i >= 0; i--) {
@@ -221,7 +229,13 @@ export async function getOverviewStats(): Promise<{
       where: { status: "settled", createdAt: { gte: since30 } },
     }),
     getBalanceTrend(),
-    getStatTrends(),
+    // Sparklines are non-critical: a trend-query hiccup must not take down the
+    // whole KPI overview — fall back to value-only cards (empty spark).
+    getStatTrends().catch((err) => {
+      console.error("[admin/stats] stat trends failed", err);
+      const empty: Trend = { spark: [] };
+      return { users: empty, subs: empty, decks: empty, credits: empty };
+    }),
   ]);
 
   const planSplit: Record<Plan, number> = { free: 0, plus: 0, pro: 0, max: 0 };
@@ -329,6 +343,10 @@ async function getRecentActivity(): Promise<ActivityItem[]> {
 
   const genEvents = jobs.map((j) => {
     const isPartial = j.type === "deck.regenerate.partial";
+    // Date/time the row by when the deck finished, not when it was enqueued
+    // (createdAt is queue time). Falls back to createdAt for rows generated
+    // before completedAt was recorded.
+    const eventDate = j.completedAt ?? j.createdAt;
     const hold = holdByKey.get(j.holdKey ?? j.id);
     // The hold is created at generation start (after the queue), so it doubles
     // as the precise start time.
@@ -341,12 +359,12 @@ async function getRecentActivity(): Promise<ActivityItem[]> {
       ? `Partial regen · ${fmt(j.attempts)} ${j.attempts === 1 ? "slide" : "slides"}`
       : `${FLOW_LABEL[j.project?.type ?? "create"] ?? "Deck"} deck generated`;
     return {
-      date: j.createdAt,
+      date: eventDate,
       item: {
         id: `j-${j.id}`,
         kind: (isPartial ? "regen" : "generation") as ActivityItem["kind"],
         text,
-        at: timeAgo(j.createdAt),
+        at: timeAgo(eventDate),
         email: j.project?.user?.email ?? undefined,
         cost,
         duration,
