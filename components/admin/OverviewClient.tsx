@@ -219,7 +219,7 @@ export function OverviewClient({
         ))}
       </div>
 
-      {/* Live online + map (2/3) and plan split (1/3) */}
+      {/* Live online + map (3/5) and recent activity (2/5) */}
       <div className="grid gap-4 lg:grid-cols-5">
         <div className="surface-card rounded-xl p-5 lg:col-span-3">
           <LiveGlobePanel
@@ -229,19 +229,16 @@ export function OverviewClient({
             pageviews={traffic.pageviews}
           />
         </div>
-        <div className="flex flex-col gap-4 lg:col-span-2">
-          {/* Channels grows to fill the column height (it lists many rows);
-              plan split sits below it. Device breakdown moved to the row below
-              (took the removed conversion funnel's slot). */}
-          <ChannelSources data={channels} />
-          <PlanSplit split={planSplit} />
+        <div className="lg:col-span-2">
+          <ActivityFeed items={activity} />
         </div>
       </div>
 
-      {/* Traffic by device + recent activity */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* Bottom row: traffic by device, traffic sources, users by plan */}
+      <div className="grid gap-4 lg:grid-cols-3">
         <DeviceBreakdown data={device} />
-        <ActivityFeed items={activity} />
+        <ChannelSources data={channels} />
+        <PlanSplit split={planSplit} />
       </div>
     </div>
   );
