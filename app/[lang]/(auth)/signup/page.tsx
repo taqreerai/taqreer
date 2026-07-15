@@ -28,7 +28,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function SignupPage() {
   const router = useRouter();
-  const { locale } = useLocale();
+  const { locale, dir } = useLocale();
   const dict = useDict();
   const t = dict.auth;
 
@@ -38,6 +38,10 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  // Two-step signup: step 1 = email OR Google; step 2 = name + password. Google
+  // sign-in skips step 2 entirely (the account + profile come from the OAuth
+  // callback), so the name/password fields only exist on the email path.
+  const [step, setStep] = useState<1 | 2>(1);
 
   // Cloudflare Turnstile token + a reset counter (token is single-use, so a
   // failed submit / resend bumps it to fetch a fresh challenge).
@@ -158,6 +162,18 @@ export default function SignupPage() {
     }
   };
 
+  // Step 1 → step 2. Validate the email format only (existence is checked by
+  // the real signUp on step 2 submit); advancing reveals the name/password.
+  const handleContinue = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (!EMAIL_RE.test(email)) {
+      setError(t.signup.invalidEmail);
+      return;
+    }
+    setStep(2);
+  };
+
   const handleResend = async () => {
     if (cooldown > 0 || resending) return;
     setResending(true);
@@ -255,106 +271,152 @@ export default function SignupPage() {
     >
       {error && <div className="status-error">{error}</div>}
 
-      <div className="text-start">
-        <p className="text-sm text-muted">{t.signup.eyebrow}</p>
-        <h1 className="mt-1 text-2xl font-bold">{t.signup.title}</h1>
-      </div>
-
-      <GoogleAuthButton
-        disabled={loading}
-        onError={setError}
-        onBusyChange={setLoading}
-      />
-
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-[var(--tq-border-hairline)]" />
-        </div>
-        <div className="relative flex justify-center">
-          <span className="rounded-full border border-[var(--tq-border-hairline)] bg-[var(--tq-surface)] px-3 py-0.5 text-xs text-muted">
-            {t.or}
-          </span>
-        </div>
-      </div>
-
-      <form onSubmit={handleEmailSignup} className="space-y-4">
-        <div>
-          <label className="mb-1.5 block text-sm font-medium">{t.signup.nameLabel}</label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={t.signup.namePlaceholder}
-            required
-            className="input-dark cursor-text"
-          />
-        </div>
-        <div>
-          <label className="mb-1.5 block text-sm font-medium">{t.emailLabel}</label>
-          <input
-            type="email"
-            dir="ltr"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="example@email.com"
-            required
-            className="input-dark cursor-text"
-          />
-        </div>
-        <div>
-          <label className="mb-1.5 block text-sm font-medium">{t.passwordLabel}</label>
-          <input
-            type="password"
-            dir="ltr"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-            required
-            className="input-dark cursor-text"
-          />
-          {/* Live requirements checklist. */}
-          <div className="mt-2 space-y-1.5 rounded-xl border border-[var(--tq-border-hairline)] bg-overlay-soft p-3">
-            <p className={`text-xs font-medium ${pwAllMet ? "text-foreground" : "text-muted"}`}>
-              {pwAllMet ? t.signup.pwReqMet : t.signup.pwReqTitle}
-            </p>
-            {pwReqs.map((r) => (
-              <div
-                key={r.key}
-                className={`flex items-center gap-2 text-xs transition-colors ${
-                  r.met ? "text-foreground" : "text-foreground/30"
-                }`}
-              >
-                <span className="material-symbols-outlined text-[16px]">check</span>
-                <span>{r.label}</span>
-              </div>
-            ))}
+      {step === 1 ? (
+        /* ─── Step 1: email OR Google ─────────────────────────────── */
+        <>
+          <div className="text-start">
+            <p className="text-sm text-muted">{t.signup.eyebrow}</p>
+            <h1 className="mt-1 text-2xl font-bold">{t.signup.title}</h1>
           </div>
-        </div>
 
-        {TURNSTILE_ENABLED ? (
-          <TurnstileWidget
-            onVerify={setCaptchaToken}
-            onExpire={() => setCaptchaToken("")}
-            resetKey={captchaReset}
-            className="w-full"
+          <GoogleAuthButton
+            disabled={loading}
+            onError={setError}
+            onBusyChange={setLoading}
           />
-        ) : null}
 
-        <button
-          type="submit"
-          disabled={loading || !pwAllMet}
-          className="btn-gradient w-full px-4 py-2.5 text-sm disabled:opacity-50 cursor-pointer"
-        >
-          {loading ? t.signup.submitting : t.signup.submit}
-        </button>
-      </form>
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-[var(--tq-border-hairline)]" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="rounded-full border border-[var(--tq-border-hairline)] bg-[var(--tq-surface)] px-3 py-0.5 text-xs text-muted">
+                {t.or}
+              </span>
+            </div>
+          </div>
 
-      <div className="border-t border-[var(--tq-border-hairline)] pt-4 text-center text-sm text-muted">
-        {t.signup.haveAccount}
-        <Link href={localizedHref("/login", locale)} className="text-foreground hover:underline cursor-pointer">
-          {t.signup.login}
-        </Link>
-      </div>
+          <form onSubmit={handleContinue} className="space-y-4">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">{t.emailLabel}</label>
+              <input
+                type="email"
+                dir="ltr"
+                autoFocus
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="example@email.com"
+                required
+                className="input-dark cursor-text"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="btn-gradient w-full px-4 py-2.5 text-sm disabled:opacity-50 cursor-pointer"
+            >
+              {t.signup.continue}
+            </button>
+          </form>
+
+          <div className="border-t border-[var(--tq-border-hairline)] pt-4 text-center text-sm text-muted">
+            {t.signup.haveAccount}
+            <Link href={localizedHref("/login", locale)} className="text-foreground hover:underline cursor-pointer">
+              {t.signup.login}
+            </Link>
+          </div>
+        </>
+      ) : (
+        /* ─── Step 2: name + password (email path only) ───────────── */
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              setStep(1);
+              setError(null);
+            }}
+            className="inline-flex cursor-pointer items-center gap-1 text-sm text-muted transition-colors hover:text-foreground"
+          >
+            <span
+              className={`material-symbols-outlined text-[18px] ${dir === "rtl" ? "rotate-180" : ""}`}
+              aria-hidden
+            >
+              arrow_back
+            </span>
+            {t.signup.back}
+          </button>
+
+          <div className="text-start">
+            <h1 className="text-2xl font-bold">{t.signup.detailsTitle}</h1>
+            {/* The email chosen in step 1. No dir override, so it aligns with
+                the headline (start of the page direction — right in RTL); a
+                Latin address still reads left-to-right via the bidi algorithm
+                since it sits alone in its element. */}
+            <p className="mt-1 text-sm text-muted">{email}</p>
+          </div>
+
+          <form onSubmit={handleEmailSignup} className="space-y-4">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">{t.signup.nameLabel}</label>
+              <input
+                type="text"
+                autoFocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t.signup.namePlaceholder}
+                required
+                className="input-dark cursor-text"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">{t.passwordLabel}</label>
+              <input
+                type="password"
+                dir="ltr"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                className="input-dark cursor-text"
+              />
+              {/* Live requirements checklist. */}
+              <div className="mt-2 space-y-1.5 rounded-xl border border-[var(--tq-border-hairline)] bg-overlay-soft p-3">
+                <p className={`text-xs font-medium ${pwAllMet ? "text-foreground" : "text-muted"}`}>
+                  {pwAllMet ? t.signup.pwReqMet : t.signup.pwReqTitle}
+                </p>
+                {pwReqs.map((r) => (
+                  <div
+                    key={r.key}
+                    className={`flex items-center gap-2 text-xs transition-colors ${
+                      r.met ? "text-foreground" : "text-foreground/30"
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[16px]">check</span>
+                    <span>{r.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {TURNSTILE_ENABLED ? (
+              <TurnstileWidget
+                onVerify={setCaptchaToken}
+                onExpire={() => setCaptchaToken("")}
+                resetKey={captchaReset}
+                className="w-full"
+              />
+            ) : null}
+
+            <button
+              type="submit"
+              disabled={loading || !pwAllMet}
+              className="btn-gradient w-full px-4 py-2.5 text-sm disabled:opacity-50 cursor-pointer"
+            >
+              {loading ? t.signup.submitting : t.signup.submit}
+            </button>
+          </form>
+        </>
+      )}
     </motion.div>
   );
 }
