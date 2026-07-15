@@ -73,29 +73,37 @@ function flowTrend(spark: number[]): Omit<Trend, "spark"> {
 
 async function getStatTrends(): Promise<{
   users: Trend;
+  subs: Trend;
   decks: Trend;
   credits: Trend;
 }> {
-  const windowStartMs = Date.now() - SPARK_DAYS * DAY_MS;
+  const now = Date.now();
+  const windowStartMs = now - SPARK_DAYS * DAY_MS;
   const windowStart = new Date(windowStartMs);
 
-  const [usersBaseline, newUsers, newDecks, spentRows] = await Promise.all([
-    prisma.user.count({
-      where: { role: { not: "admin" }, createdAt: { lt: windowStart } },
-    }),
-    prisma.user.findMany({
-      where: { role: { not: "admin" }, createdAt: { gte: windowStart } },
-      select: { createdAt: true },
-    }),
-    prisma.presentation.findMany({
-      where: { createdAt: { gte: windowStart } },
-      select: { createdAt: true },
-    }),
-    prisma.creditHold.findMany({
-      where: { status: "settled", createdAt: { gte: windowStart } },
-      select: { createdAt: true, amountCharged: true },
-    }),
-  ]);
+  const [usersBaseline, newUsers, newDecks, spentRows, activeSubs] =
+    await Promise.all([
+      prisma.user.count({
+        where: { role: { not: "admin" }, createdAt: { lt: windowStart } },
+      }),
+      prisma.user.findMany({
+        where: { role: { not: "admin" }, createdAt: { gte: windowStart } },
+        select: { createdAt: true },
+      }),
+      prisma.presentation.findMany({
+        where: { createdAt: { gte: windowStart } },
+        select: { createdAt: true },
+      }),
+      prisma.creditHold.findMany({
+        where: { status: "settled", createdAt: { gte: windowStart } },
+        select: { createdAt: true, amountCharged: true },
+      }),
+      // Currently-active paid subs, by createdAt — see the subs note below.
+      prisma.subscription.findMany({
+        where: { status: "active", plan: { in: [...PAID_PLANS] } },
+        select: { createdAt: true },
+      }),
+    ]);
 
   // Users — cumulative daily total (running total from the pre-window count).
   let running = usersBaseline;
@@ -116,8 +124,22 @@ async function getStatTrends(): Promise<{
     windowStartMs,
   );
 
+  // Subs — APPROXIMATE active-over-time: for each day, count the subs that are
+  // active NOW and were created on/before that day. There's no cancel
+  // timestamp, so this can't see subs that were active then but have since
+  // churned — it undercounts past days (the line only rises to the current
+  // count). A rough trend indicator; the card value is the exact count.
+  const subsSpark: number[] = [];
+  for (let i = SPARK_DAYS - 1; i >= 0; i--) {
+    const dayEndMs = now - i * DAY_MS;
+    subsSpark.push(
+      activeSubs.filter((s) => s.createdAt.getTime() <= dayEndMs).length,
+    );
+  }
+
   return {
     users: { spark: usersSpark, ...trendFrom(usersSpark[0], usersSpark.at(-1) ?? 0) },
+    subs: { spark: subsSpark, ...trendFrom(subsSpark[0], subsSpark.at(-1) ?? 0) },
     decks: { spark: decksSpark, ...flowTrend(decksSpark) },
     credits: { spark: creditsSpark, ...flowTrend(creditsSpark) },
   };
@@ -127,18 +149,42 @@ async function getStatTrends(): Promise<{
 // Live-only: with no live key in this environment (e.g. local dev on test keys)
 // it returns null and the card shows "n/a" rather than a test-mode figure. Also
 // resilient - a Stripe hiccup returns null instead of blanking the Overview.
-async function getStripeBalanceUsd(): Promise<number | null> {
+// Current LIVE Stripe balance (USD) + an approximate 14-day daily-balance
+// sparkline reconstructed from balance transactions: balance at end of day D =
+// current balance minus the net of every transaction created after D. Uses
+// `amount` by `created`, so it ignores available/pending timing — a trend
+// indicator, not an exact ledger. Live-only: null spark (card shows "n/a" and
+// no line) with test keys or on any Stripe hiccup.
+async function getBalanceTrend(): Promise<{ usd: number | null } & Trend> {
   const client = getLiveStripeOrNull();
-  if (!client) return null;
+  if (!client) return { usd: null, spark: [] };
   try {
     const bal = await client.balance.retrieve();
     const cents = [...bal.available, ...bal.pending]
       .filter((b) => b.currency === "usd")
       .reduce((sum, b) => sum + b.amount, 0);
-    return cents / 100;
+
+    const sinceSec = Math.floor((Date.now() - SPARK_DAYS * DAY_MS) / 1000);
+    const txns = await client.balanceTransactions.list({
+      created: { gte: sinceSec },
+      limit: 100,
+    });
+    const usdTxns = txns.data
+      .filter((t) => t.currency === "usd")
+      .map((t) => ({ created: t.created, amount: t.amount }));
+
+    const spark: number[] = [];
+    for (let i = SPARK_DAYS - 1; i >= 0; i--) {
+      const dayEndSec = Math.floor((Date.now() - i * DAY_MS) / 1000);
+      const laterCents = usdTxns
+        .filter((t) => t.created > dayEndSec)
+        .reduce((a, t) => a + t.amount, 0);
+      spark.push((cents - laterCents) / 100);
+    }
+    return { usd: cents / 100, spark, ...trendFrom(spark[0], spark.at(-1) ?? 0) };
   } catch (err) {
-    console.error("[admin/stats] stripe live balance fetch failed", err);
-    return null;
+    console.error("[admin/stats] stripe balance/trend fetch failed", err);
+    return { usd: null, spark: [] };
   }
 }
 
@@ -157,7 +203,7 @@ export async function getOverviewStats(): Promise<{
     activeSubsCount,
     decks30,
     spent,
-    balanceUsd,
+    balance,
     trends,
   ] = await Promise.all([
     prisma.user.count({ where: { role: { not: "admin" } } }),
@@ -174,7 +220,7 @@ export async function getOverviewStats(): Promise<{
       _sum: { amountCharged: true },
       where: { status: "settled", createdAt: { gte: since30 } },
     }),
-    getStripeBalanceUsd(),
+    getBalanceTrend(),
     getStatTrends(),
   ]);
 
@@ -187,21 +233,23 @@ export async function getOverviewStats(): Promise<{
 
   const stats: AdminStat[] = [
     { key: "users", label: "Total users", value: fmt(totalUsers), spark: trends.users.spark, delta: trends.users.delta, trend: trends.users.trend },
-    // Subs + balance are point-in-time metrics with no historical series in our
-    // data (Subscription has no cancel timestamp; Stripe balance isn't stored),
-    // so they render value-only until a daily-snapshot feed exists.
-    { key: "subs", label: "Active subscriptions", value: fmt(activeSubsCount), spark: [] },
+    // Subs sparkline is an approximation (no historical churn — see
+    // getStatTrends); balance sparkline is reconstructed from Stripe and is
+    // live-only (empty spark ⇒ value-only card with test keys).
+    { key: "subs", label: "Active subscriptions", value: fmt(activeSubsCount), spark: trends.subs.spark, delta: trends.subs.delta, trend: trends.subs.trend },
     {
       key: "balance",
       label: "Stripe balance",
       value:
-        balanceUsd === null
+        balance.usd === null
           ? "n/a"
-          : `$${balanceUsd.toLocaleString("en-US", {
+          : `$${balance.usd.toLocaleString("en-US", {
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
             })}`,
-      spark: [],
+      spark: balance.spark,
+      delta: balance.delta,
+      trend: balance.trend,
     },
     { key: "decks", label: "Decks generated (30d)", value: fmt(decks30), spark: trends.decks.spark, delta: trends.decks.delta, trend: trends.decks.trend },
     { key: "credits", label: "Credits spent (30d)", value: fmt(creditsSpent30), spark: trends.credits.spark, delta: trends.credits.delta, trend: trends.credits.trend },
