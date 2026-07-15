@@ -22,6 +22,9 @@ const DEG = Math.PI / 180;
 const THETA = 0.1;
 const AUTO_SPEED = 0.0025;
 const OUR_BLUE: [number, number, number] = [0.2, 0.5, 1]; // #3380FF
+// Cap the ranked list so the panel height tracks the Recent-activity card
+// (the globe still plots every country as a marker; only the list is capped).
+const MAX_COUNTRY_ROWS = 12;
 
 const SHORT_NAME: Record<string, string> = {
   "United States of America": "United States",
@@ -354,7 +357,7 @@ export function LiveGlobePanel({
               No visitor data yet.
             </p>
           ) : null}
-          {sorted.map((v) => (
+          {sorted.slice(0, MAX_COUNTRY_ROWS).map((v) => (
             <div
               key={v.code}
               onMouseEnter={() => focusCountry(v)}
