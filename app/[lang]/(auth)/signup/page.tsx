@@ -5,9 +5,10 @@
 //
 // Single-step email signup (user direction 2026-06-16): name + email + password
 // with a LIVE requirements checklist. Cloudflare Turnstile (Supabase-native
-// captcha) gates the submit + the resend. Google sign-in lives on the login page
-// only - signing in with Google there creates the account on first use, so no
-// signup path is lost. Left-aligned eyebrow + title, then the fields.
+// captcha) gates the submit + the resend. A "Continue with Google" button
+// (shared GoogleAuthButton, same OAuth flow as login) sits above the email form;
+// the /callback route creates the account on first Google sign-in. Left-aligned
+// eyebrow + title, then the fields.
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -20,6 +21,7 @@ import {
   TurnstileWidget,
   TURNSTILE_ENABLED,
 } from "@/components/auth/TurnstileWidget";
+import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -246,6 +248,23 @@ export default function SignupPage() {
       <div className="text-start">
         <p className="text-sm text-muted">{t.signup.eyebrow}</p>
         <h1 className="mt-1 text-2xl font-bold">{t.signup.title}</h1>
+      </div>
+
+      <GoogleAuthButton
+        disabled={loading}
+        onError={setError}
+        onBusyChange={setLoading}
+      />
+
+      <div className="relative">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-[var(--tq-border-hairline)]" />
+        </div>
+        <div className="relative flex justify-center">
+          <span className="rounded-full border border-[var(--tq-border-hairline)] bg-[var(--tq-surface)] px-3 py-0.5 text-xs text-muted">
+            {t.or}
+          </span>
+        </div>
       </div>
 
       <form onSubmit={handleEmailSignup} className="space-y-4">
