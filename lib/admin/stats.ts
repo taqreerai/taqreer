@@ -73,6 +73,16 @@ function flowTrend(spark: number[]): Omit<Trend, "spark"> {
   return trendFrom(prev, curr);
 }
 
+// Stock metrics (cumulative totals): latest value vs the window midpoint
+// (recent-half growth). When the midpoint is still zero — the app is younger
+// than half the window, so the series starts at 0 — fall back to the first day
+// that had data, so a young metric still shows a growth % instead of nothing.
+function stockTrend(spark: number[]): Omit<Trend, "spark"> {
+  const mid = Math.floor(spark.length / 2);
+  const prev = spark[mid] > 0 ? spark[mid] : (spark.find((v) => v > 0) ?? 0);
+  return trendFrom(prev, spark.at(-1) ?? 0);
+}
+
 async function getStatTrends(): Promise<{
   users: Trend;
   subs: Trend;
@@ -140,8 +150,8 @@ async function getStatTrends(): Promise<{
   }
 
   return {
-    users: { spark: usersSpark, ...trendFrom(usersSpark[0], usersSpark.at(-1) ?? 0) },
-    subs: { spark: subsSpark, ...trendFrom(subsSpark[0], subsSpark.at(-1) ?? 0) },
+    users: { spark: usersSpark, ...stockTrend(usersSpark) },
+    subs: { spark: subsSpark, ...stockTrend(subsSpark) },
     decks: { spark: decksSpark, ...flowTrend(decksSpark) },
     credits: { spark: creditsSpark, ...flowTrend(creditsSpark) },
   };
