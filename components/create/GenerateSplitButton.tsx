@@ -148,8 +148,13 @@ export function GenerateSplitButton({
   // preset. Rows above the user's plan show that tier name as a pill
   // (clicking still works - preflight 402s into the upgrade dialog).
   const userPlan = credits ? normalizePlan(credits.plan) : null;
-  // Free tier gets the slide-cap upsell popup on Generate (every run).
-  const isFree = userPlan === "free";
+  // Free tier gets the slide-cap upsell popup on Generate (every run). Treat an
+  // unknown plan (credits not loaded yet) as free — normalizePlan defaults
+  // unknown to "free" — so a free user can't skip the upsell by clicking
+  // Generate during the brief credits-load race. `userPlan` stays
+  // null-until-loaded for the preset-gating logic below, which must not gate
+  // before the balance resolves.
+  const isFree = normalizePlan(credits?.plan) === "free";
   // Admin/superuser: every preset is unlocked and no credit cost shows
   // (the run is never charged). Mirrors the server preflight bypass.
   const isAdmin = credits?.isAdmin ?? false;

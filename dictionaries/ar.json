@@ -674,7 +674,7 @@
       "premiumDesignDesc": "أعمق تخطيط للتصميم، أعلى جودة",
       "etaMin": "~{eta} د",
       "balance": "رصيدك: {count} نقطة",
-      "creditsEstimate": "\u2248 {credits} ÙÙØ·Ø©",
+      "creditsEstimate": "\u2248 {credits} نقطة",
       "slideCapUpsell": {
         "title": "الحد الأقصى للشرائح",
         "close": "إغلاق",
