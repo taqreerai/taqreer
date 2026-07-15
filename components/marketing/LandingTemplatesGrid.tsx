@@ -3,9 +3,9 @@
 /* eslint-disable @next/next/no-img-element -- thumbnail src is a generated storage/data URL; next/image's host allowlist + optimization don't apply */
 
 // Landing-page templates grid — full-wrapper-width 2 × 4 grid of public
-// template covers. No titles, just the thumbnails. Each tile scrubs
-// through its template's slides on mouse-move, mirroring the dashboard's
-// Recent Projects tiles (components/app/ProjectThumbnail.tsx).
+// template covers. No titles, just the thumbnails. Tiles show the COVER
+// only — the dashboard-style hover-scrub through slides was removed on
+// owner direction (2026-07-16); the lightbox is the preview surface here.
 //
 // Clicking a tile opens the SAME TemplateLightbox modal as the dashboard
 // "قوالبي" widget. Its "use" CTA routes a logged-out visitor to /signup
@@ -16,7 +16,7 @@
 // page (/presentation-templates/[slug]) — a crawlable path Google can follow —
 // instead of opening the lightbox. Slugless tiles keep the lightbox.
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { useUseTemplate } from "@/hooks/useUseTemplate";
 import { localizedHref } from "@/lib/i18n/navigation";
@@ -25,11 +25,6 @@ import { PremiumBadge } from "@/components/app/PremiumBadge";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 import type { LandingTemplate } from "@/lib/auth/marquee-projects";
 import type { SlideFormat } from "@/lib/schema/slide";
-
-// Mirror ProjectThumbnail's scrub-activation threshold so the landing
-// tiles feel identical to the dashboard ones: bare hover doesn't scrub
-// until the cursor has moved past this many px from where it entered.
-const SCRUB_ACTIVATION_PX = 6;
 
 // Deterministic 0..MAX pseudo-random delay per tile index. Tiles fade
 // in scattered (not sequentially, not all at once) on scroll. Sin-hash
@@ -121,45 +116,13 @@ function LandingTemplateTile({
   href?: string;
 }) {
   const dict = useDict();
-  const rootRef = useRef<HTMLElement | null>(null);
-  const entryXRef = useRef<number | null>(null);
-  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
-  const slides = template.slides;
-  const isMultiSlide = slides.length > 1;
-  const src = slides[hoverIndex ?? 0] ?? null;
+  // Cover only — no hover-scrub on the marketing surfaces.
+  const src = template.slides[0] ?? null;
   // Portrait covers crop from the top so they fill the 16:9 tile without
   // letterboxing — same rule the dashboard tiles use.
   const imgObjectClass =
     template.format === "9:16" ? "object-cover object-top" : "object-cover";
-
-  // Scrub logic mirrors ProjectThumbnail.handleMouseMove: ignore bare
-  // hover until the cursor moves past the activation threshold, then map
-  // horizontal position to a slide index (RTL — rightmost pixel = slide 1).
-  const handleMouseMove = (e: React.MouseEvent<HTMLElement>) => {
-    if (!isMultiSlide) return;
-    const rect = rootRef.current?.getBoundingClientRect();
-    if (!rect || rect.width <= 0) return;
-    if (entryXRef.current == null) {
-      entryXRef.current = e.clientX;
-      return;
-    }
-    if (Math.abs(e.clientX - entryXRef.current) < SCRUB_ACTIVATION_PX) return;
-    const relX = e.clientX - rect.left;
-    const idx = Math.min(
-      slides.length - 1,
-      Math.max(
-        0,
-        Math.floor(((rect.width - relX) / rect.width) * slides.length),
-      ),
-    );
-    setHoverIndex(idx);
-  };
-
-  const handleMouseLeave = () => {
-    setHoverIndex(null);
-    entryXRef.current = null;
-  };
 
   // Shared tile body — identical inside the anchor (detail-link mode) and
   // the lightbox button.
@@ -184,10 +147,7 @@ function LandingTemplateTile({
     <div className="tq-thumbnail group relative aspect-video w-full overflow-hidden rounded-[14px]">
       {href ? (
         <a
-          ref={rootRef as React.Ref<HTMLAnchorElement>}
           href={href}
-          onMouseMove={handleMouseMove}
-          onMouseLeave={handleMouseLeave}
           aria-label={dict.landing.templatesGrid.previewAria}
           className="absolute inset-0 block cursor-pointer"
         >
@@ -195,11 +155,8 @@ function LandingTemplateTile({
         </a>
       ) : (
         <button
-          ref={rootRef as React.Ref<HTMLButtonElement>}
           type="button"
           onClick={onOpen}
-          onMouseMove={handleMouseMove}
-          onMouseLeave={handleMouseLeave}
           aria-label={dict.landing.templatesGrid.previewAria}
           className="absolute inset-0 block cursor-zoom-in"
         >
@@ -207,19 +164,7 @@ function LandingTemplateTile({
         </button>
       )}
 
-      {/* Scrub counter — bottom-end, only while actively scrubbing a
-          multi-slide template. Matches the dashboard tile's chrome. */}
-      {isMultiSlide && hoverIndex !== null ? (
-        <span
-          dir="ltr"
-          className="pointer-events-none absolute bottom-2 end-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-medium leading-none text-white"
-        >
-          {hoverIndex + 1} / {slides.length}
-        </span>
-      ) : null}
-
-      {/* Premium marker — top-start, diagonal-opposite the scrub
-          counter so the two never crowd. */}
+      {/* Premium marker — top-start. */}
       {template.isPremium ? (
         <PremiumBadge className="pointer-events-none absolute top-2 start-2 z-10" />
       ) : null}
