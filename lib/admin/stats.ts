@@ -31,6 +31,98 @@ function timeAgo(d: Date): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+// ─── KPI sparklines + deltas ────────────────────────────────────────────────
+// Real trend series derived from existing rows (no snapshot table needed) for
+// the metrics that have a natural time-axis: total users (cumulative stock),
+// decks/day and credits-spent/day (flow). Subs + Stripe balance have no
+// historical series in our data, so those cards stay value-only.
+const SPARK_DAYS = 14;
+
+type Trend = { spark: number[]; delta?: string; trend?: "up" | "down" | "flat" };
+
+// Bucket dated, optionally-weighted items into SPARK_DAYS daily totals.
+function bucketDaily(
+  items: { t: number; w?: number }[],
+  windowStartMs: number,
+): number[] {
+  const b = new Array(SPARK_DAYS).fill(0) as number[];
+  for (const it of items) {
+    const idx = Math.floor((it.t - windowStartMs) / DAY_MS);
+    if (idx >= 0 && idx < SPARK_DAYS) b[idx] += it.w ?? 1;
+  }
+  return b;
+}
+
+// Percentage change → "+8.2%" / "-2.4%" + trend. No baseline ⇒ no delta.
+function trendFrom(prev: number, curr: number): Omit<Trend, "spark"> {
+  if (!Number.isFinite(prev) || prev <= 0) return {};
+  const pct = ((curr - prev) / prev) * 100;
+  return {
+    delta: `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`,
+    trend: pct > 0.1 ? "up" : pct < -0.1 ? "down" : "flat",
+  };
+}
+
+// Flow metrics: recent-half sum vs earlier-half sum (this week vs last).
+function flowTrend(spark: number[]): Omit<Trend, "spark"> {
+  const h = Math.floor(spark.length / 2);
+  const prev = spark.slice(0, h).reduce((a, b) => a + b, 0);
+  const curr = spark.slice(h).reduce((a, b) => a + b, 0);
+  return trendFrom(prev, curr);
+}
+
+async function getStatTrends(): Promise<{
+  users: Trend;
+  decks: Trend;
+  credits: Trend;
+}> {
+  const windowStartMs = Date.now() - SPARK_DAYS * DAY_MS;
+  const windowStart = new Date(windowStartMs);
+
+  const [usersBaseline, newUsers, newDecks, spentRows] = await Promise.all([
+    prisma.user.count({
+      where: { role: { not: "admin" }, createdAt: { lt: windowStart } },
+    }),
+    prisma.user.findMany({
+      where: { role: { not: "admin" }, createdAt: { gte: windowStart } },
+      select: { createdAt: true },
+    }),
+    prisma.presentation.findMany({
+      where: { createdAt: { gte: windowStart } },
+      select: { createdAt: true },
+    }),
+    prisma.creditHold.findMany({
+      where: { status: "settled", createdAt: { gte: windowStart } },
+      select: { createdAt: true, amountCharged: true },
+    }),
+  ]);
+
+  // Users — cumulative daily total (running total from the pre-window count).
+  let running = usersBaseline;
+  const usersSpark = bucketDaily(
+    newUsers.map((u) => ({ t: u.createdAt.getTime() })),
+    windowStartMs,
+  ).map((n) => (running += n));
+
+  // Decks — new decks per day (flow).
+  const decksSpark = bucketDaily(
+    newDecks.map((p) => ({ t: p.createdAt.getTime() })),
+    windowStartMs,
+  );
+
+  // Credits — settled charges summed per day (flow).
+  const creditsSpark = bucketDaily(
+    spentRows.map((r) => ({ t: r.createdAt.getTime(), w: r.amountCharged ?? 0 })),
+    windowStartMs,
+  );
+
+  return {
+    users: { spark: usersSpark, ...trendFrom(usersSpark[0], usersSpark.at(-1) ?? 0) },
+    decks: { spark: decksSpark, ...flowTrend(decksSpark) },
+    credits: { spark: creditsSpark, ...flowTrend(creditsSpark) },
+  };
+}
+
 // Real current LIVE Stripe account balance (available + pending) in USD.
 // Live-only: with no live key in this environment (e.g. local dev on test keys)
 // it returns null and the card shows "n/a" rather than a test-mode figure. Also
@@ -59,24 +151,32 @@ export async function getOverviewStats(): Promise<{
   // Kick off the activity feed alongside the KPI queries (independent roundtrip).
   const activityPromise = getRecentActivity();
 
-  const [totalUsers, planGroups, activeSubsCount, decks30, spent, balanceUsd] =
-    await Promise.all([
-      prisma.user.count({ where: { role: { not: "admin" } } }),
-      prisma.user.groupBy({
-        by: ["plan"],
-        where: { role: { not: "admin" } },
-        _count: { _all: true },
-      }),
-      prisma.subscription.count({
-        where: { status: "active", plan: { in: [...PAID_PLANS] } },
-      }),
-      prisma.presentation.count({ where: { createdAt: { gte: since30 } } }),
-      prisma.creditHold.aggregate({
-        _sum: { amountCharged: true },
-        where: { status: "settled", createdAt: { gte: since30 } },
-      }),
-      getStripeBalanceUsd(),
-    ]);
+  const [
+    totalUsers,
+    planGroups,
+    activeSubsCount,
+    decks30,
+    spent,
+    balanceUsd,
+    trends,
+  ] = await Promise.all([
+    prisma.user.count({ where: { role: { not: "admin" } } }),
+    prisma.user.groupBy({
+      by: ["plan"],
+      where: { role: { not: "admin" } },
+      _count: { _all: true },
+    }),
+    prisma.subscription.count({
+      where: { status: "active", plan: { in: [...PAID_PLANS] } },
+    }),
+    prisma.presentation.count({ where: { createdAt: { gte: since30 } } }),
+    prisma.creditHold.aggregate({
+      _sum: { amountCharged: true },
+      where: { status: "settled", createdAt: { gte: since30 } },
+    }),
+    getStripeBalanceUsd(),
+    getStatTrends(),
+  ]);
 
   const planSplit: Record<Plan, number> = { free: 0, plus: 0, pro: 0, max: 0 };
   for (const g of planGroups) {
@@ -86,7 +186,10 @@ export async function getOverviewStats(): Promise<{
   const creditsSpent30 = spent._sum.amountCharged ?? 0;
 
   const stats: AdminStat[] = [
-    { key: "users", label: "Total users", value: fmt(totalUsers), spark: [] },
+    { key: "users", label: "Total users", value: fmt(totalUsers), spark: trends.users.spark, delta: trends.users.delta, trend: trends.users.trend },
+    // Subs + balance are point-in-time metrics with no historical series in our
+    // data (Subscription has no cancel timestamp; Stripe balance isn't stored),
+    // so they render value-only until a daily-snapshot feed exists.
     { key: "subs", label: "Active subscriptions", value: fmt(activeSubsCount), spark: [] },
     {
       key: "balance",
@@ -100,8 +203,8 @@ export async function getOverviewStats(): Promise<{
             })}`,
       spark: [],
     },
-    { key: "decks", label: "Decks generated (30d)", value: fmt(decks30), spark: [] },
-    { key: "credits", label: "Credits spent (30d)", value: fmt(creditsSpent30), spark: [] },
+    { key: "decks", label: "Decks generated (30d)", value: fmt(decks30), spark: trends.decks.spark, delta: trends.decks.delta, trend: trends.decks.trend },
+    { key: "credits", label: "Credits spent (30d)", value: fmt(creditsSpent30), spark: trends.credits.spark, delta: trends.credits.delta, trend: trends.credits.trend },
   ];
 
   const activity = await activityPromise;
