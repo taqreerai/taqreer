@@ -63,3 +63,10 @@ curl -s -o /dev/null -w 'HTTP %{http_code}\n' "http://localhost:$PORT/ar"
 # not fail an otherwise-healthy deploy.
 echo "==> Purge Cloudflare edge cache"
 npx tsx -r dotenv/config scripts/purge-cf.ts || echo "(cf purge failed - non-fatal)"
+
+# Notify IndexNow (Bing / Yandex + the AI crawlers that consume that feed) of
+# the live URL set, read from the just-deployed sitemap. Google does NOT use
+# IndexNow (it has the sitemap + GSC). No secrets — the key is public
+# (public/<key>.txt, now live behind the atomic swap above). Non-fatal.
+echo "==> Notify IndexNow"
+npx tsx scripts/indexnow.ts || echo "(indexnow submit failed - non-fatal)"
