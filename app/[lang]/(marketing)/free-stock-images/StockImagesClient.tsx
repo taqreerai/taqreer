@@ -80,20 +80,29 @@ export function StockImagesClient({
       // state. The CDN edge cache (from the API's response headers) still
       // serves anonymous first loads.
       const res = await fetch(buildUrl(q, r, targetPage), { cache: "no-store" });
+      // A non-2xx body (e.g. { error }) still parses as JSON, so guard the
+      // status AND the shape before trusting it — otherwise `images` could
+      // become undefined and crash at `images.length`.
+      if (!res.ok) throw new Error(`stock-images ${res.status}`);
       const data = (await res.json()) as {
         images: StockImage[];
         pageCount: number;
         page: number;
       };
+      if (
+        !Array.isArray(data.images) ||
+        !Number.isFinite(data.pageCount) ||
+        !Number.isFinite(data.page)
+      ) {
+        throw new Error("invalid stock-images response");
+      }
       if (id !== reqIdRef.current) return; // superseded
       setImages(data.images);
       setPageCount(data.pageCount);
       setPage(data.page);
     } catch {
-      if (id !== reqIdRef.current) return;
-      setImages([]);
-      setPageCount(1);
-      setPage(0);
+      // Keep the last successful page on failure (don't blank the gallery on
+      // a transient error); just release the loading state in `finally`.
     } finally {
       if (id === reqIdRef.current) setLoading(false);
     }

@@ -22,11 +22,13 @@ import { prisma } from "@/lib/prisma";
 export const runtime = "nodejs";
 export const maxDuration = 30;
 
-// Pin the proxied fetch to our own Supabase host. `storageUrl` is always
-// written to the public bucket, so any other host is corrupt data.
-const SUPABASE_HOST = (() => {
+// Pin the proxied fetch to our own Supabase ORIGIN (scheme + host + port,
+// not just the hostname — so a different scheme/port can't slip through).
+// `storageUrl` is always written to the public bucket, so any other origin
+// is corrupt data.
+const SUPABASE_ORIGIN = (() => {
   try {
-    return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").hostname || null;
+    return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").origin || null;
   } catch {
     return null;
   }
@@ -83,7 +85,7 @@ export async function GET(request: Request) {
   } catch {
     return NextResponse.json({ error: "Image not found" }, { status: 404 });
   }
-  if (!SUPABASE_HOST || upstreamUrl.hostname !== SUPABASE_HOST) {
+  if (!SUPABASE_ORIGIN || upstreamUrl.origin !== SUPABASE_ORIGIN) {
     return NextResponse.json({ error: "Image not found" }, { status: 404 });
   }
 
@@ -94,7 +96,12 @@ export async function GET(request: Request) {
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   let upstream: Response;
   try {
-    upstream = await fetch(upstreamUrl, { signal: controller.signal });
+    upstream = await fetch(upstreamUrl, {
+      signal: controller.signal,
+      // Refuse redirects — a 3xx could otherwise carry the fetch off the
+      // validated Supabase origin.
+      redirect: "error",
+    });
   } catch {
     return NextResponse.json({ error: "Could not fetch image" }, { status: 502 });
   } finally {
