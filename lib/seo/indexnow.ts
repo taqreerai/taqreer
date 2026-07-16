@@ -20,20 +20,10 @@ const ENDPOINT = "https://api.indexnow.org/indexnow";
 const MAX_URLS = 10_000; // IndexNow per-request cap
 const TIMEOUT_MS = 10_000;
 
-/**
- * Submit a batch of same-host URLs to IndexNow. Returns `{ ok, status }`;
- * never throws. Off-host URLs are dropped (IndexNow rejects a batch whose
- * URLs don't all match `host`).
- */
-export async function submitToIndexNow(
-  urls: string[],
-): Promise<{ ok: boolean; status?: number; count: number }> {
-  const prefix = `https://${INDEXNOW_HOST}/`;
-  const urlList = [...new Set(urls)]
-    .filter((u) => u.startsWith(prefix))
-    .slice(0, MAX_URLS);
-  if (urlList.length === 0) return { ok: false, count: 0 };
-
+// POST one batch (<= MAX_URLS). Never throws — soft-fails + logs.
+async function postBatch(
+  urlList: string[],
+): Promise<{ ok: boolean; status?: number }> {
   try {
     const res = await fetch(ENDPOINT, {
       method: "POST",
@@ -51,9 +41,33 @@ export async function submitToIndexNow(
     if (!res.ok) {
       console.error(`[indexnow] submit failed: HTTP ${res.status}`);
     }
-    return { ok: res.ok, status: res.status, count: urlList.length };
+    return { ok: res.ok, status: res.status };
   } catch (err) {
     console.error("[indexnow] submit error", err);
-    return { ok: false, count: urlList.length };
+    return { ok: false };
   }
+}
+
+/**
+ * Submit same-host URLs to IndexNow. Returns `{ ok, status, count }`; never
+ * throws. Off-host URLs are dropped (IndexNow rejects a batch whose URLs don't
+ * all match `host`), and the list is chunked into MAX_URLS-sized POSTs so a
+ * large set is submitted in full rather than truncated. `ok` is true only if
+ * every batch was accepted; `status` is the last batch's status.
+ */
+export async function submitToIndexNow(
+  urls: string[],
+): Promise<{ ok: boolean; status?: number; count: number }> {
+  const prefix = `https://${INDEXNOW_HOST}/`;
+  const urlList = [...new Set(urls)].filter((u) => u.startsWith(prefix));
+  if (urlList.length === 0) return { ok: false, count: 0 };
+
+  let ok = true;
+  let status: number | undefined;
+  for (let i = 0; i < urlList.length; i += MAX_URLS) {
+    const r = await postBatch(urlList.slice(i, i + MAX_URLS));
+    ok = ok && r.ok;
+    status = r.status ?? status;
+  }
+  return { ok, status, count: urlList.length };
 }
