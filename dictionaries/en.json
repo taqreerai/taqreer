@@ -134,6 +134,32 @@
       ]
     }
   },
+  "stockImages": {
+    "meta": {
+      "title": "Free Stock Images Library | taqreer.ai",
+      "description": "Browse a free library of AI-generated stock images. Search by description, filter by landscape or portrait, and download any image for your presentations and projects."
+    },
+    "hero": {
+      "eyebrow": "Free stock images",
+      "title": "Free stock images library",
+      "subtitle": "A growing library of AI-generated images, free to download. Search by description and filter by landscape or portrait."
+    },
+    "breadcrumb": "Free stock images",
+    "searchLabel": "Search images by description",
+    "searchPlaceholder": "Search images...",
+    "filterAria": "Filter by orientation",
+    "filterAll": "All",
+    "filterLandscape": "Landscape",
+    "filterPortrait": "Portrait",
+    "download": "Download image",
+    "viewFull": "View full image",
+    "loadMore": "Load more",
+    "loading": "Loading...",
+    "emptyTitle": "No images yet",
+    "emptyDesc": "AI-generated images will show up here as they are created.",
+    "noResultsTitle": "No results",
+    "noResultsDesc": "No images match your search."
+  },
   "exploreMore": {
     "title": "Explore more",
     "subtitle": "Everything taqreer.ai does, one page each.",
@@ -144,6 +170,7 @@
       "presentationStyle": { "title": "Match a style", "body": "Mimic the design style of a deck you like." },
       "arabicPresentations": { "title": "Arabic presentations", "body": "Arabic-first design with true right-to-left support." },
       "templates": { "title": "Templates", "body": "Ready-made, editable presentation templates." },
+      "stockImages": { "title": "Free stock images", "body": "A free library of AI-generated images to download." },
       "pricing": { "title": "Pricing", "body": "Simple plans; start free." }
     }
   },
@@ -410,6 +437,7 @@
     "whyUs": "Why us",
     "pricing": "Pricing",
     "templates": "Templates",
+    "stockImages": "Photo library",
     "faq": "FAQ",
     "login": "Log in",
     "signup": "Sign up",

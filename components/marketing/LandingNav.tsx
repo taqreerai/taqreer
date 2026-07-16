@@ -59,11 +59,11 @@ export function LandingNav() {
   const home = localizedHref("/", locale);
   const sec = (anchor: string) => (onLanding ? anchor : `${home}${anchor}`);
   const navLinks = [
-    { label: dict.landingNav.home, href: onLanding ? "#" : home },
     { label: dict.landingNav.features, href: sec("#features") },
     { label: dict.landingNav.whyUs, href: localizedHref("/arabic-presentations", locale) },
     { label: dict.landingNav.pricing, href: localizedHref("/pricing", locale) },
     { label: dict.landingNav.templates, href: localizedHref("/presentation-templates", locale) },
+    { label: dict.landingNav.stockImages, href: localizedHref("/free-stock-images", locale) },
     { label: dict.landingNav.faq, href: sec("#faq") },
   ];
 

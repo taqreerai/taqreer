@@ -17,7 +17,8 @@ export type SpokeKey =
   | "redesign"
   | "presentationStyle"
   | "arabicPresentations"
-  | "templates";
+  | "templates"
+  | "stockImages";
 
 const SPOKE_PATHS: Record<SpokeKey, string> = {
   aiPresentations: "/ai-presentations",
@@ -26,6 +27,7 @@ const SPOKE_PATHS: Record<SpokeKey, string> = {
   presentationStyle: "/presentation-style",
   arabicPresentations: "/arabic-presentations",
   templates: "/presentation-templates",
+  stockImages: "/free-stock-images",
 };
 
 // Each spoke links the 3 siblings that FOLLOW it in SPOKE_PATHS order,

@@ -26,13 +26,14 @@ export const revalidate = 3600;
 
 const ROUTES: {
   path: string;
-  changeFrequency: "weekly" | "monthly" | "yearly";
+  changeFrequency: "daily" | "weekly" | "monthly" | "yearly";
   priority: number;
   // Last real content change (bump on copy edits, not on deploys).
   lastModified: string;
 }[] = [
   { path: "", changeFrequency: "weekly", priority: 1, lastModified: "2026-07-01" },
   { path: "presentation-templates", changeFrequency: "weekly", priority: 0.8, lastModified: "2026-07-06" },
+  { path: "free-stock-images", changeFrequency: "daily", priority: 0.7, lastModified: "2026-07-16" },
   { path: "pricing", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-07-01" },
   { path: "ai-presentations", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-07-01" },
   { path: "report-design", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-07-01" },

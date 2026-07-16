@@ -191,6 +191,38 @@ export function collectionPageSchema(opts: {
   };
 }
 
+// ImageGallery: a page presenting a set of images (/free-stock-images).
+// A CollectionPage subtype; `associatedMedia` itemizes the visible images
+// as ImageObjects (contentUrl + caption = the image prompt), which is the
+// signal Google Images uses. Only the first page is itemized (what's in
+// the static HTML) so the blob stays lean.
+export function imageGallerySchema(opts: {
+  name: string;
+  description: string;
+  path: string;
+  locale: Locale;
+  images: { url: string; caption: string }[];
+}) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "ImageGallery",
+    name: opts.name,
+    description: opts.description,
+    url: `${SITE_URL}${opts.path}`,
+    inLanguage: opts.locale === "ar" ? "ar" : "en",
+    isPartOf: { "@type": "WebSite", name: "taqreer.ai", url: SITE_URL },
+    ...(opts.images.length > 0
+      ? {
+          associatedMedia: opts.images.map((im) => ({
+            "@type": "ImageObject",
+            contentUrl: im.url,
+            caption: im.caption,
+          })),
+        }
+      : {}),
+  };
+}
+
 // CreativeWork: a single template's detail page (/presentation-templates/[slug]).
 // Deliberately CreativeWork rather than Product (no offers/reviews to back a
 // Product) or ImageObject (the page is the work, not just its cover).
