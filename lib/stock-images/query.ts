@@ -75,11 +75,15 @@ export function randomShuffleCohort(): string {
 }
 
 // Only known cohorts are honoured; anything else falls back to the default
-// order. Keeps the meaningful keyspace bounded no matter what a client sends.
+// order. Accepted input is CANONICALIZED (`c00` -> `c0`) rather than echoed
+// back verbatim: the hash uses this string, so padded variants would otherwise
+// each mint their own order + cache entry and the bound would be 42 strings,
+// not the intended 32.
 function normalizeSeed(seed: string | null | undefined): string {
-  const s = (seed ?? "").trim();
-  const m = /^c(\d{1,2})$/.exec(s);
-  return m && Number(m[1]) < SHUFFLE_COHORTS ? s : SHUFFLE_SALT;
+  const m = /^c(\d{1,2})$/.exec((seed ?? "").trim());
+  if (!m) return SHUFFLE_SALT;
+  const n = Number(m[1]);
+  return n < SHUFFLE_COHORTS ? `c${n}` : SHUFFLE_SALT;
 }
 
 // Escape LIKE metacharacters so a search for "50%" or "a_b" matches the
