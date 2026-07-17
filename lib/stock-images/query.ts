@@ -57,19 +57,29 @@ export type StockImagesPage = {
 export const STOCK_IMAGES_PAGE_SIZE = 12;
 const MAX_PAGE_SIZE = 60;
 
-// Fallback salt for the shuffle when no seed is supplied (e.g. a bare API
-// call). Normally the SEED does this job: the page mints a fresh one per
-// request so the gallery isn't frozen on the same first page forever, and
-// hands it to the client so every paging/filter call reuses it — the order
-// has to stay stable WITHIN a visit or page 2 would repeat or skip page 1.
+// Fallback salt for the shuffle when no (or an unknown) seed is supplied.
 const SHUFFLE_SALT = "stock-shuffle-v1";
-// Bound the seed: it's a bound parameter (no injection), this just stops a
-// crafted request from shipping a huge string into the hash.
-const MAX_SEED_LEN = 64;
 
+// The gallery is shuffled per VISIT so it isn't frozen on one first page. The
+// seed is drawn from a BOUNDED set of cohorts rather than being unique per
+// visitor: a unique-per-visit seed makes every request its own CDN cache key
+// (zero cross-visitor reuse, unbounded keyspace), while 32 cohorts still give
+// 32 different first pages — a repeat visitor almost always lands on another.
+// The seed must stay stable WITHIN a visit (the client echoes it back), or
+// page 2 would repeat or skip page 1.
+const SHUFFLE_COHORTS = 32;
+
+/** A random cohort seed for one visit. Used by the page, echoed by the client. */
+export function randomShuffleCohort(): string {
+  return `c${Math.floor(Math.random() * SHUFFLE_COHORTS)}`;
+}
+
+// Only known cohorts are honoured; anything else falls back to the default
+// order. Keeps the meaningful keyspace bounded no matter what a client sends.
 function normalizeSeed(seed: string | null | undefined): string {
-  const s = (seed ?? "").trim().slice(0, MAX_SEED_LEN);
-  return s.length > 0 ? s : SHUFFLE_SALT;
+  const s = (seed ?? "").trim();
+  const m = /^c(\d{1,2})$/.exec(s);
+  return m && Number(m[1]) < SHUFFLE_COHORTS ? s : SHUFFLE_SALT;
 }
 
 // Escape LIKE metacharacters so a search for "50%" or "a_b" matches the
