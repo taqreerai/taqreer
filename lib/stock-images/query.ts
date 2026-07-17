@@ -150,3 +150,48 @@ export async function getStockImagesPage(opts: {
     return { images: [], total: 0, pageCount: 1, page: 0 };
   }
 }
+
+// Cap on the "more from this set" suggestions.
+const RELATED_CAP = 24;
+
+/**
+ * Other images from the SAME deck (saved version) as `id` — the "more from
+ * this set" suggestions in the lightbox. Returns the whole deck group
+ * INCLUDING `id` (so the caller has the full set to navigate), in a stable
+ * shuffled order. Empty when `id` isn't a browsable image or its deck has no
+ * other ready images.
+ *
+ * Still no titles/PII: only prompt + url + aspect, grouped by the deck's saved
+ * version. Fail-soft to [].
+ */
+export async function getRelatedStockImages(id: string): Promise<StockImage[]> {
+  if (!id) return [];
+  try {
+    const rows = await prisma.$queryRaw<Row[]>`
+      SELECT gi.id, gi."storageUrl" AS url, gi.prompt, gi.aspect
+      FROM "GeneratedImage" gi
+      JOIN "Presentation" pr
+        ON pr."savedVersionId" = gi."presentationVersionId"
+      WHERE gi.status = 'ready'
+        AND gi."storageUrl" IS NOT NULL
+        -- Same saved-version deck as the requested image (subquery is itself
+        -- saved-version scoped, so a random/superseded id resolves to nothing).
+        AND gi."presentationVersionId" = (
+          SELECT gi2."presentationVersionId"
+          FROM "GeneratedImage" gi2
+          JOIN "Presentation" pr2
+            ON pr2."savedVersionId" = gi2."presentationVersionId"
+          WHERE gi2.id = ${id}
+            AND gi2.status = 'ready'
+            AND gi2."storageUrl" IS NOT NULL
+          LIMIT 1
+        )
+      ORDER BY md5(gi.id)
+      LIMIT ${RELATED_CAP}
+    `;
+    return rows;
+  } catch (err) {
+    console.error("[stock-images] related query failed", err);
+    return [];
+  }
+}

@@ -18,6 +18,7 @@ import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { SegmentedToggle } from "@/components/create/controls";
 import { Pagination } from "@/components/app/Pagination";
 import { StockImageCard } from "@/components/marketing/StockImageCard";
+import { StockImageModal } from "@/components/marketing/StockImageModal";
 import type { StockImage } from "@/lib/stock-images/query";
 
 type RatioValue = "all" | "landscape" | "portrait";
@@ -42,6 +43,8 @@ export function StockImagesClient({
   // True once the user has narrowed the set (search or filter) — drives
   // the "no results" vs "empty library" copy.
   const [filtered, setFiltered] = useState(false);
+  // Lightbox target (null = closed).
+  const [modalImage, setModalImage] = useState<StockImage | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Monotonic id: every fetch bumps it; a response is applied only if it
@@ -184,7 +187,7 @@ export function StockImagesClient({
           >
             {images.map((img) => (
               <div key={img.id} className="mb-4 break-inside-avoid">
-                <StockImageCard image={img} />
+                <StockImageCard image={img} onOpen={setModalImage} />
               </div>
             ))}
           </div>
@@ -192,6 +195,11 @@ export function StockImagesClient({
           <Pagination page={page} pageCount={pageCount} onChange={handlePage} />
         </>
       )}
+
+      <StockImageModal
+        image={modalImage}
+        onClose={() => setModalImage(null)}
+      />
     </div>
   );
 }
