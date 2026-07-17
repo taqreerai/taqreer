@@ -43,8 +43,14 @@ export function StockImagesClient({
   // True once the user has narrowed the set (search or filter) — drives
   // the "no results" vs "empty library" copy.
   const [filtered, setFiltered] = useState(false);
-  // Lightbox target (null = closed).
-  const [modalImage, setModalImage] = useState<StockImage | null>(null);
+  // Lightbox target (null = closed). `openId` increments per tile click so the
+  // modal scopes its selection to one open (reopening a tile starts on that
+  // tile, not on the suggestion you last viewed in it).
+  const [modal, setModal] = useState<{
+    image: StockImage;
+    openId: number;
+  } | null>(null);
+  const openSeqRef = useRef(0);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Monotonic id: every fetch bumps it; a response is applied only if it
@@ -187,7 +193,12 @@ export function StockImagesClient({
           >
             {images.map((img) => (
               <div key={img.id} className="mb-4 break-inside-avoid">
-                <StockImageCard image={img} onOpen={setModalImage} />
+                <StockImageCard
+                  image={img}
+                  onOpen={(i) =>
+                    setModal({ image: i, openId: ++openSeqRef.current })
+                  }
+                />
               </div>
             ))}
           </div>
@@ -197,8 +208,9 @@ export function StockImagesClient({
       )}
 
       <StockImageModal
-        image={modalImage}
-        onClose={() => setModalImage(null)}
+        image={modal?.image ?? null}
+        openId={modal?.openId ?? 0}
+        onClose={() => setModal(null)}
       />
     </div>
   );

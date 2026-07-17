@@ -66,7 +66,10 @@ export function StockImageCard({
     <button
       type="button"
       onClick={() => onOpen(image)}
-      aria-label={t.viewFull}
+      // The PROMPT (not a generic label) so every tile has a distinct
+      // accessible name — a shared "view image" label makes the grid
+      // unnavigable by screen reader.
+      aria-label={`${t.viewFull}: ${image.prompt}`}
       className={`group tq-thumbnail relative block w-full overflow-hidden rounded-[14px] ${aspectClass(
         image.aspect,
       )}`}

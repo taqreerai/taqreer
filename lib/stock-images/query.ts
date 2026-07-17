@@ -186,7 +186,10 @@ export async function getRelatedStockImages(id: string): Promise<StockImage[]> {
             AND gi2."storageUrl" IS NOT NULL
           LIMIT 1
         )
-      ORDER BY md5(gi.id)
+      -- The requested image sorts first so it always survives the cap (a deck
+      -- with more than RELATED_CAP ready images could otherwise drop it, and
+      -- the contract is that the group INCLUDES it); the rest are shuffled.
+      ORDER BY (gi.id = ${id}) DESC, md5(gi.id)
       LIMIT ${RELATED_CAP}
     `;
     return rows;

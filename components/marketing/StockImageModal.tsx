@@ -29,9 +29,14 @@ import type { StockImage } from "@/lib/stock-images/query";
 
 export function StockImageModal({
   image,
+  openId,
   onClose,
 }: {
   image: StockImage | null;
+  // Increments on every tile click. Scopes `selected` to ONE open, so
+  // reopening the same tile always starts on that tile's image rather than
+  // resuming the suggestion you last viewed in it.
+  openId: number;
   onClose: () => void;
 }) {
   const dict = useDict();
@@ -39,32 +44,42 @@ export function StockImageModal({
   const t = dict.stockImages;
   const open = image !== null;
 
-  // `current` = the image shown large (starts as the clicked one, changes when
-  // a suggestion is clicked). `deck` = the whole same-deck group.
-  const [current, setCurrent] = useState<StockImage | null>(image);
-  const [deck, setDeck] = useState<StockImage[]>([]);
+  // Both bits of state are TAGGED with the tile they belong to (`forId`), so a
+  // new open can never inherit a previous session's selection or deck. That
+  // lets everything derive during render — no reset-on-open effect.
+  const [selected, setSelected] = useState<{
+    forOpen: number;
+    image: StockImage;
+  } | null>(null);
+  const [deckFor, setDeckFor] = useState<{
+    forId: string;
+    images: StockImage[];
+  } | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const reqRef = useRef(0);
   useFocusTrap(panelRef, open);
 
-  // On open (or a different tile): reset to that image and lazy-load its deck
-  // group for the suggestions. Race-guarded.
+  // Fetch-only effect (no synchronous setState): lazily loads the deck group
+  // for the suggestions. The cleanup invalidates the request, so a response
+  // landing after close — or after a different tile opened — is dropped.
   useEffect(() => {
     if (!image) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- canonical reset-on-open + async fetch
-    setCurrent(image);
-    setDeck([]);
-    const rid = ++reqRef.current;
-    fetch(`/api/stock-images/related?id=${encodeURIComponent(image.id)}`, {
+    const forId = image.id;
+    let alive = true;
+    fetch(`/api/stock-images/related?id=${encodeURIComponent(forId)}`, {
       cache: "no-store",
     })
       .then((r) => r.json())
       .then((d: { images?: StockImage[] }) => {
-        if (rid === reqRef.current && Array.isArray(d.images)) setDeck(d.images);
+        if (alive && Array.isArray(d.images)) {
+          setDeckFor({ forId, images: d.images });
+        }
       })
       .catch(() => {
         /* suggestions are optional — a failure just shows none */
       });
+    return () => {
+      alive = false;
+    };
   }, [image]);
 
   // Esc + body-scroll lock while open.
@@ -84,14 +99,13 @@ export function StockImageModal({
 
   if (typeof document === "undefined") return null;
 
-  // Guard against a one-frame flash of a stale `current` from a previous open:
-  // trust `current` only once it's the freshly-opened image or a member of the
-  // loaded deck; otherwise show the incoming `image`.
+  // Everything derives from the current open: a deck fetched for a different
+  // image, or a selection from a previous open, simply doesn't apply — so a
+  // stale one can never flash in, with no reset-on-open effect.
+  const deck = deckFor?.forId === (image?.id ?? "") ? deckFor.images : [];
   const shown =
-    image &&
-    current &&
-    (current.id === image.id || deck.some((d) => d.id === current.id))
-      ? current
+    selected?.forOpen === openId && deck.some((d) => d.id === selected.image.id)
+      ? selected.image
       : image;
   const suggestions = shown ? deck.filter((d) => d.id !== shown.id) : [];
 
@@ -187,8 +201,10 @@ export function StockImageModal({
                         <button
                           key={s.id}
                           type="button"
-                          onClick={() => setCurrent(s)}
-                          aria-label={t.viewFull}
+                          onClick={() => setSelected({ forOpen: openId, image: s })}
+                          // The PROMPT, so each suggestion has a distinct
+                          // accessible name rather than a shared generic one.
+                          aria-label={`${t.viewFull}: ${s.prompt}`}
                           className="tq-thumbnail group relative aspect-square overflow-hidden rounded-[8px]"
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
