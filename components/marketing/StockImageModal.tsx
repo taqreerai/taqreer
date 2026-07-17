@@ -25,6 +25,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 import { thumbUrl } from "@/components/marketing/StockImageCard";
+import {
+  getCachedRelated,
+  prefetchRelated,
+} from "@/components/marketing/stockImagesCache";
 import type { StockImage } from "@/lib/stock-images/query";
 
 export function StockImageModal({
@@ -58,25 +62,19 @@ export function StockImageModal({
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(panelRef, open);
 
-  // Fetch-only effect (no synchronous setState): lazily loads the deck group
-  // for the suggestions. The cleanup invalidates the request, so a response
-  // landing after close — or after a different tile opened — is dropped.
+  // Fetch-only effect (no synchronous setState): warms the deck group if the
+  // tile's hover/focus prefetch hasn't already, then flips state so the render
+  // picks it up. The cleanup invalidates the request, so a response landing
+  // after close — or after a different tile opened — is dropped.
   useEffect(() => {
     if (!image) return;
     const forId = image.id;
+    if (getCachedRelated(forId)) return; // already warm — rendered from cache
     let alive = true;
-    fetch(`/api/stock-images/related?id=${encodeURIComponent(forId)}`, {
-      cache: "no-store",
-    })
-      .then((r) => r.json())
-      .then((d: { images?: StockImage[] }) => {
-        if (alive && Array.isArray(d.images)) {
-          setDeckFor({ forId, images: d.images });
-        }
-      })
-      .catch(() => {
-        /* suggestions are optional — a failure just shows none */
-      });
+    prefetchRelated(forId).then(() => {
+      const group = getCachedRelated(forId);
+      if (alive && group) setDeckFor({ forId, images: group });
+    });
     return () => {
       alive = false;
     };
@@ -102,7 +100,16 @@ export function StockImageModal({
   // Everything derives from the current open: a deck fetched for a different
   // image, or a selection from a previous open, simply doesn't apply — so a
   // stale one can never flash in, with no reset-on-open effect.
-  const deck = deckFor?.forId === (image?.id ?? "") ? deckFor.images : [];
+  //
+  // The cache is read during render so a prefetched group paints on the FIRST
+  // frame (no pop-in, no shift). `deckFor` state exists only to re-render the
+  // cold path once its fetch lands.
+  const cached = image ? getCachedRelated(image.id) : undefined;
+  const deck =
+    deckFor?.forId === (image?.id ?? "") ? deckFor.images : (cached ?? []);
+  // Cold open: no group yet, so reserve the suggestions slot with a skeleton
+  // instead of letting it pop in and shove the download button up.
+  const loadingSuggestions = !!image && !cached && deckFor?.forId !== image.id;
   const shown =
     selected?.forOpen === openId && deck.some((d) => d.id === selected.image.id)
       ? selected.image
@@ -190,7 +197,23 @@ export function StockImageModal({
                     {t.download}
                   </a>
 
-                  {suggestions.length > 0 ? (
+                  {loadingSuggestions ? (
+                    // Reserves the slot while the group loads, so the download
+                    // button is already at its final spot (the hover prefetch
+                    // means this rarely shows at all).
+                    <div aria-hidden>
+                      <div className="my-5 border-t border-foreground/[0.08]" />
+                      <div className="mb-3 h-5 w-32 rounded bg-[var(--tq-overlay-soft)]" />
+                      <div className="grid grid-cols-3 gap-2">
+                        {[0, 1, 2].map((i) => (
+                          <div
+                            key={i}
+                            className="aspect-square animate-pulse rounded-[8px] bg-[var(--tq-overlay-soft)]"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ) : suggestions.length > 0 ? (
                     <>
                       <div className="my-5 border-t border-foreground/[0.08]" />
                       <h3 className="mb-3 text-sm font-semibold text-foreground">

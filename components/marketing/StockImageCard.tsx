@@ -15,6 +15,7 @@
 
 import { useState } from "react";
 import { useDict } from "@/components/i18n/LocaleProvider";
+import { prefetchRelated } from "@/components/marketing/stockImagesCache";
 import type { StockImage } from "@/lib/stock-images/query";
 
 // Resized-thumbnail URL via Supabase's image-transform endpoint. A
@@ -66,6 +67,11 @@ export function StockImageCard({
     <button
       type="button"
       onClick={() => onOpen(image)}
+      // Warm this image's deck group before the click lands, so the lightbox
+      // can paint its suggestions immediately instead of popping them in late
+      // (which shoved the download button up). No-ops once cached/in-flight.
+      onMouseEnter={() => prefetchRelated(image.id)}
+      onFocus={() => prefetchRelated(image.id)}
       // The PROMPT (not a generic label) so every tile has a distinct
       // accessible name — a shared "view image" label makes the grid
       // unnavigable by screen reader.
