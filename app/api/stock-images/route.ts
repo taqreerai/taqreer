@@ -10,10 +10,13 @@
 //   ratio "landscape" | "portrait"  (anything else = all)
 //   page  0-indexed page (loader clamps to [0, pageCount-1])
 //   limit page size (loader clamps to [1, 60])
+//   seed  shuffle seed — the page mints one per visit and the client echoes
+//         it back on every call, so the order stays stable across pages
+//         within a visit while differing between visits
 //
-// Public + edge-cacheable: the response is the same for every visitor
-// given the same query, so a shared CDN cache is correct here (unlike
-// the per-user /api/library download).
+// Public + edge-cacheable: the response is the same for every visitor given
+// the same query AND seed, so a shared CDN cache is still correct (the seed
+// just partitions the keyspace per visit).
 
 import { NextResponse } from "next/server";
 import {
@@ -38,8 +41,9 @@ export async function GET(request: Request) {
     Number.isFinite(limitRaw) && limitRaw > 0
       ? limitRaw
       : STOCK_IMAGES_PAGE_SIZE;
+  const seed = searchParams.get("seed");
 
-  const result = await getStockImagesPage({ q, ratio, page, pageSize });
+  const result = await getStockImagesPage({ q, ratio, page, pageSize, seed });
 
   return NextResponse.json(result, {
     headers: {

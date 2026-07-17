@@ -63,9 +63,16 @@ export default async function StockImagesPage(props: {
 }) {
   const { lang } = await props.params;
   const locale = resolve(lang);
+  // A fresh shuffle seed per request, so the gallery isn't frozen on the same
+  // first page for every visitor/visit. It's handed to the client island so
+  // every paging/filter call reuses it — the order must stay stable WITHIN a
+  // visit or page 2 would repeat or skip page 1. (The route is force-dynamic,
+  // so this renders per request; crawlers also see a rotating sample, which
+  // spreads discovery across the corpus.)
+  const seed = crypto.randomUUID();
   const [dict, page] = await Promise.all([
     getDictionary(locale),
-    getStockImagesPage({}),
+    getStockImagesPage({ seed }),
   ]);
   const t = dict.stockImages;
 
@@ -114,6 +121,7 @@ export default async function StockImagesPage(props: {
         <StockImagesClient
           initialImages={page.images}
           initialPageCount={page.pageCount}
+          seed={seed}
         />
       </section>
 

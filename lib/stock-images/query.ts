@@ -57,9 +57,20 @@ export type StockImagesPage = {
 export const STOCK_IMAGES_PAGE_SIZE = 12;
 const MAX_PAGE_SIZE = 60;
 
-// Salt for the stable per-deck shuffle. Bump to reshuffle the whole
-// gallery (e.g. if the current order ever feels stale).
+// Fallback salt for the shuffle when no seed is supplied (e.g. a bare API
+// call). Normally the SEED does this job: the page mints a fresh one per
+// request so the gallery isn't frozen on the same first page forever, and
+// hands it to the client so every paging/filter call reuses it — the order
+// has to stay stable WITHIN a visit or page 2 would repeat or skip page 1.
 const SHUFFLE_SALT = "stock-shuffle-v1";
+// Bound the seed: it's a bound parameter (no injection), this just stops a
+// crafted request from shipping a huge string into the hash.
+const MAX_SEED_LEN = 64;
+
+function normalizeSeed(seed: string | null | undefined): string {
+  const s = (seed ?? "").trim().slice(0, MAX_SEED_LEN);
+  return s.length > 0 ? s : SHUFFLE_SALT;
+}
 
 // Escape LIKE metacharacters so a search for "50%" or "a_b" matches the
 // literal text, not the ILIKE wildcards (Postgres LIKE defaults to a
@@ -77,6 +88,9 @@ type Row = { id: string; url: string; prompt: string; aspect: string };
  * @param opts.ratio    orientation filter ("landscape" | "portrait"); null/absent = all
  * @param opts.page     0-indexed page (clamped to [0, pageCount-1])
  * @param opts.pageSize page size (clamped to [1, 60], default 12)
+ * @param opts.seed     shuffle seed — a fresh one per visit varies the first
+ *                      page; reuse the SAME seed for every call in a visit or
+ *                      pagination breaks (page 2 would repeat/skip page 1)
  *
  * Fail-soft: a DB hiccup degrades to an empty page rather than throwing,
  * so the public route never 500s.
@@ -86,7 +100,9 @@ export async function getStockImagesPage(opts: {
   ratio?: StockImageRatio | null;
   page?: number;
   pageSize?: number;
+  seed?: string | null;
 }): Promise<StockImagesPage> {
+  const seed = normalizeSeed(opts.seed);
   const pageSize = Math.min(
     MAX_PAGE_SIZE,
     Math.max(1, Math.floor(opts.pageSize || STOCK_IMAGES_PAGE_SIZE)),
@@ -129,9 +145,9 @@ export async function getStockImagesPage(opts: {
                gi.aspect,
                ROW_NUMBER() OVER (
                  PARTITION BY gi."presentationVersionId"
-                 ORDER BY md5(gi.id)
+                 ORDER BY md5(gi.id || ${seed})
                ) AS rn,
-               md5(gi."presentationVersionId" || ${SHUFFLE_SALT}) AS deck_order
+               md5(gi."presentationVersionId" || ${seed}) AS deck_order
         FROM "GeneratedImage" gi
         JOIN "Presentation" pr
           ON pr."savedVersionId" = gi."presentationVersionId"

@@ -27,9 +27,14 @@ type RatioValue = "all" | "landscape" | "portrait";
 export function StockImagesClient({
   initialImages,
   initialPageCount,
+  seed,
 }: {
   initialImages: StockImage[];
   initialPageCount: number;
+  // The server's per-visit shuffle seed. Echoed on every request so paging and
+  // filtering stay coherent with the server-rendered first page — a different
+  // seed mid-visit would repeat or skip images across pages.
+  seed: string;
 }) {
   const dict = useDict();
   const { dir } = useLocale();
@@ -76,6 +81,9 @@ export function StockImagesClient({
     if (q.trim()) params.set("q", q.trim());
     if (r !== "all") params.set("ratio", r);
     if (p > 0) params.set("page", String(p));
+    // Always carry the visit's seed so every page/filter matches the order the
+    // server rendered page 0 with.
+    params.set("seed", seed);
     return `/api/stock-images?${params.toString()}`;
   }
 
