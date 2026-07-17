@@ -13,12 +13,13 @@
 // is debounced via a timeout ref; a request-id ref drops stale responses
 // so fast typing / quick page clicks can't render an out-of-order page.
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { SegmentedToggle } from "@/components/create/controls";
 import { Pagination } from "@/components/app/Pagination";
 import { StockImageCard } from "@/components/marketing/StockImageCard";
 import { StockImageModal } from "@/components/marketing/StockImageModal";
+import { prefetchRelated } from "@/components/marketing/stockImagesCache";
 import type { StockImage } from "@/lib/stock-images/query";
 
 type RatioValue = "all" | "landscape" | "portrait";
@@ -133,6 +134,18 @@ export function StockImagesClient({
     runQuery(search, ratio, next);
     gridTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+
+  // Warm every visible tile's deck group shortly after paint. Hover prefetch
+  // only helps a mouse; this covers touch and fast clicks too, so the lightbox
+  // knows up front whether a set HAS suggestions — otherwise it reserves the
+  // slot and then collapses it (or pops it in), shifting the download button.
+  // Deduped + edge-cached, so the requests are cheap and fire once per id.
+  useEffect(() => {
+    if (images.length === 0) return;
+    const ids = images.map((i) => i.id);
+    const t = setTimeout(() => ids.forEach((id) => prefetchRelated(id)), 400);
+    return () => clearTimeout(t);
+  }, [images]);
 
   return (
     <div>

@@ -72,8 +72,11 @@ export function StockImageModal({
     if (getCachedRelated(forId)) return; // already warm — rendered from cache
     let alive = true;
     prefetchRelated(forId).then(() => {
-      const group = getCachedRelated(forId);
-      if (alive && group) setDeckFor({ forId, images: group });
+      if (!alive) return;
+      // Settle EITHER way: prefetchRelated swallows failures and only caches on
+      // success, so an empty result must still clear the loading state — else
+      // the skeleton would spin forever instead of hiding the section.
+      setDeckFor({ forId, images: getCachedRelated(forId) ?? [] });
     });
     return () => {
       alive = false;
