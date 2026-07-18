@@ -8,6 +8,7 @@
 // the admin layout). A ?user=<id> query auto-expands + pages to that user.
 
 import { useCallback, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { avatarGradientForSeed } from "@/lib/util/avatar-gradient";
 import { formatRelativeTime } from "@/lib/util/relative-time";
 import { IconCircle } from "@/components/admin/IconCircle";
@@ -71,7 +72,7 @@ function Pill({
 function TierPill({ plan }: { plan: Plan }) {
   return (
     <span
-      className="flex-shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium"
+      className="flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-medium"
       style={{ color: MUTED, background: "var(--tq-overlay-soft)" }}
     >
       {PLAN_LABEL[plan]}
@@ -471,7 +472,7 @@ export function ActivityClient({
 
                   <span
                     aria-hidden="true"
-                    className="material-symbols-outlined flex-shrink-0 transition-transform"
+                    className="material-symbols-outlined flex-shrink-0 transition-transform duration-300"
                     style={{
                       fontSize: 20,
                       color: MUTED,
@@ -482,18 +483,32 @@ export function ActivityClient({
                   </span>
                 </button>
 
-                {isOpen ? (
-                  <div className="pb-3">
-                    <Timeline
-                      state={timelines[u.id]}
-                      onLoadMore={() => {
-                        const cursor = timelines[u.id]?.nextCursor;
-                        if (cursor) startLoad(u.id, cursor);
-                      }}
-                      onRetry={() => startLoad(u.id)}
-                    />
-                  </div>
-                ) : null}
+                {/* Expand/collapse reveal: same AnimatePresence height pattern
+                    and timing (0.25s easeInOut) as the FaqAccordion. initial
+                    false so a deep-linked pre-expanded row opens instantly. */}
+                <AnimatePresence initial={false}>
+                  {isOpen ? (
+                    <motion.div
+                      key="timeline"
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.25, ease: "easeInOut" }}
+                      className="overflow-hidden"
+                    >
+                      <div className="pb-3">
+                        <Timeline
+                          state={timelines[u.id]}
+                          onLoadMore={() => {
+                            const cursor = timelines[u.id]?.nextCursor;
+                            if (cursor) startLoad(u.id, cursor);
+                          }}
+                          onRetry={() => startLoad(u.id)}
+                        />
+                      </div>
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
               </div>
             );
           })
