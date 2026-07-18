@@ -2127,6 +2127,11 @@ export const deckGenerate = inngest.createFunction(
             });
             slides.length = 0;
             streamingPreview.length = 0;
+            // The discarded deck's declared total is stale; the replacement
+            // cover (parsed just below) re-declares. Reset so a redo that
+            // OMITS data-deck-slides falls back to progressive, not the old
+            // count (CR #155).
+            if (isCeilingMode) declaredTotal = null;
           }
           // Auto-palette: adopt Claude's cover-emitted palette the moment the
           // cover closes. `theme` IS `streamingTheme` (same object), so the
@@ -2146,25 +2151,6 @@ export const deckGenerate = inngest.createFunction(
               });
             }
           }
-          // AUTO nav total: the cover declares the model's intended slide
-          // count (data-deck-slides). Ceiling mode only - exact/enhance
-          // already know their total. Clamp to the budgeted ceiling (the
-          // stream can't exceed it anyway); once set, the progress writes
-          // switch the nav from progressive (streamed + 1) to this number.
-          if (isCeilingMode && declaredTotal === null && parsed.role === "cover") {
-            const m = /data-deck-slides\s*=\s*["']?\s*(\d{1,3})/i.exec(
-              parsed.html,
-            );
-            const n = m ? parseInt(m[1], 10) : NaN;
-            if (Number.isFinite(n) && n > 0) {
-              declaredTotal =
-                slideCeiling != null ? Math.min(n, slideCeiling) : n;
-              logger.info("deck_declared_total", {
-                declared: n,
-                clamped: declaredTotal,
-              });
-            }
-          }
           const role =
             parsed.role && SLIDE_ROLES.has(parsed.role as never)
               ? (parsed.role as NonNullable<SlideType["role"]>)
@@ -2176,6 +2162,21 @@ export const deckGenerate = inngest.createFunction(
           // the restart guard resets it.
           const decl = parseFrameSlide(parsed.html);
           if (decl.deckTitle) frameCtx.deckTitle = decl.deckTitle;
+          // AUTO nav total: the cover declares the model's intended count
+          // (data-deck-slides, read off the opening tag by parseFrameSlide).
+          // Ceiling mode only - exact/enhance already know their total. Runs
+          // AFTER the restart guard, and with NO "set-once" guard, so a
+          // replacement cover (thinking-off redo) re-declares. Clamp to the
+          // budgeted ceiling; once set, the progress writes switch the nav
+          // from progressive (streamed + 1) to this number.
+          if (isCeilingMode && parsed.role === "cover") {
+            const n = decl.deckSlides ? parseInt(decl.deckSlides, 10) : NaN;
+            if (Number.isFinite(n) && n > 0) {
+              declaredTotal =
+                slideCeiling != null ? Math.min(n, slideCeiling) : n;
+              logger.info("deck_declared_total", { declared: n, clamped: declaredTotal });
+            }
+          }
           const sectionHtml = assembleFramedSlide(
             decl,
             frameCtx,

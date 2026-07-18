@@ -184,6 +184,9 @@ export type FrameSlideDecl = {
   bgPrompt: string | null;
   bgScrim: "none" | "soft" | "strong";
   deckTitle: string | null;
+  /** Cover's data-deck-slides = the model's declared intended slide total
+   *  (drives the auto generating-nav count). Raw attr string; caller parses. */
+  deckSlides: string | null;
   /** Claude's ENTIRE well div (modifier classes carry its CSS), or the section
    *  inner HTML as a fallback when the well tag is missing. */
   wellHtml: string;
@@ -234,6 +237,7 @@ export function parseFrameSlide(sectionHtml: string): FrameSlideDecl {
     bgPrompt: attr(openTag, "data-bg-prompt"),
     bgScrim: scrim === "soft" || scrim === "strong" ? scrim : "none",
     deckTitle: attr(openTag, "data-deck-title"),
+    deckSlides: attr(openTag, "data-deck-slides"),
     wellHtml: wellMatch
       ? wellMatch[1]
       : sectionHtml
