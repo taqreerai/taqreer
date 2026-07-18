@@ -36,53 +36,17 @@ type Tier = {
   popular?: boolean;
 };
 
+// Per-tier feature-enabled flags: row 0 = credits, rows 1..8 = features[0..7]
+// (labels come from dict.landing.pricing.tiers[i]). Every tier lists 8 features
+// so all four cards render at the same height. `off` rows show muted (locked).
+const on = { enabled: true };
+const off = { enabled: false };
+
 const TIERS: Tier[] = [
-  {
-    features: [
-      { enabled: true },
-      { enabled: true },
-      { enabled: true },
-      { enabled: true },
-      { enabled: true },
-      { enabled: false },
-      { enabled: false },
-    ],
-    isFree: true,
-  },
-  {
-    features: [
-      { enabled: true },
-      { enabled: true },
-      { enabled: true },
-      { enabled: true },
-      { enabled: true },
-      { enabled: true },
-      { enabled: false },
-    ],
-  },
-  {
-    features: [
-      { enabled: true },
-      { enabled: true },
-      { enabled: true },
-      { enabled: true },
-      { enabled: true },
-      { enabled: true },
-      { enabled: true },
-    ],
-    popular: true,
-  },
-  {
-    features: [
-      { enabled: true },
-      { enabled: true },
-      { enabled: true },
-      { enabled: true },
-      { enabled: true },
-      { enabled: true },
-      { enabled: true },
-    ],
-  },
+  { features: [on, on, on, on, on, off, off, off, off], isFree: true },
+  { features: [on, on, on, on, on, on, on, on, off] },
+  { features: [on, on, on, on, on, on, on, on, on], popular: true },
+  { features: [on, on, on, on, on, on, on, on, on] },
 ];
 
 // Per-tier feature-enabled booleans, exported so the in-app BillingSection
