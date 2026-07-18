@@ -149,7 +149,6 @@ function TimelineRow({ item }: { item: TimelineItem }) {
             {item.slides.map((s, i) => (
               <Pill key={i} title={s.role ?? undefined}>
                 {s.position != null ? `Slide ${s.position}` : "Slide ?"}
-                {s.role ? ` · ${s.role}` : ""}
               </Pill>
             ))}
           </div>
