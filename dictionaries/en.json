@@ -799,7 +799,7 @@
           "name": "Free",
           "description": "To try it out and make simple decks fast.",
           "credits": "{credits} credits (signup gift)",
-          "features": ["Quick draft quality", "Up to {slides} slides per deck", "Images with the latest GPT models", "Enhance · Mimic · Data", "Balanced and Professional design", "Premium templates"],
+          "features": ["Up to {slides} slides per deck", "PNG export only", "Watermarked exports", "Images with the latest GPT models", "All export formats · no watermark", "All creation methods"],
           "footnote": "Upgrade anytime",
           "cta": "Start free"
         },
@@ -807,7 +807,7 @@
           "name": "Plus",
           "description": "To create decks regularly with every creation method.",
           "credits": "{credits} credits / month",
-          "features": ["All creation methods", "Balanced design quality", "Images with the latest GPT models", "Up to {slides} slides per deck", "Custom brand identity", "Premium templates"],
+          "features": ["Up to {slides} slides per deck", "All export formats · no watermark", "All creation methods", "Balanced design quality", "GPT images · custom brand", "All quality presets"],
           "footnote": "Upgrade or downgrade anytime",
           "cta": "Start now"
         },
@@ -815,7 +815,7 @@
           "name": "Pro",
           "description": "For pros who want top quality and premium templates.",
           "credits": "{credits} credits / month",
-          "features": ["All quality presets", "Images with the latest GPT models", "Premium templates", "Up to {slides} slides per deck", "Custom brand identity", "All creation methods"],
+          "features": ["Up to {slides} slides per deck", "All export formats · no watermark", "All quality presets", "All creation methods", "GPT images · custom brand", "Premium templates"],
           "footnote": "Upgrade or downgrade anytime",
           "cta": "Start now"
         },
@@ -823,7 +823,7 @@
           "name": "Max",
           "description": "For heavy use, with maximum capacity and priority.",
           "credits": "{credits} credits / month",
-          "features": ["All presets and all methods", "Images with the latest GPT models", "Up to {slides} slides per deck", "Premium templates", "Custom brand identity", "Processing priority"],
+          "features": ["Up to {slides} slides per deck", "All export formats · no watermark", "All presets and all methods", "GPT images · custom brand", "Premium templates", "Processing priority"],
           "footnote": "You can downgrade anytime",
           "cta": "Start now"
         }

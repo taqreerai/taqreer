@@ -43,7 +43,7 @@ const TIERS: Tier[] = [
       { enabled: true },
       { enabled: true },
       { enabled: true },
-      { enabled: false },
+      { enabled: true },
       { enabled: false },
       { enabled: false },
     ],
