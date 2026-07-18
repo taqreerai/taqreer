@@ -941,7 +941,8 @@ export default function DatasheetPage() {
             onGenerate={handleGenerate}
             quality={quality}
             onQualityChange={setQuality}
-            slideCount={estimatedSlideCount}
+            slideCount={estimatedSlideCount.slides}
+            slideCountUpTo={estimatedSlideCount.upTo}
             disabled={generateDisabled}
             loading={generateLoading}
           />

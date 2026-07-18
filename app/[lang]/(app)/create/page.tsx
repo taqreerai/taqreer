@@ -343,10 +343,10 @@ export default function CreatePage() {
   const fileReady = hasFile && contentFileStage === "ready" && !!contentAnthropicFileId;
   const fileExtracting = hasFile && contentFileStage === "extracting";
   const contentReady = hasText || fileReady;
-  // Split-button credit estimate: dynamic by the textarea content (auto) or the
-  // manual count (custom), via the same estimateSlides the server holds on, and
-  // capped at the tier limit like the run. A content file's text isn't counted
-  // client-side, so a file in auto mode reads as unknown (button shows its 8).
+  // Split-button credit estimate. Custom = the exact pick. Auto = the MODEL
+  // decides the count (owner ruling 2026-07-18) - the display is the held
+  // CEILING (tier cap, admin 75) rendered as "up to", matching the server's
+  // hold exactly.
   const estimatedSlideCount = useMemo(
     () =>
       displaySlideEstimate(
@@ -1085,7 +1085,8 @@ export default function CreatePage() {
             onGenerate={handleGenerate}
             quality={quality}
             onQualityChange={setQuality}
-            slideCount={estimatedSlideCount}
+            slideCount={estimatedSlideCount.slides}
+            slideCountUpTo={estimatedSlideCount.upTo}
             imagesMode={imagesMode}
             disabled={generateDisabled}
             loading={generateLoading}

@@ -82,6 +82,11 @@ export function GenerateSplitButton({
   // back to 8 (the historical default) when missing — the menu
   // is decorative anyway, no real consequence.
   slideCount,
+  // AUTO (model-decided) count: slideCount is the held CEILING, not a
+  // committed size - the per-preset estimate renders as "up to N cr" so
+  // the shown maximum still equals the held maximum (price == charge
+  // parity; the settle refunds down to the authored count).
+  slideCountUpTo = false,
   // Images-mode deck: the per-preset estimate carries the per-image
   // surcharge, mirroring the server quote (preflight) so the shown
   // number stays the held number (price == charge parity).
@@ -97,6 +102,7 @@ export function GenerateSplitButton({
   quality: Quality;
   onQualityChange: (next: Quality) => void;
   slideCount?: number | null;
+  slideCountUpTo?: boolean;
   imagesMode?: boolean;
   disabled?: boolean;
   loading?: boolean;
@@ -225,7 +231,9 @@ export function GenerateSplitButton({
           type="button"
           onClick={() => {
             // Free tier: show the slide-cap upsell before generating.
-            if (isFree) {
+            // NEVER for admins - their plan resolves "free" (no sub) but the
+            // superuser bypasses all gating (owner report 2026-07-18).
+            if (isFree && !isAdmin) {
               setShowSlideCapUpsell(true);
               return;
             }
@@ -411,10 +419,10 @@ export function GenerateSplitButton({
                       }`}
                       dir="ltr"
                     >
-                      {dict.flows.generate.creditsEstimate.replace(
-                        "{credits}",
-                        formatCredits(cost),
-                      )}
+                      {(slideCountUpTo
+                        ? dict.flows.generate.creditsEstimateUpTo
+                        : dict.flows.generate.creditsEstimate
+                      ).replace("{credits}", formatCredits(cost))}
                     </span>
                   </span>
                 </button>

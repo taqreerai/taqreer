@@ -873,6 +873,17 @@ function buildUserMessage(event: DeckGenerateEvent) {
     ``,
     `Brief:`,
     JSON.stringify(sanitizeBriefFonts(event.brief), null, 2),
+    // AUTO slide count (owner ruling 2026-07-18): the model decides the
+    // length; the Brief's slideCount is the HELD ceiling, not a target.
+    // Exact user picks (slideCountMode "exact"/absent) keep the match-the-
+    // preference semantics unchanged.
+    ...((event.brief as { slideCountMode?: string } | null)?.slideCountMode ===
+    "ceiling"
+      ? [
+          ``,
+          `SLIDE COUNT (auto): the Brief's slideCount is a MAXIMUM, not a target — the user left the deck length to YOU. Author the count the content actually calls for; honor any explicit structure in the content (numbered slides, sections, an outline) — up to that maximum. Never pad, stretch, or split content just to approach the maximum.`,
+        ]
+      : []),
   ];
   if (event.type === "enhance" && event.enhance) {
     lines.push(``, `Enhancement settings:`, JSON.stringify(event.enhance, null, 2));
@@ -1181,7 +1192,7 @@ function buildSourceTextDirective(
       `  • Design a fresh deck from scratch that communicates the most important information clearly to the user's audience.`,
       `  • Do NOT translate or transliterate. Keep the document's source language unless the user's other directives say otherwise.`,
       `  • Do NOT redesign the document verbatim. Pick what matters, edit aggressively, structure for clarity.`,
-      `  • You are free to choose slide count, layout, and information density — match the user's slideCount preference when set, otherwise pick what fits the content.`,
+      `  • You are free to choose layout and information density. Slide count: match the Brief's slideCount when slideCountMode is "exact" (the user picked it); when "ceiling", it is only your MAXIMUM — pick what fits the content.`,
     );
   } else if (source.kind === "enhance") {
     const fonts = source.fonts ?? [];

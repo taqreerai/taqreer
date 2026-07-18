@@ -1227,7 +1227,8 @@ export default function MimicFlow({
             onGenerate={handleGenerate}
             quality={quality}
             onQualityChange={setQuality}
-            slideCount={estimatedSlideCount}
+            slideCount={estimatedSlideCount.slides}
+            slideCountUpTo={estimatedSlideCount.upTo}
             imagesMode={imagesMode}
             disabled={generateDisabled}
             loading={generateLoading}

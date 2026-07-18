@@ -9,7 +9,6 @@
 // keep the flat ≈$0.0022/credit COGS property (§4) when re-tuning.
 
 import type { Quality } from "@/lib/types/quality";
-import { estimateSlideCountFromText } from "@/lib/types/quality";
 import type { KnownPlan } from "@/lib/plan";
 import { MAX_GENERATED_IMAGES } from "@/lib/images/slide-images";
 
@@ -259,12 +258,12 @@ export function estimateSlides(input: SlideEstimateInput): SlideEstimate {
   switch (input.kind) {
     case "fixed":
       return { slides: Math.max(1, Math.floor(input.count)), exact: true, basis: "user" };
-    case "text": {
-      const slides = estimateSlideCountFromText(input.text);
-      return slides === null
-        ? { slides: null, exact: false, basis: "unknown" }
-        : { slides, exact: false, basis: "text" };
-    }
+    case "text":
+      // AUTO is the MODEL's decision (owner ruling 2026-07-18): no our-side
+      // word-count heuristic - it lowballed a structured 8-slide carousel to
+      // 5. Unknown → the quote holds the hard ceiling (tier cap ∧ credits)
+      // and the model authors what the content calls for, up to it.
+      return { slides: null, exact: false, basis: "unknown" };
     case "enhance":
       // 1:1 rebuild of the source - the page count IS the slide count.
       return { slides: Math.max(1, Math.floor(input.pageCount)), exact: true, basis: "pages" };
@@ -272,10 +271,8 @@ export function estimateSlides(input: SlideEstimateInput): SlideEstimate {
       if (input.requested && input.requested > 0) {
         return { slides: Math.floor(input.requested), exact: true, basis: "user" };
       }
-      const fromBrief = estimateSlideCountFromText(input.briefText);
-      return fromBrief === null
-        ? { slides: null, exact: false, basis: "unknown" }
-        : { slides: fromBrief, exact: false, basis: "text" };
+      // Typed-brief mimic without an explicit pick: same auto law as text.
+      return { slides: null, exact: false, basis: "unknown" };
     }
     case "datasheet": {
       // PROPOSED structural heuristic: cover + closing (2) + one
@@ -297,32 +294,32 @@ export function estimateSlides(input: SlideEstimateInput): SlideEstimate {
  * The slide count to DISPLAY on the split-button credit estimate. Reuses the
  * server's estimateSlides so the shown price tracks the run, then clamps to the
  * user's tier cap (the run is capped there too, so the estimate must not exceed
- * it). A null (unknown) estimate collapses to undefined, letting the button fall
- * back to its historical 8-slide default. Pure + client-safe (same as
- * estimateSlides), so create/datasheet/mimic can call it directly.
+ * it). An UNKNOWN estimate (auto text/mimic-brief, create-from-file - the
+ * model decides the count) displays the CEILING the server will hold - the
+ * tier cap - flagged `upTo: true` so the button renders "up to" pricing
+ * instead of a committed number. Pure + client-safe (same as estimateSlides),
+ * so create/datasheet/mimic can call it directly.
  */
 export function displaySlideEstimate(
   input: SlideEstimateInput,
   slideCap: number,
-): number | undefined {
+): { slides: number; upTo: boolean } {
   const est = estimateSlides(input).slides;
-  return est == null ? undefined : Math.min(est, slideCap);
+  return est == null
+    ? { slides: slideCap, upTo: true }
+    : { slides: Math.min(est, slideCap), upTo: false };
 }
-
-// When the input size is unknowable up front (create-from-file before
-// extraction), the prompt's own default targets 8-12 slides - hold for
-// that upper bound (capped by the tier), not the full tier cap, so a
-// Max user isn't pre-authorized 1,700+ credits for a 10-slide deck.
-export const UNKNOWN_INPUT_HOLD_SLIDES = 12;
 
 /**
  * What one generation request will hold and (at most) charge.
  *
  * Exact counts: hold == charge == the quoted number.
- * Estimates:    hold the estimated count (or the unknown-input default
- *               when the input is unknowable), settle on the actual
- *               manifest count - clamped to the hold, so the user is
- *               NEVER charged more than the number they were shown.
+ * Unknown (auto/model-decided) + non-exact estimates: hold the CEILING -
+ *               the tier slide cap (owner ruling 2026-07-18: auto is only
+ *               hard-capped by tier + credits; preflight lowers the
+ *               ceiling to what the balance affords) - and settle on the
+ *               actual manifest count, clamped to the hold, so the user
+ *               is NEVER charged more than the number they were shown.
  */
 export function quoteGeneration(args: {
   preset: Quality;
@@ -344,7 +341,9 @@ export function quoteGeneration(args: {
 } {
   const effective = effectivePreset(args.preset, args.flow);
   const holdSlides = Math.min(
-    args.estimate.slides ?? UNKNOWN_INPUT_HOLD_SLIDES,
+    // Unknown = the model decides; the hold IS the ceiling (tier cap;
+    // admin tiers carry SYSTEM_SLIDE_CAP; preflight lowers by balance).
+    args.estimate.slides ?? args.slideCap,
     args.slideCap,
   );
   return {

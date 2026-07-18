@@ -154,53 +154,8 @@ export function estimateMinutes(quality: Quality, slideCount: number): number {
   return Math.max(1, Math.round(totalSecs / 60));
 }
 
-// Auto slide-count from raw input text. Used when the user opts out of
-// picking an explicit count (`slideCountMode: "auto"` on /create/summary)
-// — instead of letting Claude pick "somewhere in 8–12" the brief carries
-// an exact count derived from the input length.
-//
-// Formula:
-//   words      = whitespace-tokenized count, with stray punctuation
-//                stripped so "x." and "y!" don't inflate the count
-//   per_slide  = 100 words is a comfortable editorial slide density
-//                (room for a headline + 2–3 short paragraphs or a
-//                stat block). Lower density reads padded; higher
-//                density overflows on RTL.
-//   content    = ceil(words / per_slide), floored at 3 so we always
-//                have a real middle even on tiny inputs
-//   total      = content + 2 — one slide reserved for the cover,
-//                one for the closing / thank-you frame
-//   clamp      = [5, 20] so we never go below "cover + 3 body +
-//                closing" and never balloon past a sensible upper
-//                bound (Sonnet starts dropping quality past ~20)
-//
-// Returns null when the text is empty / whitespace-only — caller
-// should fall back to its own default (typically 8).
-export function estimateSlideCountFromText(text: string | null | undefined): number | null {
-  if (!text || typeof text !== "string") return null;
-  const cleaned = text
-    .replace(/[\p{P}\p{S}]+/gu, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (cleaned.length === 0) return null;
-  const words = cleaned.split(" ").filter(Boolean).length;
-  if (words === 0) return null;
-  const PER_SLIDE = 100;
-  const contentSlides = Math.max(3, Math.ceil(words / PER_SLIDE));
-  const wordTotal = contentSlides + 2; // + cover + closing
-
-  // Honour explicit STRUCTURE over raw length. A section-rich brief can be
-  // word-sparse (e.g. an Arabic outline of 10 sections in ~250 words estimates
-  // ~5 by word-count, Claude then matches it and trims content hard). When the
-  // author delineated sections with horizontal-rule dividers (⸻ / ——— / *** /
-  // ___ / ===), the block count is a far better signal — roughly one slide per
-  // block. Take the LARGER of the two, but only on a strong signal (≥2
-  // dividers) so unstructured prose is left exactly as before.
-  const dividers = (
-    text.match(/^[^\S\r\n]*(?:⸻|[*\-_—=]{3,})[^\S\r\n]*$/gmu) || []
-  ).length;
-  const blockTotal = dividers >= 2 ? dividers + 1 : 0; // chunks between rules
-
-  const total = Math.max(wordTotal, blockTotal);
-  return Math.max(5, Math.min(20, total));
-}
+// (The word-count auto slide estimator was DELETED 2026-07-18, owner ruling:
+// auto slide count is the MODEL's decision - it lowballed structured content
+// (an explicit 8-slide carousel script estimated 5 by word count). The system
+// now only hard-caps by tier slide cap + affordable credits; see
+// lib/credits/cost.ts estimateSlides "unknown" + the ceiling brief mode.)

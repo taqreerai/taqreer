@@ -10,7 +10,7 @@ import { isOwnedBrandAssetPath, signBrandAssetUrl } from "@/lib/storage/sign";
 import { decodeSvgBytes } from "@/lib/brand/svg-decode";
 import { isPolychromeSvg } from "@/lib/brand/svg-polychrome";
 import { ALLOWED_FONT_HOSTS } from "@/lib/schema/slide";
-import { estimateSlideCountFromText, type Quality } from "@/lib/types/quality";
+import { type Quality } from "@/lib/types/quality";
 import {
   ensureFresh,
   getActivePresetKeys,
@@ -636,15 +636,12 @@ export async function POST(request: Request) {
     logoRead.isPolychrome,
   );
 
-  // Auto slide-count when the user defers ("auto" mode on
-  // /create/summary): estimate from the input text. For file uploads
-  // we don't have the text in-hand, so fall back to null and let the
-  // prompt's "8–12 if unset" guidance stand.
-  const resolvedSlideCount =
-    payload.slideCount ??
-    (payload.content?.type === "text"
-      ? estimateSlideCountFromText(payload.content.text)
-      : null);
+  // Auto slide-count ("auto" mode on /create/summary): the MODEL decides
+  // (owner ruling 2026-07-18) - no our-side text heuristic. null rides to
+  // preflight as an UNKNOWN estimate, which holds the hard ceiling
+  // (tier cap ∧ affordable credits) and briefs the model with
+  // slideCountMode "ceiling" below.
+  const resolvedSlideCount = payload.slideCount ?? null;
 
   const contentLanguage = resolveLanguage(payload.language);
   const contentDirection = directionForLanguage(contentLanguage);
@@ -790,6 +787,12 @@ export async function POST(request: Request) {
     brand: claudeBrand,
     rules: payload.rules ?? null,
     slideCount: cappedSlideCount,
+    // "exact" = the user picked the number (author exactly N).
+    // "ceiling" = auto/estimate - slideCount is the HELD MAXIMUM; the model
+    // authors what the content calls for, up to it (deck-generate appends
+    // the matching directive after the Brief JSON). The stream's slide-cap
+    // abort at holdSlides stays the hard enforcement either way.
+    slideCountMode: preflight.exact ? "exact" : "ceiling",
     // context/images.md — when on (create flow), deck-generate swaps the
     // SVG-only graphics directive for the images-deck override + reserves
     // generated-image boxes. OMITTED when off, so a normal deck's brief

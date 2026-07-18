@@ -203,7 +203,7 @@ export async function preflightGenerate(args: {
   }
 
   const effective = effectivePreset(args.preset, args.flow);
-  const quote = quoteGeneration({
+  let quote = quoteGeneration({
     preset: args.preset,
     flow: args.flow,
     estimate,
@@ -212,6 +212,37 @@ export async function preflightGenerate(args: {
     imagesMode,
     imageCredits,
   });
+
+  // AUTO ceiling follows the balance transparently (owner ruling
+  // 2026-07-18): an UNKNOWN estimate holds the tier cap, and when the
+  // balance can't cover that ceiling we LOWER the ceiling to what the
+  // credits afford instead of blocking - the model authors what the
+  // content needs up to it, and the settle charges the actual count.
+  // Exact picks keep the block-with-offers path below (never truncate a
+  // number the user explicitly chose). Falls through to
+  // insufficient_credits when even MIN_REDUCED_SLIDES doesn't fit.
+  if (
+    !args.isAdmin &&
+    !estimate.exact &&
+    estimate.slides === null &&
+    quote.holdCredits > balance.total
+  ) {
+    let ceiling = maxAffordableSlides(effective, balance.total, creditCostFor);
+    while (
+      ceiling >= MIN_REDUCED_SLIDES &&
+      costWithImages(effective, ceiling) > balance.total
+    ) {
+      ceiling--;
+    }
+    if (ceiling >= MIN_REDUCED_SLIDES) {
+      const holdSlides = Math.min(ceiling, quote.holdSlides);
+      quote = {
+        ...quote,
+        holdSlides,
+        holdCredits: costWithImages(effective, holdSlides),
+      };
+    }
+  }
 
   if (!args.isAdmin && quote.holdCredits > balance.total) {
     // The reduced-slides offer must fit slide cost + image surcharge, so

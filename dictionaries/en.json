@@ -703,7 +703,7 @@
       "premiumDesignDesc": "Deepest design planning, highest quality",
       "etaMin": "~{eta} min",
       "balance": "Balance: {count} cr",
-      "creditsEstimate": "\u2248 {credits} cr",
+      "creditsEstimate": "\u2248 {credits} cr", "creditsEstimateUpTo": "up to {credits} cr",
       "slideCapUpsell": {
         "title": "Slide limit",
         "close": "Close",
