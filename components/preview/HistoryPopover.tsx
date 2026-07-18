@@ -309,13 +309,30 @@ function HistoryItem({
       } ${disabled && !isCurrent ? "cursor-wait opacity-60" : ""}`}
     >
       <span className="flex flex-col gap-0.5">
-        <span className="text-xs font-medium text-foreground">
-          {dict.editor.history.version.replace("{n}", String(number))}
+        <span className="flex items-center gap-1.5">
+          <span className="text-xs font-medium text-foreground">
+            {dict.editor.history.version.replace("{n}", String(number))}
+          </span>
+          <EditTypePill source={row.source} />
         </span>
         <span className="text-[10px] text-foreground/50">{relative}</span>
       </span>
       {isCurrent ? <CurrentBadge /> : null}
     </button>
+  );
+}
+
+// Muted pill flagging how a version was produced: a user's manual edit vs an
+// AI action. `manual_edit` is the only user-driven source; everything else
+// (create / regen / partial_regen) is AI-generated. Neutral tokens so it reads
+// as metadata, not an action (the violet CurrentBadge is the only accent here).
+function EditTypePill({ source }: { source: string }) {
+  const dict = useDict();
+  const isManual = source === "manual_edit";
+  return (
+    <span className="rounded-full bg-foreground/[0.06] px-1.5 py-0.5 text-[9px] font-medium leading-none text-foreground/60">
+      {isManual ? dict.editor.history.manualEdit : dict.editor.history.aiEdit}
+    </span>
   );
 }
 

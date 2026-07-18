@@ -1046,7 +1046,9 @@
       "originalVersion": "النسخة الأصلية",
       "firstGenerated": "أول إصدار تم إنشاؤه",
       "version": "الإصدار {n}",
-      "current": "الحالي"
+      "current": "الحالي",
+      "manualEdit": "يدوي",
+      "aiEdit": "ذكاء اصطناعي"
     },
     "cancelDialog": {
       "title": "إلغاء الإنشاء",

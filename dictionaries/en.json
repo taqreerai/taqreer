@@ -1046,7 +1046,9 @@
       "originalVersion": "Original version",
       "firstGenerated": "First generated version",
       "version": "Version {n}",
-      "current": "Current"
+      "current": "Current",
+      "manualEdit": "Manual",
+      "aiEdit": "AI"
     },
     "cancelDialog": {
       "title": "Cancel generation",
