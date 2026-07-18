@@ -255,6 +255,11 @@ function resolveInitialSlideCount(
 ): number {
   const fromManifest = readManifestSlideCount(slideJson);
   if (fromManifest !== null) return fromManifest;
+  // AUTO mode: the prompt's slideCount is the tier CEILING, not a real
+  // count (2026-07-18). Seeding it would flash the whole cap; the model
+  // declares its intended total on the cover and the progress poll fills
+  // it in. Neutral default until then. Custom picks keep their hint.
+  if (readSlideCountAuto(prompt)) return 6;
   const hint = readSlideCountHint(prompt);
   if (hint !== null) return hint;
   return 6;

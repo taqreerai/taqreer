@@ -4075,21 +4075,23 @@ export function DeckView({
 
     // Slot count switches on the user's slide-count mode:
     //   • custom (user picked N) → fixed-N tiles. Today's behavior.
-    //   • auto                   → reserve a slot per slide Claude COMMITTED
-    //                              to up front (`progress.estimatedTotal`,
-    //                              which the server fills from the manifest's
-    //                              top-level `slideCount` as soon as it
-    //                              streams). So the user sees the full total
-    //                              immediately — closed slides render as
-    //                              thumbnails, the rest pulse as pending, and
-    //                              the slot Claude is writing shows the
-    //                              paragraph-write icon. Before the count
-    //                              arrives (early thinking) it's just the
-    //                              streamed slides + a trailing tail. If Claude
-    //                              overshoots its own number, the +1 keeps the
-    //                              row growing. The tail/extra slots disappear
-    //                              when status flips to "completed" and the
-    //                              manifest branch below takes over.
+    //   • auto                   → PROGRESSIVE then DECLARED (2026-07-18). The
+    //                              old behavior reserved a slot per slide "up
+    //                              front" from `estimatedTotal`, but for auto
+    //                              that was the tier CEILING (30/60/75), so it
+    //                              painted the whole cap as empty tiles. Now
+    //                              the server keeps `estimatedTotal` at the
+    //                              streamed count until the model DECLARES its
+    //                              intended total on the cover
+    //                              (data-deck-slides), then bumps it to that.
+    //                              So the row grows one tile at a time (streamed
+    //                              + the trailing "writing" tile) until the
+    //                              cover lands, then jumps to the declared
+    //                              total; closed slides render as thumbnails,
+    //                              the rest pulse pending. If Claude overshoots
+    //                              its own number, the +1 keeps the row growing.
+    //                              Tail/extra slots vanish when status flips to
+    //                              "completed" and the manifest branch takes over.
     // The `Math.max(..., 1)` guarantees at least one tile so an empty
     // sidebar doesn't flash on initial paint before Claude's first
     // slide closes — the user sees the writing icon immediately.

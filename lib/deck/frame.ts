@@ -125,7 +125,7 @@ OUTPUT - emit exactly this, with NOTHING else (no prose, no fences, no JSON, no 
 </section>
 ${imageBlocks}
 - The FIRST character of your response is \`<\` (your <style>).
-- The COVER <section> also carries data-deck-title="…" (3-8 words, in the deck's language, a real title - becomes the project name).
+- The COVER <section> also carries data-deck-title="…" (3-8 words, in the deck's language, a real title - becomes the project name) AND data-deck-slides="N" = the TOTAL number of slides you intend to produce for this deck (your honest plan, cover + body + closing, within any maximum the Brief sets). It drives the generating progress bar, so make it match the deck you actually build.
 - Slides are TOP-LEVEL siblings - never nest a <section>. Exactly one .well per section, nothing else inside the section.
 - There is NO wrapper element around your output: never write CSS through an imagined container (e.g. \`.deck x\`, \`.wrapper x\` - those selectors match NOTHING). Base styles go on .well or your own classes.
 - ‼️ Design the well in FLOW ONLY: flex and grid (display:flex/grid, flex-direction, gap, padding, margin, flex:1, aspect-ratio, align-items/justify-content). NEVER position:absolute/relative offsets, NEVER left/top, NEVER transforms, NEVER negative margins inside the well - the layout must be pure document flow, so nothing can ever overlap. Give .well itself display:flex;flex-direction:column (or grid) filling its box; distribute space with gap, flex:1, and auto margins. Px font sizes and fixed px sizes for images/cards are fine. Plan each slide so content FITS its well without overflowing.

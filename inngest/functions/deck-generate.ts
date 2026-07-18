@@ -1689,12 +1689,24 @@ export const deckGenerate = inngest.createFunction(
       effort: callParams.outputConfig?.effort ?? "n/a",
     });
 
-    // Estimated total slides for the progress UI. Use the brief's slideCount
-    // if the user picked a custom value; otherwise default to 8 (we ask Claude
-    // for 8–12 in the prompt). Updated to the actual count once we see it
-    // streamed in.
+    // Progress-UI slide total. Two modes (2026-07-18):
+    //   • EXACT (custom pick, enhance 1:1): the count is known up front, so
+    //     the nav can reserve every tile immediately.
+    //   • CEILING (auto): brief.slideCount is the tier CAP (30/60/75), NOT a
+    //     commitment - reserving it painted the whole ceiling as empty tiles
+    //     for every paid user. So we DON'T seed it; declaredTotal stays null
+    //     until the model declares its own intended count on the cover
+    //     (data-deck-slides), and the nav grows progressively (streamed + 1)
+    //     until then. writeProgress derives estimatedTotal from declaredTotal
+    //     + the streamed count, never the ceiling.
     const briefSlideCount = (data.brief as { slideCount?: number | null } | null)?.slideCount;
-    const estimatedTotal = typeof briefSlideCount === "number" && briefSlideCount > 0 ? briefSlideCount : 8;
+    const isCeilingMode =
+      (data.brief as { slideCountMode?: string } | null)?.slideCountMode ===
+      "ceiling";
+    let declaredTotal: number | null =
+      !isCeilingMode && typeof briefSlideCount === "number" && briefSlideCount > 0
+        ? briefSlideCount
+        : null;
 
     // Slide aspect ratio chosen on /create/brand. Persisted on the
     // manifest so renderer + lightbox + export all see one source of
@@ -1815,7 +1827,6 @@ export const deckGenerate = inngest.createFunction(
       const writeProgress = (
         stage: "thinking" | "designing" | "validating" | "saving",
         currentSlide: number,
-        total: number,
         extra?: { thinkingTokens?: number; thinkingBudget?: number },
       ) =>
         prisma.presentationVersion
@@ -1827,7 +1838,15 @@ export const deckGenerate = inngest.createFunction(
                 progress: {
                   stage,
                   currentSlide,
-                  estimatedTotal: Math.max(total, currentSlide),
+                  // EXACT/declared: the known/declared count (grow if the
+                  // model overshoots). CEILING pre-declaration: progressive -
+                  // the streamed count so far (min 1 so the writing tile
+                  // shows), NEVER the tier ceiling. The client adds the
+                  // trailing "currently writing" tile (streamed + 1).
+                  estimatedTotal:
+                    declaredTotal != null
+                      ? Math.max(declaredTotal, currentSlide)
+                      : Math.max(currentSlide, 1),
                   genStartedAt,
                   ...(extra ?? {}),
                 },
@@ -1960,7 +1979,7 @@ export const deckGenerate = inngest.createFunction(
         // (with the sent screenshots) because that exchange is the part the
         // user can't otherwise see.
 
-        await writeProgress("thinking", 0, estimatedTotal, {
+        await writeProgress("thinking", 0, {
           thinkingTokens: 0,
           thinkingBudget,
         });
@@ -2127,6 +2146,25 @@ export const deckGenerate = inngest.createFunction(
               });
             }
           }
+          // AUTO nav total: the cover declares the model's intended slide
+          // count (data-deck-slides). Ceiling mode only - exact/enhance
+          // already know their total. Clamp to the budgeted ceiling (the
+          // stream can't exceed it anyway); once set, the progress writes
+          // switch the nav from progressive (streamed + 1) to this number.
+          if (isCeilingMode && declaredTotal === null && parsed.role === "cover") {
+            const m = /data-deck-slides\s*=\s*["']?\s*(\d{1,3})/i.exec(
+              parsed.html,
+            );
+            const n = m ? parseInt(m[1], 10) : NaN;
+            if (Number.isFinite(n) && n > 0) {
+              declaredTotal =
+                slideCeiling != null ? Math.min(n, slideCeiling) : n;
+              logger.info("deck_declared_total", {
+                declared: n,
+                clamped: declaredTotal,
+              });
+            }
+          }
           const role =
             parsed.role && SLIDE_ROLES.has(parsed.role as never)
               ? (parsed.role as NonNullable<SlideType["role"]>)
@@ -2223,7 +2261,7 @@ export const deckGenerate = inngest.createFunction(
           const now = Date.now();
           if (now - lastThinkingWriteAt > 1000) {
             lastThinkingWriteAt = now;
-            void writeProgress("thinking", slides.length, estimatedTotal, {
+            void writeProgress("thinking", slides.length, {
               thinkingTokens: Math.round(snapshot.length / 4),
               thinkingBudget,
             });
@@ -2260,11 +2298,7 @@ export const deckGenerate = inngest.createFunction(
           const now = Date.now();
           if (slides.length > 0 && now - lastWriteAt > 800) {
             lastWriteAt = now;
-            void writeProgress(
-              "designing",
-              slides.length,
-              Math.max(estimatedTotal, slides.length),
-            );
+            void writeProgress("designing", slides.length);
           }
           if (
             jobId &&
@@ -2359,7 +2393,7 @@ export const deckGenerate = inngest.createFunction(
               kept: slides.length,
               ceiling: slideCeiling,
             });
-            await writeProgress("saving", slides.length, slides.length);
+            await writeProgress("saving", slides.length);
             return { manifest: assembleManifest(), usage, stoppedEarly: false };
           }
           if (cancelObserved) {
@@ -2379,7 +2413,7 @@ export const deckGenerate = inngest.createFunction(
               jobId,
               kept: slides.length,
             });
-            await writeProgress("saving", slides.length, slides.length);
+            await writeProgress("saving", slides.length);
             return {
               manifest: assembleManifest(),
               usage,
@@ -2492,7 +2526,7 @@ export const deckGenerate = inngest.createFunction(
         // deck's language). Title extraction + language/direction resolution +
         // schema validation live in `assembleManifest` above (shared with the
         // keeps-partial cancel path).
-        await writeProgress("saving", slides.length, slides.length);
+        await writeProgress("saving", slides.length);
         return { manifest: assembleManifest(), usage };
       }
 
