@@ -25,13 +25,31 @@ import {
 
 type Billing = "monthly" | "yearly";
 
+type FeatureFlag = { enabled: boolean };
+
+// Exactly nine flags per tier (fixed-length tuple, not a loose array) so the
+// enabled booleans can never drift out of alignment with the nine localized
+// labels below — a wrong count is a compile error, not a silently misrendered
+// (or undefined) row.
+type FeatureFlags = [
+  FeatureFlag,
+  FeatureFlag,
+  FeatureFlag,
+  FeatureFlag,
+  FeatureFlag,
+  FeatureFlag,
+  FeatureFlag,
+  FeatureFlag,
+  FeatureFlag,
+];
+
 type Tier = {
   // Non-translatable structure only. Localized text (name, description,
   // features, footnote, cta) comes from dict.landing.pricing.tiers[i] by index.
   // `enabled: false` rows render muted. The features array order here drives the
-  // enabled booleans; row 0 maps to dict...tiers[i].credits, rows 1..6 map to
-  // dict...tiers[i].features[0..5].
-  features: { enabled: boolean }[];
+  // enabled booleans; row 0 maps to dict...tiers[i].credits, rows 1..8 map to
+  // dict...tiers[i].features[0..7].
+  features: FeatureFlags;
   isFree?: boolean; // Free has no cadence / no yearly footnote
   popular?: boolean;
 };
@@ -201,7 +219,7 @@ function PricingCard({
   const footnote =
     billing === "yearly" && !tier.isFree ? pricing.billedYearly : copy.footnote;
 
-  // Row 0 is the credits line; rows 1..6 are copy.features[0..5]. The enabled
+  // Row 0 is the credits line; rows 1..8 are copy.features[0..7]. The enabled
   // booleans live on tier.features (structure), the labels come from copy.
   // Fill {credits}/{slides} with the tier's live numbers. credits = the free
   // signup grant or a paid monthly allotment; slides = the per-tier cap.
