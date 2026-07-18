@@ -68,6 +68,23 @@ function setBusy(projectId: string, value: boolean): void {
   entry.subscribers.forEach((cb) => cb());
 }
 
+// Durable export-activity logging for the admin console. The pdf/png server
+// routes write their own ExportEvent rows; the client-built pptx/gslides
+// pipelines have no server route, so they POST here to land in the per-user
+// activity log too. Fire-and-forget: never blocks or fails the export.
+function logExport(
+  projectId: string,
+  format: "pptx" | "gslides" | "gslides_fallback_pptx",
+  slideCount: number,
+): void {
+  fetch(`/api/projects/${projectId}/export/log`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ format, slideCount }),
+    keepalive: true,
+  }).catch(() => {});
+}
+
 export type ExportStatus = "idle" | "running" | "success" | "error";
 export type ExportButtonState = { status: ExportStatus; message?: string };
 
@@ -202,6 +219,7 @@ export function useExportActions({
           project_id: projectId,
           slide_count: manifest.slides.length,
         });
+        logExport(projectId, "pptx", manifest.slides.length);
         setState({ status: "idle" });
       } catch (error) {
         setState({
@@ -241,6 +259,7 @@ export function useExportActions({
             project_id: projectId,
             slide_count: manifest.slides.length,
           });
+          logExport(projectId, "gslides_fallback_pptx", manifest.slides.length);
           setExportGslides({ status: "idle" });
         } catch (fallbackError) {
           setExportGslides({
@@ -269,6 +288,7 @@ export function useExportActions({
           project_id: projectId,
           slide_count: manifest.slides.length,
         });
+        logExport(projectId, "gslides", manifest.slides.length);
         setGslidesUrl(url);
         setExportGslides({ status: "idle" });
       } catch (error) {

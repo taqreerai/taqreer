@@ -336,7 +336,7 @@ async function getRecentActivity(): Promise<ActivityItem[]> {
       select: {
         id: true,
         type: true,
-        attempts: true,
+        inputJson: true,
         holdKey: true,
         completedAt: true,
         createdAt: true,
@@ -376,8 +376,13 @@ async function getRecentActivity(): Promise<ActivityItem[]> {
       hold && j.completedAt
         ? formatDuration(j.completedAt.getTime() - hold.createdAt.getTime())
         : null;
+    // Partial-regen slide count comes from the run's actual target list
+    // (inputJson.targetSlideIds), NOT Job.attempts (which is the retry count).
+    const targetIds = (j.inputJson as { targetSlideIds?: unknown } | null)
+      ?.targetSlideIds;
+    const partialCount = Array.isArray(targetIds) ? targetIds.length : 0;
     const text = isPartial
-      ? `Partial regen · ${fmt(j.attempts)} ${j.attempts === 1 ? "slide" : "slides"}`
+      ? `Partial regen · ${fmt(partialCount)} ${partialCount === 1 ? "slide" : "slides"}`
       : `${FLOW_LABEL[j.project?.type ?? "create"] ?? "Deck"} deck generated`;
     return {
       date: eventDate,

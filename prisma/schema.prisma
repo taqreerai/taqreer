@@ -50,6 +50,7 @@ model User {
   notifications      Notification[] @relation("RecipientNotifications")
   notificationsActed Notification[] @relation("ActorNotifications")
   flattenEvents      FlattenEvent[]
+  exportEvents       ExportEvent[]
 }
 
 model Project {
@@ -114,6 +115,7 @@ model Project {
   shares        ProjectShare[]
   notifications Notification[]
   flattenEvents FlattenEvent[]
+  exportEvents  ExportEvent[]
 
   @@index([userId, isFavorite])
   @@index([brandKitId])
@@ -708,6 +710,30 @@ model FlattenEvent {
   @@index([projectId, parityOk])
   @@index([fidelityScore]) // dashboard: scan the low-fidelity tail
   @@index([createdAt])     // standalone for the TTL sweep (mirrors Notification)
+}
+
+// Deck export activity log for the admin activity feed. One row per successful
+// export, written GOING FORWARD ONLY (no backfill) — pdf/png from their server
+// routes, pptx/gslides from the client via POST /api/projects/[id]/export/log.
+// Attributed to the EXPORTER (resolveProjectAccess .user.prismaId): the deck
+// owner for their own decks, the collaborator for a shared deck. Anonymous
+// public-view exporters (no prismaId) write nothing. Exports are otherwise only
+// in PostHog (deck_exported), which the console can't join per-user.
+model ExportEvent {
+  id         String   @id @default(cuid())
+  userId     String
+  projectId  String?
+  // pdf | png (server routes) · pptx | gslides | gslides_fallback_pptx (client)
+  format     String
+  slideCount Int?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // SetNull (not Cascade): the export history survives a deleted deck, since it
+  // is a durable per-user activity record.
+  project    Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([projectId])
 }
 
 // Phase 16.E — bell notifications.

@@ -7,6 +7,9 @@
 // English-only, dark-only, LTR (forced by the admin layout).
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
+import { localizedHref } from "@/lib/i18n/navigation";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import {
   PLAN_LABEL,
   type AdminStat,
@@ -134,11 +137,23 @@ const ACTIVITY_ICON: Record<ActivityItem["kind"], string> = {
 };
 
 function ActivityFeed({ items }: { items: ActivityItem[] }) {
+  const { locale } = useLocale();
   return (
     <div className="surface-card rounded-xl p-5">
-      <span className="text-sm font-medium" style={{ color: PRIMARY }}>
+      {/* Header links to the full per-user Activity page. */}
+      <Link
+        href={localizedHref("/admin/activity", locale)}
+        className="group inline-flex items-center gap-1 text-sm font-medium"
+        style={{ color: PRIMARY }}
+      >
         Recent activity
-      </span>
+        <span
+          className="material-symbols-outlined transition-transform group-hover:translate-x-0.5"
+          style={{ fontSize: 18, color: MUTED }}
+        >
+          chevron_right
+        </span>
+      </Link>
       {items.length === 0 ? (
         <p className="mt-3 text-sm" style={{ color: MUTED }}>
           No activity yet.
