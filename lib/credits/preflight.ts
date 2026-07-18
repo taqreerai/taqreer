@@ -32,6 +32,7 @@ import {
   imagesSurcharge,
   maxAffordableSlides,
   quoteGeneration,
+  MIN_REDUCED_SLIDES,
 } from "@/lib/credits/cost";
 import {
   type TierConfigRow,
@@ -44,8 +45,10 @@ import {
 } from "@/lib/config/runtime-config";
 import { getBalance, type BalanceSnapshot } from "@/lib/credits/server";
 
-// A deck below this is not a deck (cover + body + closing).
-export const MIN_REDUCED_SLIDES = 3;
+// A deck below this is not a deck (cover + body + closing). Defined in
+// cost.ts (client-safe - the split button mirrors the probe-down for the
+// "up to" ceiling display); re-exported here for the server-side callers.
+export { MIN_REDUCED_SLIDES };
 
 export type PresetQuote = {
   preset: Quality;

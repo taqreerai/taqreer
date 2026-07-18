@@ -304,11 +304,20 @@ export function displaySlideEstimate(
   input: SlideEstimateInput,
   slideCap: number,
 ): { slides: number; upTo: boolean } {
-  const est = estimateSlides(input).slides;
-  return est == null
+  const est = estimateSlides(input);
+  return est.slides == null
     ? { slides: slideCap, upTo: true }
-    : { slides: Math.min(est, slideCap), upTo: false };
+    : // ANY non-exact estimate is a maximum, not a commitment (the settle
+      // charges the actual authored count) - datasheet's structural estimate
+      // included (CR #154).
+      { slides: Math.min(est.slides, slideCap), upTo: !est.exact };
 }
+
+// The smallest deck the reduced-slides offer (and the display's affordability
+// clamp) will go down to. Lives here (client-safe) because the split button
+// mirrors the server's probe-down for the "up to" ceiling display; preflight
+// re-exports it for its server-side uses.
+export const MIN_REDUCED_SLIDES = 3;
 
 /**
  * What one generation request will hold and (at most) charge.

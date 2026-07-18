@@ -34,6 +34,7 @@ import {
   TIER_ORDER,
   SYSTEM_SLIDE_CAP,
   imagesSurcharge,
+  MIN_REDUCED_SLIDES,
 } from "@/lib/credits/cost";
 import { normalizePlan, planLabel } from "@/lib/plan";
 import {
@@ -230,6 +231,11 @@ export function GenerateSplitButton({
           layout
           type="button"
           onClick={() => {
+            // Credits not resolved yet: no-op (sub-second window). Closes
+            // BOTH load races - a free user can't skip the upsell, and an
+            // admin can't be shown it (CR #154). The button stays visually
+            // enabled; the next click lands normally.
+            if (!credits) return;
             // Free tier: show the slide-cap upsell before generating.
             // NEVER for admins - their plan resolves "free" (no sub) but the
             // superuser bypasses all gating (owner report 2026-07-18).
@@ -327,16 +333,28 @@ export function GenerateSplitButton({
               const isGiftRow = giftKey !== null && preset.key === giftKey;
               const costPreset =
                 isGiftRow && draftPreset ? draftPreset : preset;
-              const cost =
+              const rowCost = (slides: number) =>
                 costPreset.baseCredits +
-                effectiveSlideCount * costPreset.perSlideCredits +
+                slides * costPreset.perSlideCredits +
                 // Same surcharge the server holds (preset-independent);
                 // live DB rate once /api/credits resolves, constant before.
-                imagesSurcharge(
-                  effectiveSlideCount,
-                  imagesMode,
-                  credits?.imageCredits,
-                );
+                imagesSurcharge(slides, imagesMode, credits?.imageCredits);
+              // "Up to" (auto) ceiling: mirror preflight's probe-down so the
+              // shown maximum equals what the server will actually HOLD for
+              // this preset - a low balance lowers the ceiling instead of
+              // showing an unpayable tier-cap price (CR #154). Floor at
+              // MIN_REDUCED_SLIDES; below it the server blocks anyway and
+              // the unaffordable amber styling tells the story.
+              let rowSlides = effectiveSlideCount;
+              if (slideCountUpTo && !isAdmin && credits) {
+                while (
+                  rowSlides > MIN_REDUCED_SLIDES &&
+                  rowCost(rowSlides) > credits.balance.total
+                ) {
+                  rowSlides--;
+                }
+              }
+              const cost = rowCost(rowSlides);
               const gateTier = preset.gateTier;
               const gated =
                 !isAdmin &&
