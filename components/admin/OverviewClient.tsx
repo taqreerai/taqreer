@@ -148,6 +148,7 @@ function ActivityFeed({ items }: { items: ActivityItem[] }) {
       >
         Recent activity
         <span
+          aria-hidden="true"
           className="material-symbols-outlined transition-transform group-hover:translate-x-0.5"
           style={{ fontSize: 18, color: MUTED }}
         >

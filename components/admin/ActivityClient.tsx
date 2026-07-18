@@ -166,31 +166,34 @@ function Timeline({
   onLoadMore: () => void;
   onRetry: () => void;
 }) {
-  if (!state || state.loading) {
+  // Only the INITIAL load (no items yet) takes over with the loading / error /
+  // empty states. Once items are loaded, a failed "load more" keeps them on
+  // screen and surfaces the error inline on the footer button.
+  if (!state || (state.loading && state.items.length === 0)) {
     return (
       <p className="py-4 text-center text-sm" style={{ color: MUTED }}>
         Loading activity...
       </p>
     );
   }
-  if (state.error) {
-    return (
-      <div className="flex items-center justify-center gap-3 py-4">
-        <span className="text-sm" style={{ color: MUTED }}>
-          Could not load activity.
-        </span>
-        <button
-          type="button"
-          onClick={onRetry}
-          className="rounded-full px-3 py-1 text-xs font-medium"
-          style={{ color: PRIMARY, background: "var(--tq-overlay-soft)" }}
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
   if (state.items.length === 0) {
+    if (state.error) {
+      return (
+        <div className="flex items-center justify-center gap-3 py-4">
+          <span className="text-sm" style={{ color: MUTED }}>
+            Could not load activity.
+          </span>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="rounded-full px-3 py-1 text-xs font-medium"
+            style={{ color: PRIMARY, background: "var(--tq-overlay-soft)" }}
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
     return (
       <p className="py-4 text-center text-sm" style={{ color: MUTED }}>
         No activity yet.
@@ -211,7 +214,7 @@ function Timeline({
           <TimelineRow item={it} />
         </div>
       ))}
-      {state.nextCursor ? (
+      {state.loadingMore || state.error || state.nextCursor ? (
         <div className="flex justify-center pt-2">
           <button
             type="button"
@@ -220,7 +223,11 @@ function Timeline({
             className="rounded-full px-4 py-1.5 text-xs font-medium disabled:opacity-40"
             style={{ color: PRIMARY, background: "var(--tq-overlay-soft)" }}
           >
-            {state.loadingMore ? "Loading..." : "Load more"}
+            {state.loadingMore
+              ? "Loading..."
+              : state.error
+                ? "Couldn't load more. Retry"
+                : "Load more"}
           </button>
         </div>
       ) : null}
@@ -266,7 +273,7 @@ export function ActivityClient({
       : {},
   );
 
-  // Async fetch ONLY — setState lands in an async continuation. Called from
+  // Async fetch ONLY: setState lands in an async continuation. Called from
   // startLoad (event handlers), never directly from render/effects.
   const fetchTimeline = useCallback(async (userId: string, cursor?: string) => {
     try {
@@ -359,6 +366,7 @@ export function ActivityClient({
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1" style={{ minWidth: 220 }}>
           <span
+            aria-hidden="true"
             className="material-symbols-outlined pointer-events-none absolute start-3 top-1/2 -translate-y-1/2"
             style={{ fontSize: 18, color: MUTED }}
           >
@@ -432,6 +440,7 @@ export function ActivityClient({
                     {location ? (
                       <>
                         <span
+                          aria-hidden="true"
                           className="material-symbols-outlined"
                           style={{ fontSize: 15 }}
                         >
@@ -445,6 +454,7 @@ export function ActivityClient({
                   </div>
 
                   <span
+                    aria-hidden="true"
                     className="material-symbols-outlined flex-shrink-0 transition-transform"
                     style={{
                       fontSize: 20,
@@ -488,7 +498,11 @@ export function ActivityClient({
             className="grid h-8 w-8 place-items-center rounded-full transition-colors disabled:opacity-40"
             style={{ color: MUTED, background: "var(--tq-overlay-soft)" }}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+            <span
+              aria-hidden="true"
+              className="material-symbols-outlined"
+              style={{ fontSize: 18 }}
+            >
               chevron_left
             </span>
           </button>
@@ -503,7 +517,11 @@ export function ActivityClient({
             className="grid h-8 w-8 place-items-center rounded-full transition-colors disabled:opacity-40"
             style={{ color: MUTED, background: "var(--tq-overlay-soft)" }}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+            <span
+              aria-hidden="true"
+              className="material-symbols-outlined"
+              style={{ fontSize: 18 }}
+            >
               chevron_right
             </span>
           </button>

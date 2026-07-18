@@ -5,7 +5,7 @@
 // route to write an ExportEvent from. The server-side pdf/png routes write their
 // own rows directly; this endpoint exists only for the browser-built formats.
 //
-// Auth: SAME check the pdf/png routes use (resolveProjectAccess "view") — the
+// Auth: SAME check the pdf/png routes use (resolveProjectAccess "view"): the
 // caller must be able to see the deck. The row is attributed to the exporter's
 // prisma id; anonymous public-view callers (no prismaId) are a silent no-op.
 // The format is whitelisted to the client-built values so a forged request

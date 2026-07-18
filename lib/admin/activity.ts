@@ -1,9 +1,9 @@
 import "server-only";
 
 // Admin "Full activity" data layer (server-only). Two readers:
-//   • getActivityUsers()        — the top-level user list (name / email /
+//   • getActivityUsers()        : the top-level user list (name / email /
 //                                 signup country+city), mirrors the Users tab.
-//   • getUserActivityTimeline() — one user's merged, paginated timeline of
+//   • getUserActivityTimeline() : one user's merged, paginated timeline of
 //                                 generations, regens, partial regens (with the
 //                                 slides that changed), failed/cancelled runs,
 //                                 and exports.
@@ -95,7 +95,7 @@ export async function getActivityUsers(): Promise<ActivityUser[]> {
 
 type TimelineBase = {
   id: string;
-  at: string; // ISO — the event's createdAt (also the pagination cursor)
+  at: string; // ISO, the event's createdAt (also the pagination cursor)
   projectId: string | null;
   projectTitle: string | null;
 };
@@ -290,7 +290,7 @@ export async function getUserActivityTimeline(
   const dated: { at: Date; item: TimelineItem }[] = [];
 
   for (const j of jobs) {
-    if (!j.projectId) continue; // orphaned (project deleted) — unattributable
+    if (!j.projectId) continue; // orphaned (project deleted), unattributable
     const meta = projectMeta.get(j.projectId);
     const projectTitle = meta?.title ?? null;
     const flow = meta?.flow ?? "Create";
@@ -316,7 +316,7 @@ export async function getUserActivityTimeline(
       continue;
     }
 
-    // Succeeded — cost + duration from the hold.
+    // Succeeded: cost + duration from the hold.
     const hold = holdByKey.get(j.holdKey ?? j.id);
     const cost = hold ? `${fmt(hold.amountCharged ?? 0)} cr` : "Free";
     const duration =
@@ -347,7 +347,7 @@ export async function getUserActivityTimeline(
       continue;
     }
 
-    // deck.generate — first succeeded generation for the project is the new
+    // deck.generate: first succeeded generation for the project is the new
     // deck; any later one is a full regen.
     const isNew = firstGenJobByProject.get(j.projectId) === j.id;
     dated.push({
@@ -364,15 +364,38 @@ export async function getUserActivityTimeline(
     });
   }
 
+  // Titles for exports of decks this user does NOT own (a shared/public deck
+  // they exported): those projectIds are absent from projectMeta, so resolve
+  // them in one batched read rather than rendering a titleless line.
+  const foreignExportIds = [
+    ...new Set(
+      exports
+        .map((e) => e.projectId)
+        .filter((id): id is string => !!id && !projectMeta.has(id)),
+    ),
+  ];
+  const foreignTitles = foreignExportIds.length
+    ? new Map(
+        (
+          await prisma.project.findMany({
+            where: { id: { in: foreignExportIds } },
+            select: { id: true, title: true },
+          })
+        ).map((p) => [p.id, p.title]),
+      )
+    : new Map<string, string>();
+
   for (const e of exports) {
-    const meta = e.projectId ? projectMeta.get(e.projectId) : undefined;
+    const title = e.projectId
+      ? (projectMeta.get(e.projectId)?.title ?? foreignTitles.get(e.projectId) ?? null)
+      : null;
     dated.push({
       at: e.createdAt,
       item: {
         id: `exp-${e.id}`,
         at: e.createdAt.toISOString(),
         projectId: e.projectId,
-        projectTitle: meta?.title ?? null,
+        projectTitle: title,
         kind: "export",
         format: e.format,
         slideCount: e.slideCount,

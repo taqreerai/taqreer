@@ -287,22 +287,20 @@ export async function POST(
       slide_count: manifest.slides.length,
     });
   }
-  // Admin activity log — durable, per-user export history. Attributed to the
-  // exporter; anonymous callers have no prismaId. Best-effort (never fails the
-  // download).
+  // Admin activity log: durable, per-user export history. Attributed to the
+  // exporter; anonymous callers have no prismaId. Best-effort and
+  // fire-and-forget so a slow write never delays the finished download.
   if (access.user.prismaId) {
-    try {
-      await prisma.exportEvent.create({
+    void prisma.exportEvent
+      .create({
         data: {
           userId: access.user.prismaId,
           projectId,
           format: "png",
           slideCount: manifest.slides.length,
         },
-      });
-    } catch (err) {
-      console.error("[export/png] activity log failed", err);
-    }
+      })
+      .catch((err) => console.error("[export/png] activity log failed", err));
   }
   return new NextResponse(body, {
     status: 200,

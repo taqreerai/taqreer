@@ -284,23 +284,21 @@ export async function POST(
       slide_count: manifest.slides.length,
     });
   }
-  // Admin activity log — durable, per-user export history (PostHog can't be
+  // Admin activity log: durable, per-user export history (PostHog can't be
   // joined per user). Attributed to the exporter; anonymous public-view callers
-  // have no prismaId so nothing is written. Best-effort: a log failure must
-  // never fail the download.
+  // have no prismaId so nothing is written. Best-effort and fire-and-forget so
+  // a slow write never delays the finished download.
   if (access.user.prismaId) {
-    try {
-      await prisma.exportEvent.create({
+    void prisma.exportEvent
+      .create({
         data: {
           userId: access.user.prismaId,
           projectId,
           format: "pdf",
           slideCount: manifest.slides.length,
         },
-      });
-    } catch (err) {
-      console.error("[export/pdf] activity log failed", err);
-    }
+      })
+      .catch((err) => console.error("[export/pdf] activity log failed", err));
   }
   return new NextResponse(body, {
     status: 200,

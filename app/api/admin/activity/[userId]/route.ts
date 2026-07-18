@@ -21,8 +21,9 @@ export async function GET(
   const { userId } = await params;
   const url = new URL(request.url);
   const limitRaw = Number(url.searchParams.get("limit"));
+  // Integer-only: a fractional limit would reach Prisma's `take` and throw.
   const limit =
-    Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : undefined;
+    Number.isInteger(limitRaw) && limitRaw > 0 ? limitRaw : undefined;
   const before = url.searchParams.get("before") ?? undefined;
 
   const timeline = await getUserActivityTimeline(userId, { limit, before });
