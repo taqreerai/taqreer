@@ -16,6 +16,10 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { sourceKindToFlow } from "@/lib/project/flow";
 import { sanitizeCity } from "@/lib/api/geo";
+import type { Plan } from "@/lib/admin/mock";
+
+const PLAN_SET = new Set<Plan>(["free", "plus", "pro", "max"]);
+const asPlan = (p: string): Plan => (PLAN_SET.has(p as Plan) ? (p as Plan) : "free");
 
 const fmt = (n: number) => n.toLocaleString("en-US");
 
@@ -60,6 +64,7 @@ export type ActivityUser = {
   id: string;
   name: string;
   email: string;
+  plan: Plan;
   country: string | null;
   city: string | null;
   joinedAt: string; // YYYY-MM-DD
@@ -74,6 +79,7 @@ export async function getActivityUsers(): Promise<ActivityUser[]> {
       id: true,
       name: true,
       email: true,
+      plan: true,
       createdAt: true,
       signupCountry: true,
       signupCity: true,
@@ -83,6 +89,7 @@ export async function getActivityUsers(): Promise<ActivityUser[]> {
     id: u.id,
     name: u.name?.trim() || u.email.split("@")[0] || "User",
     email: u.email,
+    plan: asPlan(u.plan),
     country: u.signupCountry,
     // Re-sanitized on read: rows stored before the mojibake repair carry
     // double-encoded city names; the repair is idempotent for clean values.

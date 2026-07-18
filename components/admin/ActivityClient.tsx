@@ -11,6 +11,7 @@ import { useCallback, useState } from "react";
 import { avatarGradientForSeed } from "@/lib/util/avatar-gradient";
 import { formatRelativeTime } from "@/lib/util/relative-time";
 import { IconCircle } from "@/components/admin/IconCircle";
+import { PLAN_LABEL, type Plan } from "@/lib/admin/mock";
 import type {
   ActivityUser,
   ActivityTimeline,
@@ -62,6 +63,18 @@ function Pill({
       style={{ color: PRIMARY, background: "var(--tq-overlay-soft)" }}
     >
       {children}
+    </span>
+  );
+}
+
+// Muted pill showing the user's current tier, in front of their name.
+function TierPill({ plan }: { plan: Plan }) {
+  return (
+    <span
+      className="flex-shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium"
+      style={{ color: MUTED, background: "var(--tq-overlay-soft)" }}
+    >
+      {PLAN_LABEL[plan]}
     </span>
   );
 }
@@ -422,11 +435,14 @@ export function ActivityClient({
                   </span>
 
                   <div className="min-w-0 flex-1">
-                    <div
-                      className="truncate text-sm font-medium"
-                      style={{ color: PRIMARY }}
-                    >
-                      {u.name}
+                    <div className="flex items-center gap-2">
+                      <TierPill plan={u.plan} />
+                      <span
+                        className="min-w-0 truncate text-sm font-medium"
+                        style={{ color: PRIMARY }}
+                      >
+                        {u.name}
+                      </span>
                     </div>
                     <div className="truncate text-xs" style={{ color: MUTED }}>
                       {u.email}
