@@ -19,6 +19,10 @@ const PLAN_OPTIONS: Array<Plan | "all"> = ["all", "free", "plus", "pro", "max"];
 const STATUS_OPTIONS = ["all", "active", "banned"] as const;
 type StatusFilter = (typeof STATUS_OPTIONS)[number];
 
+// The list is client-filtered (search / plan / status) over the server's
+// take-500 window, so paginate on the client to keep filtering instant.
+const PAGE_SIZE = 20;
+
 function PlanBadge({ plan }: { plan: Plan }) {
   return (
     <span
@@ -44,6 +48,11 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
   const [query, setQuery] = useState("");
   const [planFilter, setPlanFilter] = useState<Plan | "all">("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [page, setPage] = useState(1);
+
+  // Any filter change jumps back to page 1 (the current page may not exist in
+  // the narrowed result set). Setters wrap this so no mount effect is needed.
+  const resetToFirstPage = () => setPage(1);
 
   // grantTarget: a user id, or "all" for the toolbar action, or null (closed).
   const [grantTarget, setGrantTarget] = useState<string | "all" | null>(null);
@@ -90,6 +99,13 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
       (statusFilter === "banned" ? u.banned : !u.banned);
     return matchesQuery && matchesPlan && matchesStatus;
   });
+
+  // Clamp the page against the current result set (a stale page from before a
+  // filter change resolves to the last valid page rather than an empty list).
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const pageUsers = filtered.slice(pageStart, pageStart + PAGE_SIZE);
 
   const applyGrant = async () => {
     const amount = parseInt(grantAmount, 10);
@@ -269,7 +285,10 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
           </span>
           <input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              resetToFirstPage();
+            }}
             placeholder="Search name or email"
             className="h-10 w-full rounded-full ps-10 pe-4 text-sm outline-none"
             style={inputStyle}
@@ -278,7 +297,10 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
 
         <select
           value={planFilter}
-          onChange={(e) => setPlanFilter(e.target.value as Plan | "all")}
+          onChange={(e) => {
+            setPlanFilter(e.target.value as Plan | "all");
+            resetToFirstPage();
+          }}
           className="h-10 rounded-full px-4 text-sm outline-none"
           style={inputStyle}
         >
@@ -291,7 +313,10 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
 
         <select
           value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+          onChange={(e) => {
+            setStatusFilter(e.target.value as StatusFilter);
+            resetToFirstPage();
+          }}
           className="h-10 rounded-full px-4 text-sm capitalize outline-none"
           style={inputStyle}
         >
@@ -321,14 +346,14 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
             No users match these filters.
           </p>
         ) : (
-          filtered.map((u, i) => (
+          pageUsers.map((u, i) => (
             <div
               key={u.id}
               className="flex flex-wrap items-center gap-x-4 gap-y-3 py-3"
               style={{
                 opacity: u.banned ? 0.55 : 1,
                 borderBottom:
-                  i === filtered.length - 1
+                  i === pageUsers.length - 1
                     ? "none"
                     : "1px solid var(--tq-border-hairline)",
               }}
@@ -484,6 +509,52 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
           ))
         )}
       </div>
+
+      {/* Pagination - only when the filtered set spills past one page. */}
+      {totalPages > 1 ? (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <span className="text-xs" style={{ color: MUTED }}>
+            Showing {pageStart + 1}-{pageStart + pageUsers.length} of{" "}
+            {filtered.length.toLocaleString("en-US")}
+          </span>
+          <div className="flex items-center justify-between gap-2 sm:justify-end">
+            <button
+              type="button"
+              onClick={() => setPage(Math.max(1, currentPage - 1))}
+              disabled={currentPage <= 1}
+              className="btn-pill flex h-9 items-center gap-1 pe-4 ps-3 text-sm disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: 18 }}
+              >
+                chevron_left
+              </span>
+              Prev
+            </button>
+            <span
+              className="text-xs tabular-nums"
+              style={{ color: MUTED }}
+            >
+              Page {currentPage} / {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
+              disabled={currentPage >= totalPages}
+              className="btn-pill flex h-9 items-center gap-1 ps-4 pe-3 text-sm disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Next
+              <span
+                className="material-symbols-outlined"
+                style={{ fontSize: 18 }}
+              >
+                chevron_right
+              </span>
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {/* Grant modal */}
       <Modal

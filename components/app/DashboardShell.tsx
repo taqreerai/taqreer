@@ -84,10 +84,12 @@ export function DashboardShell({
       // Home: content is vertically centered, so the top icons overlap empty
       // space above it — no extra top padding needed.
       ? "pt-8 px-4 pb-8 space-y-16 md:pt-10 md:px-8"
-      // List pages (templates / projects / library / …): the headline sits at
-      // the top, so add enough top padding to clear the absolutely-positioned
-      // TopUtilityBar icons (search / theme / language).
-      : "pt-16 px-4 pb-8 space-y-16 md:pt-20 md:px-8";
+      // List pages (templates / projects / library / admin / …): the headline
+      // sits at the top, so add enough top padding to clear the absolutely-
+      // positioned TopUtilityBar icons (search / theme / language). Extra bottom
+      // padding on phones so the last row clears the mobile browser's bottom
+      // toolbar (which overlaps the viewport), same as the flows above.
+      : "pt-16 px-4 pb-28 space-y-16 md:pt-20 md:px-8 md:pb-8";
 
   // Panel background variant: flows get the static bottom glow (dots only), home
   // (+ any other glow route) gets the animated aurora, everything else is flat gray.
