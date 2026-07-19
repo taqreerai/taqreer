@@ -28,24 +28,31 @@ const PenIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
         { duration: 0.8, ease: "easeInOut" },
       );
 
+      // The scope ref goes null if the icon unmounts mid-sequence (e.g. a route
+      // change while the card is hovered). Bail before each subsequent animate()
+      // so motion doesn't call querySelectorAll on a null scope, which surfaced
+      // as an unhandled rejection on /create (Sentry TAQREER-K).
+      if (!scope.current) return;
       await animate(
         ".pen-slash",
         { pathLength: [0, 1], opacity: [0, 1] },
         { duration: 0.3, ease: "easeOut" },
       );
 
+      if (!scope.current) return;
       await animate(
         ".pen-slash",
         { pathLength: 0, opacity: 0 },
         { duration: 0.2, ease: "easeInOut" },
       );
 
+      if (!scope.current) return;
       animate(
         ".pen-group",
         { x: 0, y: 0, rotate: 0 },
         { duration: 0.25, ease: "easeInOut" },
       );
-    }, [animate]);
+    }, [animate, scope]);
 
     const stop = useCallback(() => {
       animate(
