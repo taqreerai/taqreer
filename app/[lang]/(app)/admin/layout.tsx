@@ -15,7 +15,7 @@ export default async function AdminLayout({
   await requireAdminPage();
 
   return (
-    <div dir="ltr" className="space-y-8">
+    <div dir="ltr" className="space-y-6 md:space-y-8">
       <header className="space-y-4">
         <div className="space-y-1">
           <h1

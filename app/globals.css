@@ -2171,6 +2171,36 @@ html.app-shell-scroll body {
   display: none;
 }
 
+/* ─── Admin tab bar edge fade ─── */
+/* The 7-tab pill nav scrolls horizontally on mobile (wider than the viewport).
+   A soft mask on whichever side still has hidden tabs hints there are more to
+   swipe to. `data-fade` is set by AdminTabs from the live scroll position; the
+   row fits on desktop, so it resolves to "none" there. */
+.admin-tab-scroller[data-fade="right"] {
+  -webkit-mask-image: linear-gradient(to right, #000 82%, transparent 100%);
+  mask-image: linear-gradient(to right, #000 82%, transparent 100%);
+}
+.admin-tab-scroller[data-fade="left"] {
+  -webkit-mask-image: linear-gradient(to left, #000 82%, transparent 100%);
+  mask-image: linear-gradient(to left, #000 82%, transparent 100%);
+}
+.admin-tab-scroller[data-fade="both"] {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    #000 6%,
+    #000 94%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    #000 6%,
+    #000 94%,
+    transparent 100%
+  );
+}
+
 /* ─── Sidebar Tooltip ─── */
 /* One tooltip look across the app — matches the editor toolbox's inline
    tooltip (PreviewActionBar: bg-black/90, rounded-md, px-3 py-1.5) so the

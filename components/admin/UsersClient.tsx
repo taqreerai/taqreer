@@ -324,7 +324,7 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
           filtered.map((u, i) => (
             <div
               key={u.id}
-              className="flex items-center gap-4 py-3"
+              className="flex flex-wrap items-center gap-x-4 gap-y-3 py-3"
               style={{
                 opacity: u.banned ? 0.55 : 1,
                 borderBottom:
@@ -411,13 +411,13 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
                 {u.joinedAt}
               </div>
 
-              <div className="flex flex-shrink-0 items-center gap-1">
+              <div className="flex w-full flex-shrink-0 items-center justify-end gap-1.5 sm:w-auto sm:gap-1">
                 <button
                   type="button"
                   onClick={() => openGrant(u.id)}
                   aria-label="Grant credits"
                   title="Grant credits"
-                  className="grid h-8 w-8 place-items-center rounded-full transition-colors"
+                  className="grid h-9 w-9 place-items-center rounded-full transition-colors sm:h-8 sm:w-8"
                   style={{ color: ACCENT, background: "var(--tq-overlay-soft)" }}
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
@@ -433,7 +433,7 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
                   }}
                   aria-label="Set credits"
                   title="Set credits"
-                  className="grid h-8 w-8 place-items-center rounded-full transition-colors"
+                  className="grid h-9 w-9 place-items-center rounded-full transition-colors sm:h-8 sm:w-8"
                   style={{ color: MUTED, background: "var(--tq-overlay-soft)" }}
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
@@ -448,7 +448,7 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
                   }}
                   aria-label="Grant test tier"
                   title="Grant test tier (1 month, free)"
-                  className="grid h-8 w-8 place-items-center rounded-full transition-colors"
+                  className="grid h-9 w-9 place-items-center rounded-full transition-colors sm:h-8 sm:w-8"
                   style={{ color: MUTED, background: "var(--tq-overlay-soft)" }}
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
@@ -460,7 +460,7 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
                   onClick={() => setBanTarget(u)}
                   aria-label={u.banned ? "Unban" : "Ban"}
                   title={u.banned ? "Unban" : "Ban"}
-                  className="grid h-8 w-8 place-items-center rounded-full transition-colors"
+                  className="grid h-9 w-9 place-items-center rounded-full transition-colors sm:h-8 sm:w-8"
                   style={{ color: MUTED, background: "var(--tq-overlay-soft)" }}
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
@@ -472,7 +472,7 @@ export function UsersClient({ initialUsers }: { initialUsers: AdminUser[] }) {
                   onClick={() => setDeleteTarget(u)}
                   aria-label="Delete user"
                   title="Delete user"
-                  className="grid h-8 w-8 place-items-center rounded-full transition-colors"
+                  className="grid h-9 w-9 place-items-center rounded-full transition-colors sm:h-8 sm:w-8"
                   style={{ color: DANGER, background: "var(--tq-overlay-soft)" }}
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: 18 }}>

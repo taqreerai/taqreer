@@ -16,6 +16,9 @@ import { formatCount, type CountryVisitors } from "@/lib/admin/mock";
 const MUTED = "var(--tq-text-muted)";
 const PRIMARY = "var(--tq-text-primary)";
 const ACCENT = "var(--tq-purple)";
+// Desktop / maximum globe size. On narrow screens the box shrinks to its
+// container (see `size`/`sizeRef` below) and the canvas + projection math track
+// the live pixel size, so hit-testing and tooltips stay aligned.
 const GLOBE_SIZE = 420;
 const R = GLOBE_SIZE / 2;
 const DEG = Math.PI / 180;
@@ -42,7 +45,13 @@ function clamp(n: number, lo: number, hi: number) {
 
 // Screen position (within the GLOBE_SIZE box) of a lat/lng given the globe's
 // current phi/theta. `visible` = the point faces the camera; `z` = how much.
-function project(lat: number, lng: number, phi: number, theta: number) {
+function project(
+  lat: number,
+  lng: number,
+  phi: number,
+  theta: number,
+  r: number = R,
+) {
   const lm = lat * DEG;
   const pm = (3 * Math.PI) / 2 - lng * DEG; // cobe locationToAngles phi
   const dphi = phi - pm;
@@ -51,7 +60,7 @@ function project(lat: number, lng: number, phi: number, theta: number) {
   const z0 = Math.cos(lm) * Math.cos(dphi);
   const y = y0 * Math.cos(theta) - z0 * Math.sin(theta);
   const z = y0 * Math.sin(theta) + z0 * Math.cos(theta);
-  return { x: R + R * x, y: R - R * y, z, visible: z > 0.08 };
+  return { x: r + r * x, y: r - r * y, z, visible: z > 0.08 };
 }
 
 type Tip = { name: string; count: number; x: number; y: number };
@@ -87,6 +96,9 @@ export function LiveGlobePanel({
 }) {
   const isLight = useIsLight();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Live pixel size of the (square) globe box; the box is CSS-responsive and a
+  // ResizeObserver keeps this in sync so projection / hit-testing use real px.
+  const sizeRef = useRef(GLOBE_SIZE);
   const phiRef = useRef(4.4);
   const thetaRef = useRef(THETA);
   const pointerRef = useRef<number | null>(null);
@@ -125,10 +137,14 @@ export function LiveGlobePanel({
     const canvas = canvasRef.current;
     if (!canvas) return;
     let width = canvas.offsetWidth;
-    const onResize = () => {
+    sizeRef.current = width;
+    // Track the canvas' rendered CSS width (it fills the responsive box), so the
+    // globe re-renders at the right resolution and projection uses live px.
+    const ro = new ResizeObserver(() => {
       width = canvas.offsetWidth;
-    };
-    window.addEventListener("resize", onResize);
+      sizeRef.current = width;
+    });
+    ro.observe(canvas);
 
     // cobe shades the land dots dark and the ocean light from one baseColor, so
     // a near-white base gives dark continents on a white sphere; a neutral-gray
@@ -207,7 +223,7 @@ export function LiveGlobePanel({
     return () => {
       cancelAnimationFrame(raf);
       globe.destroy();
-      window.removeEventListener("resize", onResize);
+      ro.disconnect();
     };
   }, [markers, isLight]);
 
@@ -218,8 +234,9 @@ export function LiveGlobePanel({
     const ft = clamp(v.lat * DEG, -0.35, 0.72);
     focusRef.current = { phi: raw + k * 2 * Math.PI, theta: ft };
     hitRef.current = null;
-    const cy = R - (v.lat * DEG - ft) * R; // centered marker screen Y
-    setTip({ name: v.name, count: v.count, x: R, y: cy - 38 });
+    const r = sizeRef.current / 2;
+    const cy = r - (v.lat * DEG - ft) * r; // centered marker screen Y
+    setTip({ name: v.name, count: v.count, x: r, y: cy - 38 });
   };
   const unfocus = () => {
     focusRef.current = null;
@@ -245,7 +262,13 @@ export function LiveGlobePanel({
     let hit: { v: CountryVisitors; x: number; y: number } | null = null;
     let best = 16;
     for (const v of visitors) {
-      const p = project(v.lat, v.lng, phiRef.current, thetaRef.current);
+      const p = project(
+        v.lat,
+        v.lng,
+        phiRef.current,
+        thetaRef.current,
+        sizeRef.current / 2,
+      );
       if (!p.visible) continue;
       const dd = Math.hypot(p.x - mx, p.y - my);
       if (dd < best) {
@@ -271,8 +294,9 @@ export function LiveGlobePanel({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Stat strip: live presence + cumulative 30d totals, divider-separated. */}
-      <div className="flex items-center gap-5">
+      {/* Stat strip: live presence + cumulative 30d totals, divider-separated.
+          Wraps to a 3-column grid on mobile so the values never clip. */}
+      <div className="grid grid-cols-3 gap-3 sm:flex sm:items-center sm:gap-5">
         {[
           { label: "Users online", value: onlineNow },
           { label: "Unique visitors", value: uniqueVisitors },
@@ -281,7 +305,7 @@ export function LiveGlobePanel({
           <div key={s.label} className="flex items-center gap-5">
             {i > 0 ? (
               <span
-                className="h-8 w-px"
+                className="hidden h-8 w-px sm:block"
                 style={{ background: "var(--tq-border-hairline)" }}
               />
             ) : null}
@@ -301,13 +325,12 @@ export function LiveGlobePanel({
       </div>
 
       <div className="flex flex-col items-center gap-6 lg:flex-row">
-        {/* Globe */}
-        <div
-          className="relative"
-          style={{ width: GLOBE_SIZE, height: GLOBE_SIZE, flexShrink: 0 }}
-        >
+        {/* Globe - square box; full-width up to GLOBE_SIZE on mobile, fixed on
+            desktop so the ranked list sits beside it. */}
+        <div className="relative aspect-square w-full max-w-[420px] shrink-0 lg:w-[420px]">
           <canvas
             ref={canvasRef}
+            className="h-full w-full"
             onPointerDown={(e) => {
               pointerRef.current = e.clientX;
               stoppedRef.current = true;
@@ -329,10 +352,8 @@ export function LiveGlobePanel({
               if (!focusRef.current) setTip(null);
             }}
             style={{
-              width: GLOBE_SIZE,
-              height: GLOBE_SIZE,
               cursor: "grab",
-              contain: "layout paint size",
+              contain: "layout paint",
             }}
           />
           {tip ? (
