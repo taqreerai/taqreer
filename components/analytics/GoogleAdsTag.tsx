@@ -20,10 +20,11 @@
 // race the effect. gtag.js drains the dataLayer queue in insertion order
 // whenever it finishes loading, so default always precedes update.
 //
-// Conversions measured today: the Ads-side "Sign ups" page-load goal
-// (/dashboard). A precise code-fired signup conversion can be added later via
-// gtag('event','conversion',{send_to:'AW-.../<label>'}) once a conversion
-// action with a label exists in the Ads account.
+// Conversions: the code-fired "Sign-up" conversion fires once per NEW account
+// via trackAdsConversion() below (called from <SignupConversion/> on the
+// dashboard, gated server-side so a returning login never counts). We pass a
+// transaction_id (the user's id) so Google hard-dedupes to one conversion per
+// user, ever - a double fire can't double-count.
 //
 // Renders the loader script only; mounted once in app/[lang]/layout.tsx next
 // to PostHogProvider. No-ops entirely when NEXT_PUBLIC_GOOGLE_ADS_ID is unset
@@ -84,6 +85,23 @@ function grantConsent(): void {
     ad_user_data: "granted",
     ad_personalization: "granted",
     analytics_storage: "granted",
+  });
+}
+
+// Fire a code-defined conversion (currently just Sign-up). No-ops when the tag
+// is disabled (NEXT_PUBLIC_GOOGLE_ADS_ID unset -> gtag.js never loads, so local
+// / preview never pollute the Ads account). ensureConfigured() first so the
+// `config` command always precedes the event even if this races the mount
+// effect (gtag.js drains the queue in insertion order). transaction_id lets
+// Google dedupe repeat fires to a single counted conversion. Consent state is
+// whatever GoogleAdsTag's effect already applied (denied -> modeled ping,
+// granted -> measured) - the same posture as every other hit from this tag.
+export function trackAdsConversion(sendTo: string, transactionId?: string): void {
+  if (!ADS_ID || !sendTo) return;
+  ensureConfigured();
+  gtag("event", "conversion", {
+    send_to: sendTo,
+    ...(transactionId ? { transaction_id: transactionId } : {}),
   });
 }
 

@@ -1,5 +1,6 @@
 import { QuickActions } from "@/components/app/QuickActions";
 import { HomeLibrary } from "@/components/app/HomeLibrary";
+import { SignupConversion } from "@/components/analytics/SignupConversion";
 import type { ProjectsGridProject } from "@/components/app/ProjectsGrid";
 import { prisma } from "@/lib/prisma";
 import { getAuthUser } from "@/lib/supabase/user";
@@ -215,6 +216,10 @@ export default async function DashboardPage({
 
   return (
     <div className="page-container pb-16">
+      {/* Google Ads "Sign-up" conversion — fires once per new account (the
+          route gates on a fresh signup grant); no-op for returning logins. */}
+      <SignupConversion />
+
       {/* Centered launcher — a welcome line + the 4 flow cards. §22: the height
           leaves just enough so the HomeLibrary toggle header + the TOP of the
           thumbnails peek at the bottom of the first screen (Lovable-style),
