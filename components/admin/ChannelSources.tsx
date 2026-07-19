@@ -37,7 +37,7 @@ export function ChannelSources({ data }: { data: ChannelRow[] | null }) {
               key={`${d.label}|${d.channel}`}
               className="flex items-center gap-3"
             >
-              <span className="w-40 flex-shrink-0 truncate text-sm">
+              <span className="w-28 flex-shrink-0 truncate text-sm sm:w-40">
                 <span style={{ color: PRIMARY }}>{d.label}</span>
                 {d.channel ? (
                   <span className="ms-1.5 text-xs" style={{ color: MUTED }}>

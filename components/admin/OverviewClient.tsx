@@ -236,7 +236,7 @@ export function OverviewClient({
       </div>
 
       {/* Live online + map (3/5) and recent activity (2/5) */}
-      <div className="grid gap-4 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
         <div className="surface-card rounded-xl p-5 lg:col-span-3">
           <LiveGlobePanel
             visitors={geo}
@@ -251,7 +251,7 @@ export function OverviewClient({
       </div>
 
       {/* Bottom row: traffic by device, traffic sources, users by plan */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <DeviceBreakdown data={device} />
         <ChannelSources data={channels} />
         <PlanSplit split={planSplit} />

@@ -83,6 +83,26 @@ function useIsLight() {
   return light;
 }
 
+// Render the interactive WebGL globe only on wide screens (lg+). On phones and
+// tablets the canvas is never mounted, so its per-frame repaint (which flickers
+// content below it on iOS Safari) and its battery cost are gone; the stat strip
+// + ranked country list carry the data there. This component is loaded ssr:false
+// so reading matchMedia in the initializer is safe (no hydration mismatch).
+function useIsWide() {
+  const [wide, setWide] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(min-width: 1024px)").matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const onChange = () => setWide(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return wide;
+}
+
 export function LiveGlobePanel({
   visitors,
   onlineNow,
@@ -95,6 +115,7 @@ export function LiveGlobePanel({
   pageviews: number;
 }) {
   const isLight = useIsLight();
+  const isWide = useIsWide();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Live pixel size of the (square) globe box; the box is CSS-responsive and a
   // ResizeObserver keeps this in sync so projection / hit-testing use real px.
@@ -225,7 +246,9 @@ export function LiveGlobePanel({
       globe.destroy();
       ro.disconnect();
     };
-  }, [markers, isLight]);
+    // isWide gates whether the canvas is mounted at all; re-run so the globe is
+    // created when crossing into lg+ and torn down when leaving it.
+  }, [markers, isLight, isWide]);
 
   // List row hover: rotate + tilt so the country is centered, then tooltip.
   const focusCountry = (v: CountryVisitors) => {
@@ -325,51 +348,58 @@ export function LiveGlobePanel({
       </div>
 
       <div className="flex flex-col items-center gap-6 lg:flex-row">
-        {/* Globe - square box; full-width up to GLOBE_SIZE on mobile, fixed on
-            desktop so the ranked list sits beside it. */}
-        <div className="relative aspect-square w-full max-w-[420px] shrink-0 lg:w-[420px]">
-          <canvas
-            ref={canvasRef}
-            className="h-full w-full"
-            onPointerDown={(e) => {
-              pointerRef.current = e.clientX;
-              stoppedRef.current = true;
-              focusRef.current = null;
-              pausedRef.current = false;
-              hitRef.current = null;
-              setTip(null);
-              if (canvasRef.current) canvasRef.current.style.cursor = "grabbing";
-            }}
-            onPointerEnter={() => {
-              pausedRef.current = true;
-            }}
-            onPointerMove={onCanvasMove}
-            onPointerUp={release}
-            onPointerLeave={() => {
-              release();
-              pausedRef.current = false;
-              hitRef.current = null;
-              if (!focusRef.current) setTip(null);
-            }}
-            style={{
-              cursor: "grab",
-              contain: "layout paint",
-            }}
-          />
-          {tip ? (
-            <div
-              className="surface-menu pointer-events-none absolute z-10 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-1.5"
-              style={{ left: tip.x, top: tip.y }}
-            >
-              <span className="text-sm font-semibold" style={{ color: PRIMARY }}>
-                {tip.name}
-              </span>
-              <span className="text-sm" style={{ color: MUTED }}>
-                {formatCount(tip.count)}
-              </span>
-            </div>
-          ) : null}
-        </div>
+        {/* Globe - square box, wide screens only. Gated on isWide so the canvas
+            is never mounted on phones/tablets (no per-frame repaint flicker, no
+            battery drain); the ranked list carries the data there. */}
+        {isWide ? (
+          <div className="relative aspect-square w-full max-w-[420px] shrink-0 lg:w-[420px]">
+            <canvas
+              ref={canvasRef}
+              className="h-full w-full"
+              onPointerDown={(e) => {
+                pointerRef.current = e.clientX;
+                stoppedRef.current = true;
+                focusRef.current = null;
+                pausedRef.current = false;
+                hitRef.current = null;
+                setTip(null);
+                if (canvasRef.current)
+                  canvasRef.current.style.cursor = "grabbing";
+              }}
+              onPointerEnter={() => {
+                pausedRef.current = true;
+              }}
+              onPointerMove={onCanvasMove}
+              onPointerUp={release}
+              onPointerLeave={() => {
+                release();
+                pausedRef.current = false;
+                hitRef.current = null;
+                if (!focusRef.current) setTip(null);
+              }}
+              style={{
+                cursor: "grab",
+                contain: "layout paint",
+              }}
+            />
+            {tip ? (
+              <div
+                className="surface-menu pointer-events-none absolute z-10 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-1.5"
+                style={{ left: tip.x, top: tip.y }}
+              >
+                <span
+                  className="text-sm font-semibold"
+                  style={{ color: PRIMARY }}
+                >
+                  {tip.name}
+                </span>
+                <span className="text-sm" style={{ color: MUTED }}>
+                  {formatCount(tip.count)}
+                </span>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
         {/* Ranked list - hovering a row rotates the globe to that country. */}
         <div className="flex w-full flex-col gap-1">
