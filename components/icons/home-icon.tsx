@@ -25,7 +25,7 @@ const HomeIcon = forwardRef<AnimatedIconHandle, AnimatedIconProps>(
         { scale: [0.95, 1] },
         { duration: 0.3, ease: "easeOut" },
       );
-      // Bail if the icon unmounted during the await — the scope ref is then null
+      // Bail if the icon unmounted during the await: the scope ref is then null
       // and motion would call querySelectorAll on it (same class of unhandled
       // rejection as Sentry TAQREER-K in pen-icon).
       if (!scope.current) return;
