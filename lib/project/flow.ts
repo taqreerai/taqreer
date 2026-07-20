@@ -32,6 +32,26 @@ export function sourceKindToFlow(
 // The canonical flow set INCLUDING social (which every deck store speaks now).
 export type DeckFlow = BrandKitTargetFlow | "social";
 
+// Human labels for each flow. The ONE place admin surfaces (decks list badge,
+// activity/stats feeds) read from, so a new flow shows up everywhere at once.
+export const DECK_FLOW_LABEL: Record<string, string> = {
+  create: "Create",
+  enhance: "Enhance",
+  mimic: "Mimic",
+  datasheet: "Datasheet",
+  social: "Social",
+};
+
+// Narrow an arbitrary stored string to a known DeckFlow (defaults to "create").
+export function toDeckFlow(value: string | null | undefined): DeckFlow {
+  return value === "enhance" ||
+    value === "mimic" ||
+    value === "datasheet" ||
+    value === "social"
+    ? value
+    : "create";
+}
+
 // The flow a COMPLETED deck belongs to. Social is EVENT-driven (it carries no
 // source kind, so sourceKindToFlow alone would fall through to "create" and
 // clobber Project.type on completion); every other flow is derived from the

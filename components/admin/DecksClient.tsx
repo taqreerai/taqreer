@@ -12,6 +12,7 @@ import { avatarGradientForSeed } from "@/lib/util/avatar-gradient";
 import { formatRelativeTime } from "@/lib/util/relative-time";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { useLocale } from "@/components/i18n/LocaleProvider";
+import { DECK_FLOW_LABEL, type DeckFlow } from "@/lib/project/flow";
 
 const MUTED = "var(--tq-text-muted)";
 const PRIMARY = "var(--tq-text-primary)";
@@ -19,7 +20,7 @@ const PRIMARY = "var(--tq-text-primary)";
 export type AdminDeck = {
   id: string;
   title: string;
-  type: "create" | "enhance";
+  type: DeckFlow;
   language: "ar" | "en";
   format: string;
   tone: string | null;
@@ -31,7 +32,7 @@ export type AdminDeck = {
 };
 
 type LangFilter = "all" | "ar" | "en";
-type TypeFilter = "all" | "create" | "enhance";
+type TypeFilter = "all" | DeckFlow;
 
 const PAGE_SIZE = 10;
 
@@ -129,6 +130,9 @@ export function DecksClient({ initialDecks }: { initialDecks: AdminDeck[] }) {
           <option value="all">All types</option>
           <option value="create">Create</option>
           <option value="enhance">Enhance</option>
+          <option value="mimic">Mimic</option>
+          <option value="datasheet">Datasheet</option>
+          <option value="social">Social</option>
         </select>
       </div>
 
@@ -203,7 +207,7 @@ export function DecksClient({ initialDecks }: { initialDecks: AdminDeck[] }) {
 
               <div className="hidden flex-shrink-0 items-center gap-1 sm:flex">
                 <Badge>{d.language === "ar" ? "AR" : "EN"}</Badge>
-                <Badge>{d.type === "enhance" ? "Enhance" : "Create"}</Badge>
+                <Badge>{DECK_FLOW_LABEL[d.type] ?? "Create"}</Badge>
               </div>
 
               <div className="hidden w-16 flex-shrink-0 text-end md:block">

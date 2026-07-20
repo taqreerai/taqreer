@@ -15,6 +15,7 @@
 import { prisma } from "@/lib/prisma";
 import { getLiveStripeOrNull } from "@/lib/billing/stripe";
 import type { AdminStat, ActivityItem, Plan } from "@/lib/admin/mock";
+import { DECK_FLOW_LABEL } from "@/lib/project/flow";
 
 const PAID_PLANS = ["plus", "pro", "max"] as const;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -301,13 +302,6 @@ function formatDuration(ms: number): string {
   return `${h}h ${m % 60}m`;
 }
 
-const FLOW_LABEL: Record<string, string> = {
-  create: "Create",
-  enhance: "Enhance",
-  mimic: "Mimic",
-  datasheet: "Datasheet",
-};
-
 // Recent activity feed - newest signups / generations / partial regens /
 // purchases, merged newest-first. Generation + regen rows are enriched with the
 // generator's email, the charged cost, and precise duration.
@@ -383,7 +377,7 @@ async function getRecentActivity(): Promise<ActivityItem[]> {
     const partialCount = Array.isArray(targetIds) ? targetIds.length : 0;
     const text = isPartial
       ? `Partial regen · ${fmt(partialCount)} ${partialCount === 1 ? "slide" : "slides"}`
-      : `${FLOW_LABEL[j.project?.type ?? "create"] ?? "Deck"} deck generated`;
+      : `${DECK_FLOW_LABEL[j.project?.type ?? "create"] ?? "Deck"} deck generated`;
     return {
       date: eventDate,
       item: {

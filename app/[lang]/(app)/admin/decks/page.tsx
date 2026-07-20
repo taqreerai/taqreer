@@ -6,6 +6,7 @@
 import { requireAdminPage } from "@/lib/api/admin-context";
 import { prisma } from "@/lib/prisma";
 import { DecksClient, type AdminDeck } from "@/components/admin/DecksClient";
+import { toDeckFlow } from "@/lib/project/flow";
 
 export const dynamic = "force-dynamic";
 
@@ -34,9 +35,10 @@ export default async function AdminDecksPage() {
   const decks: AdminDeck[] = rows.map((p) => ({
     id: p.id,
     title: p.title,
-    // Only "create" | "enhance" are ever written to Project.type (mimic is
-    // derived from the source payload, not stored here) - narrow defensively.
-    type: p.type === "enhance" ? "enhance" : "create",
+    // Project.type carries the real flow at completion (deckFlowFor):
+    // create / enhance / mimic / datasheet / social. Narrow to the known set
+    // so the operator can see which flow produced each deck.
+    type: toDeckFlow(p.type),
     language: p.language === "en" ? "en" : "ar",
     format: p.format,
     tone: p.tone,

@@ -14,7 +14,7 @@ import "server-only";
 
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
-import { sourceKindToFlow } from "@/lib/project/flow";
+import { deckFlowFor, DECK_FLOW_LABEL } from "@/lib/project/flow";
 import { sanitizeCity } from "@/lib/api/geo";
 import type { Plan } from "@/lib/admin/mock";
 
@@ -34,17 +34,11 @@ function formatDuration(ms: number): string {
   return `${h}h ${m % 60}m`;
 }
 
-const FLOW_LABEL: Record<string, string> = {
-  create: "Create",
-  enhance: "Enhance",
-  mimic: "Mimic",
-  datasheet: "Datasheet",
-};
-
 // The canonical flow label for a deck. The brief (Project.aiPrompt JSON) carries
 // source.kind ("scratch" | "enhance" | "mimic" | "data"); legacy briefs without
-// it fall back to Project.type ("create" | "enhance"). sourceKindToFlow is the
-// single source of truth for the rename + is idempotent for canonical values.
+// it fall back to Project.type (which, post-completion, IS the flow, incl.
+// "social"). deckFlowFor reads the type first (so social, which carries no
+// source, is honored) then maps the source kind. DECK_FLOW_LABEL is shared.
 function flowLabelFor(aiPrompt: string | null, type: string): string {
   let kind: string | undefined;
   if (aiPrompt) {
@@ -55,7 +49,7 @@ function flowLabelFor(aiPrompt: string | null, type: string): string {
       /* non-JSON / legacy brief: fall back to Project.type below */
     }
   }
-  return FLOW_LABEL[sourceKindToFlow(kind ?? type)] ?? "Create";
+  return DECK_FLOW_LABEL[deckFlowFor(type, kind)] ?? "Create";
 }
 
 // ─── Top-level user list ─────────────────────────────────────────────────────
