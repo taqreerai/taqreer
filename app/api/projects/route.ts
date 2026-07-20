@@ -669,18 +669,19 @@ export async function POST(request: Request) {
       { status: 403 },
     );
   }
-  // Social is a scratch (text-only) flow. `type` is client-controlled, so
-  // reject a `type:"social"` payload that ALSO smuggles a non-scratch source
-  // (enhance/mimic/data): otherwise a source-driven brief would run under
-  // social's flow gating + slide cap (and pricing), overriding the source's
-  // own flow. Deriving the flow here keeps persistence/enqueue/pricing aligned.
+  // Social is a scratch, TEXT-ONLY flow. `type` + `content` are both client-
+  // controlled, so reject a `type:"social"` payload that smuggles in either a
+  // non-scratch source (enhance/mimic/data) OR file content: otherwise a
+  // source/file-driven brief would run under social's flow gating + slide cap
+  // (and pricing), overriding the real flow. Keeps persistence/enqueue/pricing
+  // aligned with the declared social contract.
   if (
     projectType === "social" &&
-    validatedSource &&
-    validatedSource.kind !== "scratch"
+    (payload.content?.type === "file" ||
+      (validatedSource && validatedSource.kind !== "scratch"))
   ) {
     return NextResponse.json(
-      { error: "social flow does not accept a source" },
+      { error: "social flow accepts text content only" },
       { status: 400 },
     );
   }

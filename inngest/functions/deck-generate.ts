@@ -654,7 +654,7 @@ function resolveFormat(event: DeckGenerateEvent): SlideFormat {
   // canvas dims, and the saved manifest format all derive from resolveFormat.
   if ((event.type ?? "create") === "social") return format;
   // Non-social flows: 16:9 + 9:16 are universal; 3:4 stays create-only (the
-  // legacy "Post" tile); the new social-only ratios (1:1/4:5/2:3) never ride a
+  // legacy "Post" tile); the new social-only ratios (1:1/4:5) never ride a
   // non-social brief, so a crafted payload falls back to 16:9.
   if (format === "16:9" || format === "9:16") return format;
   if (format === "3:4") {

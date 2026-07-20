@@ -20,7 +20,6 @@ const ASPECT_CSS: Record<SlideFormat, string> = {
   "3:4": "3 / 4",
   "1:1": "1 / 1",
   "4:5": "4 / 5",
-  "2:3": "2 / 3",
 };
 
 export function SocialFormatFields({

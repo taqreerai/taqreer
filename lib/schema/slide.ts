@@ -180,7 +180,6 @@ export const SLIDE_FORMATS = [
   // canvas px), so these need no other change downstream.
   "1:1",
   "4:5",
-  "2:3",
 ] as const;
 export type SlideFormat = (typeof SLIDE_FORMATS)[number];
 
@@ -193,7 +192,6 @@ export const SLIDE_DIMENSIONS = {
   "3:4": { width: 1080, height: 1440 },
   "1:1": { width: 1080, height: 1080 },
   "4:5": { width: 1080, height: 1350 },
-  "2:3": { width: 1080, height: 1620 },
 } as const;
 
 // Prompt directive injected wherever a 3:4 deck's canvas is described
@@ -215,7 +213,6 @@ export const SOCIAL_FORMATS: ReadonlySet<SlideFormat> = new Set([
   "1:1",
   "4:5",
   "9:16",
-  "2:3",
   "3:4",
 ]);
 export function isSocialFormat(format: SlideFormat | undefined): boolean {

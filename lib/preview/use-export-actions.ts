@@ -130,7 +130,7 @@ export function useExportActions({
   projectTitle,
   manifest,
   formatFallback,
-  isSocial = false,
+  isSocial,
 }: {
   projectId: string;
   projectTitle: string;
@@ -138,7 +138,8 @@ export function useExportActions({
   formatFallback?: SlideFormat;
   // Social decks export PDF/PNG only at ANY ratio (incl. 9:16/16:9, which are
   // not PDF/PNG-only formats). The runners enforce it too, not just the menus.
-  isSocial?: boolean;
+  // REQUIRED (no default) so a new caller can't silently bypass the restriction.
+  isSocial: boolean;
 }): UseExportActionsResult {
   const [exportPptx, setExportPptx] = useState<ExportButtonState>({
     status: "idle",

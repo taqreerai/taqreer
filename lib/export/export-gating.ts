@@ -35,7 +35,6 @@ const ALL_EXPORT_KINDS: readonly GateableExportKind[] = [
 const PDF_PNG_ONLY_FORMATS: ReadonlySet<string> = new Set([
   "1:1",
   "4:5",
-  "2:3",
   "3:4",
 ]);
 
