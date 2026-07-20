@@ -139,10 +139,14 @@ export async function preflightGenerate(args: {
     : baseTier;
   // Social carousels cap well below the deck tier cap (see slideCapForFlow) so
   // AUTO holds a carousel-sane ceiling; every `tier.slideCap` read below then
-  // inherits it (quote, exact-cap block, cappedToTier).
+  // inherits it (quote, exact-cap block, cappedToTier). Admins keep the
+  // documented slide-cap bypass (SYSTEM_SLIDE_CAP) - the social cap is a
+  // per-tier product guardrail, not something the superuser is bound by.
   const tier: TierConfigRow = {
     ...resolvedTier,
-    slideCap: slideCapForFlow(args.flow, resolvedTier.slideCap),
+    slideCap: args.isAdmin
+      ? resolvedTier.slideCap
+      : slideCapForFlow(args.flow, resolvedTier.slideCap),
   };
   const balance = await getBalance(args.userId, now);
   const estimate = estimateSlides(args.slideInput);

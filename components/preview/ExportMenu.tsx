@@ -84,6 +84,7 @@ export function ExportMenu({
     projectTitle,
     manifest,
     formatFallback,
+    isSocial,
   });
   const run: Record<ExportKind, () => Promise<void>> = {
     pptx: runPptx,

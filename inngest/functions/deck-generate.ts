@@ -844,7 +844,7 @@ function buildUserMessage(event: DeckGenerateEvent) {
     // leads the user message before any canvas/language/brief content.
     ...styleDirectiveBlock(rules),
     event.type === "social"
-      ? `Design the social media post for this brief: an original set of portrait cards for a phone feed.`
+      ? `Design the social media post for this brief: an original set of ${orientationLabel} cards for a social feed.`
       : `Generate the slide deck for this presentation.`,
     ``,
     `Flow: ${event.type ?? "create"}`,
@@ -1948,7 +1948,13 @@ export const deckGenerate = inngest.createFunction(
             canvas: SLIDE_DIMENSIONS[slideFormat],
             language: streamLanguage,
             imagesMode: isImagesMode(data),
-            kind: isSocialFormat(slideFormat) ? "social" : "deck",
+            // Drive the social persona off the FLOW, not just the ratio: a social
+            // post at 16:9 (X/LinkedIn landscape) is not a social-format but still
+            // needs the social persona. isSocialFormat stays for the legacy 3:4.
+            kind:
+              data.type === "social" || isSocialFormat(slideFormat)
+                ? "social"
+                : "deck",
           }),
           paletteAuto ? AUTO_PALETTE_ADDENDUM : null,
           // Mimic with images on recreates the reference's imagery (its box

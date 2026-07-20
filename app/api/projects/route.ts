@@ -669,6 +669,21 @@ export async function POST(request: Request) {
       { status: 403 },
     );
   }
+  // Social is a scratch (text-only) flow. `type` is client-controlled, so
+  // reject a `type:"social"` payload that ALSO smuggles a non-scratch source
+  // (enhance/mimic/data): otherwise a source-driven brief would run under
+  // social's flow gating + slide cap (and pricing), overriding the source's
+  // own flow. Deriving the flow here keeps persistence/enqueue/pricing aligned.
+  if (
+    projectType === "social" &&
+    validatedSource &&
+    validatedSource.kind !== "scratch"
+  ) {
+    return NextResponse.json(
+      { error: "social flow does not accept a source" },
+      { status: 400 },
+    );
+  }
   await ensureFresh();
   let quality = resolveQuality(payload.quality);
 

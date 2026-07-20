@@ -130,11 +130,15 @@ export function useExportActions({
   projectTitle,
   manifest,
   formatFallback,
+  isSocial = false,
 }: {
   projectId: string;
   projectTitle: string;
   manifest: SlideManifest;
   formatFallback?: SlideFormat;
+  // Social decks export PDF/PNG only at ANY ratio (incl. 9:16/16:9, which are
+  // not PDF/PNG-only formats). The runners enforce it too, not just the menus.
+  isSocial?: boolean;
 }): UseExportActionsResult {
   const [exportPptx, setExportPptx] = useState<ExportButtonState>({
     status: "idle",
@@ -200,10 +204,10 @@ export function useExportActions({
     setState: (s: ExportButtonState) => void,
   ) =>
     guard(async () => {
-      // 3:4 social-post decks are PDF/PNG only. The UI hides this entry
-      // (ExportMenu / ShareDialog); this is the belt-and-braces stop for
-      // any stale surface that still offers it.
-      if (isPdfPngOnlyFormat(exportManifest.format)) {
+      // Social decks (any ratio) + PDF/PNG-only formats can't produce PPTX. The
+      // UI hides this entry (ExportMenu / ShareDialog); this is the belt-and-
+      // braces stop for any stale surface that still offers it.
+      if (isSocial || isPdfPngOnlyFormat(exportManifest.format)) {
         setState({ status: "error", message: "تعذر التصدير" });
         return;
       }
@@ -238,7 +242,9 @@ export function useExportActions({
   // download so the menu entry never dead-ends.
   const runGslides = () =>
     guard(async () => {
-      if (exportManifest.format === "3:4") {
+      // Google Slides rides the PPTX pipeline, so mirror its restriction:
+      // social decks (any ratio) + PDF/PNG-only formats can't produce Slides.
+      if (isSocial || isPdfPngOnlyFormat(exportManifest.format)) {
         setExportGslides({ status: "error", message: "تعذر التصدير" });
         return;
       }

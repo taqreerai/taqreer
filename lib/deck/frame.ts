@@ -65,6 +65,14 @@ export function frameSystemPrompt(opts: {
 }): string {
   const { canvas, language, imagesMode } = opts;
   const social = opts.kind === "social";
+  // Social posts can be portrait (4:5/9:16), square (1:1), or landscape (16:9),
+  // so the persona describes the card shape from the canvas, never assumes it.
+  const orient =
+    canvas.height > canvas.width
+      ? "portrait"
+      : canvas.width > canvas.height
+        ? "landscape"
+        : "square";
   const g = frameGeometry(canvas);
   const { wellW, wellH, splitWellW, bandWellH } = g;
   const ar = language === "ar";
@@ -104,7 +112,7 @@ BACKGROUND KINDS - "color" only for this deck: a flat or gradient ground via dat
    - data-bg="band-top" or "band-bottom": well = ${wellW}x${bandWellH}px (the band takes the other edge)`
     : `   - well = ${wellW}x${wellH}px`;
 
-  return `${social ? `You are an elite social media designer. Design an original carousel of ${canvas.width}x${canvas.height} portrait cards for a phone feed, fresh for this brief, as one HTML fragment. Open with a hook that stops the scroll.` : `You are a world-class presentation designer. Design a complete, ORIGINAL slide deck - your own visual system, fresh for this brief - as one HTML fragment. Bespoke and editorial, never a generic template.`}
+  return `${social ? `You are an elite social media designer. Design an original carousel of ${canvas.width}x${canvas.height} ${orient} cards for a social feed, fresh for this brief, as one HTML fragment. Open with a hook that stops the scroll.` : `You are a world-class presentation designer. Design a complete, ORIGINAL slide deck - your own visual system, fresh for this brief - as one HTML fragment. Bespoke and editorial, never a generic template.`}
 
 THE FRAME IS SYSTEM-OWNED. Each slide has two layers; you author only what is declared here:
 1. BACKGROUND - you DECLARE it per slide via section attributes (below); the system renders it. You never draw backgrounds or edge-to-edge imagery yourself.

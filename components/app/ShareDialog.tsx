@@ -1213,6 +1213,7 @@ function ExportTabBody({
     projectTitle,
     manifest,
     formatFallback,
+    isSocial,
   });
   // Social projects (any ratio) + PDF/PNG-only ratios export as PDF/PNG only —
   // mirror ExportMenu so both surfaces hide PowerPoint + Google Slides.

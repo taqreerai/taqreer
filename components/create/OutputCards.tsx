@@ -22,8 +22,11 @@ import {
   type CornerPosition,
 } from "@/components/create/controls";
 import { useDict } from "@/components/i18n/LocaleProvider";
+import type { SlideFormat } from "@/lib/schema/slide";
 
-export type SlideSize = "16:9" | "9:16" | "3:4" | "1:1" | "4:5" | "2:3";
+// Derived from SlideFormat (the single source of truth) so the two can never
+// drift when a ratio is added or removed.
+export type SlideSize = SlideFormat;
 export type SlideCountMode = "auto" | "custom";
 // File-local alias — used by LogoPlacementCard below. Not exported
 // because no external consumer uses it (callers pass `CornerPosition`
