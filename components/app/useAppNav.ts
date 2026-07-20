@@ -30,7 +30,7 @@ export function useAppNav(): {
     { label: dict.nav.create, icon: "add_circle", path: "/create" },
     { label: dict.nav.enhance, icon: "auto_fix_high", path: "/enhance" },
     { label: dict.nav.mimic, icon: "content_copy", path: "/mimic" },
-    { label: dict.nav.social, icon: "photo_camera", path: "/social" },
+    { label: dict.nav.social, icon: "tag", path: "/social" },
   ];
 
   // Library surfaces — the user's saved stuff.

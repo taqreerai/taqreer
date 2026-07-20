@@ -44,6 +44,7 @@ import PaintIcon from "./paint-icon";
 import StarIcon from "./star-icon";
 import GearIcon from "./gear-icon";
 import CameraIcon from "./camera-icon";
+import HashtagIcon from "./hashtag-icon";
 
 // Material Symbol name → itshover animated component. Adding a new
 // icon? Drop the new component into `components/icons/` and add the
@@ -57,7 +58,7 @@ const ICON_REGISTRY: Record<
   auto_fix_high: SparklesIcon, // تحسين — magic wand glyph
   content_copy: CopyIcon, // محاكاة — copy
   dataset: ChartHistogramIcon, // من بيانات — Excel/data → histogram with trend curve
-  photo_camera: CameraIcon, // سوشيال — social posts / carousels
+  tag: HashtagIcon, // منشور — social platforms (hashtag)
 
   // Sidebar nav
   home: HomeIcon,
