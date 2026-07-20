@@ -52,14 +52,17 @@ export function toDeckFlow(value: string | null | undefined): DeckFlow {
     : "create";
 }
 
-// The flow a COMPLETED deck belongs to. Social is EVENT-driven (it carries no
-// source kind, so sourceKindToFlow alone would fall through to "create" and
-// clobber Project.type on completion); every other flow is derived from the
-// source kind. Read the event type FIRST, then fall back to the source mapper.
+// The flow a COMPLETED deck belongs to. Trust a recognized NON-create event
+// type first: social is event-driven (no source kind), and a completed deck's
+// Project.type already IS its flow even when the brief's source kind is missing
+// or legacy (e.g. an old mimic/datasheet deck whose aiPrompt predates stored
+// source.kind - passing sourceKind alone would mislabel it "create"). Only when
+// the event type is create/unknown do we fall back to the source-kind mapper.
 export function deckFlowFor(
   eventType: string | null | undefined,
   sourceKind: string | null | undefined,
 ): DeckFlow {
-  if (eventType === "social") return "social";
+  const fromType = toDeckFlow(eventType);
+  if (fromType !== "create") return fromType;
   return sourceKindToFlow(sourceKind);
 }

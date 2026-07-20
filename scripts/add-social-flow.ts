@@ -21,33 +21,41 @@ async function main() {
   const adapter = new PrismaPg({ connectionString: databaseUrl });
   const prisma = new PrismaClient({ adapter });
   try {
-    let changed = 0;
-    for (const plan of PAID_TIERS) {
-      const tier = await prisma.tier.findUnique({ where: { plan } });
-      if (!tier) {
-        console.log(`- ${plan}: no row, skipped`);
-        continue;
+    // One transaction so partial failure can't leave some tiers updated with
+    // the runtime cache un-invalidated (configVersion un-bumped). Each tier is
+    // re-read INSIDE the tx and updated with the row locked, so a concurrent
+    // admin Settings edit to the same tier can't be clobbered by read-then-
+    // replace. Idempotent: tiers that already have social are left untouched.
+    const log = await prisma.$transaction(async (tx) => {
+      const lines: string[] = [];
+      let changed = 0;
+      for (const plan of PAID_TIERS) {
+        const tier = await tx.tier.findUnique({ where: { plan } });
+        if (!tier) {
+          lines.push(`- ${plan}: no row, skipped`);
+          continue;
+        }
+        if (tier.flows.includes("social")) {
+          lines.push(`- ${plan}: already has social`);
+          continue;
+        }
+        const next = [...tier.flows, "social"];
+        await tx.tier.update({ where: { plan }, data: { flows: next } });
+        changed++;
+        lines.push(`+ ${plan}: added social -> [${next.join(", ")}]`);
       }
-      if (tier.flows.includes("social")) {
-        console.log(`- ${plan}: already has social`);
-        continue;
+      if (changed > 0) {
+        await tx.platformSettings.update({
+          where: { id: "singleton" },
+          data: { configVersion: { increment: 1 } },
+        });
+        lines.push(`bumped configVersion (${changed} tier(s) updated)`);
+      } else {
+        lines.push("no changes");
       }
-      await prisma.tier.update({
-        where: { plan },
-        data: { flows: [...tier.flows, "social"] },
-      });
-      changed++;
-      console.log(`+ ${plan}: added social -> [${[...tier.flows, "social"].join(", ")}]`);
-    }
-    if (changed > 0) {
-      await prisma.platformSettings.update({
-        where: { id: "singleton" },
-        data: { configVersion: { increment: 1 } },
-      });
-      console.log(`bumped configVersion (${changed} tier(s) updated)`);
-    } else {
-      console.log("no changes");
-    }
+      return lines;
+    });
+    console.log(log.join("\n"));
   } finally {
     await prisma.$disconnect();
   }
