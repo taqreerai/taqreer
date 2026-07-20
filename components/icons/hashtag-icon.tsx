@@ -3,8 +3,8 @@
 // Vendored from the itshover registry (https://itshover.com/r/hashtag-icon.json).
 // Adapted to the repo convention (see camera-icon.tsx + the AnimatedIcon
 // header): import from `framer-motion` (not `motion/react`), use `useCallback`
-// for start/stop, and DROP the upstream onHoverStart/onHoverEnd SVG handlers —
-// the animation is driven by the parent nav pill via the ref, not icon hover.
+// for start/stop, and DROP the upstream onHoverStart/onHoverEnd SVG handlers.
+// The animation is driven by the parent nav pill via the ref, not icon hover.
 // `transform-box: fill-box` so each line scales around its own centre in place.
 
 import { forwardRef, useImperativeHandle, useCallback } from "react";

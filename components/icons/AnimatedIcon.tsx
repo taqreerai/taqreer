@@ -58,7 +58,7 @@ const ICON_REGISTRY: Record<
   auto_fix_high: SparklesIcon, // تحسين — magic wand glyph
   content_copy: CopyIcon, // محاكاة — copy
   dataset: ChartHistogramIcon, // من بيانات — Excel/data → histogram with trend curve
-  tag: HashtagIcon, // منشور — social platforms (hashtag)
+  tag: HashtagIcon, // منشور - social platforms (hashtag)
 
   // Sidebar nav
   home: HomeIcon,
