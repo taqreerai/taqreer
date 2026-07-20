@@ -625,10 +625,8 @@
       "designCard": "Design",
       "platform": "Platform",
       "ratio": "Size",
-      "ratios": { "square": "Square", "portrait": "Portrait", "story": "Story", "landscape": "Landscape", "tall": "Tall" },
+      "ratios": { "square": "Square", "portrait": "Portrait", "story": "Story", "landscape": "Landscape" },
       "count": "Slides",
-      "single": "Single",
-      "carousel": "Carousel",
       "style": "Design style"
     },
     "mimic": {

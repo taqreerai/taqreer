@@ -5,7 +5,7 @@
 // deck slide-size picker. Selecting a platform resets the ratio to its default.
 
 import { useDict } from "@/components/i18n/LocaleProvider";
-import type { SlideFormat } from "@/lib/schema/slide";
+import { type SlideFormat, SLIDE_DIMENSIONS } from "@/lib/schema/slide";
 import {
   SOCIAL_PLATFORMS,
   PLATFORM_LABEL,
@@ -13,6 +13,13 @@ import {
   defaultRatioFor,
   type SocialPlatform,
 } from "@/lib/social/platforms";
+
+// The px shown per ratio IS the actual export size (SLIDE_DIMENSIONS), so the
+// label never promises a size the engine doesn't produce.
+function pxLabel(format: SlideFormat): string {
+  const d = SLIDE_DIMENSIONS[format];
+  return `${d.width} x ${d.height}`;
+}
 
 const ASPECT_CSS: Record<SlideFormat, string> = {
   "16:9": "16 / 9",
@@ -102,7 +109,7 @@ export function SocialFormatFields({
                     dir="ltr"
                     className={`text-[10px] tabular-nums ${active ? "text-foreground/70" : "text-foreground/40"}`}
                   >
-                    {r.px} · {r.format}
+                    {pxLabel(r.format)} · {r.format}
                   </span>
                 </span>
                 <span

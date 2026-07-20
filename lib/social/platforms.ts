@@ -31,35 +31,36 @@ export const PLATFORM_ICON: Record<SocialPlatform, string> = {
 };
 
 export type PlatformRatio = {
-  // The SlideFormat the deck is generated + exported at.
+  // The SlideFormat the deck is generated + exported at. The px shown in the UI
+  // is DERIVED from SLIDE_DIMENSIONS[format] (see SocialFormatFields), so the
+  // label always matches the actual export size instead of an aspirational
+  // platform-recommended size the engine never produces.
   format: SlideFormat;
   // dict key under flows.social.ratios (square|portrait|story|landscape).
   nameKey: "square" | "portrait" | "story" | "landscape";
-  // The platform-recommended px, shown in the UI as a label.
-  px: string;
 };
 
 // Per platform, its supported ratios in display order (FIRST = default).
 export const PLATFORM_RATIOS: Record<SocialPlatform, PlatformRatio[]> = {
   instagram: [
-    { format: "4:5", nameKey: "portrait", px: "1080 x 1350" },
-    { format: "1:1", nameKey: "square", px: "1080 x 1080" },
-    { format: "9:16", nameKey: "story", px: "1080 x 1920" },
+    { format: "4:5", nameKey: "portrait" },
+    { format: "1:1", nameKey: "square" },
+    { format: "9:16", nameKey: "story" },
   ],
   facebook: [
-    { format: "4:5", nameKey: "portrait", px: "1080 x 1350" },
-    { format: "1:1", nameKey: "square", px: "1080 x 1080" },
-    { format: "9:16", nameKey: "story", px: "1080 x 1920" },
+    { format: "4:5", nameKey: "portrait" },
+    { format: "1:1", nameKey: "square" },
+    { format: "9:16", nameKey: "story" },
   ],
   x: [
-    { format: "16:9", nameKey: "landscape", px: "1600 x 900" },
-    { format: "1:1", nameKey: "square", px: "1080 x 1080" },
-    { format: "4:5", nameKey: "portrait", px: "1080 x 1350" },
+    { format: "16:9", nameKey: "landscape" },
+    { format: "1:1", nameKey: "square" },
+    { format: "4:5", nameKey: "portrait" },
   ],
   linkedin: [
-    { format: "1:1", nameKey: "square", px: "1200 x 1200" },
-    { format: "4:5", nameKey: "portrait", px: "1080 x 1350" },
-    { format: "16:9", nameKey: "landscape", px: "1200 x 628" },
+    { format: "1:1", nameKey: "square" },
+    { format: "4:5", nameKey: "portrait" },
+    { format: "16:9", nameKey: "landscape" },
   ],
 };
 

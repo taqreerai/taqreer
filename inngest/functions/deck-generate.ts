@@ -6,7 +6,7 @@ import { holdCredits, settleHold } from "@/lib/credits/server";
 import { generationCost } from "@/lib/credits/cost";
 import { type Quality } from "@/lib/types/quality";
 import { prisma } from "@/lib/prisma";
-import { sourceKindToFlow, deckFlowFor } from "@/lib/project/flow";
+import { deckFlowFor } from "@/lib/project/flow";
 import {
   SlideManifestSchema,
   SLIDE_DIMENSIONS,
@@ -844,7 +844,7 @@ function buildUserMessage(event: DeckGenerateEvent) {
     // leads the user message before any canvas/language/brief content.
     ...styleDirectiveBlock(rules),
     event.type === "social"
-      ? `Design the social media post for this brief: an original set of ${orientationLabel} cards for a social feed.`
+      ? `Design the social media post for this brief: an original set of cards for a social feed.`
       : `Generate the slide deck for this presentation.`,
     ``,
     `Flow: ${event.type ?? "create"}`,
@@ -3151,7 +3151,7 @@ export const deckGenerate = inngest.createFunction(
         actorPrismaUserId,
         // `kind` carries the canonical flow (create | enhance | mimic |
         // datasheet) — drives the flow-specific notification title + icon.
-        payload: { versionId, kind: sourceKindToFlow(sourceKind) },
+        payload: { versionId, kind: deckFlowFor(data.type, sourceKind) },
         recipientUserIds: [actorPrismaUserId],
         allowSelfEcho: true,
       }).catch((err) => {

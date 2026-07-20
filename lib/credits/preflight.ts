@@ -139,14 +139,16 @@ export async function preflightGenerate(args: {
     : baseTier;
   // Social carousels cap well below the deck tier cap (see slideCapForFlow) so
   // AUTO holds a carousel-sane ceiling; every `tier.slideCap` read below then
-  // inherits it (quote, exact-cap block, cappedToTier). Admins keep the
-  // documented slide-cap bypass (SYSTEM_SLIDE_CAP) - the social cap is a
-  // per-tier product guardrail, not something the superuser is bound by.
+  // inherits it (quote, exact-cap block, cappedToTier). Applied to ADMINS too:
+  // the social 20-cap is a content-FORMAT guardrail (a carousel is short by
+  // nature), not a tier/billing gate, so the admin bypass (which unlocks flows,
+  // presets, and large DECKS) does not exempt it. This also keeps the client
+  // estimate == the server hold, since the /social page caps every user the
+  // same way (deliberately overrides CodeRabbit's admin-bypass note: no one
+  // needs a 75-card "post", and shown-must-equal-held is the stronger rule).
   const tier: TierConfigRow = {
     ...resolvedTier,
-    slideCap: args.isAdmin
-      ? resolvedTier.slideCap
-      : slideCapForFlow(args.flow, resolvedTier.slideCap),
+    slideCap: slideCapForFlow(args.flow, resolvedTier.slideCap),
   };
   const balance = await getBalance(args.userId, now);
   const estimate = estimateSlides(args.slideInput);

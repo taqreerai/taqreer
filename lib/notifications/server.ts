@@ -32,7 +32,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { broadcastToUser } from "@/lib/realtime/server-broadcast";
-import type { BrandKitTargetFlow } from "@/lib/create/seed-from-brand-kit";
+import type { DeckFlow } from "@/lib/project/flow";
 
 // Active notification types. Adding a new type here is the place to
 // update — the bell renderer's lookup table is the only other site
@@ -95,11 +95,11 @@ export type NotificationPayloadMap = {
   };
   "deck.generate.finished": {
     versionId: string;
-    // Canonical generation flow (create | enhance | mimic | datasheet) —
-    // drives the flow-specific notification title. The emit site normalizes
-    // the raw source kind via `sourceKindToFlow`, so this is already the
-    // flow vocabulary, not the source-kind one.
-    kind?: BrandKitTargetFlow;
+    // Canonical generation flow (create | enhance | mimic | datasheet | social)
+    // — drives the flow-specific notification icon. The emit site normalizes via
+    // `deckFlowFor`, so this is already the flow vocabulary (incl. social, which
+    // carries no source kind), not the source-kind one.
+    kind?: DeckFlow;
   };
   "deck.generate.failed": {
     reason?: string;

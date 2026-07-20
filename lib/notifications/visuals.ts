@@ -21,6 +21,7 @@ const FLOW_ICON: Record<string, string> = {
   enhance: "auto_fix_high",
   mimic: "content_copy",
   datasheet: "dataset",
+  social: "photo_camera",
 };
 
 const TYPE_ICON: Record<string, string> = {

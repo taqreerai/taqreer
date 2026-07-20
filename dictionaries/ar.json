@@ -625,10 +625,8 @@
       "designCard": "التصميم",
       "platform": "المنصة",
       "ratio": "المقاس",
-      "ratios": { "square": "مربع", "portrait": "عمودي", "story": "ستوري", "landscape": "أفقي", "tall": "طويل" },
+      "ratios": { "square": "مربع", "portrait": "عمودي", "story": "ستوري", "landscape": "أفقي" },
       "count": "الشرائح",
-      "single": "منشور واحد",
-      "carousel": "كاروسيل",
       "style": "نمط التصميم"
     },
     "mimic": {

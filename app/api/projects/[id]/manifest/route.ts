@@ -32,6 +32,10 @@ export async function GET(
     where: { id: projectId },
     select: {
       format: true,
+      // Flow discriminator so the Share Export tab, opened from a project
+      // tile (no `isSocial` prop), still limits social decks to PDF/PNG at
+      // ANY ratio (incl. 9:16/16:9, which format alone can't distinguish).
+      type: true,
       presentation: {
         select: {
           versions: {
@@ -66,5 +70,6 @@ export async function GET(
   return NextResponse.json({
     manifest: parsed.data,
     format: project.format,
+    isSocial: project.type === "social",
   });
 }

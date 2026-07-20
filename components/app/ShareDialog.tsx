@@ -151,9 +151,14 @@ export function ShareDialog({
   const [fetchedFormat, setFetchedFormat] = useState<
     SlideFormat | undefined
   >(undefined);
+  // Social flag from the lazy fetch (project-tile path). The prop wins when set
+  // (studio path passes it); otherwise the fetched value limits social decks to
+  // PDF/PNG at ANY ratio, mirroring the studio surface.
+  const [fetchedIsSocial, setFetchedIsSocial] = useState<boolean>(false);
   const [manifestError, setManifestError] = useState<string | null>(null);
   const effectiveManifest = manifest ?? fetchedManifest;
   const effectiveFormat = formatFallback ?? fetchedFormat;
+  const effectiveIsSocial = isSocial || fetchedIsSocial;
 
   // Per-action busy flags so a slow PATCH on a single row doesn't grey
   // out the whole panel — only the in-flight control.
@@ -211,6 +216,7 @@ export function ShareDialog({
     setTab(showExportTab ? initialTab : "share");
     setFetchedManifest(null);
     setFetchedFormat(undefined);
+    setFetchedIsSocial(false);
     setManifestError(null);
     /* eslint-enable react-hooks/set-state-in-effect */
 
@@ -268,10 +274,12 @@ export function ShareDialog({
         const data = (await res.json()) as {
           manifest: SlideManifest;
           format: SlideFormat | null;
+          isSocial?: boolean;
         };
         if (cancelled) return;
         setFetchedManifest(data.manifest);
         setFetchedFormat(data.format ?? undefined);
+        setFetchedIsSocial(data.isSocial === true);
       } catch {
         if (!cancelled) setManifestError(dict.dialogs.share.errLoadProject);
       }
@@ -726,7 +734,7 @@ export function ShareDialog({
                           projectTitle={projectTitle}
                           manifest={effectiveManifest}
                           formatFallback={effectiveFormat}
-                          isSocial={isSocial}
+                          isSocial={effectiveIsSocial}
                           loadError={manifestError}
                         />
                       </motion.div>
