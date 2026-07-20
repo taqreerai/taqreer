@@ -21,7 +21,11 @@ import type { SlideManifest, SlideFormat } from "@/lib/schema/slide";
 import { useExportActions, type ExportKind } from "@/lib/preview/use-export-actions";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { useCreditBalance } from "@/lib/credits/store";
-import { isExportGated, EXPORT_GATE_TIER } from "@/lib/export/export-gating";
+import {
+  isExportGated,
+  visibleExportKinds,
+  EXPORT_GATE_TIER,
+} from "@/lib/export/export-gating";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import { GoogleSlidesReadyDialog } from "@/components/export/GoogleSlidesReadyDialog";
 import { FormatIcon } from "@/components/export/FormatIcon";
@@ -47,12 +51,14 @@ export function ExportMenu({
   projectTitle,
   manifest,
   formatFallback,
+  isSocial = false,
   disabled,
 }: {
   projectId: string;
   projectTitle: string;
   manifest: SlideManifest;
   formatFallback?: SlideFormat;
+  isSocial?: boolean;
   disabled?: boolean;
 }) {
   const dict = useDict();
@@ -86,13 +92,11 @@ export function ExportMenu({
     gslides: runGslides,
   };
 
-  // 3:4 social-post decks export as PDF/PNG only — PPTX has no sane 3:4
-  // layout story and the HTML doc is presentation-shaped. Hide both.
+  // Social projects (any ratio) + PDF/PNG-only ratios export as PDF/PNG only —
+  // PPTX/Google Slides are hidden (visibleExportKinds is the single source).
   const effectiveFormat = manifest?.format ?? formatFallback ?? "16:9";
-  const formats =
-    effectiveFormat === "3:4"
-      ? FORMATS.filter((f) => f.kind === "pdf" || f.kind === "png")
-      : FORMATS;
+  const visibleKinds = new Set(visibleExportKinds(isSocial, effectiveFormat));
+  const formats = FORMATS.filter((f) => visibleKinds.has(f.kind));
 
   // Export tier gate: free keeps PNG only (and nothing on 3:4 social
   // decks). Gated rows stay visible with a gold crown and upsell on

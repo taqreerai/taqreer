@@ -17,12 +17,14 @@ export function StudioActions({
   projectTitle,
   manifest,
   formatFallback,
+  isSocial = false,
   role,
 }: {
   projectId: string;
   projectTitle: string;
   manifest: SlideManifest | null;
   formatFallback?: SlideFormat;
+  isSocial?: boolean;
   role: ProjectRole;
 }) {
   const dict = useDict();
@@ -41,6 +43,7 @@ export function StudioActions({
         projectTitle={projectTitle}
         manifest={manifest}
         formatFallback={formatFallback}
+        isSocial={isSocial}
       />
       {isOwner ? (
         <>
@@ -62,6 +65,7 @@ export function StudioActions({
             projectTitle={projectTitle}
             manifest={manifest}
             formatFallback={formatFallback}
+            isSocial={isSocial}
             showExportTab={false}
             onClose={() => setShareOpen(false)}
           />

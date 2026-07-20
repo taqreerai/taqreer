@@ -190,6 +190,8 @@ type Props = {
   // as the fallback for placeholder cards during generation, when there's
   // no manifest yet to read `format` from.
   initialFormat?: SlideFormat;
+  // Social flow: PDF/PNG-only exports (any ratio) + "post" studio copy.
+  initialIsSocial?: boolean;
   // Width of the main app sidebar (80 collapsed, 260 expanded). Read
   // SSR-side from the `tq_sidebar_collapsed` cookie by the page that
   // mounts DeckView and passed in here so the SlideNavSidebar's
@@ -343,6 +345,7 @@ export function DeckView({
   initialSourceKind = null,
   initialSlideStates = [],
   initialFormat,
+  initialIsSocial = false,
   initialMainSidebarWidth = 260,
   initialActiveRegen = null,
   brandingWatermark = false,
@@ -634,7 +637,8 @@ export function DeckView({
   );
   const aspectRatio = `${canvasW} / ${canvasH}`;
   // 3:4 is a social post, not a deck — the generating title says "post".
-  const isPostFormat = (manifest?.format ?? initialFormat) === "3:4";
+  const isPostFormat =
+    initialIsSocial || (manifest?.format ?? initialFormat) === "3:4";
 
   // gridRef is defined here so it can be passed to <motion.div>
   // below. The scale + height measurement effect that uses it lives
@@ -4329,6 +4333,7 @@ export function DeckView({
                   projectTitle={projectTitle}
                   manifest={exportManifest}
                   formatFallback={initialFormat}
+                  isSocial={initialIsSocial}
                   role={role}
                 />
               </>

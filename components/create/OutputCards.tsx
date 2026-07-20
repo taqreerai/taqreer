@@ -23,7 +23,7 @@ import {
 } from "@/components/create/controls";
 import { useDict } from "@/components/i18n/LocaleProvider";
 
-export type SlideSize = "16:9" | "9:16" | "3:4";
+export type SlideSize = "16:9" | "9:16" | "3:4" | "1:1" | "4:5" | "2:3";
 export type SlideCountMode = "auto" | "custom";
 // File-local alias — used by LogoPlacementCard below. Not exported
 // because no external consumer uses it (callers pass `CornerPosition`

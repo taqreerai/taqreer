@@ -6,13 +6,14 @@ import { holdCredits, settleHold } from "@/lib/credits/server";
 import { generationCost } from "@/lib/credits/cost";
 import { type Quality } from "@/lib/types/quality";
 import { prisma } from "@/lib/prisma";
-import { sourceKindToFlow } from "@/lib/project/flow";
+import { sourceKindToFlow, deckFlowFor } from "@/lib/project/flow";
 import {
   SlideManifestSchema,
   SLIDE_DIMENSIONS,
   SLIDE_FORMATS,
   SLIDE_ROLE_VALUES,
   GENCHAT_MAX,
+  isSocialFormat,
   type GenChatEntry,
   type SlideFormat,
   type SlideManifest,
@@ -176,9 +177,12 @@ const SLIDE_ROLES = new Set<NonNullable<SlideType["role"]>>(SLIDE_ROLE_VALUES);
 export function isImagesMode(event: DeckGenerateEvent): boolean {
   const sourceKind = (event.brief as { source?: { kind?: string } } | null)
     ?.source?.kind;
+  const type = event.type ?? "create";
   return (
     (event.brief as { imagesMode?: boolean } | null)?.imagesMode === true &&
-    (event.type ?? "create") === "create" &&
+    // Social rides the SAME images path as create (owner: social = create at
+    // social ratios). enhance + data keep their own visual handling.
+    (type === "create" || type === "social") &&
     sourceKind !== "enhance" &&
     sourceKind !== "data"
   );
@@ -189,11 +193,11 @@ export function isImagesMode(event: DeckGenerateEvent): boolean {
 // the HTML path: `create` (scratch/text/images), `datasheet` (source.kind
 // "data"), `mimic` (source.kind "mimic"), and `enhance` (type "enhance"). The
 // JSON manifest path below is now dead and is removed in the Stage-3 cleanup.
-// (`type` is only ever "create" | "enhance", so this is effectively always true;
-// kept explicit so a future third flow defaults to the legacy path, not silently
-// to HTML, until it's deliberately migrated.)
+// (`type` is create | enhance | social, all HTML-authoring; kept explicit so a
+// future flow defaults to the legacy path, not silently to HTML, until migrated.)
 export function isHtmlAuthoringFlow(event: DeckGenerateEvent): boolean {
-  return (event.type ?? "create") === "create" || event.type === "enhance";
+  const t = event.type ?? "create";
+  return t === "create" || t === "enhance" || t === "social";
 }
 
 type EnhanceData = {
@@ -208,7 +212,7 @@ type DeckGenerateEvent = {
   presentationId: string;
   versionId: string;
   jobId?: string | null;
-  type?: "create" | "enhance";
+  type?: "create" | "enhance" | "social";
   // First-deck gift flag - set by /api/projects when this is the user's
   // very first deck; upgrades the CALL params to the cheapest thinking
   // preset while billing stays on `quality`. See resolveEffectiveQuality.
@@ -282,6 +286,27 @@ const DESIGN_STYLE_DIRECTIVES: Record<string, string> = {
     "Modular rounded cards (a consistent large corner radius, ~24–32px) on softly tinted grounds; use the palette's MOST saturated token as the card fills and tint the remaining tokens for grounds — don't assume bright colors exist; work from the tokens given. Hard-edged offset shadows on cards (a solid brand-dark shadow offset down-right) for depth; one repeated shape motif (circles/blobs). One accent-filled hero card per slide carries the emphasis. Signature + frame: the rounded-card + offset-shadow system plus the repeated motif, every slide. Density: 3–5 cards. Archetypes: hero-card, card-grid, big-number-card, icon-row. When generating images: bright, high-saturation, soft even light, candid/lifestyle or rounded 3D illustration.",
   "Brutalist":
     "Expose the structure. Box regions with thick 2–3px solid rules in the brand's darkest ink AND use heavy flat FILL blocks as region backgrounds (not ink-on-light — this is what separates it from Swiss); collapse spacing so borders touch, and align hard-left/right or collide on purpose, never centred. Heaviest brand-font weight, uppercase Latin via CSS text-transform; one harsh accent as a flat fill. Hard offset shadows (solid, no blur); zero rounded corners, zero gradients, zero soft anything. Keep the brand fonts — no monospace. Signature + frame: every region boxed + a stark fixed corner label. Density: medium-to-dense, structural. Archetypes: boxed-grid, fill-statement, stacked-rules, collision-headline. When generating images: prefer none; if any, harsh high-contrast black-and-white or halftone, flat and unretouched.",
+
+  // Social-media styles (2026 trends). Short AESTHETIC descriptions only: name
+  // the visual language + image mood, then trust Claude to design the layout.
+  // (The shared STYLE_LEAD above already handles frame consistency + reuse; no
+  // need to dictate per-card counts, placement, or density here.)
+  "Bold Type":
+    "A bold typographic poster. Huge, confident type in the brand's heaviest weight carries the whole design, with very little else on the card. Flat brand-colour or clean neutral grounds. Imagery, if any: minimal and high-contrast.",
+  "Editorial Feed":
+    "A refined magazine editorial: a small kicker, a large display headline, generous whitespace, and strong photography. Calm, confident, high-end. Imagery: photojournalistic, natural light.",
+  "Grainy Gradient":
+    "Dreamy, atmospheric gradients blended from the brand colours and softened with a fine film-grain texture. Modern, moody, tactile. Imagery: soft and low-contrast, blended into the glow.",
+  "Neo-Brutalist":
+    "Loud and flat: bright solid brand fills, thick dark outlines, hard offset shadows, and chunky type. Playful, confident, sticker-like. Imagery: flat, high-contrast, cutout feel.",
+  "Minimal Air":
+    "Quiet and spacious: lots of whitespace, one clear idea per card, restrained type, and a single small accent. Understated and premium. Imagery: simple, with room to breathe.",
+  "Photo Overlay":
+    "Photography-led: full-bleed images with bold type set over a legibility scrim. Cinematic and immersive. Imagery: strong, high-contrast subjects.",
+  "Retro Print":
+    "A nostalgic print / risograph aesthetic: a warm limited two-colour palette, visible halftone or paper grain, and slightly imperfect type. Characterful and analog. Imagery: grainy, limited-colour, screenprinted.",
+  "3D Pop":
+    "Playful, dopamine-bright depth: soft rounded shapes and clay-like 3D elements in saturated brand colours, gentle shadows, and friendly type. Imagery: bright, rounded 3D or soft clay renders.",
 };
 
 function ruleLines(rules: Rules): string[] {
@@ -624,12 +649,14 @@ function resolveFormat(event: DeckGenerateEvent): SlideFormat {
     ?.slideSize;
   if (!SLIDE_FORMATS.includes(candidate as SlideFormat)) return "16:9";
   const format = candidate as SlideFormat;
-  // 3:4 is a create-only social-post ratio (the picker's `withPost` tile is
-  // create-only). If it ever rides in on a non-create brief — a crafted
-  // payload, or a future UI that shares the picker — fall back to 16:9 so the
-  // social base prompt and the PDF/PNG-only export contract stay unreachable
-  // outside create. This is the single chokepoint: the prompt swap, canvas
-  // dims, and the saved manifest format all derive from resolveFormat.
+  // The SOCIAL flow may use ANY ratio (its platform picker offers the full
+  // social set + landscape). This is the single chokepoint: the prompt swap,
+  // canvas dims, and the saved manifest format all derive from resolveFormat.
+  if ((event.type ?? "create") === "social") return format;
+  // Non-social flows: 16:9 + 9:16 are universal; 3:4 stays create-only (the
+  // legacy "Post" tile); the new social-only ratios (1:1/4:5/2:3) never ride a
+  // non-social brief, so a crafted payload falls back to 16:9.
+  if (format === "16:9" || format === "9:16") return format;
   if (format === "3:4") {
     const sourceKind = (event.brief as { source?: { kind?: string } } | null)?.source
       ?.kind;
@@ -638,9 +665,9 @@ function resolveFormat(event: DeckGenerateEvent): SlideFormat {
       sourceKind !== "data" &&
       sourceKind !== "mimic" &&
       sourceKind !== "enhance";
-    if (!isCreateFlow) return "16:9";
+    return isCreateFlow ? "3:4" : "16:9";
   }
-  return format;
+  return "16:9";
 }
 
 // Deep-strip uploaded-font `storageUrl`s from the brief before it's dumped
@@ -816,13 +843,15 @@ function buildUserMessage(event: DeckGenerateEvent) {
     // DESIGN STYLE first — the chosen style frames the entire deck, so it
     // leads the user message before any canvas/language/brief content.
     ...styleDirectiveBlock(rules),
-    `Generate the slide deck for this presentation.`,
+    event.type === "social"
+      ? `Design the social media post for this brief: an original set of portrait cards for a phone feed.`
+      : `Generate the slide deck for this presentation.`,
     ``,
     `Flow: ${event.type ?? "create"}`,
     // Canvas dimensions are a hard contract — the renderer measures the DOM
     // at this exact size and the PPT export uses the matching layout.
     // Echo them up-front so Claude doesn't have to dig them out of the brief.
-    `Slide canvas: ${width}×${height} px (${format} ${orientationLabel}).`,
+    `${event.type === "social" ? "Card" : "Slide"} canvas: ${width}×${height} px (${format} ${orientationLabel}).`,
     // 3:4's social-carousel framing lives in SYSTEM_PROMPT_SOCIAL_HTML now,
     // so no extra user-message directive here (regens still carry it via
     // buildPartialSystemPrompt).
@@ -1919,7 +1948,7 @@ export const deckGenerate = inngest.createFunction(
             canvas: SLIDE_DIMENSIONS[slideFormat],
             language: streamLanguage,
             imagesMode: isImagesMode(data),
-            kind: slideFormat === "3:4" ? "social" : "deck",
+            kind: isSocialFormat(slideFormat) ? "social" : "deck",
           }),
           paletteAuto ? AUTO_PALETTE_ADDENDUM : null,
           // Mimic with images on recreates the reference's imagery (its box
@@ -1937,7 +1966,11 @@ export const deckGenerate = inngest.createFunction(
         // applies — built once at the top of this step, shared with the JSON
         // path. The HTML suffix replaces the JSON path's "return the deck JSON"
         // closer (gated out of buildUserMessage for HTML flows).
-        const userText = `${baseUserMessage}\n\nAuthor the deck now: emit the \`<section>\` slides using the provided design system, starting with the cover. The first character of your reply must be \`<\`.`;
+        const closer =
+          data.type === "social"
+            ? `Design the post now: emit the \`<section>\` cards using the provided design system, starting with the hook card. The first character of your reply must be \`<\`.`
+            : `Author the deck now: emit the \`<section>\` slides using the provided design system, starting with the cover. The first character of your reply must be \`<\`.`;
+        const userText = `${baseUserMessage}\n\n${closer}`;
 
         // ── GENCHAT (backend-transparency feed) ────────────────────────────
         // What the studio's layers rail shows while the deck generates: the
@@ -2796,10 +2829,11 @@ export const deckGenerate = inngest.createFunction(
           status: "completed",
           title: manifest.title,
           // Persist the FLOW so dashboard surfaces can show which path
-          // produced the deck. Set once at completion (covers all four
-          // flows; the creation route only ever distinguishes
-          // create/enhance). `sourceKindToFlow` is the single mapper.
-          type: sourceKindToFlow(sourceKind),
+          // produced the deck. Set once at completion. Social is event-driven
+          // (no source kind), so `deckFlowFor` reads `data.type` first -
+          // sourceKindToFlow alone would fall through to "create" and clobber
+          // the social flow set at /api/projects time (the bug this fixes).
+          type: deckFlowFor(data.type, sourceKind),
         },
       });
 

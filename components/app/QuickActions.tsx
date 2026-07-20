@@ -26,7 +26,7 @@ const CARD_BASE = [
   { icon: "add_circle", key: "create", path: "/create" },
   { icon: "auto_fix_high", key: "enhance", path: "/enhance" },
   { icon: "content_copy", key: "mimic", path: "/mimic" },
-  { icon: "dataset", key: "fromData", path: "/datasheet" },
+  { icon: "photo_camera", key: "social", path: "/social" },
 ] as const;
 
 export function QuickActions() {

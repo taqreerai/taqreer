@@ -12,13 +12,14 @@ import type { Quality } from "@/lib/types/quality";
 import type { KnownPlan } from "@/lib/plan";
 import { MAX_GENERATED_IMAGES } from "@/lib/images/slide-images";
 
-export type Flow = "create" | "enhance" | "mimic" | "datasheet";
+export type Flow = "create" | "enhance" | "mimic" | "datasheet" | "social";
 
 export const ALL_FLOWS: readonly Flow[] = [
   "create",
   "enhance",
   "mimic",
   "datasheet",
+  "social",
 ];
 
 export const CREDIT_COST: Record<Quality, { base: number; perSlide: number }> =
@@ -79,6 +80,19 @@ export function imagesSurcharge(
 
 // Nothing above 75 slides is ever exposed (≈128k output-token ceiling).
 export const SYSTEM_SLIDE_CAP = 75;
+
+// Social carousels are short by nature (Instagram allows up to 20 cards), so the
+// social flow caps the slide count HERE - below the deck tier cap (30/60/75).
+// Without it, AUTO would hold the tier cap and price a single "post" at
+// thousands of credits. Applied on BOTH the client estimate (social page) and
+// the server hold (preflight) so shown == charged.
+export const SOCIAL_SLIDE_CAP = 20;
+
+/** The effective slide cap for a flow: social carousels cap low; every other
+ *  flow uses the tier cap unchanged. */
+export function slideCapForFlow(flow: Flow, tierCap: number): number {
+  return flow === "social" ? Math.min(tierCap, SOCIAL_SLIDE_CAP) : tierCap;
+}
 
 // Top-up packs expire 12 months after purchase (§1).
 export const TOPUP_EXPIRY_MONTHS = 12;

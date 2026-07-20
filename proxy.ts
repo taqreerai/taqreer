@@ -16,6 +16,7 @@ const protectedRoutes = [
   "/editor",
   "/create",
   "/enhance",
+  "/social",
   "/settings",
   "/brand-kits",
   "/folders",

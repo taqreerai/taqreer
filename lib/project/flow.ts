@@ -28,3 +28,18 @@ export function sourceKindToFlow(
       return "create";
   }
 }
+
+// The canonical flow set INCLUDING social (which every deck store speaks now).
+export type DeckFlow = BrandKitTargetFlow | "social";
+
+// The flow a COMPLETED deck belongs to. Social is EVENT-driven (it carries no
+// source kind, so sourceKindToFlow alone would fall through to "create" and
+// clobber Project.type on completion); every other flow is derived from the
+// source kind. Read the event type FIRST, then fall back to the source mapper.
+export function deckFlowFor(
+  eventType: string | null | undefined,
+  sourceKind: string | null | undefined,
+): DeckFlow {
+  if (eventType === "social") return "social";
+  return sourceKindToFlow(sourceKind);
+}

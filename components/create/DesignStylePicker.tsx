@@ -40,6 +40,31 @@ type StyleKey =
   | "playful"
   | "brutalist";
 
+// ── Social-media style set (2026 trends) ────────────────────────
+// Distinct from the deck styles above: these target portrait phone-feed
+// cards (a scroll-stopping hook, big legible type, one atmosphere across
+// the carousel). Labels double as DESIGN_STYLE_DIRECTIVES keys in
+// deck-generate.ts (kept globally unique so both sets coexist in that map).
+const SOCIAL_STYLES: ReadonlyArray<{ label: string; key: SocialStyleKey }> = [
+  { label: "Bold Type", key: "boldtype" },
+  { label: "Editorial Feed", key: "editorial" },
+  { label: "Grainy Gradient", key: "grainy" },
+  { label: "Neo-Brutalist", key: "brutalist" },
+  { label: "Minimal Air", key: "minimal" },
+  { label: "Photo Overlay", key: "photo" },
+  { label: "Retro Print", key: "retro" },
+  { label: "3D Pop", key: "pop3d" },
+];
+type SocialStyleKey =
+  | "boldtype"
+  | "editorial"
+  | "grainy"
+  | "brutalist"
+  | "minimal"
+  | "photo"
+  | "retro"
+  | "pop3d";
+
 // ── The static mini-slide previews ──────────────────────────────
 // Each is a 16:9 box composed of token-colored blocks. Percentage
 // geometry so ONE markup serves both the small trigger swatch and the
@@ -153,23 +178,146 @@ function StyleMini({
   );
 }
 
+// ── Portrait social-card previews ───────────────────────────────
+// Same CSS-block language as StyleMini, but a 4:5 portrait card so the
+// swatch reads as a phone-feed post. Keys → SOCIAL_STYLES.
+function SocialStyleMini({
+  k,
+  big = false,
+  boldSample = "خط",
+}: {
+  k: SocialStyleKey | "auto";
+  big?: boolean;
+  boldSample?: string;
+}) {
+  const base =
+    "relative w-full overflow-hidden rounded-md border border-[var(--tq-border-hairline)] bg-[var(--tq-surface)]";
+  const abs = (s: React.CSSProperties): React.CSSProperties => ({
+    position: "absolute",
+    ...s,
+  });
+  // A faint dot texture (halftone/grain hint) as a CSS background-image.
+  const HALFTONE =
+    "radial-gradient(var(--tq-text-muted) 0.8px, transparent 0.8px)";
+  return (
+    <div className={base} style={{ aspectRatio: "4/5" }} dir="ltr">
+      {k === "boldtype" && (
+        <div
+          className="flex h-full w-full items-center justify-center font-black text-foreground"
+          style={{ fontSize: big ? 40 : 15, lineHeight: 1 }}
+        >
+          {boldSample}
+        </div>
+      )}
+      {k === "editorial" && (
+        <>
+          <div style={abs({ top: "8%", left: "10%", width: "26%", height: "3%", background: ACCENT })} />
+          <div style={abs({ top: "14%", left: "10%", width: "70%", height: "9%", background: BAR })} />
+          <div style={abs({ top: "26%", left: "10%", width: "52%", height: "5%", background: BAR_SOFT })} />
+          <div style={abs({ top: "40%", left: "10%", right: "10%", height: "38%", background: BAR_SOFT })} />
+          <div style={abs({ bottom: "8%", left: "10%", width: "44%", height: "4%", background: BAR_SOFT })} />
+        </>
+      )}
+      {k === "grainy" && (
+        <>
+          <div
+            style={abs({
+              inset: 0,
+              background:
+                "radial-gradient(120% 90% at 30% 20%, color-mix(in srgb, var(--tq-purple) 70%, transparent), transparent 60%), radial-gradient(120% 90% at 80% 90%, color-mix(in srgb, var(--tq-blue, var(--tq-purple)) 65%, transparent), transparent 55%), var(--tq-surface)",
+            })}
+          />
+          <div style={abs({ inset: 0, backgroundImage: HALFTONE, backgroundSize: "5px 5px", opacity: 0.35 })} />
+          <div style={abs({ bottom: "20%", left: "16%", width: "56%", height: "7%", borderRadius: 999, background: "#fff" })} />
+          <div style={abs({ bottom: "12%", left: "16%", width: "34%", height: "4%", borderRadius: 999, background: "rgba(255,255,255,0.7)" })} />
+        </>
+      )}
+      {k === "brutalist" && (
+        <>
+          <div style={abs({ top: "12%", left: "12%", width: "50%", height: "24%", background: ACCENT, boxShadow: `${big ? 5 : 3}px ${big ? 5 : 3}px 0 var(--tq-text-primary)`, border: `${big ? 2 : 1.5}px solid var(--tq-text-primary)` })} />
+          <div style={abs({ bottom: "14%", left: "12%", width: "70%", height: "16%", background: "var(--tq-surface)", boxShadow: `${big ? 5 : 3}px ${big ? 5 : 3}px 0 var(--tq-text-primary)`, border: `${big ? 2 : 1.5}px solid var(--tq-text-primary)` })} />
+        </>
+      )}
+      {k === "minimal" && (
+        <>
+          <div style={abs({ top: "46%", left: "24%", width: "52%", height: "6%", background: BAR })} />
+          <div style={abs({ top: "58%", left: "44%", width: "12%", height: "2.5%", background: ACCENT })} />
+        </>
+      )}
+      {k === "photo" && (
+        <>
+          <div style={abs({ inset: 0, background: "color-mix(in srgb, var(--tq-purple) 45%, black)" })} />
+          <div style={abs({ inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.85), transparent 55%)" })} />
+          <div style={abs({ bottom: "14%", left: "10%", width: "62%", height: "7%", background: "#fff" })} />
+          <div style={abs({ bottom: "7%", left: "10%", width: "38%", height: "4%", background: "rgba(255,255,255,0.7)" })} />
+        </>
+      )}
+      {k === "retro" && (
+        <>
+          <div style={abs({ inset: 0, background: "color-mix(in srgb, var(--tq-purple) 22%, var(--tq-surface))" })} />
+          <div style={abs({ inset: 0, backgroundImage: HALFTONE, backgroundSize: "4px 4px", opacity: 0.5 })} />
+          <div style={abs({ inset: "9%", border: `${big ? 2 : 1.5}px solid var(--tq-text-primary)` })} />
+          <div style={abs({ top: "42%", left: "20%", width: "60%", height: "8%", background: ACCENT })} />
+        </>
+      )}
+      {k === "pop3d" && (
+        <>
+          <div style={abs({ top: "12%", left: "14%", width: "34%", aspectRatio: "1", borderRadius: "50%", background: ACCENT, boxShadow: "0 6px 12px rgba(0,0,0,0.25)" })} />
+          <div style={abs({ bottom: "14%", left: "12%", right: "12%", height: "34%", borderRadius: 18, background: BAR_SOFT, boxShadow: "0 6px 14px rgba(0,0,0,0.18)" })} />
+          <div style={abs({ bottom: "22%", left: "18%", width: "40%", height: "5%", borderRadius: 999, background: BAR })} />
+        </>
+      )}
+      {k === "auto" && (
+        <div className="flex h-full w-full items-center justify-center text-muted">
+          <span
+            className="material-symbols-outlined"
+            style={{ fontSize: big ? 22 : 14 }}
+            aria-hidden
+          >
+            auto_awesome
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function DesignStylePicker({
   value,
   onChange,
   disabled = false,
+  variant = "deck",
 }: {
   value: string | null;
   onChange: (next: string | null) => void;
   disabled?: boolean;
+  // "social" swaps in the 2026 social-media style set + portrait previews.
+  variant?: "deck" | "social";
 }) {
   const dict = useDict();
   const { dir } = useLocale();
   const t = dict.flows.stylePicker;
+  const isSocial = variant === "social";
+  // Style list, preview renderer, and descriptions all switch on the variant.
+  const styles: ReadonlyArray<{ label: string; key: string }> = isSocial
+    ? SOCIAL_STYLES
+    : STYLES;
+  const descs: Record<string, string> = isSocial ? t.socialDescs : t.descs;
+  const renderMini = (key: string, opts: { big?: boolean }) =>
+    isSocial ? (
+      <SocialStyleMini
+        k={key as SocialStyleKey | "auto"}
+        big={opts.big}
+        boldSample={t.socialBoldSample}
+      />
+    ) : (
+      <StyleMini k={key as StyleKey | "auto"} big={opts.big} boldSample={t.boldSample} />
+    );
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(panelRef, open);
 
-  const current = STYLES.find((s) => s.label === value) ?? null;
+  const current = styles.find((s) => s.label === value) ?? null;
 
   useEffect(() => {
     if (!open) return;
@@ -190,15 +338,15 @@ export function DesignStylePicker({
         aria-haspopup="dialog"
         className="flex w-full items-center gap-3 rounded-xl border border-[var(--tq-border-hairline)] bg-[var(--tq-card)] p-2 text-start transition-colors hover:border-[var(--tq-purple)] disabled:cursor-not-allowed disabled:opacity-50"
       >
-        <div className="w-14 shrink-0">
-          <StyleMini k={current?.key ?? "auto"} boldSample={t.boldSample} />
+        <div className={`${isSocial ? "w-10" : "w-14"} shrink-0`}>
+          {renderMini(current?.key ?? "auto", {})}
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[13px] font-semibold text-foreground">
             {current ? current.label : t.auto}
           </p>
           <p className="truncate text-[11px] text-muted">
-            {current ? t.descs[current.key] : t.autoDesc}
+            {current ? descs[current.key] : t.autoDesc}
           </p>
         </div>
         <span
@@ -259,7 +407,7 @@ export function DesignStylePicker({
                       </div>
 
                       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                        {STYLES.map((s) => {
+                        {styles.map((s) => {
                           const active = value === s.label;
                           return (
                             <button
@@ -275,11 +423,13 @@ export function DesignStylePicker({
                                   : "border-[var(--tq-border-hairline)] hover:border-[var(--tq-purple)]"
                               }`}
                             >
-                              <StyleMini k={s.key} big boldSample={t.boldSample} />
+                              <div className={isSocial ? "mx-auto w-3/5" : undefined}>
+                                {renderMini(s.key, { big: true })}
+                              </div>
                               <p className="mt-2 text-[12px] font-semibold text-foreground">
                                 {s.label}
                               </p>
-                              <p className="text-[11px] text-muted">{t.descs[s.key]}</p>
+                              <p className="text-[11px] text-muted">{descs[s.key]}</p>
                             </button>
                           );
                         })}
@@ -296,7 +446,9 @@ export function DesignStylePicker({
                               : "border-[var(--tq-border-hairline)] hover:border-[var(--tq-purple)]"
                           }`}
                         >
-                          <StyleMini k="auto" big />
+                          <div className={isSocial ? "mx-auto w-3/5" : undefined}>
+                            {renderMini("auto", { big: true })}
+                          </div>
                           <p className="mt-2 text-[12px] font-semibold text-foreground">{t.auto}</p>
                           <p className="text-[11px] text-muted">{t.autoDesc}</p>
                         </button>

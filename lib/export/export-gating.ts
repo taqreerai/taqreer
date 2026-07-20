@@ -20,6 +20,45 @@ import type { KnownPlan } from "@/lib/plan";
 
 export type GateableExportKind = "pptx" | "pdf" | "png" | "gslides";
 
+// Full deck export set, in menu order.
+const ALL_EXPORT_KINDS: readonly GateableExportKind[] = [
+  "pptx",
+  "pdf",
+  "gslides",
+  "png",
+];
+
+// Ratios that are PDF/PNG-only regardless of flow: the social-only ratios
+// (never reachable outside the social flow) + the legacy 3:4 "Post". 9:16 and
+// 16:9 are deliberately NOT here, so create/mimic decks at those ratios KEEP
+// full PPTX/Google Slides export.
+const PDF_PNG_ONLY_FORMATS: ReadonlySet<string> = new Set([
+  "1:1",
+  "4:5",
+  "2:3",
+  "3:4",
+]);
+
+/** True when a deck's format alone forces PDF/PNG-only export (independent of
+ *  flow). Used by the export runner guards for pptx/gslides. */
+export function isPdfPngOnlyFormat(format: string | undefined): boolean {
+  return PDF_PNG_ONLY_FORMATS.has(format ?? "16:9");
+}
+
+/**
+ * Which export formats to OFFER, given the flow + format. SOCIAL projects (any
+ * ratio, incl 9:16/16:9) and any PDF/PNG-only format are PDF + PNG only (no
+ * PPTX/Google Slides); everything else offers all four. Single source replacing
+ * the duplicated inline `=== "3:4"` filters in ExportMenu + ShareDialog.
+ */
+export function visibleExportKinds(
+  isSocial: boolean,
+  format: string | undefined,
+): GateableExportKind[] {
+  if (isSocial || isPdfPngOnlyFormat(format)) return ["pdf", "png"];
+  return [...ALL_EXPORT_KINDS];
+}
+
 /** The tier that unlocks paid exports - drives UpgradeModal's minTier. */
 export const EXPORT_GATE_TIER: KnownPlan = "plus";
 

@@ -91,6 +91,9 @@ export type InitialState = {
   // the generating-state placeholder grid (when the manifest isn't ready
   // yet) so the cards have the correct orientation from the first paint.
   initialFormat: SlideFormat;
+  // Social flow (Project.type === "social"): a Claude deck at social ratios.
+  // Drives the export lock (PDF/PNG only, any ratio) + "post" studio copy.
+  initialIsSocial: boolean;
   /**
    * Free-tier branding (2026-07-13): true when the deck OWNER is on the
    * free plan (admins exempt). DeckView renders the "Designed by
@@ -423,6 +426,8 @@ export async function loadProject(
       // generating-state placeholder grid in DeckView shows the correct
       // orientation BEFORE the manifest finishes streaming.
       format: true,
+      // Flow discriminator: "social" projects export PDF/PNG only.
+      type: true,
       // Owner plan + role for the free-tier branding watermark (see
       // InitialState.brandingWatermark).
       user: { select: { plan: true, role: true } },
@@ -484,6 +489,7 @@ export async function loadProject(
     initialSourceKind: readSourceKind(prompt),
     initialSlideStates,
     initialFormat: narrowFormat(project.format),
+    initialIsSocial: project.type === "social",
     initialActiveRegen,
     brandingWatermark:
       !isPaidPlan(project.user.plan) && project.user.role !== "admin",

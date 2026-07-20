@@ -171,7 +171,17 @@ export const SlideSchema = z.object({
 //   9:16 → 1080×1920 px in the browser → 5.625″ × 10″ in PPT (vertical)
 //   3:4  → 1080×1440 px in the browser → no PPT (PDF/PNG only)
 // dom-to-pptx accepts custom layout via { width, height } in inches.
-export const SLIDE_FORMATS = ["16:9", "9:16", "3:4"] as const;
+export const SLIDE_FORMATS = [
+  "16:9",
+  "9:16",
+  "3:4",
+  // Social-media ratios (the /social flow; 2026 platform sizes). 1080-wide
+  // canonical px. The engine is ratio-agnostic (frameGeometry derives from
+  // canvas px), so these need no other change downstream.
+  "1:1",
+  "4:5",
+  "2:3",
+] as const;
 export type SlideFormat = (typeof SLIDE_FORMATS)[number];
 
 // Canonical pixel dimensions Claude authors against for each format.
@@ -181,6 +191,9 @@ export const SLIDE_DIMENSIONS = {
   "16:9": { width: 1920, height: 1080 },
   "9:16": { width: 1080, height: 1920 },
   "3:4": { width: 1080, height: 1440 },
+  "1:1": { width: 1080, height: 1080 },
+  "4:5": { width: 1080, height: 1350 },
+  "2:3": { width: 1080, height: 1620 },
 } as const;
 
 // Prompt directive injected wherever a 3:4 deck's canvas is described
@@ -192,6 +205,21 @@ export const CAROUSEL_DIRECTIVE =
 
 export function dimensionsForFormat(format: SlideFormat | undefined) {
   return SLIDE_DIMENSIONS[format ?? "16:9"];
+}
+
+// The portrait/square social ratios. Drives the social persona prompt
+// (frame.ts kind:"social") and the PDF/PNG-only export lock. NOTE: 16:9 is
+// also a social ratio (X/LinkedIn landscape) but is limited to PDF/PNG by the
+// social FLOW, not by format (a 16:9 create deck keeps full exports).
+export const SOCIAL_FORMATS: ReadonlySet<SlideFormat> = new Set([
+  "1:1",
+  "4:5",
+  "9:16",
+  "2:3",
+  "3:4",
+]);
+export function isSocialFormat(format: SlideFormat | undefined): boolean {
+  return format != null && SOCIAL_FORMATS.has(format);
 }
 
 // One GenChat entry - the backend-transparency feed shown in the layers rail

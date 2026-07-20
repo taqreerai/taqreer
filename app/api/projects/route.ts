@@ -158,7 +158,7 @@ async function readLogo(path: string): Promise<LogoRead> {
 }
 
 type CreateProjectPayload = {
-  type?: "create" | "enhance";
+  type?: "create" | "enhance" | "social";
   content?: {
     type?: "file" | "text";
     fileName?: string;
@@ -472,7 +472,12 @@ export async function POST(request: Request) {
 
   const payload = (await request.json()) as CreateProjectPayload;
   const title = buildProjectTitle(payload, dict);
-  const projectType = payload.type === "enhance" ? "enhance" : "create";
+  const projectType =
+    payload.type === "enhance"
+      ? "enhance"
+      : payload.type === "social"
+        ? "social"
+        : "create";
 
   // Resolve the Prisma user UP FRONT (lifted out of the tx below) - the
   // credit preflight needs the user id + plan BEFORE we create any
@@ -692,13 +697,15 @@ export async function POST(request: Request) {
   // (reduce / top up) BEFORE any rows or Claude calls exist. The
   // payload shape feeds CreditGateDialog client-side.
   const creditFlow: CreditFlow =
-    validatedSource?.kind === "enhance"
-      ? "enhance"
-      : validatedSource?.kind === "mimic"
-        ? "mimic"
-        : validatedSource?.kind === "data"
-          ? "datasheet"
-          : "create";
+    projectType === "social"
+      ? "social"
+      : validatedSource?.kind === "enhance"
+        ? "enhance"
+        : validatedSource?.kind === "mimic"
+          ? "mimic"
+          : validatedSource?.kind === "data"
+            ? "datasheet"
+            : "create";
   let slideInput: SlideEstimateInput;
   if (typeof payload.slideCount === "number" && payload.slideCount > 0) {
     slideInput = { kind: "fixed", count: payload.slideCount };

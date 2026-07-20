@@ -26,6 +26,7 @@ import {
   type SlideEstimateInput,
   ALL_FLOWS,
   SYSTEM_SLIDE_CAP,
+  slideCapForFlow,
   estimateSlides,
   effectivePreset,
   generationCost,
@@ -128,7 +129,7 @@ export async function preflightGenerate(args: {
   const plan = normalizePlan(args.plan);
   await ensureFresh();
   const baseTier = getTier(plan);
-  const tier: TierConfigRow = args.isAdmin
+  const resolvedTier: TierConfigRow = args.isAdmin
     ? {
         ...baseTier,
         flows: [...ALL_FLOWS],
@@ -136,6 +137,13 @@ export async function preflightGenerate(args: {
         slideCap: SYSTEM_SLIDE_CAP,
       }
     : baseTier;
+  // Social carousels cap well below the deck tier cap (see slideCapForFlow) so
+  // AUTO holds a carousel-sane ceiling; every `tier.slideCap` read below then
+  // inherits it (quote, exact-cap block, cappedToTier).
+  const tier: TierConfigRow = {
+    ...resolvedTier,
+    slideCap: slideCapForFlow(args.flow, resolvedTier.slideCap),
+  };
   const balance = await getBalance(args.userId, now);
   const estimate = estimateSlides(args.slideInput);
   const imagesMode = args.imagesMode === true;

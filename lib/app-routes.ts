@@ -14,6 +14,7 @@ export const APP_ROUTE_SEGMENTS = new Set([
   "enhance",
   "mimic",
   "datasheet",
+  "social",
   "project",
   "preview",
   "use-template",

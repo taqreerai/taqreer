@@ -38,7 +38,11 @@ import { Avatar } from "@/components/common/Avatar";
 import { Toggle } from "@/components/create/controls";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { useCreditBalance } from "@/lib/credits/store";
-import { isExportGated, EXPORT_GATE_TIER } from "@/lib/export/export-gating";
+import {
+  isExportGated,
+  isPdfPngOnlyFormat,
+  EXPORT_GATE_TIER,
+} from "@/lib/export/export-gating";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import { GoogleSlidesReadyDialog } from "@/components/export/GoogleSlidesReadyDialog";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
@@ -98,6 +102,8 @@ export function ShareDialog({
   // invocations keep the default `true` because the modal is the
   // only export path from /projects. Added 2026-05-24.
   showExportTab = true,
+  // Social projects export PDF/PNG only (any ratio); hides PPTX/Slides.
+  isSocial = false,
   onClose,
 }: {
   open: boolean;
@@ -107,6 +113,7 @@ export function ShareDialog({
   manifest?: SlideManifest;
   formatFallback?: SlideFormat;
   showExportTab?: boolean;
+  isSocial?: boolean;
   onClose: () => void;
 }) {
   const dict = useDict();
@@ -719,6 +726,7 @@ export function ShareDialog({
                           projectTitle={projectTitle}
                           manifest={effectiveManifest}
                           formatFallback={effectiveFormat}
+                          isSocial={isSocial}
                           loadError={manifestError}
                         />
                       </motion.div>
@@ -1111,12 +1119,14 @@ function ExportTabContent({
   projectTitle,
   manifest,
   formatFallback,
+  isSocial,
   loadError,
 }: {
   projectId: string;
   projectTitle: string;
   manifest: SlideManifest | null | undefined;
   formatFallback: SlideFormat | undefined;
+  isSocial: boolean;
   loadError: string | null;
 }) {
   const dict = useDict();
@@ -1146,6 +1156,7 @@ function ExportTabContent({
       projectTitle={projectTitle}
       manifest={manifest}
       formatFallback={formatFallback}
+      isSocial={isSocial}
     />
   );
 }
@@ -1188,11 +1199,13 @@ function ExportTabBody({
   projectTitle,
   manifest,
   formatFallback,
+  isSocial,
 }: {
   projectId: string;
   projectTitle: string;
   manifest: SlideManifest;
   formatFallback: SlideFormat | undefined;
+  isSocial: boolean;
 }) {
   const dict = useDict();
   const actions = useExportActions({
@@ -1201,10 +1214,10 @@ function ExportTabBody({
     manifest,
     formatFallback,
   });
-  // 3:4 social-post decks export as PDF/PNG only — mirror ExportMenu's
-  // filter so both surfaces hide PowerPoint + HTML for them.
+  // Social projects (any ratio) + PDF/PNG-only ratios export as PDF/PNG only —
+  // mirror ExportMenu so both surfaces hide PowerPoint + Google Slides.
   const effectiveFormat = manifest?.format ?? formatFallback ?? "16:9";
-  const isCarousel = effectiveFormat === "3:4";
+  const isCarousel = isSocial || isPdfPngOnlyFormat(effectiveFormat);
   // Export tier gate — mirror ExportMenu: free keeps PNG only (nothing on
   // 3:4 social decks); gated rows crown + upsell instead of exporting.
   const credits = useCreditBalance();

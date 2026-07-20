@@ -24,6 +24,7 @@
 import { useState, useSyncExternalStore } from "react";
 import posthog from "posthog-js";
 import type { SlideManifest, SlideFormat } from "@/lib/schema/slide";
+import { isPdfPngOnlyFormat } from "@/lib/export/export-gating";
 import { exportManifestAsPptx } from "@/lib/export/html-export";
 import {
   ensureDriveToken,
@@ -202,7 +203,7 @@ export function useExportActions({
       // 3:4 social-post decks are PDF/PNG only. The UI hides this entry
       // (ExportMenu / ShareDialog); this is the belt-and-braces stop for
       // any stale surface that still offers it.
-      if (exportManifest.format === "3:4") {
+      if (isPdfPngOnlyFormat(exportManifest.format)) {
         setState({ status: "error", message: "تعذر التصدير" });
         return;
       }

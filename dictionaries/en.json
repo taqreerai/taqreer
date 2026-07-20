@@ -6,6 +6,7 @@
     "enhance": "Enhance",
     "mimic": "Mimic",
     "fromData": "Datasheet",
+    "social": "Social",
     "comingSoon": "Soon",
     "projects": "My projects",
     "templates": "Templates",
@@ -407,7 +408,8 @@
     "create": { "title": "Create", "desc": "from an idea or file" },
     "enhance": { "title": "Enhance", "desc": "redesign a presentation" },
     "mimic": { "title": "Mimic", "desc": "apply a reference design" },
-    "fromData": { "title": "Datasheet", "desc": "turn tables into a presentation" }
+    "fromData": { "title": "Datasheet", "desc": "turn tables into a presentation" },
+    "social": { "title": "Social", "desc": "posts and carousels" }
   },
   "contact": {
     "title": "Contact us",
@@ -549,7 +551,7 @@
     }
   },
   "flows": {
-    "stylePicker": { "boldSample": "Deck", "dialogTitle": "Choose a design style", "auto": "Auto", "autoDesc": "We pick what fits your content", "change": "Change", "descs": { "swiss": "Strict grid, calm whitespace", "corporate": "Clear charts and figures", "minimal": "One element, generous space", "editorial": "Magazine-style columns", "bold": "Huge display headlines", "duotone": "Two tones, full-bleed imagery", "playful": "Free shapes, bold color", "brutalist": "Raw borders, stark contrast" } },
+    "stylePicker": { "boldSample": "Deck", "socialBoldSample": "BOLD", "dialogTitle": "Choose a design style", "auto": "Auto", "autoDesc": "We pick what fits your content", "change": "Change", "descs": { "swiss": "Strict grid, calm whitespace", "corporate": "Clear charts and figures", "minimal": "One element, generous space", "editorial": "Magazine-style columns", "bold": "Huge display headlines", "duotone": "Two tones, full-bleed imagery", "playful": "Free shapes, bold color", "brutalist": "Raw borders, stark contrast" }, "socialDescs": { "boldtype": "Giant type, one loud statement", "editorial": "Magazine kicker, big headline, hero", "grainy": "Dreamy gradient auras with grain", "brutalist": "Flat brights, thick borders, shadows", "minimal": "Airy whitespace, one calm idea", "photo": "Full-bleed photo, type on a scrim", "retro": "Risograph two-tone with halftone", "pop3d": "Soft 3D shapes, rounded cards" } },
     "contentCard": "Content",
     "language": "Language",
     "contentLanguageAria": "Content language",
@@ -614,6 +616,20 @@
       "languageAria": "Deck language",
       "instructions": "Extra instructions",
       "instructionsPlaceholder": "e.g. focus on Q3, highlight the sales drop…"
+    },
+    "social": {
+      "title": "Design a social post",
+      "subtitle": "Pick a platform and size, add your brief and brand, and we design an on-brand post or carousel you can export as PDF or PNG.",
+      "contentCard": "Content",
+      "topicPlaceholder": "What's the post about? e.g. 3 tips for better sleep…",
+      "designCard": "Design",
+      "platform": "Platform",
+      "ratio": "Size",
+      "ratios": { "square": "Square", "portrait": "Portrait", "story": "Story", "landscape": "Landscape", "tall": "Tall" },
+      "count": "Slides",
+      "single": "Single",
+      "carousel": "Carousel",
+      "style": "Design style"
     },
     "mimic": {
       "title": "Mimic another deck's design",
