@@ -27,11 +27,13 @@ type Billing = "monthly" | "yearly";
 
 type FeatureFlag = { enabled: boolean };
 
-// Exactly nine flags per tier (fixed-length tuple, not a loose array) so the
-// enabled booleans can never drift out of alignment with the nine localized
+// Exactly TEN flags per tier (fixed-length tuple, not a loose array) so the
+// enabled booleans can never drift out of alignment with the ten localized
 // labels below — a wrong count is a compile error, not a silently misrendered
-// (or undefined) row.
+// (or undefined) row. Row 0 = credits; row 1 = the generation-model line
+// (Sonnet restructure 2026-07-21); rows 2..9 = features[1..8].
 type FeatureFlags = [
+  FeatureFlag,
   FeatureFlag,
   FeatureFlag,
   FeatureFlag,
@@ -54,17 +56,18 @@ type Tier = {
   popular?: boolean;
 };
 
-// Per-tier feature-enabled flags: row 0 = credits, rows 1..8 = features[0..7]
-// (labels come from dict.landing.pricing.tiers[i]). Every tier lists 8 features
-// so all four cards render at the same height. `off` rows show muted (locked).
+// Per-tier feature-enabled flags: row 0 = credits, row 1 = model line, rows
+// 2..9 = features[1..8] (labels come from dict.landing.pricing.tiers[i]). Every
+// tier lists 9 features so all four cards render at the same height. `off` rows
+// show muted (locked). The model line (features[0]) is enabled on ALL tiers.
 const on = { enabled: true };
 const off = { enabled: false };
 
 const TIERS: Tier[] = [
-  { features: [on, on, on, on, on, off, off, off, off], isFree: true },
-  { features: [on, on, on, on, on, on, on, on, off] },
-  { features: [on, on, on, on, on, on, on, on, on], popular: true },
-  { features: [on, on, on, on, on, on, on, on, on] },
+  { features: [on, on, on, on, on, on, off, off, off, off], isFree: true },
+  { features: [on, on, on, on, on, on, on, on, on, off] },
+  { features: [on, on, on, on, on, on, on, on, on, on], popular: true },
+  { features: [on, on, on, on, on, on, on, on, on, on] },
 ];
 
 // Per-tier feature-enabled booleans, exported so the in-app BillingSection

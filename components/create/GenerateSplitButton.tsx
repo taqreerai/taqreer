@@ -64,15 +64,18 @@ const FALLBACK_PRESETS: CreditPreset[] = QUALITY_PRESETS.filter(
   gateTier: TIER_ORDER.find((t) => TIERS[t].presets.includes(p.key)) ?? null,
 }));
 
-// 3-level design-quality chip (2026-07-08 restructure): no thinking =
-// draft; thinking at effort medium+ = premium; thinking low = standard.
-// Mirrors what paramsForPreset sends to the API for each preset.
-function designLevel(p: {
-  thinking: boolean;
-  effort?: string | null;
-}): "draft" | "standard" | "premium" {
-  if (!p.thinking) return "draft";
-  return p.effort && p.effort !== "low" ? "premium" : "standard";
+// Design-quality name by LADDER RANK (Sonnet restructure + Fable-for-Max
+// 2026-07-21). Multiple no-thinking presets exist (Sonnet + opus-fast), so the
+// old thinking-based level collided. Name by position instead - presets arrive
+// sorted by sortOrder (cheapest first): 0 = basic, 1 = balanced, 2 = advanced,
+// 3+ = pro (Fable, Max-only). The four "level" keys map to the dict labels
+// (draftDesign="أساسي", standardDesign="متوازن", premiumDesign="متقدم",
+// proDesign="احترافي").
+function designLevel(rank: number): "draft" | "standard" | "premium" | "pro" {
+  if (rank <= 0) return "draft";
+  if (rank === 1) return "standard";
+  if (rank === 2) return "premium";
+  return "pro";
 }
 
 export function GenerateSplitButton({
@@ -251,15 +254,19 @@ export function GenerateSplitButton({
           aria-hidden
           className="my-2 w-px bg-[var(--tq-border-hairline)] group-hover:bg-white/25"
         />
+        {/* Quality selector = the split-button's right half. A visible "جودة"
+            label next to the chevron so it reads as the quality control instead
+            of a bare arrow. Keeps the pill's transparent surface. */}
         <button
           type="button"
           onClick={() => setPresetMenuOpen((v) => !v)}
           disabled={disabled || loading}
           aria-label={presetMenuOpen ? dict.flows.generate.closeQualityMenu : dict.flows.generate.chooseQuality}
           aria-expanded={presetMenuOpen}
-          className="relative z-10 inline-flex w-10 items-center justify-center bg-transparent disabled:cursor-not-allowed disabled:opacity-60"
+          className="relative z-10 inline-flex items-center gap-1.5 bg-transparent px-3.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
           style={{ borderRadius: "0 9999px 9999px 0" }}
         >
+          <span>{dict.flows.generate.qualityLabel}</span>
           <span
             className={`material-symbols-outlined leading-none transition-transform ${
               presetMenuOpen ? "rotate-180" : ""
@@ -295,7 +302,9 @@ export function GenerateSplitButton({
                 </span>
               ) : null}
             </div>
-            {presets.map((preset) => {
+            {presets.map((preset, presetRank) => {
+              // Ladder rank drives the design-quality name (see designLevel).
+              const level = designLevel(presetRank);
               const rowCost = (slides: number) =>
                 preset.baseCredits +
                 slides * preset.perSlideCredits +
@@ -358,18 +367,22 @@ export function GenerateSplitButton({
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="truncate text-sm font-medium">
-                      {designLevel(preset) === "premium"
-                        ? dict.flows.generate.premiumDesign
-                        : designLevel(preset) === "standard"
-                          ? dict.flows.generate.standardDesign
-                          : dict.flows.generate.draftDesign}
+                      {level === "pro"
+                        ? dict.flows.generate.proDesign
+                        : level === "premium"
+                          ? dict.flows.generate.premiumDesign
+                          : level === "standard"
+                            ? dict.flows.generate.standardDesign
+                            : dict.flows.generate.draftDesign}
                     </span>
                     <span className="truncate text-xs text-foreground/45">
-                      {designLevel(preset) === "premium"
-                        ? dict.flows.generate.premiumDesignDesc
-                        : designLevel(preset) === "standard"
-                          ? dict.flows.generate.standardDesignDesc
-                          : dict.flows.generate.draftDesignDesc}
+                      {level === "pro"
+                        ? dict.flows.generate.proDesignDesc
+                        : level === "premium"
+                          ? dict.flows.generate.premiumDesignDesc
+                          : level === "standard"
+                            ? dict.flows.generate.standardDesignDesc
+                            : dict.flows.generate.draftDesignDesc}
                     </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-2.5">

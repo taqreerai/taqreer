@@ -36,8 +36,13 @@ export const CREDIT_COST: Record<Quality, { base: number; perSlide: number }> =
     // History: 2026-07-07 repricing set fast 100+15 / balanced 400+22 /
     // medium 600+30 / fable-low 900+60 off prod Job averages (see
     // context/pricing-study-2026-07.md §3).
-    "opus-fast": { base: 160, perSlide: 27 },
-    "opus-balanced": { base: 460, perSlide: 34 },
+    // Sonnet restructure 2026-07-21: prices CASCADE up the ladder. Sonnet takes
+    // the old opus-fast price; each Opus preset inherits the next-higher old
+    // price (so the 3 price points are unchanged, just reassigned). opus-medium
+    // kept for legacy decks (deactivated in the preset config).
+    "sonnet-fast": { base: 160, perSlide: 27 },
+    "opus-fast": { base: 460, perSlide: 34 },
+    "opus-balanced": { base: 660, perSlide: 42 },
     "opus-medium": { base: 660, perSlide: 42 },
     "fable-low": { base: 960, perSlide: 72 },
   };
@@ -121,14 +126,15 @@ export type TierConfig = {
 // display-only) and live allotments from the DB Tier rows; these constants
 // are the seed + client-safe fallback (parity asserted vs SEED_TIERS).
 export const TIERS: Record<KnownPlan, TierConfig> = {
-  // Preset ladder 2026-07-08: free = draft only (no thinking); Plus adds
-  // balanced; Pro/Max unlock the medium "professional design" preset.
+  // Preset ladder 2026-07-21 (Sonnet restructure): free = Sonnet entry model
+  // only; Plus adds opus-fast; Pro/Max add opus-balanced. Must mirror
+  // SEED_TIERS.unlockedPresetKeys (parity asserted).
   free: {
     priceUsd: 0,
     monthlyAllotment: 0,
     signupGrant: 400,
     slideCap: 5,
-    presets: ["opus-fast"],
+    presets: ["sonnet-fast"],
     flows: ["create"],
   },
   plus: {
@@ -136,7 +142,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     monthlyAllotment: 4000,
     signupGrant: 0,
     slideCap: 30,
-    presets: ["opus-fast", "opus-balanced"],
+    presets: ["sonnet-fast", "opus-fast"],
     flows: ALL_FLOWS,
   },
   pro: {
@@ -144,7 +150,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     monthlyAllotment: 10000,
     signupGrant: 0,
     slideCap: 60,
-    presets: ["opus-fast", "opus-balanced", "opus-medium"],
+    presets: ["sonnet-fast", "opus-fast", "opus-balanced"],
     flows: ALL_FLOWS,
   },
   max: {
@@ -152,7 +158,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     monthlyAllotment: 35000,
     signupGrant: 0,
     slideCap: 75,
-    presets: ["opus-fast", "opus-balanced", "opus-medium"],
+    presets: ["sonnet-fast", "opus-fast", "opus-balanced", "fable-low"],
     flows: ALL_FLOWS,
   },
 };

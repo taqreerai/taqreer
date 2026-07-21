@@ -56,24 +56,35 @@ export type TierConfigRow = {
 // 2026-07-10 vision-layer repricing (owner-approved +60 base +12/slide):
 // every generation now runs the freeze bake's vision review as a second
 // Opus call - see lib/credits/cost.ts CREDIT_COST for the measured math.
+// Preset ladder (Sonnet restructure 2026-07-21 + Fable-for-Max 2026-07-21):
+// Sonnet 5 is the free/entry model; Opus presets are subscription-gated;
+// fable-low (Claude Fable 5) is REACTIVATED as the Max-exclusive top tier
+// ("احترافي" / Professional). opus-medium retired (kept inactive for legacy
+// decks). Prices cascade up the ladder (see lib/credits/cost.ts CREDIT_COST);
+// Fable keeps its 960/72 study price. Fable requires thinking on (the API
+// rejects thinking:disabled for Fable). Sonnet maxTokens 64000; Opus/Fable 128000.
 export const SEED_PRESETS: readonly PresetConfig[] = [
-  { key: "opus-fast",     label: "Opus 4.8", model: "claude-opus-4-8", thinking: false, effort: null,     maxTokens: 128000, baseCredits: 160, perSlideCredits: 27, secsPerSlide: 8,  baseOverheadSecs: 25, active: true, sortOrder: 0 },
-  { key: "opus-balanced", label: "Opus 4.8", model: "claude-opus-4-8", thinking: true,  effort: "low",    maxTokens: 128000, baseCredits: 460, perSlideCredits: 34, secsPerSlide: 25, baseOverheadSecs: 60, active: true, sortOrder: 1 },
-  { key: "opus-medium",   label: "Opus 4.8", model: "claude-opus-4-8", thinking: true,  effort: "medium", maxTokens: 128000, baseCredits: 660, perSlideCredits: 42, secsPerSlide: 25, baseOverheadSecs: 60, active: true, sortOrder: 2 },
-  { key: "fable-low",     label: "Fable 5",  model: "claude-fable-5",  thinking: true,  effort: "low",    maxTokens: 128000, baseCredits: 960, perSlideCredits: 72, secsPerSlide: 20, baseOverheadSecs: 45, active: false, sortOrder: 3 },
+  { key: "sonnet-fast",   label: "Sonnet 5", model: "claude-sonnet-5", thinking: false, effort: null,     maxTokens: 64000,  baseCredits: 160, perSlideCredits: 27, secsPerSlide: 6,  baseOverheadSecs: 20, active: true,  sortOrder: 0 },
+  { key: "opus-fast",     label: "Opus 4.8", model: "claude-opus-4-8", thinking: false, effort: null,     maxTokens: 128000, baseCredits: 460, perSlideCredits: 34, secsPerSlide: 8,  baseOverheadSecs: 25, active: true,  sortOrder: 1 },
+  { key: "opus-balanced", label: "Opus 4.8", model: "claude-opus-4-8", thinking: true,  effort: "low",    maxTokens: 128000, baseCredits: 660, perSlideCredits: 42, secsPerSlide: 25, baseOverheadSecs: 60, active: true,  sortOrder: 2 },
+  { key: "fable-low",     label: "Fable 5",  model: "claude-fable-5",  thinking: true,  effort: "low",    maxTokens: 128000, baseCredits: 960, perSlideCredits: 72, secsPerSlide: 20, baseOverheadSecs: 45, active: true,  sortOrder: 3 },
+  { key: "opus-medium",   label: "Opus 4.8", model: "claude-opus-4-8", thinking: true,  effort: "medium", maxTokens: 128000, baseCredits: 660, perSlideCredits: 42, secsPerSlide: 25, baseOverheadSecs: 60, active: false, sortOrder: 4 },
 ];
 
-// Preset ladder per tier (user direction 2026-07-08): free stays on the
-// no-thinking draft preset; Plus adds balanced; Pro/Max unlock medium.
+// Preset ladder per tier (Sonnet restructure 2026-07-21 + Fable-for-Max): free
+// gets the Sonnet entry model only; Plus adds opus-fast; Pro adds opus-balanced;
+// Max additionally unlocks fable-low (the Max-exclusive Professional tier).
 export const SEED_TIERS: readonly TierConfigRow[] = [
-  { plan: "free", priceUsd: 0,   monthlyAllotment: 0,     signupGrant: 400, slideCap: 5,  unlockedPresetKeys: ["opus-fast"], flows: ["create"], sortOrder: 0 },
-  { plan: "plus", priceUsd: 12,  monthlyAllotment: 4000,  signupGrant: 0,   slideCap: 30, unlockedPresetKeys: ["opus-fast", "opus-balanced"], flows: ["create", "enhance", "mimic", "datasheet", "social"], sortOrder: 1 },
-  { plan: "pro",  priceUsd: 25,  monthlyAllotment: 10000, signupGrant: 0,   slideCap: 60, unlockedPresetKeys: ["opus-fast", "opus-balanced", "opus-medium"], flows: ["create", "enhance", "mimic", "datasheet", "social"], sortOrder: 2 },
-  { plan: "max",  priceUsd: 100, monthlyAllotment: 35000, signupGrant: 0,   slideCap: 75, unlockedPresetKeys: ["opus-fast", "opus-balanced", "opus-medium"], flows: ["create", "enhance", "mimic", "datasheet", "social"], sortOrder: 3 },
+  { plan: "free", priceUsd: 0,   monthlyAllotment: 0,     signupGrant: 400, slideCap: 5,  unlockedPresetKeys: ["sonnet-fast"], flows: ["create"], sortOrder: 0 },
+  { plan: "plus", priceUsd: 12,  monthlyAllotment: 4000,  signupGrant: 0,   slideCap: 30, unlockedPresetKeys: ["sonnet-fast", "opus-fast"], flows: ["create", "enhance", "mimic", "datasheet", "social"], sortOrder: 1 },
+  { plan: "pro",  priceUsd: 25,  monthlyAllotment: 10000, signupGrant: 0,   slideCap: 60, unlockedPresetKeys: ["sonnet-fast", "opus-fast", "opus-balanced"], flows: ["create", "enhance", "mimic", "datasheet", "social"], sortOrder: 2 },
+  { plan: "max",  priceUsd: 100, monthlyAllotment: 35000, signupGrant: 0,   slideCap: 75, unlockedPresetKeys: ["sonnet-fast", "opus-fast", "opus-balanced", "fable-low"], flows: ["create", "enhance", "mimic", "datasheet", "social"], sortOrder: 3 },
 ];
 
 // Seed default + regen preset, mirroring DEFAULT_QUALITY / REGEN_QUALITY.
-const SEED_DEFAULT_KEY = "opus-fast";
+// Sonnet is the global default (unlocked for every tier, so no tier ever
+// defaults to a locked preset).
+const SEED_DEFAULT_KEY = "sonnet-fast";
 
 // Mirrors IMAGE_CREDITS_PER_IMAGE (lib/credits/cost.ts) - kept as a
 // literal here to avoid a config->cost import cycle; parity is asserted
@@ -207,9 +218,18 @@ export function defaultPresetKey(): string {
   if (active.some((p) => p.key === SEED_DEFAULT_KEY)) return SEED_DEFAULT_KEY;
   return active[0]?.key ?? SEED_DEFAULT_KEY;
 }
-/** Regen preset key (= REGEN_QUALITY): the fastest active (no-thinking) preset, else the default. */
+/**
+ * Regen preset key (= REGEN_QUALITY). PINNED to opus-fast when active: Sonnet
+ * now sits below opus-fast in the ladder, but we don't want legacy / retired
+ * (opus-medium) decks whose original preset is inactive to silently regen on
+ * the cheaper Sonnet - they keep regenerating on Opus. Falls back to the
+ * fastest active no-thinking preset only if opus-fast itself is deactivated.
+ * (Sonnet-generated decks still regen on Sonnet via regenPresetFor inheritance.)
+ */
 export function regenPresetKey(): string {
-  const noThink = getActivePresets().find((p) => !p.thinking);
+  const active = getActivePresets();
+  if (active.some((p) => p.key === "opus-fast")) return "opus-fast";
+  const noThink = active.find((p) => !p.thinking);
   return noThink?.key ?? defaultPresetKey();
 }
 

@@ -1587,20 +1587,21 @@ export default async function BrandPage() {
               </Frame>
               <Frame className="space-y-3 text-[13px] leading-relaxed text-muted-foreground">
                 <p>
-                  <span className="text-foreground">opus-fast</span> is the Free
-                  default (no thinking, ~$0.10, fastest). The green chip marks
-                  presets that pay the thinking-budget surcharge and wait time.
+                  <span className="text-foreground">sonnet-fast</span> (Basic /
+                  أساسي) is the Free default: the Sonnet 5 entry model, no
+                  thinking, cheapest. Opus is a paid feature.
                 </p>
                 <p>
                   The blue pill is the tier where a preset unlocks:{" "}
-                  <span className="text-foreground">opus-balanced</span> at Plus,{" "}
-                  <span className="text-foreground">fable-low</span> at Pro. A
-                  gated row upsells instead of selecting.
+                  <span className="text-foreground">opus-fast</span> at Plus,{" "}
+                  <span className="text-foreground">opus-balanced</span> at Pro,{" "}
+                  <span className="text-foreground">fable-low</span> at Max. A
+                  gated row upsells instead of selecting. (opus-medium retired.)
                 </p>
                 <p>
-                  <span className="text-foreground">fable-low</span> is parked -
-                  Fable is disabled upstream, so it stays out of the live picker
-                  until re-enabled.
+                  <span className="text-foreground">fable-low</span> (Claude Fable
+                  5, احترافي / Professional) is the Max-exclusive top tier -
+                  thinking required, priced 960 + 72/slide.
                 </p>
                 <p className="text-[12px]">
                   Source of truth: <Tag>lib/types/quality.ts</Tag> +{" "}
