@@ -55,7 +55,7 @@ export async function generateMetadata(props: {
   };
 }
 
-export default async function ReportDesignPage(props: {
+export default async function SocialMediaPostsPage(props: {
   params: Promise<{ lang: string }>;
 }) {
   const { lang } = await props.params;
