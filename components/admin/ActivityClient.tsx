@@ -143,13 +143,11 @@ function TimelineRow({ item, locale }: { item: TimelineItem; locale: Locale }) {
       <img
         src={thumb}
         alt=""
-        className="h-12 w-[85px] rounded-md object-cover"
-        style={{ background: "var(--tq-overlay-soft)" }}
+        className="tq-thumbnail h-12 w-[85px] rounded-md object-cover"
       />
     ) : (
       <span
-        className="grid h-12 w-[85px] place-items-center rounded-md"
-        style={{ background: "var(--tq-overlay-soft)" }}
+        className="tq-thumbnail grid h-12 w-[85px] place-items-center rounded-md"
       >
         <span
           aria-hidden="true"
