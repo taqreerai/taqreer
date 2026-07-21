@@ -192,14 +192,12 @@ export function GenerateSplitButton({
 
   return (
     <div ref={splitButtonRef} className="relative">
-      {/* Outer pill — the `.btn-gradient-anim` class supplies the
-          full animated chrome (border + hover fill). Inner buttons
-          carry no background of their own. `dir="ltr"` on the
-          wrapper forces a deterministic visual order regardless of
-          any RTL inheritance from the surrounding shell — main on
-          the visual left, arrow on the visual right. */}
+      {/* Outer pill — the `.btn-gradient-anim` class supplies the full animated
+          chrome (border + hover fill). Inner buttons carry no background of their
+          own. The pill inherits the locale direction so the two halves mirror in
+          RTL (Generate on the start side, Quality on the end side); the inner
+          buttons round with logical start/end radii to match. */}
       <div
-        dir="ltr"
         className="btn-gradient-anim group relative flex h-11 items-stretch transition-shadow"
         style={{ borderRadius: 9999 }}
       >
@@ -232,8 +230,7 @@ export function GenerateSplitButton({
           }}
           disabled={disabled || loading}
           aria-label={label}
-          className="relative z-10 inline-flex items-center justify-center gap-2 bg-transparent px-6 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
-          style={{ borderRadius: "9999px 0 0 9999px" }}
+          className="relative z-10 inline-flex items-center justify-center gap-2 rounded-s-full bg-transparent px-6 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
           transition={{ duration: 0.22, ease: "easeOut" }}
         >
           {loading ? (
@@ -263,8 +260,7 @@ export function GenerateSplitButton({
           disabled={disabled || loading}
           aria-label={presetMenuOpen ? dict.flows.generate.closeQualityMenu : dict.flows.generate.chooseQuality}
           aria-expanded={presetMenuOpen}
-          className="relative z-10 inline-flex items-center gap-1.5 bg-transparent px-3.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
-          style={{ borderRadius: "0 9999px 9999px 0" }}
+          className="relative z-10 inline-flex items-center gap-1.5 rounded-e-full bg-transparent px-3.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"
         >
           <span>{dict.flows.generate.qualityLabel}</span>
           <span

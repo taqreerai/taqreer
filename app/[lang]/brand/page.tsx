@@ -1564,23 +1564,28 @@ export default async function BrandPage() {
                   </div>
                   <div className="p-1.5">
                     <PresetRow
-                      model="Opus 4.8"
+                      model="Sonnet 5"
                       thinking={false}
-                      credits={deckCost("opus-fast")}
+                      credits={deckCost("sonnet-fast")}
                       active
                     />
                     <PresetRow
                       model="Opus 4.8"
-                      thinking
+                      thinking={false}
                       gate="Plus"
+                      credits={deckCost("opus-fast")}
+                    />
+                    <PresetRow
+                      model="Opus 4.8"
+                      thinking
+                      gate="Pro"
                       credits={deckCost("opus-balanced")}
                     />
                     <PresetRow
                       model="Fable 5"
                       thinking
-                      gate="Pro"
+                      gate="Max"
                       credits={deckCost("fable-low")}
-                      muted="parked"
                     />
                   </div>
                 </div>

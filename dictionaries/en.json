@@ -822,7 +822,7 @@
           "name": "Plus",
           "description": "To create decks regularly with every creation method.",
           "credits": "{credits} credits / month",
-          "features": ["Advanced Opus models", "Up to {slides} slides per deck", "All export formats", "No watermark", "All creation methods", "Balanced design quality", "Images with the latest GPT models", "Custom brand identity", "All quality presets"],
+          "features": ["Advanced Opus model", "Up to {slides} slides per deck", "All export formats", "No watermark", "All creation methods", "Balanced design quality", "Images with the latest GPT models", "Custom brand identity", "All quality presets"],
           "footnote": "Upgrade or downgrade anytime",
           "cta": "Start now"
         },

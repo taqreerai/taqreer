@@ -9,9 +9,10 @@
 // (lib/config/runtime-config.ts), so it can never drift from the seed:
 //   - add sonnet-fast (sort 0, claude-sonnet-5, 160/27)
 //   - reprice + reorder opus-fast (sort 1, 460/34) and opus-balanced (sort 2, 660/42)
-//   - deactivate opus-medium (sort 3) - kept for legacy decks
-//   - fable-low -> sort 4 (unchanged, inactive)
-//   - tiers: free=[sonnet-fast], plus=[+opus-fast], pro/max=[+opus-balanced]
+//   - reactivate fable-low (sort 3, claude-fable-5, 960/72) as the Max-only tier
+//   - deactivate opus-medium (sort 4) - kept for legacy decks
+//   - tiers: free=[sonnet-fast], plus=[+opus-fast], pro=[+opus-balanced],
+//     max=[+opus-balanced, +fable-low]
 //   - bump PlatformSettings.configVersion so runtime-config reloads
 import { config } from "dotenv";
 import { existsSync } from "fs";
