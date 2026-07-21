@@ -56,32 +56,47 @@ function bucketDaily(
   return b;
 }
 
-// Percentage change → "+8.2%" / "-2.4%" + trend. No baseline ⇒ no delta.
-function trendFrom(prev: number, curr: number): Omit<Trend, "spark"> {
-  if (!Number.isFinite(prev) || prev <= 0) return {};
+// Percentage change → "+8.2%" / "-2.4%" + trend.
+// `minPrev` is the smallest baseline for which a % is meaningful: a near-zero
+// prev (a young / ramping metric — e.g. 5 users or 8 decks growing into the
+// current totals) yields absurd 1000-7000% figures that read as broken, so
+// below the floor we return NO delta and let the sparkline carry the trend.
+// Survivors are display-capped at 999% so a still-small base can't render a
+// runaway 4-digit number.
+const DELTA_CAP = 999;
+function trendFrom(
+  prev: number,
+  curr: number,
+  minPrev = 1,
+): Omit<Trend, "spark"> {
+  if (!Number.isFinite(prev) || prev < Math.max(minPrev, Number.EPSILON)) {
+    return {};
+  }
   const pct = ((curr - prev) / prev) * 100;
+  const capped = Math.min(Math.abs(pct), DELTA_CAP);
+  const over = Math.abs(pct) > DELTA_CAP ? ">" : "";
   return {
-    delta: `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`,
+    delta: `${over}${pct < 0 ? "-" : "+"}${capped.toFixed(1)}%`,
     trend: pct > 0.1 ? "up" : pct < -0.1 ? "down" : "flat",
   };
 }
 
 // Flow metrics: recent-half sum vs earlier-half sum (this week vs last).
-function flowTrend(spark: number[]): Omit<Trend, "spark"> {
+function flowTrend(spark: number[], minPrev = 1): Omit<Trend, "spark"> {
   const h = Math.floor(spark.length / 2);
   const prev = spark.slice(0, h).reduce((a, b) => a + b, 0);
   const curr = spark.slice(h).reduce((a, b) => a + b, 0);
-  return trendFrom(prev, curr);
+  return trendFrom(prev, curr, minPrev);
 }
 
 // Stock metrics (cumulative totals): latest value vs the window midpoint
 // (recent-half growth). When the midpoint is still zero — the app is younger
 // than half the window, so the series starts at 0 — fall back to the first day
 // that had data, so a young metric still shows a growth % instead of nothing.
-function stockTrend(spark: number[]): Omit<Trend, "spark"> {
+function stockTrend(spark: number[], minPrev = 1): Omit<Trend, "spark"> {
   const mid = Math.floor(spark.length / 2);
   const prev = spark[mid] > 0 ? spark[mid] : (spark.find((v) => v > 0) ?? 0);
-  return trendFrom(prev, spark.at(-1) ?? 0);
+  return trendFrom(prev, spark.at(-1) ?? 0, minPrev);
 }
 
 async function getStatTrends(): Promise<{
@@ -150,11 +165,15 @@ async function getStatTrends(): Promise<{
     );
   }
 
+  // Per-metric baseline floors below which a % is noise (one signup / deck
+  // swings it wildly). Until the app clears these, the card shows value +
+  // sparkline only. Counts use unit floors; credits use a charge-scale floor
+  // (a single deck is ~200-660 cr, so ~3k ≈ several decks of real history).
   return {
-    users: { spark: usersSpark, ...stockTrend(usersSpark) },
-    subs: { spark: subsSpark, ...stockTrend(subsSpark) },
-    decks: { spark: decksSpark, ...flowTrend(decksSpark) },
-    credits: { spark: creditsSpark, ...flowTrend(creditsSpark) },
+    users: { spark: usersSpark, ...stockTrend(usersSpark, 25) },
+    subs: { spark: subsSpark, ...stockTrend(subsSpark, 5) },
+    decks: { spark: decksSpark, ...flowTrend(decksSpark, 15) },
+    credits: { spark: creditsSpark, ...flowTrend(creditsSpark, 3000) },
   };
 }
 
@@ -208,7 +227,9 @@ async function getBalanceTrend(): Promise<{ usd: number | null } & Trend> {
         .reduce((a, t) => a + t.amount, 0);
       spark.push((cents - laterCents) / 100);
     }
-    return { usd: cents / 100, spark, ...trendFrom(spark[0], spark.at(-1) ?? 0) };
+    // No delta on the balance: it's a fluctuating cash figure (drops on every
+    // payout), not a growth series, so a % change reads as noise. Sparkline only.
+    return { usd: cents / 100, spark };
   } catch (err) {
     console.error("[admin/stats] stripe balance/trend fetch failed", err);
     return { usd: null, spark: [] };
