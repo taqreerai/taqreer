@@ -209,7 +209,7 @@ export async function POST(
 
   // ── Credit pre-check (UX-forward gate) ─────────────────────────────
   // The worker holds regenCost(preset, slideCount) against the OWNER and throws
-  // NonRetriableError on an insufficient balance — which the user only ever sees
+  // NonRetriableError on an insufficient balance, which the user only ever sees
   // as a generic `failed` version with no upgrade path. Gate here, BEFORE
   // promoting drafts / allocating a version, so the studio opens the credit gate
   // synchronously. Size the hold by counting the AI drafts read-only (the exact

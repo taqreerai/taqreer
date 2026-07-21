@@ -1,6 +1,6 @@
 "use client";
 
-// DesktopEditHint — one-time, dismissible notice shown to owners/editors who
+// DesktopEditHint: one-time, dismissible notice shown to owners/editors who
 // open the studio on a PHONE. Direct editing (double-click text, move/restyle
 // elements) is desktop-only (`editMode = canEdit && !isMobileStudio` in
 // DeckView), so mobile users can only change content through the paid AI path.

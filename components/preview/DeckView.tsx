@@ -1842,7 +1842,7 @@ export function DeckView({
   // studio. Same effect-not-initializer recipe as isMobileStudio (localStorage +
   // matchMedia aren't available in the useState initializer). Only turns the
   // flag ON; the render gates on isMobileStudio too, so a resize to desktop
-  // dismisses it. localStorage read is best-effort — a blocked store (private
+  // dismisses it. localStorage read is best-effort: a blocked store (private
   // mode) just skips the hint rather than nagging every load.
   useEffect(() => {
     if (!isMobileStudio || !canEdit) return;
@@ -1863,7 +1863,7 @@ export function DeckView({
     try {
       window.localStorage.setItem("tq.studio.desktopEditHint.v1", "1");
     } catch {
-      /* storage blocked — dismissal just won't persist */
+      /* storage blocked, dismissal just won't persist */
     }
   }, []);
 
@@ -3529,6 +3529,9 @@ export function DeckView({
       }
       const data = (await res.json()) as { comment: CommentRow };
       setComments((prev) => [...prev, data.comment]);
+      // Return the created row so callers (the AI composer) can roll it back if
+      // the follow-up regen is refused by the credit gate.
+      return data.comment;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- throwApiError + dict.editor.errors strings are stable; used only in the error path
     [projectId, studioMode],
@@ -3622,10 +3625,12 @@ export function DeckView({
           | null;
         // Out of credits: open the upgrade/top-up gate instead of failing
         // silently. Clear the optimistic overlay first so no spinner strands.
+        // Return `true` so the AI-composer caller can roll back the comment it
+        // optimistically created (it must not persist as a hidden draft).
         if (res.status === 402 && isCreditGatePayload(data)) {
           setApplying(null);
           setCreditGate(data);
-          return;
+          return true;
         }
         throw new Error(
           (data as { error?: string } | null)?.error ??
@@ -3669,14 +3674,22 @@ export function DeckView({
       if (!target) return;
       const targetId = target.slideId;
       if (slideStates[targetId]?.lockedAt != null) return;
-      await handleCreateComment({
+      const created = await handleCreateComment({
         slideId: targetId,
         bounds: pendingAiBounds,
         content: trimmed,
       });
-      // Region consumed — clear it; the optimistic regen overlay takes over.
+      // Region consumed, clear it; the optimistic regen overlay takes over.
       setPendingAiBounds(null);
-      await handleFirePartialRegen([targetId]);
+      const gated = await handleFirePartialRegen([targetId]);
+      if (gated) {
+        // The credit gate refused the run (CreditGateDialog is now open). Roll
+        // back the forAi comment we just created so it isn't stranded as a
+        // hidden draft (or duplicated on a post-topup retry), then rethrow so
+        // PreviewActionBar keeps the composer text for that retry.
+        await handleDeleteComment(created.id).catch(() => {});
+        throw new Error("regen blocked by credit gate");
+      }
     },
     [
       applying,
@@ -3686,6 +3699,7 @@ export function DeckView({
       pendingAiBounds,
       handleCreateComment,
       handleFirePartialRegen,
+      handleDeleteComment,
     ],
   );
 
@@ -4322,7 +4336,11 @@ export function DeckView({
       canvasW={canvasW}
       canvasH={canvasH}
       direction={manifest!.direction}
-      onCreate={handleCreateComment}
+      // Adapt the row-returning creator to the overlay's void onCreate; only the
+      // AI composer path needs the created row (for credit-gate rollback).
+      onCreate={async (input) => {
+        await handleCreateComment(input);
+      }}
       onUpdate={handleUpdateComment}
       onDelete={handleDeleteComment}
       canModerate={canEdit}

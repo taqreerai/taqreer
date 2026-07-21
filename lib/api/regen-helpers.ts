@@ -145,13 +145,13 @@ export type CreditGate402 = {
 /**
  * Pre-flight credit gate for the regen routes. The regen/generate workers hold
  * credits against the deck OWNER (project.userId) and throw NonRetriableError
- * when the balance can't cover it — which the user only ever sees as a generic
+ * when the balance can't cover it, which the user only ever sees as a generic
  * `failed` version with no upgrade path (the incident this fixes). This runs the
  * SAME balance check in the ROUTE, BEFORE any version/job is allocated or event
  * dispatched, so the studio can open the credit gate synchronously instead.
  *
  * Returns the 402 body to send, or null when the run is affordable (or the owner
- * is an admin, whose runs are waived downstream by holdCredits — mirrors the
+ * is an admin, whose runs are waived downstream by holdCredits, mirroring the
  * isAdmin bypass in preflightGenerate). `cost` MUST be computed with the same
  * call the worker holds with (regenCost for partial/slide regen, the carried
  * generation holdCredits for full-deck regen) so shown == charged. The worker
