@@ -4,8 +4,8 @@
 // getFlows + FlowCard) on a marketing spoke page, framed in the same browser-
 // window chrome so a visitor sees the real, deeply-customizable flow form.
 // Static: the Generate button is disabled and no real inputs are mounted.
-// Reused by the flow spokes (/ai-presentations = create, /report-design =
-// datasheet, /redesign = enhance). Copy tracks dict.flows.* via getFlows, so it
+// Reused by the flow spokes (/ai-presentations = create, /social-media-posts =
+// social, /redesign = enhance). Copy tracks dict.flows.* via getFlows, so it
 // can't drift from the live flows.
 
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
@@ -14,7 +14,7 @@ import { getFlows, FlowCard } from "@/components/marketing/DashboardPreview";
 export function FlowPreview({
   view,
 }: {
-  view: "create" | "enhance" | "mimic" | "datasheet";
+  view: "create" | "enhance" | "mimic" | "social";
 }) {
   const dict = useDict();
   const { dir } = useLocale();

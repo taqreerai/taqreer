@@ -167,7 +167,7 @@
     "subtitle": "Everything taqreer.ai does, one page each.",
     "links": {
       "aiPresentations": { "title": "AI presentations", "body": "Turn an idea or a file into a designed deck." },
-      "reportDesign": { "title": "Report design", "body": "Turn spreadsheets into designed reports with charts." },
+      "socialMediaPosts": { "title": "Social media posts", "body": "Design on-brand posts and carousels for every platform." },
       "redesign": { "title": "Redesign a deck", "body": "Upload an existing presentation and let AI redesign it." },
       "presentationStyle": { "title": "Match a style", "body": "Mimic the design style of a deck you like." },
       "arabicPresentations": { "title": "Arabic presentations", "body": "Arabic-first design with true right-to-left support." },
@@ -237,37 +237,37 @@
       { "q": "Can I export to PowerPoint?", "a": "Yes. Export your deck as editable PPTX for PowerPoint while preserving the Arabic formatting and text direction." }
     ]
   },
-  "reportDesign": {
+  "socialMediaPosts": {
     "meta": {
-      "title": "AI Report Maker from Your Data | taqreer.ai",
-      "description": "Turn your spreadsheets into AI-designed reports and presentations. Upload an Excel or CSV file and taqreer.ai builds a report with charts, in Arabic and English, ready to edit and export."
+      "title": "AI Social Media Post Maker | taqreer.ai",
+      "description": "Design social media posts and carousels with AI, in Arabic and English. Pick a platform and size, add your brief and brand, and export as PDF or PNG."
     },
-    "breadcrumb": "Report Design",
+    "breadcrumb": "Social Media Posts",
     "hero": {
-      "eyebrow": "From data",
-      "title": "Design reports with AI from your data",
-      "subtitle": "Upload a spreadsheet and taqreer.ai turns it into a designed report and presentation with charts, in Arabic and English, ready to edit and export.",
+      "eyebrow": "Social",
+      "title": "Design social media posts with AI",
+      "subtitle": "Pick a platform and size, add your brief and brand, and taqreer.ai designs an on-brand post or carousel for Instagram, Facebook, X, and LinkedIn, in Arabic and English, ready to export as PDF or PNG.",
       "cta": "Start free"
     },
     "preview": {
-      "title": "From a spreadsheet to a report",
-      "subtitle": "Upload an Excel or CSV file, apply your brand, and set the output. This is how turning your data starts."
+      "title": "From a brief to a post",
+      "subtitle": "Choose a platform and size, apply your brand, and set the design. This is how designing a social post starts."
     },
     "why": {
       "title": "Why taqreer.ai",
-      "subtitle": "Your data becomes a visual story, not just numbers.",
+      "subtitle": "On-brand posts and carousels, sized for every platform.",
       "points": [
-        { "title": "Automatic charts", "body": "taqreer.ai reads your data and picks the right charts for each section." },
-        { "title": "Reports in Arabic", "body": "Full right-to-left support and numbers inside Arabic text." },
-        { "title": "Extra instructions", "body": "Add notes that steer the AI toward what matters most in your data." },
-        { "title": "Edit and export", "body": "Tweak any slide in the editor, then export to PowerPoint and PDF." }
+        { "title": "Every platform size", "body": "Instagram, Facebook, X, and LinkedIn ratios, square, portrait, and story, at the exact export size." },
+        { "title": "Carousels in one go", "body": "Design a multi-slide carousel with a consistent look across every slide." },
+        { "title": "On-brand every time", "body": "Apply your colors, fonts, and logo so every post matches your identity." },
+        { "title": "Export PDF or PNG", "body": "Download your post or carousel as PDF or PNG, ready to publish." }
       ]
     },
     "faq": [
-      { "q": "How do I design a report with AI?", "a": "Upload an Excel or CSV spreadsheet, choose your brand, and the AI turns it into a report and presentation with charts in minutes." },
-      { "q": "Which file formats are supported?", "a": "taqreer.ai supports Excel files (XLSX, XLS) and CSV files." },
-      { "q": "Are the reports in Arabic?", "a": "Yes. taqreer.ai is Arabic-first with full right-to-left support and numbers inside Arabic text, and it supports English too." },
-      { "q": "Can I export to PowerPoint?", "a": "Yes. Export your report as editable PPTX for PowerPoint while preserving the Arabic formatting and charts." }
+      { "q": "How do I design a social media post with AI?", "a": "Pick a platform and size, add your brief and brand, and taqreer.ai designs an on-brand post or carousel in minutes that you can edit and export." },
+      { "q": "Which platforms and sizes are supported?", "a": "Instagram, Facebook, X, and LinkedIn, with square, portrait, story, and landscape sizes at the exact export dimensions." },
+      { "q": "Can I design a carousel?", "a": "Yes. Choose Auto or a fixed slide count and taqreer.ai designs a multi-slide carousel with a consistent design." },
+      { "q": "Can I export as PDF or PNG?", "a": "Yes. Export your post or carousel as PDF or PNG, in Arabic and English, ready to publish." }
     ]
   },
   "redesign": {
@@ -753,7 +753,7 @@
       "features": {
         "eyebrow": "Features",
         "title": "Everything you need to create a professional presentation",
-        "subtitle": "Start from raw content, enhance an existing deck, mimic a reference style, or turn your data into slides. taqreer.ai designs your presentations and reports with AI."
+        "subtitle": "Start from raw content, enhance an existing deck, mimic a reference style, or design a social media post. taqreer.ai designs your presentations and reports with AI."
       },
       "templates": {
         "eyebrow": "Templates",
@@ -776,7 +776,7 @@
       { "title": "Create a new presentation", "description": "Write your idea or upload a file, and taqreer.ai builds a complete, professionally designed deck that matches your taste and brand identity." },
       { "title": "Enhance an existing presentation", "description": "Upload your current deck as PowerPoint or PDF, and we'll redesign it with your new identity while preserving the core content." },
       { "title": "Mimic a presentation's style", "description": "Attach a reference deck whose colors, fonts, and layout you like, and we'll apply the same visual style to your new content." },
-      { "title": "Create from data", "description": "Turn an Excel or CSV file into a complete professional deck, with the right charts and precise formatting on every slide." }
+      { "title": "Design a social media post", "description": "Pick a platform and size, add your brief and brand, and taqreer.ai designs an on-brand post or carousel you can export as PDF or PNG." }
     ],
     "templatesCard": {
       "title": "Ready-made templates with RTL support",
@@ -846,7 +846,7 @@
     "faq": [
       { "q": "What is taqreer.ai?", "a": "taqreer.ai is an AI platform that turns your content, text, a file, or an idea, into a fully designed professional presentation in Arabic and English within minutes." },
       { "q": "How do I design a presentation with AI?", "a": "Write your topic or upload a file in taqreer.ai, choose your brand, and the AI designs a complete presentation in minutes that you can edit and export to PowerPoint." },
-      { "q": "Does taqreer.ai design presentations and reports in Arabic?", "a": "Yes. taqreer.ai is Arabic-first with full right-to-left support and Arabic fonts, and it turns your ideas and data into designed presentations and reports in Arabic and English." },
+      { "q": "Does taqreer.ai design presentations and reports in Arabic?", "a": "Yes. taqreer.ai is Arabic-first with full right-to-left support and Arabic fonts, and it turns your ideas and files into designed presentations and reports in Arabic and English." },
       { "q": "Does it fully support Arabic?", "a": "Yes. taqreer.ai is Arabic-first: correct RTL direction, elegant Arabic fonts, and bidirectional formatting that handles English words and numbers inside Arabic text accurately." },
       { "q": "How does the credit system work?", "a": "Each deck uses credits based on its slide count and the model used. You get monthly credits with your plan, plus {credits} free credits at signup to try the platform." },
       { "q": "Can I edit the deck after creating it?", "a": "Absolutely. The editor lets you edit text, colors, and slides and reorder them, with autosave and checkpoints you can revert to anytime." },

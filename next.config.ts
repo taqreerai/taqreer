@@ -35,6 +35,26 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  // The datasheet flow's SEO spoke /report-design was renamed to
+  // /social-media-posts (the flow became social). 301 (statusCode, NOT
+  // permanent:true which emits 308) so the old indexed URL passes its authority
+  // to the new one. Redirects run BEFORE the proxy.ts locale gate, so the
+  // locale-prefixed canonicals (/ar/report-design, /en/report-design) 301 in one
+  // hop; the bare path 301s then the proxy adds the locale, same as any bare URL.
+  async redirects() {
+    return [
+      {
+        source: "/:lang(ar|en)/report-design",
+        destination: "/:lang/social-media-posts",
+        statusCode: 301,
+      },
+      {
+        source: "/report-design",
+        destination: "/social-media-posts",
+        statusCode: 301,
+      },
+    ];
+  },
 };
 
 export default withSentryConfig(nextConfig, {

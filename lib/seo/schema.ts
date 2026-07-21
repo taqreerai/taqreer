@@ -40,7 +40,7 @@ const ENTITY = {
     features: [
       "تصميم عروض تقديمية بالذكاء الاصطناعي",
       "دعم كامل للعربية واتجاه النص من اليمين إلى اليسار",
-      "تحويل الملفات والتقارير إلى عروض مصممة",
+      "تصميم منشورات وكاروسيل لمنصات التواصل الاجتماعي",
       "محرر شرائح مباشر في المتصفح",
       "تصدير إلى باوربوينت و PDF مع الحفاظ على التنسيق العربي",
       "تطبيق الهوية البصرية: الشعار والألوان والخطوط",
@@ -55,7 +55,7 @@ const ENTITY = {
     features: [
       "AI presentation design",
       "Full Arabic and right-to-left support",
-      "Turn files and reports into designed decks",
+      "Design social media posts and carousels",
       "Live in-browser slide editor",
       "Export to PowerPoint and PDF with Arabic formatting preserved",
       "Apply your brand: logo, colors, and fonts",

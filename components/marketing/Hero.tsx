@@ -209,7 +209,7 @@ export function Hero({ projectCount }: { projectCount?: number }) {
                 The four QuickActions cards inside the demo are
                 clickable — each one swaps the panel to a static
                 rendering of the corresponding flow (/create,
-                /enhance, /mimic, /datasheet). Files cannot actually
+                /enhance, /mimic, /social). Files cannot actually
                 be uploaded — dropzones are visual chrome only.
 
                 The chrome bar + preview pane stack inside one outer

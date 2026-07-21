@@ -6,7 +6,7 @@
 // inside the landing hero's browser-chrome frame. The four QuickActions
 // cards on the dashboard view are the ONLY interactive elements — each
 // one swaps the panel to a static rendering of the corresponding flow
-// (/create, /enhance, /mimic, /datasheet). Files cannot actually be
+// (/create, /enhance, /mimic, /social). Files cannot actually be
 // uploaded — the dropzones are visual chrome only (no <input type=file>
 // is rendered) so this is purely an HTML view.
 //
@@ -48,8 +48,16 @@ import type { AnimatedIconHandle } from "@/components/icons/types";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
+import { SLIDE_DIMENSIONS, type SlideFormat } from "@/lib/schema/slide";
+import {
+  SOCIAL_PLATFORMS,
+  PLATFORM_LABEL,
+  ratiosForPlatform,
+  defaultRatioFor,
+  DEFAULT_PLATFORM,
+} from "@/lib/social/platforms";
 
-type View = "dashboard" | "create" | "enhance" | "mimic" | "datasheet";
+type View = "dashboard" | "create" | "enhance" | "mimic" | "social";
 
 // Quick-action card metadata. Copy (title/desc) is resolved from the
 // dictionary at render time via `dict.landing.preview.quickActions[id]`
@@ -61,7 +69,7 @@ const QUICK_ACTIONS: Array<{
   { id: "create", icon: "add_circle" },
   { id: "enhance", icon: "auto_fix_high" },
   { id: "mimic", icon: "content_copy" },
-  { id: "datasheet", icon: "dataset" },
+  { id: "social", icon: "tag" },
 ];
 
 // Sidebar icon list — mirrors `components/app/Sidebar.tsx` exactly so a
@@ -85,7 +93,7 @@ const SIDEBAR_ITEMS: Array<{
   { id: "create", icon: "add_circle", labelKey: "create", group: "actions" },
   { id: "enhance", icon: "auto_fix_high", labelKey: "enhance", group: "actions" },
   { id: "mimic", icon: "content_copy", labelKey: "mimic", group: "actions" },
-  { id: "datasheet", icon: "dataset", labelKey: "fromData", group: "actions", comingSoon: true },
+  { id: "social", icon: "tag", labelKey: "social", group: "actions" },
   { id: "projects", icon: "folder_copy", labelKey: "projects", group: "library" },
   { id: "templates", icon: "grid_view", labelKey: "templates", group: "library" },
   { id: "brand-kits", icon: "id_card", labelKey: "brandKits", group: "library" },
@@ -118,7 +126,7 @@ const VIEW_TO_PATH: Record<View, string> = {
   create: "/create",
   enhance: "/enhance",
   mimic: "/mimic",
-  datasheet: "/datasheet",
+  social: "/social",
 };
 
 // Links this element's internal scroll to the PAGE scroll, so the demo content
@@ -280,7 +288,7 @@ function DemoSidebar({
     "create",
     "enhance",
     "mimic",
-    "datasheet",
+    "social",
   ]);
 
   const groupedItems = {
@@ -341,7 +349,7 @@ function DemoSidebar({
                   item.id === "create" ||
                   item.id === "enhance" ||
                   item.id === "mimic" ||
-                  item.id === "datasheet"
+                  item.id === "social"
                 ) {
                   onNavigate(item.id);
                 }
@@ -442,10 +450,9 @@ function DemoQACard({
   dir: "rtl" | "ltr";
 }) {
   const iconRef = useRef<AnimatedIconHandle>(null);
-  // Real dashboard quick-action copy (dict.quickActions.*); the demo's
-  // "datasheet" maps to the app's "fromData" entry.
-  const qaKey = card.id === "datasheet" ? "fromData" : card.id;
-  const copy = dict.quickActions[qaKey];
+  // Real dashboard quick-action copy (dict.quickActions.*) — card.id matches the
+  // dict key directly (create / enhance / mimic / social).
+  const copy = dict.quickActions[card.id];
   return (
     <button
       type="button"
@@ -686,7 +693,7 @@ function SlideWireframe() {
 // ─── Flow body ──────────────────────────────────────────────────────
 // Each flow view renders a static rendering of the real flow page's
 // 3- or 4-card layout. Card icons + titles match the real CardHeader
-// usage in `/create`, `/enhance`, `/mimic`, `/datasheet` so a returning
+// usage in `/create`, `/enhance`, `/mimic`, `/social` so a returning
 // user reads each view as the actual flow. Inputs that would normally
 // trigger a file picker are rendered as decorative cards (no
 // <input type=file> is mounted) so a marketing visitor can't open the
@@ -816,7 +823,7 @@ function FakeDropzone({
   title: string;
   hint: string;
   // `tall` = the large centered drop area the real flows use as a card's
-  // PRIMARY action (enhance file, datasheet data, mimic reference); it grows
+  // PRIMARY action (enhance file, mimic reference); it grows
   // to fill the card. The default compact row is for secondary dropzones.
   tall?: boolean;
 }) {
@@ -924,9 +931,9 @@ function FakeAIImagesPanel({ dict, dir }: { dict: Dictionary; dir: "rtl" | "ltr"
   );
 }
 
-function FakeDesignStyleRow({ dict }: { dict: Dictionary }) {
+function FakeDesignStyleRow({ dict, label }: { dict: Dictionary; label?: string }) {
   return (
-    <FieldRow label={dict.flows.designStyle}>
+    <FieldRow label={label ?? dict.flows.designStyle}>
       <span className="rounded-full border border-[var(--tq-border-hairline)] bg-[var(--tq-card)] px-2 py-0.5 text-[10px] text-foreground">
         {dict.flows.stylePicker.auto}
       </span>
@@ -944,16 +951,90 @@ function FakeSlideSize({ dict }: { dict: Dictionary }) {
   );
 }
 
-function FakeInstructions({ dict, dir }: { dict: Dictionary; dir: "rtl" | "ltr" }) {
+// Static stand-in for SocialFormatFields: platform pills + ratio tiles for the
+// default platform (Instagram). Driven from the real source of truth
+// (lib/social/platforms + SLIDE_DIMENSIONS) so it can't drift, and the px label
+// is the ACTUAL export size, mirroring the real picker.
+const SOCIAL_RATIO_ASPECT: Record<SlideFormat, string> = {
+  "16:9": "16 / 9",
+  "9:16": "9 / 16",
+  "3:4": "3 / 4",
+  "1:1": "1 / 1",
+  "4:5": "4 / 5",
+};
+
+function FakeSocialFormat({ dict }: { dict: Dictionary }) {
+  const f = dict.flows;
+  const platform = DEFAULT_PLATFORM; // instagram
+  const ratios = ratiosForPlatform(platform); // [4:5, 1:1, 9:16]
+  const activeFormat = defaultRatioFor(platform).format; // 4:5
   return (
-    <div className="flex flex-col gap-1.5" dir={dir}>
-      <span className="text-[11px] font-semibold text-foreground/70">
-        {dict.flows.datasheet.instructions}
-      </span>
-      <FakeTextarea
-        placeholder={dict.flows.datasheet.instructionsPlaceholder}
-        rows={2}
-      />
+    <div className="flex flex-col gap-3">
+      {/* Platform pills */}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-[11px] font-semibold text-foreground/70">
+          {f.social.platform}
+        </span>
+        <div className="flex flex-wrap gap-1.5">
+          {SOCIAL_PLATFORMS.map((p) => {
+            const active = p === platform;
+            return (
+              <span
+                key={p}
+                className={`rounded-md border px-2 py-0.5 text-[10px] font-medium ${
+                  active
+                    ? "border-[var(--tq-blue)] text-[var(--tq-blue)]"
+                    : "border-foreground/20 text-foreground/60"
+                }`}
+              >
+                {PLATFORM_LABEL[p]}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+      {/* Ratio tiles for the selected platform */}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-[11px] font-semibold text-foreground/70">
+          {f.social.ratio}
+        </span>
+        <div className="grid grid-cols-1 gap-1.5">
+          {ratios.map((r) => {
+            const active = r.format === activeFormat;
+            const d = SLIDE_DIMENSIONS[r.format];
+            return (
+              <div
+                key={r.format}
+                className="flex h-9 items-center justify-between gap-2 rounded-lg border px-2.5"
+                style={{
+                  background: "var(--tq-overlay-soft)",
+                  borderColor: active
+                    ? "var(--tq-blue)"
+                    : "var(--tq-border-hairline)",
+                }}
+              >
+                <span className="flex flex-col items-start leading-tight">
+                  <span
+                    className={`text-[11px] font-semibold ${active ? "text-[var(--tq-blue)]" : "text-foreground/70"}`}
+                  >
+                    {f.social.ratios[r.nameKey]}
+                  </span>
+                  <span
+                    dir="ltr"
+                    className={`text-[9px] tabular-nums ${active ? "text-foreground/70" : "text-foreground/40"}`}
+                  >
+                    {d.width} x {d.height} · {r.format}
+                  </span>
+                </span>
+                <span
+                  className="rounded-xs border border-foreground/30 bg-foreground/10"
+                  style={{ height: 18, aspectRatio: SOCIAL_RATIO_ASPECT[r.format] }}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1102,12 +1183,12 @@ export function FlowCard({ card }: { card: FlowCardSpec }) {
 //   • /enhance    →  subject (الملف الأصلي) / palette (الهوية البصرية)
 //   • /mimic      →  subject (المحتوى) / palette (الهوية البصرية)
 //                    / auto_awesome (ما الذي نحاكيه)
-//   • /datasheet  →  dataset (البيانات) / palette (الهوية البصرية)
-//                    / settings (إعدادات الإخراج)
+//   • /social     →  edit_note (المحتوى) / palette (الهوية البصرية)
+//                    / tune (التصميم)
 
 // Builds the per-flow card specs from the REAL flow dictionary (dict.flows.*)
 // so the demo's copy + feature set track the actual /create /enhance /mimic
-// /datasheet pages and can't drift. `dir` is threaded into every control that
+// /social pages and can't drift. `dir` is threaded into every control that
 // mirrors with the locale. Only universal aspect tokens ("16:9", "9:16") and
 // the typeface name stay literal (they aren't translatable copy).
 export function getFlows(
@@ -1118,7 +1199,8 @@ export function getFlows(
   const cta = f.generate.create;
   // The real flows all render ONE consolidated brand-identity card (palette +
   // fonts + logo + save-default). `withAi` appends the AI-images panel — the
-  // create + mimic flows have it, enhance + datasheet don't.
+  // create + mimic flows have it, enhance + social don't (social's AI-images
+  // panel lives in its Design card, not the brand card).
   const brandCard = (palette: string[], withAi: boolean): FlowCardSpec => ({
     icon: "palette",
     title: f.brandCard,
@@ -1260,49 +1342,38 @@ export function getFlows(
         },
       ],
     },
-    datasheet: {
-      title: f.datasheet.title,
-      subtitle: f.datasheet.subtitle,
+    social: {
+      title: f.social.title,
+      subtitle: f.social.subtitle,
       cta,
       cards: [
         {
-          icon: "dataset",
-          title: f.datasheet.data,
+          icon: "edit_note",
+          title: f.social.contentCard,
           body: (
             <>
               <FieldRow label={f.language}>
                 <FakeSegmented options={[f.langArabic, f.langEnglish]} active={0} variant="primary" />
               </FieldRow>
-              <FakeDropzone
-                tall
-                icon="dataset"
-                title={f.datasheet.dragOrClick}
-                hint={f.datasheet.fileHint}
-              />
-              <CardSeparator />
-              <FakePersistentRow dict={dict} dir={dir} />
+              <FakeTextarea placeholder={f.social.topicPlaceholder} rows={5} />
             </>
           ),
         },
         brandCard(TRIAD, false),
         {
-          icon: "settings",
-          title: f.outputCard,
+          icon: "tune",
+          title: f.social.designCard,
           body: (
             <>
-              <FakeSlideSize dict={dict} />
+              <FakeSocialFormat dict={dict} />
               <CardSeparator />
-              <FieldRow label={f.slideCount}>
+              <FieldRow label={f.social.count}>
                 <FakeSegmented options={[f.auto, f.custom]} active={0} />
               </FieldRow>
               <CardSeparator />
-              <FieldRow label={f.slideNumbering}>
-                <FakeToggle on dir={dir} />
-              </FieldRow>
+              <FakeDesignStyleRow dict={dict} label={f.social.style} />
               <CardSeparator />
-              <FakeDesignStyleRow dict={dict} />
-              <CardSeparator />
-              <FakeInstructions dict={dict} dir={dir} />
+              <FakeAIImagesPanel dict={dict} dir={dir} />
             </>
           ),
         },

@@ -21,7 +21,7 @@ taqreer.ai is Arabic-first: true right-to-left layout, Arabic typography, and bi
 ## What it does
 
 - Create: turn a topic or brief into a designed presentation (${SITE}/en/ai-presentations, ${SITE}/ar/ai-presentations)
-- Reports: turn an Excel or CSV spreadsheet into a designed report with charts (${SITE}/en/report-design, ${SITE}/ar/report-design)
+- Social: design social media posts and carousels for Instagram, Facebook, X, and LinkedIn, exported as PDF or PNG (${SITE}/en/social-media-posts, ${SITE}/ar/social-media-posts)
 - Redesign: upload an existing deck and let AI redesign it (${SITE}/en/redesign, ${SITE}/ar/redesign)
 - Match a style: mimic the design style of a reference deck (${SITE}/en/presentation-style, ${SITE}/ar/presentation-style)
 - Arabic presentations: Arabic-first design with real right-to-left support (${SITE}/en/arabic-presentations, ${SITE}/ar/arabic-presentations)

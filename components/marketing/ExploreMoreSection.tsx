@@ -13,7 +13,7 @@ type Dict = Awaited<ReturnType<typeof getDictionary>>;
 
 export type SpokeKey =
   | "aiPresentations"
-  | "reportDesign"
+  | "socialMediaPosts"
   | "redesign"
   | "presentationStyle"
   | "arabicPresentations"
@@ -22,7 +22,7 @@ export type SpokeKey =
 
 const SPOKE_PATHS: Record<SpokeKey, string> = {
   aiPresentations: "/ai-presentations",
-  reportDesign: "/report-design",
+  socialMediaPosts: "/social-media-posts",
   redesign: "/redesign",
   presentationStyle: "/presentation-style",
   arabicPresentations: "/arabic-presentations",

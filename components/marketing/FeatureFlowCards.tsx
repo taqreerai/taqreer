@@ -2,7 +2,7 @@
 
 // ─── Landing feature-flow columns ─────────────────────────────────
 //
-// The four flows (Create / Enhance / Mimic / Datasheet) as 4 gapped cards that
+// The four flows (Create / Enhance / Mimic / Social) as 4 gapped cards that
 // match the dashboard's QuickActions — each uses the shared `.qa-card` (rounded
 // surface + idle hairline ring + animated mesh ring on hover). RTL: content
 // right-aligned, cards flow right→left. Hover plays the AnimatedIcon + tints the
@@ -19,13 +19,13 @@ import type { AnimatedIconHandle } from "@/components/icons/types";
 
 // Icons + spoke hrefs are presentational/routing chrome (not localized copy) —
 // kept in source order matching the dictionary's `landing.flowCards`
-// (create / enhance / mimic / datasheet).
-const FLOW_ICONS = ["add_circle", "auto_fix_high", "content_copy", "dataset"];
+// (create / enhance / mimic / social).
+const FLOW_ICONS = ["add_circle", "auto_fix_high", "content_copy", "tag"];
 const FLOW_HREFS: (string | null)[] = [
   "/ai-presentations", // create
   "/redesign", // enhance
   "/presentation-style", // mimic
-  "/report-design", // datasheet
+  "/social-media-posts", // social
 ];
 
 export function FeatureFlowCards() {

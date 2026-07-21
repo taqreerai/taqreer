@@ -1,6 +1,6 @@
-// Public /report-design spoke (SEO Phase 2). Targets "تصميم تقرير بالذكاء
-// الاصطناعي" (the Datasheet flow). Inlines the real Datasheet flow statically
-// (FlowPreview view="datasheet", reused from the hero demo). (marketing) chrome
+// Public /social-media-posts spoke (SEO). Targets "تصميم منشورات لمنصات التواصل
+// الاجتماعي" (the Social flow). Inlines the real Social flow statically
+// (FlowPreview view="social", reused from the hero demo). (marketing) chrome
 // + SectionHeader + FaqAccordion; tokens only, tashkeel-free.
 
 import type { Metadata } from "next";
@@ -23,8 +23,8 @@ function resolve(lang: string): "ar" | "en" {
 }
 
 // Material Symbols icon per "why" point (presentation-only + locale-agnostic).
-// Order matches dict.reportDesign.why.points.
-const WHY_ICONS = ["bar_chart", "format_textdirection_r_to_l", "edit_note", "download"];
+// Order matches dict.socialMediaPosts.why.points.
+const WHY_ICONS = ["aspect_ratio", "view_carousel", "palette", "download"];
 
 export async function generateMetadata(props: {
   params: Promise<{ lang: string }>;
@@ -32,15 +32,15 @@ export async function generateMetadata(props: {
   const { lang } = await props.params;
   const locale = resolve(lang);
   const dict = await getDictionary(locale);
-  const t = dict.reportDesign;
+  const t = dict.socialMediaPosts;
   return {
     title: t.meta.title,
     description: t.meta.description,
-    alternates: localeAlternates(locale, "report-design"),
+    alternates: localeAlternates(locale, "social-media-posts"),
     openGraph: {
       title: t.meta.title,
       description: t.meta.description,
-      url: `/${locale}/report-design`,
+      url: `/${locale}/social-media-posts`,
       siteName: "taqreer.ai",
       images: ["/og-image.png"],
       type: "website",
@@ -61,7 +61,7 @@ export default async function ReportDesignPage(props: {
   const { lang } = await props.params;
   const locale = resolve(lang);
   const dict = await getDictionary(locale);
-  const t = dict.reportDesign;
+  const t = dict.socialMediaPosts;
 
   return (
     <div className="pb-8">
@@ -69,7 +69,7 @@ export default async function ReportDesignPage(props: {
         data={[
           breadcrumbSchema([
             { name: locale === "ar" ? "الرئيسية" : "Home", url: `/${locale}` },
-            { name: t.breadcrumb, url: `/${locale}/report-design` },
+            { name: t.breadcrumb, url: `/${locale}/social-media-posts` },
           ]),
           faqPageSchema(t.faq),
         ]}
@@ -98,13 +98,13 @@ export default async function ReportDesignPage(props: {
         </ScrollReveal>
       </section>
 
-      {/* The real Datasheet flow, inlined statically (reused from the hero demo). */}
+      {/* The real Social flow, inlined statically (reused from the hero demo). */}
       <section className="py-12">
         <ScrollReveal direction="up" className="pb-10">
           <SectionHeader title={t.preview.title} subtitle={t.preview.subtitle} />
         </ScrollReveal>
         <ScrollReveal direction="up">
-          <FlowPreview view="datasheet" />
+          <FlowPreview view="social" />
         </ScrollReveal>
       </section>
 
@@ -142,7 +142,7 @@ export default async function ReportDesignPage(props: {
       </section>
 
       {/* Cross-links to the sibling marketing pages (crawl path between spokes). */}
-      <ExploreMoreSection locale={locale} current="reportDesign" dict={dict} />
+      <ExploreMoreSection locale={locale} current="socialMediaPosts" dict={dict} />
     </div>
   );
 }
