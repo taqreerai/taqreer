@@ -26,8 +26,6 @@ import {
   defaultPresetKey,
   creditCostFor,
   getImageCredits,
-  getPreset,
-  boostPresetKey,
 } from "@/lib/config/runtime-config";
 import { seedSlideVersionsForInitialGeneration } from "@/lib/db/slide-versioning";
 import { deriveColorTags } from "@/lib/project/derive-color-tags";
@@ -213,10 +211,6 @@ type DeckGenerateEvent = {
   versionId: string;
   jobId?: string | null;
   type?: "create" | "enhance" | "social";
-  // First-deck gift flag - set by /api/projects when this is the user's
-  // very first deck; upgrades the CALL params to the cheapest thinking
-  // preset while billing stays on `quality`. See resolveEffectiveQuality.
-  firstDeckBoost?: boolean;
   enhance?: EnhanceData;
   brief: unknown;
   // User-picked generation quality preset. Maps to model + thinking +
@@ -611,20 +605,11 @@ function resolveEffectiveQuality(data: DeckGenerateEvent): {
 } {
   const source = readSource(data);
   const sourceKind = source?.kind ?? "scratch";
-  // First-deck gift (2026-07-08): the user's very FIRST deck runs at the
-  // cheapest ACTIVE thinking preset while the CHARGE (hold/settle) and
-  // Job.quality stay on the preset they picked. Free users' first
-  // impression is a thinking-designed deck; the preset gate applies from
-  // deck 2 on. The flag is set server-side by /api/projects (prior project
-  // count === 0) and deliberately neutralized on regen re-dispatches.
-  // Caller must have run ensureFresh() before this resolves.
-  if (data.firstDeckBoost) {
-    const picked = data.quality ? getPreset(data.quality) : undefined;
-    if (!picked || !picked.thinking) {
-      const boost = boostPresetKey();
-      if (boost) return { effective: boost, autoUpgraded: true, sourceKind };
-    }
-  }
+  // First-deck gift REMOVED (2026-07-21): every deck (first or not) runs on the
+  // preset the user picked + is charged for. Free users' first deck no longer
+  // gets a free upgrade to the cheapest thinking preset (that ran a thinking
+  // model at the no-thinking price - a per-first-deck loss). The tier preset
+  // gate applies from deck 1.
   // General auto-upgrade DISABLED (2026-05-30). History: thinking-off presets
   // (sonnet-fast, opus-fast) emit malformed / draft-then-final JSON on
   // 30+-slide decks, which used to FAIL the run — so we force-upgraded

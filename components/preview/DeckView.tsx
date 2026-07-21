@@ -54,6 +54,12 @@ import {
   type NavItem,
 } from "@/components/preview/SlideNavSidebar";
 import { CancelGenerationDialog } from "@/components/preview/CancelGenerationDialog";
+import {
+  CreditGateDialog,
+  isCreditGatePayload,
+  type CreditGatePayload,
+} from "@/components/credits/CreditGateDialog";
+import { DesktopEditHint } from "@/components/preview/DesktopEditHint";
 import { CommentsPanel } from "@/components/preview/CommentsPanel";
 import { HeroCommentOverlay } from "@/components/preview/HeroCommentOverlay";
 import { useSwipeNav } from "@/hooks/useSwipeNav";
@@ -1342,6 +1348,17 @@ export function DeckView({
   useEffect(() => {
     applyingRef.current = applying != null;
   }, [applying]);
+  // Insufficient-credits gate for regen (partial / per-slide / full-deck). The
+  // regen routes now return a 402 CreditGatePayload BEFORE dispatching when the
+  // owner can't afford the run; we open the same CreditGateDialog the generation
+  // flows use (→ UpgradeModal / top-up) instead of the old silent failure.
+  const [creditGate, setCreditGate] = useState<CreditGatePayload | null>(null);
+  // One-time "editing is on desktop" hint for mobile owners/editors. Direct
+  // editing is desktop-only (editMode = canEdit && !isMobileStudio), so a phone
+  // user can only change content through the paid AI path. Shown at most once;
+  // dismissal persists in localStorage. Trigger effect lives with the
+  // isMobileStudio effect below (it depends on that flag).
+  const [showDesktopHint, setShowDesktopHint] = useState(false);
   // Slides currently being regen'd by a PEER (not the local user). Set
   // entries are slideIds. Added on `slide.regen.started` from the
   // project channel (self-echo skipped — the actor's `applying` state
@@ -1819,6 +1836,35 @@ export function DeckView({
     const onChange = (e: MediaQueryListEvent) => setIsMobileStudio(e.matches);
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  // Show the desktop-editing hint once, when a phone owner/editor enters the
+  // studio. Same effect-not-initializer recipe as isMobileStudio (localStorage +
+  // matchMedia aren't available in the useState initializer). Only turns the
+  // flag ON; the render gates on isMobileStudio too, so a resize to desktop
+  // dismisses it. localStorage read is best-effort — a blocked store (private
+  // mode) just skips the hint rather than nagging every load.
+  useEffect(() => {
+    if (!isMobileStudio || !canEdit) return;
+    let dismissed = true;
+    try {
+      dismissed =
+        window.localStorage.getItem("tq.studio.desktopEditHint.v1") === "1";
+    } catch {
+      dismissed = true;
+    }
+    if (!dismissed) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShowDesktopHint(true);
+    }
+  }, [isMobileStudio, canEdit]);
+  const dismissDesktopHint = useCallback(() => {
+    setShowDesktopHint(false);
+    try {
+      window.localStorage.setItem("tq.studio.desktopEditHint.v1", "1");
+    } catch {
+      /* storage blocked — dismissal just won't persist */
+    }
   }, []);
 
   // Toolbar is portal'd to document.body so its z-index isn't trapped
@@ -3570,8 +3616,21 @@ export function DeckView({
         { method: "POST" },
       );
       if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(data?.error ?? "Failed to fire partial regen");
+        const data = (await res.json().catch(() => null)) as
+          | { error?: string }
+          | CreditGatePayload
+          | null;
+        // Out of credits: open the upgrade/top-up gate instead of failing
+        // silently. Clear the optimistic overlay first so no spinner strands.
+        if (res.status === 402 && isCreditGatePayload(data)) {
+          setApplying(null);
+          setCreditGate(data);
+          return;
+        }
+        throw new Error(
+          (data as { error?: string } | null)?.error ??
+            "Failed to fire partial regen",
+        );
       }
       const data = (await res.json()) as {
         versionId: string;
@@ -4556,6 +4615,9 @@ export function DeckView({
                   editing={editMode}
                   projectId={projectId}
                   role={role}
+                  // Full-deck regenerate lives in the bar; surface its 402
+                  // insufficient-credits gate through the shared dialog below.
+                  onCreditGate={setCreditGate}
                   studioMode={studioMode}
                   onSetStudioMode={setStudioMode}
                   commentMode={commentMode}
@@ -4699,8 +4761,24 @@ export function DeckView({
                       if (!res.ok) {
                         const errorBody = (await res
                           .json()
-                          .catch(() => null)) as { error?: string } | null;
-                        throw new Error(errorBody?.error ?? "regen failed");
+                          .catch(() => null)) as
+                          | { error?: string }
+                          | CreditGatePayload
+                          | null;
+                        // Out of credits: open the upgrade/top-up gate rather
+                        // than a generic failure. Clear the overlay first.
+                        if (
+                          res.status === 402 &&
+                          isCreditGatePayload(errorBody)
+                        ) {
+                          setApplying(null);
+                          setCreditGate(errorBody);
+                          return;
+                        }
+                        throw new Error(
+                          (errorBody as { error?: string } | null)?.error ??
+                            "regen failed",
+                        );
                       }
                       const data = (await res.json()) as {
                         versionId: string;
@@ -5120,6 +5198,15 @@ export function DeckView({
           busy={cancelBusy}
         />
       ) : null}
+      {/* Insufficient-credits gate for any regen path (partial / per-slide /
+          full-deck). Opens the same UpgradeModal / top-up flow the generation
+          flows use off their 402. */}
+      <CreditGateDialog gate={creditGate} onClose={() => setCreditGate(null)} />
+      {/* One-time "editing is on desktop" hint for phone owners/editors. */}
+      <DesktopEditHint
+        open={showDesktopHint && isMobileStudio}
+        onDismiss={dismissDesktopHint}
+      />
     </section>
     </GenImageProvider>
   );

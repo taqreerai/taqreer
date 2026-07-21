@@ -15,9 +15,6 @@ import {
   ensureFresh,
   getActivePresetKeys,
   defaultPresetKey,
-  getPreset,
-  boostPresetKey,
-  regenPresetKey,
 } from "@/lib/config/runtime-config";
 import { SourceMetaSchema, type SourceMeta } from "@/lib/types/source";
 import { detectImageRegion } from "@/lib/geo/image-region";
@@ -686,26 +683,12 @@ export async function POST(request: Request) {
     );
   }
   await ensureFresh();
-  let quality = resolveQuality(payload.quality);
+  const quality = resolveQuality(payload.quality);
 
-  // ─── First-deck gift (BEFORE preflight - it changes gating + price) ──
-  // The user's very first deck runs at the cheapest ACTIVE thinking preset
-  // while being billed as the draft preset. Two entry shapes:
-  //   • picked a thinking-off preset → keep quality, boost only the run;
-  //   • picked the gift tier itself (the picker defaults there and ungates
-  //     it for first-deck users) → rewrite quality to the draft preset so
-  //     preflight gates + prices it as draft, and boost the run back up.
-  // Count BEFORE the project row is created in the transaction below.
-  let firstDeckBoost = false;
-  if ((await prisma.project.count({ where: { userId: dbUser.id } })) === 0) {
-    const picked = getPreset(quality);
-    if (!(picked?.thinking ?? false)) {
-      firstDeckBoost = true;
-    } else if (quality === boostPresetKey()) {
-      quality = regenPresetKey();
-      firstDeckBoost = true;
-    }
-  }
+  // First-deck gift REMOVED (2026-07-21): the deck runs on + is charged for the
+  // preset the user picked, from deck 1. No free upgrade to a thinking preset on
+  // the first deck (that ran a thinking model at the no-thinking price). Free
+  // users are gated to the draft preset like every other deck.
 
   // ─── Credit preflight (billing plan Phase A) ──────────────────────
   // The ONLY money gate before the Inngest hold: tier flow/preset/cap
@@ -835,7 +818,6 @@ export async function POST(request: Request) {
     enhance: projectType === "enhance" ? payload.enhance ?? null : null,
     brief,
     quality,
-    ...(firstDeckBoost ? { firstDeckBoost: true } : {}),
     // Pre-auth contract for deck-generate's holdCredits step: the
     // amount quoted (and shown) here is the MOST the job may charge.
     credit: {

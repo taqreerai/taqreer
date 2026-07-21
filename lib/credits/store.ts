@@ -71,10 +71,6 @@ export type CreditData = {
   // The server's default preset key (what an inactive/retired selection is
   // coerced to), so the picker never highlights a dead key.
   defaultPresetKey: string;
-  // First-deck gift eligibility (user has no projects yet) - drives the
-  // "your first deck runs at Balanced quality" note in the preset picker.
-  // Optional: absent on stale cached payloads.
-  firstDeckBoost?: boolean;
   // Credits per generated image (images-mode surcharge; DB admin knob).
   // Absent on a stale cached payload -> client falls back to the bundled
   // IMAGE_CREDITS_PER_IMAGE constant.

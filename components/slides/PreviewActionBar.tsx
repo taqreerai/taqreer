@@ -13,6 +13,10 @@ import { motion, useAnimationControls, useReducedMotion } from "framer-motion";
 import { SegmentedToggle } from "@/components/create/controls";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
+import {
+  isCreditGatePayload,
+  type CreditGatePayload,
+} from "@/components/credits/CreditGateDialog";
 
 // Toolbar orientation → drives where each ToolButton's tooltip pops. Vertical
 // (left rail): to the right, toward content. Horizontal (Studio bottom bar):
@@ -256,6 +260,7 @@ export function PreviewActionBar({
   onOpenHistory,
   onToggleLock,
   onRegenSlide,
+  onCreditGate,
   hasAiRegion,
   aiRegionNudge,
   onAiSubmit,
@@ -318,6 +323,10 @@ export function PreviewActionBar({
   onOpenHistory?: (rect: DOMRect) => void;
   onToggleLock?: () => void;
   onRegenSlide?: () => void;
+  // Full-deck regenerate is fired from THIS bar (handleRegenerate). When that
+  // route returns a 402 insufficient-credits gate, hand the payload up so
+  // DeckView opens the shared CreditGateDialog instead of a generic error toast.
+  onCreditGate?: (gate: CreditGatePayload) => void;
   // AI composer (§17) — the persistent bottom-bar instruction input. The user
   // scopes a region by dragging on the canvas (its on-canvas marker is the
   // only indicator now); submitting hands the typed instruction to `onAiSubmit`,
@@ -464,8 +473,20 @@ export function PreviewActionBar({
     try {
       const response = await fetch(`/api/projects/${projectId}/regenerate`, { method: "POST" });
       if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(data?.error ?? "Regenerate failed");
+        const data = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | CreditGatePayload
+          | null;
+        // Out of credits: hand the gate up to DeckView (opens the upgrade /
+        // top-up dialog) instead of an opaque error toast.
+        if (response.status === 402 && isCreditGatePayload(data) && onCreditGate) {
+          onCreditGate(data);
+          setRegen({ status: "idle" });
+          return;
+        }
+        throw new Error(
+          (data as { error?: string } | null)?.error ?? "Regenerate failed",
+        );
       }
       router.refresh();
       setRegen({ status: "idle" });

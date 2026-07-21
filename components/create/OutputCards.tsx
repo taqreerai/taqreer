@@ -404,7 +404,7 @@ function SizeChoice({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className=" flex h-11 items-center justify-between gap-3 rounded-lg border px-3 transition-colors"
+      className=" flex h-11 items-center justify-between gap-2 rounded-lg border px-2.5 transition-colors"
       style={{
         background: "var(--tq-overlay-soft)",
         borderColor: active
@@ -424,7 +424,7 @@ function SizeChoice({
       </span>
       <span
         className="rounded-xs border border-foreground/30 bg-foreground/10"
-        style={{ height: 18, aspectRatio: ratio }}
+        style={{ height: 14, aspectRatio: ratio }}
       />
     </button>
   );

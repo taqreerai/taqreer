@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { sendInngestEventWithRetry, tierForUser } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
+import { regenCreditGate } from "@/lib/api/regen-helpers";
 import { ensureFresh, regenPresetFor } from "@/lib/config/runtime-config";
 
 function toJson(value: unknown): Prisma.InputJsonValue {
@@ -36,6 +37,7 @@ export async function POST(
         orderBy: { createdAt: "desc" },
         take: 1,
       },
+      user: { select: { role: true } },
     },
   });
 
@@ -65,10 +67,26 @@ export async function POST(
   const eventPayload = {
     ...((latestJob.inputJson ?? {}) as Record<string, unknown>),
     quality: regenPresetFor(latestJob.quality),
-    // The original event may carry the one-time first-deck gift flag;
-    // regens are not first decks - never re-gift.
-    firstDeckBoost: false,
   };
+
+  // ── Credit pre-check (UX-forward gate) ─────────────────────────────
+  // A full-deck regenerate re-runs generation and REUSES the original hold
+  // contract carried in `credit` (spread from the prior job's inputJson above).
+  // The deck-generate worker holds that amount against the OWNER and fails the
+  // version on an insufficient balance, with no upgrade path shown. Gate here,
+  // before allocating the new version, so the studio opens the credit gate. Legacy
+  // jobs with no `credit` block skip (the worker stays the authoritative hold).
+  const carriedHold = (
+    latestJob.inputJson as { credit?: { holdCredits?: number } } | null
+  )?.credit?.holdCredits;
+  if (typeof carriedHold === "number") {
+    const gate = await regenCreditGate({
+      ownerId: project.userId,
+      ownerRole: project.user?.role ?? "user",
+      cost: carriedHold,
+    });
+    if (gate) return NextResponse.json(gate, { status: 402 });
+  }
 
   // Compute the next version number inside the transaction and retry on
   // unique-constraint races (PresentationVersion(presentationId, versionNumber)).

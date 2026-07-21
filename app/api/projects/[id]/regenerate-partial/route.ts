@@ -16,12 +16,19 @@ import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
 import {
   allocateNextVersionInTx,
+  regenCreditGate,
   retryOnP2002,
   rollbackVersionAndJob,
   toJson,
   type RegenTx,
 } from "@/lib/api/regen-helpers";
-import { ensureFresh, regenPresetFor } from "@/lib/config/runtime-config";
+import { regenCost } from "@/lib/credits/cost";
+import {
+  creditCostFor,
+  ensureFresh,
+  getRegenBaseCredits,
+  regenPresetFor,
+} from "@/lib/config/runtime-config";
 
 // Promoted comment shape returned from the snapshot tx — what the
 // Inngest dispatch ships to the worker.
@@ -167,6 +174,8 @@ export async function POST(
     where: { id },
     select: {
       id: true,
+      userId: true,
+      user: { select: { role: true } },
       presentation: { select: { id: true, currentVersionId: true } },
     },
   });
@@ -183,6 +192,52 @@ export async function POST(
   // already guarantees non-null. Same pattern as the sibling regen
   // route.
   const sourceVersionId = presentation.currentVersionId!;
+
+  // Regens INHERIT the deck's original generation preset (premium decks keep
+  // premium design quality on regenerated slides, priced on the same key);
+  // deactivated/legacy keys fall back to the fastest active no-thinking preset.
+  // Resolved LIVE so it follows admin Settings. Resolved up here (not after the
+  // promote tx) so the credit pre-check below prices with the SAME preset the
+  // worker holds with.
+  await ensureFresh();
+  const genJob = await prisma.job.findFirst({
+    where: { projectId: id, type: "deck.generate", status: "succeeded" },
+    orderBy: { createdAt: "desc" },
+    select: { quality: true },
+  });
+  const originalQuality = regenPresetFor(genJob?.quality);
+
+  // ── Credit pre-check (UX-forward gate) ─────────────────────────────
+  // The worker holds regenCost(preset, slideCount) against the OWNER and throws
+  // NonRetriableError on an insufficient balance — which the user only ever sees
+  // as a generic `failed` version with no upgrade path. Gate here, BEFORE
+  // promoting drafts / allocating a version, so the studio opens the credit gate
+  // synchronously. Size the hold by counting the AI drafts read-only (the exact
+  // forAi filter the promote tx uses). 0 drafts → skip; the tx returns the
+  // "No draft comments to apply" 400 below. The worker hold stays authoritative.
+  const draftForAiSlides = await prisma.comment.findMany({
+    where: {
+      presentationId: presentation.id,
+      versionId: sourceVersionId,
+      status: "draft",
+      forAi: true,
+    },
+    select: { slideId: true },
+  });
+  const gateSlideCount = new Set(draftForAiSlides.map((c) => c.slideId)).size;
+  if (gateSlideCount > 0) {
+    const gate = await regenCreditGate({
+      ownerId: project.userId,
+      ownerRole: project.user?.role ?? "user",
+      cost: regenCost(
+        originalQuality,
+        gateSlideCount,
+        creditCostFor,
+        getRegenBaseCredits(),
+      ),
+    });
+    if (gate) return NextResponse.json(gate, { status: 402 });
+  }
 
   let result: TxResult;
   try {
@@ -205,17 +260,6 @@ export async function POST(
 
   const { promoted, newVersion } = result;
   const targetSlideIds = uniqueSlideIds(promoted);
-  // Regens INHERIT the deck's original generation preset (premium decks keep
-  // premium design quality on regenerated slides, priced on the same key);
-  // deactivated/legacy keys fall back to the fastest active no-thinking
-  // preset. Resolved LIVE so it follows admin Settings.
-  await ensureFresh();
-  const genJob = await prisma.job.findFirst({
-    where: { projectId: project.id, type: "deck.generate", status: "succeeded" },
-    orderBy: { createdAt: "desc" },
-    select: { quality: true },
-  });
-  const originalQuality = regenPresetFor(genJob?.quality);
 
   // Job row + Inngest dispatch. A failure at either step rolls back
   // the version, the comment promotions, AND (if it got created) the

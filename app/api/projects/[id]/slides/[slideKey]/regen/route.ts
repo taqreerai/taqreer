@@ -25,11 +25,18 @@ import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
 import {
   allocateNextVersionInTx,
+  regenCreditGate,
   retryOnP2002,
   rollbackVersionAndJob,
   toJson,
 } from "@/lib/api/regen-helpers";
-import { ensureFresh, regenPresetFor } from "@/lib/config/runtime-config";
+import { regenCost } from "@/lib/credits/cost";
+import {
+  creditCostFor,
+  ensureFresh,
+  getRegenBaseCredits,
+  regenPresetFor,
+} from "@/lib/config/runtime-config";
 
 type RegenPayload = { replay?: boolean };
 type CachedComment = {
@@ -89,6 +96,8 @@ export async function POST(
     where: { id: projectId },
     select: {
       id: true,
+      userId: true,
+      user: { select: { role: true } },
       presentation: {
         select: { id: true, currentVersionId: true },
       },
@@ -114,6 +123,19 @@ export async function POST(
   }
   const presentation = project.presentation;
   const sourceVersionId = presentation.currentVersionId;
+
+  // ── Credit pre-check (UX-forward gate) ─────────────────────────────
+  // The worker holds regenCost(preset, 1) against the OWNER and throws
+  // NonRetriableError on an insufficient balance, which surfaces only as a
+  // generic failed version. Gate here, before allocating a version, so the studio
+  // opens the credit gate synchronously. This route always targets one slide.
+  // The worker hold stays the authoritative backstop.
+  const regenGate = await regenCreditGate({
+    ownerId: project.userId,
+    ownerRole: project.user?.role ?? "user",
+    cost: regenCost(originalQuality, 1, creditCostFor, getRegenBaseCredits()),
+  });
+  if (regenGate) return NextResponse.json(regenGate, { status: 402 });
 
   // Replay needs cached comments. If the slide has no cache, the
   // pill should have disabled Try Again on the client — but defend

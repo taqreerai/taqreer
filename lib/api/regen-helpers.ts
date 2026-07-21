@@ -14,6 +14,7 @@
 
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { getBalance } from "@/lib/credits/server";
 
 /**
  * Convert `unknown` to `Prisma.InputJsonValue` via a JSON round-trip.
@@ -121,3 +122,60 @@ export async function rollbackVersionAndJob(args: {
 // Re-export Prisma's transaction-client type alias so call sites
 // don't all need to import it themselves.
 export type RegenTx = Prisma.TransactionClient;
+
+// The 402 body a regen route returns when the deck OWNER can't afford the run.
+// Structurally matches `CreditGatePayload` in
+// components/credits/CreditGateDialog.tsx (validated there by `isCreditGatePayload`),
+// so the studio opens the SAME UpgradeModal / top-up flow the generation flows use
+// off the /api/projects 402. A regen has no reduce-slides offer, so those option
+// fields stay null/empty and only `topupGap` (needs − have) is populated.
+export type CreditGate402 = {
+  error: "insufficient_credits";
+  balance: number;
+  slideCap: null;
+  minFlowTier: null;
+  options: {
+    reducedSlides: null;
+    reducedCredits: null;
+    cheaperPresets: string[];
+    topupGap: number;
+  };
+};
+
+/**
+ * Pre-flight credit gate for the regen routes. The regen/generate workers hold
+ * credits against the deck OWNER (project.userId) and throw NonRetriableError
+ * when the balance can't cover it — which the user only ever sees as a generic
+ * `failed` version with no upgrade path (the incident this fixes). This runs the
+ * SAME balance check in the ROUTE, BEFORE any version/job is allocated or event
+ * dispatched, so the studio can open the credit gate synchronously instead.
+ *
+ * Returns the 402 body to send, or null when the run is affordable (or the owner
+ * is an admin, whose runs are waived downstream by holdCredits — mirrors the
+ * isAdmin bypass in preflightGenerate). `cost` MUST be computed with the same
+ * call the worker holds with (regenCost for partial/slide regen, the carried
+ * generation holdCredits for full-deck regen) so shown == charged. The worker
+ * hold stays the authoritative backstop; this is the UX-forward gate.
+ */
+export async function regenCreditGate(args: {
+  ownerId: string;
+  ownerRole: string;
+  cost: number;
+}): Promise<CreditGate402 | null> {
+  if (args.ownerRole === "admin") return null;
+  if (args.cost <= 0) return null;
+  const balance = await getBalance(args.ownerId);
+  if (args.cost <= balance.total) return null;
+  return {
+    error: "insufficient_credits",
+    balance: balance.total,
+    slideCap: null,
+    minFlowTier: null,
+    options: {
+      reducedSlides: null,
+      reducedCredits: null,
+      cheaperPresets: [],
+      topupGap: args.cost - balance.total,
+    },
+  };
+}

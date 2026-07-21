@@ -214,16 +214,6 @@ export function regenPresetKey(): string {
 }
 
 /**
- * The first-deck gift target: the cheapest ACTIVE thinking preset. The
- * user's very first deck runs at this quality while billing stays on the
- * draft preset (see /api/projects firstDeckBoost + deck-generate's
- * resolveEffectiveQuality).
- */
-export function boostPresetKey(): string | undefined {
-  return getActivePresets().find((p) => p.thinking)?.key;
-}
-
-/**
  * Regen preset for a deck: inherit the deck's ORIGINAL generation preset
  * when it's still ACTIVE, so a premium deck's regenerated slides match the
  * design quality the owner paid for (the regen charge scales with the same
