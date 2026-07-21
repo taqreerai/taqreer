@@ -8,9 +8,13 @@
 // the admin layout). A ?user=<id> query auto-expands + pages to that user.
 
 import { useCallback, useState } from "react";
+import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { avatarGradientForSeed } from "@/lib/util/avatar-gradient";
 import { formatRelativeTime } from "@/lib/util/relative-time";
+import { localizedHref } from "@/lib/i18n/navigation";
+import { useLocale } from "@/components/i18n/LocaleProvider";
+import type { Locale } from "@/lib/i18n/config";
 import { IconCircle } from "@/components/admin/IconCircle";
 import { PLAN_LABEL, type Plan } from "@/lib/admin/mock";
 import type {
@@ -60,7 +64,7 @@ function Pill({
   return (
     <span
       title={title}
-      className="rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums"
+      className="flex-shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums"
       style={{ color: PRIMARY, background: "var(--tq-overlay-soft)" }}
     >
       {children}
@@ -80,7 +84,7 @@ function TierPill({ plan }: { plan: Plan }) {
   );
 }
 
-function TimelineRow({ item }: { item: TimelineItem }) {
+function TimelineRow({ item, locale }: { item: TimelineItem; locale: Locale }) {
   // icon + primary label + a right-side meta (cost / duration or format).
   let icon = "auto_awesome";
   let iconColor: string | undefined;
@@ -123,17 +127,69 @@ function TimelineRow({ item }: { item: TimelineItem }) {
       break;
   }
 
+  // New-deck rows lead with the deck cover (clickable → the project) instead of
+  // the generic icon, and carry a chip with the preset key they ran on.
+  const isGen = item.kind === "generation";
+  const thumb = isGen ? item.thumbnail : null;
+  const preset = isGen ? item.preset : null;
+  const deckHref =
+    isGen && item.projectId
+      ? localizedHref(`/project/${item.projectId}`, locale)
+      : null;
+
+  const thumbTile = isGen ? (
+    thumb ? (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={thumb}
+        alt=""
+        className="h-12 w-[85px] rounded-md object-cover"
+        style={{ background: "var(--tq-overlay-soft)" }}
+      />
+    ) : (
+      <span
+        className="grid h-12 w-[85px] place-items-center rounded-md"
+        style={{ background: "var(--tq-overlay-soft)" }}
+      >
+        <span
+          aria-hidden="true"
+          className="material-symbols-outlined"
+          style={{ fontSize: 18, color: MUTED }}
+        >
+          imagesmode
+        </span>
+      </span>
+    )
+  ) : null;
+
   return (
     <div className="flex items-start gap-3 py-2.5">
-      <IconCircle icon={icon} size={30} iconSize={16} color={iconColor} background={iconBg} />
+      {isGen ? (
+        deckHref ? (
+          <Link
+            href={deckHref}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="Open deck"
+            className="flex-shrink-0 transition-opacity hover:opacity-80"
+          >
+            {thumbTile}
+          </Link>
+        ) : (
+          <span className="flex-shrink-0">{thumbTile}</span>
+        )
+      ) : (
+        <IconCircle icon={icon} size={30} iconSize={16} color={iconColor} background={iconBg} />
+      )}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span
-            className="truncate text-sm"
+            className="min-w-0 truncate text-sm"
             style={{ color: item.kind === "failed-gen" ? DANGER : PRIMARY }}
           >
             {title}
           </span>
+          {preset ? <Pill title="Preset used">{preset}</Pill> : null}
         </div>
         {item.projectTitle ? (
           <div
@@ -174,10 +230,12 @@ function Timeline({
   state,
   onLoadMore,
   onRetry,
+  locale,
 }: {
   state: TimelineState | undefined;
   onLoadMore: () => void;
   onRetry: () => void;
+  locale: Locale;
 }) {
   // Only the INITIAL load (no items yet) takes over with the loading / error /
   // empty states. Once items are loaded, a failed "load more" keeps them on
@@ -224,7 +282,7 @@ function Timeline({
               : { borderBottom: "1px solid var(--tq-border-hairline)" }
           }
         >
-          <TimelineRow item={it} />
+          <TimelineRow item={it} locale={locale} />
         </div>
       ))}
       {state.loadingMore || state.error || state.nextCursor ? (
@@ -259,6 +317,7 @@ export function ActivityClient({
   initialUserId: string | null;
   initialTimeline: ActivityTimeline | null;
 }) {
+  const { locale } = useLocale();
   const initialIndex = initialUserId
     ? users.findIndex((u) => u.id === initialUserId)
     : -1;
@@ -498,6 +557,7 @@ export function ActivityClient({
                       <div className="pb-3">
                         <Timeline
                           state={timelines[u.id]}
+                          locale={locale}
                           onLoadMore={() => {
                             const cursor = timelines[u.id]?.nextCursor;
                             if (cursor) startLoad(u.id, cursor);

@@ -108,6 +108,11 @@ export type TimelineItem =
       slideCount: number | null;
       cost: string;
       duration: string | null;
+      // Deck cover (per-slide thumb 1, else the single cover) for the clickable
+      // tile, and the preset key (Job.quality, e.g. "opus-fast") this deck was
+      // generated on. Both null when unavailable (unsaved deck / legacy job).
+      thumbnail: string | null;
+      preset: string | null;
     })
   | (TimelineBase & {
       kind: "regen-full";
@@ -153,17 +158,32 @@ export async function getUserActivityTimeline(
   // 1. Resolve the user's projects: the id filter for Jobs + a flow/title map.
   const projects = await prisma.project.findMany({
     where: { userId },
-    select: { id: true, type: true, aiPrompt: true, title: true, slideCount: true },
+    select: {
+      id: true,
+      type: true,
+      aiPrompt: true,
+      title: true,
+      slideCount: true,
+      thumbnail: true,
+      thumbnailUrls: true,
+    },
   });
   const projectMeta = new Map<
     string,
-    { flow: string; title: string; slideCount: number | null }
+    {
+      flow: string;
+      title: string;
+      slideCount: number | null;
+      thumbnail: string | null;
+    }
   >();
   for (const p of projects) {
     projectMeta.set(p.id, {
       flow: flowLabelFor(p.aiPrompt, p.type),
       title: p.title,
       slideCount: p.slideCount,
+      // Per-slide thumbs only exist after Save; fall back to the single cover.
+      thumbnail: p.thumbnailUrls[0] ?? p.thumbnail ?? null,
     });
   }
   const projectIds = projects.map((p) => p.id);
@@ -205,6 +225,7 @@ export async function getUserActivityTimeline(
         cancelRequestedAt: true,
         holdKey: true,
         inputJson: true,
+        quality: true,
         completedAt: true,
         createdAt: true,
         projectId: true,
@@ -349,20 +370,38 @@ export async function getUserActivityTimeline(
     }
 
     // deck.generate: first succeeded generation for the project is the new
-    // deck; any later one is a full regen.
+    // deck; any later one is a full regen. The new-deck row additionally
+    // carries the deck thumbnail + preset used (admin quality/cost lens).
     const isNew = firstGenJobByProject.get(j.projectId) === j.id;
-    dated.push({
-      at,
-      item: {
-        ...base,
-        id: `gen-${j.id}`,
-        kind: isNew ? "generation" : "regen-full",
-        flow,
-        slideCount: meta?.slideCount ?? null,
-        cost,
-        duration,
-      },
-    });
+    if (isNew) {
+      dated.push({
+        at,
+        item: {
+          ...base,
+          id: `gen-${j.id}`,
+          kind: "generation",
+          flow,
+          slideCount: meta?.slideCount ?? null,
+          cost,
+          duration,
+          thumbnail: meta?.thumbnail ?? null,
+          preset: j.quality ?? null,
+        },
+      });
+    } else {
+      dated.push({
+        at,
+        item: {
+          ...base,
+          id: `gen-${j.id}`,
+          kind: "regen-full",
+          flow,
+          slideCount: meta?.slideCount ?? null,
+          cost,
+          duration,
+        },
+      });
+    }
   }
 
   // Titles for exports of decks this user does NOT own (a shared/public deck
