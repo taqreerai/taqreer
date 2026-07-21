@@ -63,10 +63,13 @@ type Tier = {
 const on = { enabled: true };
 const off = { enabled: false };
 
+// Paid tiers (Plus/Pro/Max) share ONE aligned feature list (model + 8 features);
+// flags toggle the premium tail: Plus lacks premium templates + priority, Pro
+// lacks priority, Max has everything. (row 0 = credits, row 1 = model.)
 const TIERS: Tier[] = [
   { features: [on, on, on, on, on, on, off, off, off, off], isFree: true },
-  { features: [on, on, on, on, on, on, on, on, on, off] },
-  { features: [on, on, on, on, on, on, on, on, on, on], popular: true },
+  { features: [on, on, on, on, on, on, on, on, off, off] },
+  { features: [on, on, on, on, on, on, on, on, on, off], popular: true },
   { features: [on, on, on, on, on, on, on, on, on, on] },
 ];
 

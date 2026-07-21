@@ -822,7 +822,7 @@
           "name": "Plus",
           "description": "To create decks regularly with every creation method.",
           "credits": "{credits} credits / month",
-          "features": ["Opus 4.8", "Up to {slides} slides per deck", "All export formats", "No watermark", "All creation methods", "Balanced design quality", "Latest GPT images", "Custom brand identity", "All quality presets"],
+          "features": ["Opus 4.8", "Up to {slides} slides per deck", "All export formats", "No watermark", "All creation methods", "Latest GPT images", "Custom brand identity", "Premium templates", "Processing priority"],
           "footnote": "Upgrade or downgrade anytime",
           "cta": "Start now"
         },
@@ -830,7 +830,7 @@
           "name": "Pro",
           "description": "For pros who want top quality and premium templates.",
           "credits": "{credits} credits / month",
-          "features": ["Opus 4.8", "Up to {slides} slides per deck", "All export formats", "No watermark", "All quality presets", "All creation methods", "Latest GPT images", "Custom brand identity", "Premium templates"],
+          "features": ["Opus 4.8", "Up to {slides} slides per deck", "All export formats", "No watermark", "All creation methods", "Latest GPT images", "Custom brand identity", "Premium templates", "Processing priority"],
           "footnote": "Upgrade or downgrade anytime",
           "cta": "Start now"
         },
@@ -838,7 +838,7 @@
           "name": "Max",
           "description": "For heavy use, with maximum capacity and priority.",
           "credits": "{credits} credits / month",
-          "features": ["Fable 5", "Up to {slides} slides per deck", "All export formats", "No watermark", "All presets and all methods", "Latest GPT images", "Custom brand identity", "Premium templates", "Processing priority"],
+          "features": ["Fable 5", "Up to {slides} slides per deck", "All export formats", "No watermark", "All creation methods", "Latest GPT images", "Custom brand identity", "Premium templates", "Processing priority"],
           "footnote": "You can downgrade anytime",
           "cta": "Start now"
         }
