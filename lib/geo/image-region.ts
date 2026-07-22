@@ -35,18 +35,23 @@ export function detectCountry(headers: Headers): string | null {
   return fallback && !UNKNOWN_CODES.has(fallback) ? fallback : null;
 }
 
+// The shared Gulf (Khaleeji) descriptor. Exported so callers can gate
+// Gulf-specific prompt guidance (e.g. the wardrobe spec) on it without
+// re-hardcoding the string. The six GCC countries all map to this value.
+export const GULF_KHALEEJI_DESCRIPTOR = "Gulf Arab (Khaleeji) people";
+
 // MENA-precise descriptors. A cultural region ("Gulf Arab") reads far better
 // to an image model than a bare nationality, and groups neighbours that share
 // an appearance. Each value is a full noun phrase so it slots into the
 // directive as "...depict any people as <descriptor>". Countries outside this
 // map fall back to the country's English name via Intl.DisplayNames.
 const REGION_DESCRIPTOR: Record<string, string> = {
-  SA: "Gulf Arab (Khaleeji) people",
-  AE: "Gulf Arab (Khaleeji) people",
-  KW: "Gulf Arab (Khaleeji) people",
-  QA: "Gulf Arab (Khaleeji) people",
-  BH: "Gulf Arab (Khaleeji) people",
-  OM: "Gulf Arab (Khaleeji) people",
+  SA: GULF_KHALEEJI_DESCRIPTOR,
+  AE: GULF_KHALEEJI_DESCRIPTOR,
+  KW: GULF_KHALEEJI_DESCRIPTOR,
+  QA: GULF_KHALEEJI_DESCRIPTOR,
+  BH: GULF_KHALEEJI_DESCRIPTOR,
+  OM: GULF_KHALEEJI_DESCRIPTOR,
   JO: "Levantine Arab people",
   LB: "Levantine Arab people",
   SY: "Levantine Arab people",
@@ -85,4 +90,14 @@ export function detectImageRegion(headers: Headers): string | null {
   if (precise) return precise;
   const name = countryName(country);
   return name ? `local people of ${name}` : null;
+}
+
+/**
+ * True when the region is Gulf/Khaleeji, OR unknown (null) so the Gulf-based
+ * default applies. A non-null, non-Gulf descriptor (Levantine, Egyptian, ...)
+ * returns false. Gates whether the Gulf wardrobe spec is injected into the
+ * image-prompt system block.
+ */
+export function isGulfImageContext(imageRegion: string | null): boolean {
+  return imageRegion == null || imageRegion === GULF_KHALEEJI_DESCRIPTOR;
 }

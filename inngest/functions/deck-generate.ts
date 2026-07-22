@@ -42,6 +42,8 @@ import {
   assembleFramedSlide,
   type FrameDeckCtx,
 } from "@/lib/deck/frame";
+import { gulfWardrobeSystemBlocks } from "@/inngest/prompts/gulf-wardrobe";
+import { isGulfImageContext } from "@/lib/geo/image-region";
 import { injectLogoMarkers, logoImgTag } from "@/lib/deck/logo-inject";
 import { scopeDeckCss } from "@/lib/deck/scope-css";
 import { StreamingHtmlSplitter, type ParsedSlide } from "@/lib/deck/html-stream";
@@ -881,6 +883,17 @@ function buildUserMessage(event: DeckGenerateEvent) {
       ? [
           ``,
           `IMAGE CAST — when a generated image depicts PEOPLE, render them as ${(event.brief as { imageRegion: string }).imageRegion} so the imagery reflects the deck's local audience. This applies to lifestyle/photographic scenes with human subjects; images with NO people (abstract, landscape, product, texture) are unaffected, and a slide whose content is explicitly about a different place — or that genuinely calls for a global / multinational cast — should use that instead. Keep it natural and respectful: describe appearance and dress fitting the locale; never name or depict a real person.`,
+        ]
+      : []),
+    // Gulf pointer: when the wardrobe spec is injected into the system prompt
+    // (same gate as gulfWardrobeSystemBlocks), tie the per-request cast to it.
+    // The heavy spec stays in the cached system block; only this line is dynamic.
+    ...(isImagesMode(event) &&
+    isGulfImageContext(
+      (event.brief as { imageRegion?: string } | null)?.imageRegion ?? null,
+    )
+      ? [
+          `For any Gulf national dress, follow the GULF WARDROBE SPEC in the system prompt: name the exact garments and headwear (never vague "traditional attire"), one country block per person, and fold in the relevant negatives.`,
         ]
       : []),
     ...(brandColours ? [``, brandColours] : []),
@@ -2247,13 +2260,16 @@ export const deckGenerate = inngest.createFunction(
             callParams.thinking.type === "adaptive"
               ? { ...callParams.thinking, display: "summarized" as const }
               : callParams.thinking,
-          system: [
-            {
-              type: "text",
-              text: htmlSystem,
-              cache_control: { type: "ephemeral" },
-            },
-          ],
+          // The Gulf wardrobe spec (image-attire guidance) rides as its own
+          // cache-controlled block PREPENDED to the frame system for Gulf image
+          // gens - a stable static prefix, cached across decks/formats/langs and
+          // shared with the regen + freeze-bake calls (same helper, same gate).
+          system: gulfWardrobeSystemBlocks(htmlSystem, {
+            imagesMode: isImagesMode(data),
+            imageRegion:
+              (data.brief as { imageRegion?: string } | null)?.imageRegion ??
+              null,
+          }),
           // NO output_config — slide HTML streams FREE-FORM (§3.5 load-bearing
           // rule: never put slide HTML in a constrained field).
           //
