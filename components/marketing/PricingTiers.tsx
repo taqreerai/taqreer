@@ -99,7 +99,7 @@ export function PricingTiers({
   tierNumbers: TierDisplayNumber[];
   tierPrices: { plan: string; monthly: number; yearly: number }[];
 }) {
-  const [billing, setBilling] = useState<Billing>("yearly");
+  const [billing, setBilling] = useState<Billing>("monthly");
   const [busy, setBusy] = useState<string | null>(null);
   const dict = useDict();
   const { dir, locale } = useLocale();

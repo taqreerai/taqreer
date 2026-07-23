@@ -994,8 +994,8 @@
       "addComment": "Add comment",
       "addText": "Add text",
       "versionHistory": "Version history",
-      "unlockSlide": "Unlock slide",
-      "lockSlide": "Lock slide",
+      "unlockSlide": "Allow AI edits",
+      "lockSlide": "Lock from AI edits",
       "saved": "Saved",
       "saveProject": "Save",
       "backToDashboard": "Back to dashboard"
@@ -1018,8 +1018,7 @@
       "slideSelected": " · selected",
       "slideLocked": " · locked",
       "draftChip": "Draft",
-      "unlockAll": "Unlock all",
-      "lockAll": "Lock all",
+      "teaserUnlock": "Unlock the remaining slides",
       "cancelling": "Cancelling…",
       "cancelGeneration": "Cancel generation"
     },

@@ -285,7 +285,7 @@ export function ProjectThumbnail({
             scrubbing a multi-slide deck. Outside the click surface
             but inside the rounded thumbnail container. */}
         {scrub.isMultiSlide && scrub.hoverIndex !== null ? (
-          <ScrubCounter index={scrub.hoverIndex} total={slides.length} />
+          <ScrubCounter index={scrub.hoverIndex} total={scrub.scrubCount} />
         ) : null}
 
         {/* Favorited indicator — top-start corner. Diagonal-opposite

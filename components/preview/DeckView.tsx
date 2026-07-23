@@ -4053,62 +4053,6 @@ export function DeckView({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- dict.editor.errors.cancelFailed is a stable i18n string; used only in the error path
   }, [projectId, router]);
 
-  // Bulk lock / unlock — driven by the SlideNavSidebar footer pill.
-  // Walks the current manifest's slide list, builds an optimistic
-  // snapshot with every slide's lockedAt flipped, then POSTs the
-  // bulk endpoint. On error we leave the optimistic state in place
-  // Revert on failure (user-flagged via CR 2026-05-21): the sidebar
-  // pill label flips based on the global locked count, and per-slide
-  // `locked` badges drive UI everywhere. If the bulk API errors and
-  // we leave the optimistic flip in place, the deck appears locked
-  // while the server says otherwise — the user can't tell. Capturing
-  // the previous state before the optimistic update and restoring it
-  // in the catch path keeps UI honest on failure. Idempotent server-
-  // side still (re-lock keeps original lockedAt; re-unlock no-ops).
-  const bulkSetLock = useCallback(
-    async (lock: boolean) => {
-      if (!manifest) return;
-      const nowIso = new Date().toISOString();
-      let previousStates: Record<string, InitialSlideState> | null = null;
-      setSlideStates((prev) => {
-        previousStates = prev;
-        const next: Record<string, InitialSlideState> = { ...prev };
-        for (const slide of manifest.slides) {
-          const current = prev[slide.slideId];
-          next[slide.slideId] = {
-            slideKey: slide.slideId,
-            currentVersionNumber: current?.currentVersionNumber ?? 1,
-            hasCachedComments: current?.hasCachedComments ?? false,
-            // On lock: keep existing lockedAt if already set (matches
-            // server idempotency); otherwise stamp now.
-            // On unlock: always null.
-            lockedAt: lock ? (current?.lockedAt ?? nowIso) : null,
-          };
-        }
-        return next;
-      });
-      try {
-        const res = await fetch(
-          `/api/projects/${projectId}/slides/lock-all`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ locked: lock }),
-          },
-        );
-        if (!res.ok) throw new Error(`lock-all: ${res.status}`);
-      } catch (err) {
-        // Restore the previous state so the sidebar's "All locked /
-        // Lock all" label + per-slide badges reflect server truth.
-        if (previousStates) {
-          setSlideStates(previousStates);
-        }
-        console.error("bulk lock failed", err);
-      }
-    },
-    [manifest, projectId],
-  );
-
   // Placeholder strategy switches on `initialSlideCountAuto`:
   //   • custom  → fixed-N tiles (the user picked N, show N up-front)
   //   • auto    → empty-then-grow — render only as many tiles as
@@ -4673,12 +4617,13 @@ export function DeckView({
         language={
           (viewManifest?.language ?? streamingLanguage) === "en" ? "en" : "ar"
         }
-        // Bulk lock pill is hidden for non-edit roles + while generating
-        // (nothing to lock yet). Same gating as the per-slide lock toggle.
-        onLockAll={canEdit && !generating ? () => bulkSetLock(true) : undefined}
-        onUnlockAll={
-          canEdit && !generating ? () => bulkSetLock(false) : undefined
-        }
+        // Teaser paywall (free tier): a locked teaser deck shows an accent
+        // "Unlock the remaining slides" CTA in the footer (in place of the
+        // regen-lock pill), wired to the same upgrade→unlock flow the locked
+        // slot buttons use. `effectiveTeaserLocked` is already gated on owner.
+        teaserLocked={effectiveTeaserLocked > 0}
+        onTeaserUnlock={handleTeaserUnlock}
+        teaserUnlockBusy={teaserUnlocking}
         viewersBySlide={viewersBySlide}
         floating
         collapsed={slidesCollapsed}

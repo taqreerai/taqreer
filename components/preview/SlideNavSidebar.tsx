@@ -19,7 +19,7 @@
 // The header + footer are flex children; the middle grid scrolls
 // independently via `flex-1 overflow-y-auto`.
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useDict } from "@/components/i18n/LocaleProvider";
 import { SegmentedToggle } from "@/components/create/controls";
 import { SlideRenderer, slideRootBackground } from "@/components/slides/SlideRenderer";
@@ -93,13 +93,6 @@ export function SlideNavSidebar({
   // content). Optional + defaults to "ar" so callers that haven't
   // wired the prop yet keep the historical RTL behavior.
   language = "ar",
-  // Locked / unlocked counts so the bulk-toggle pill can read the
-  // global state. The parent already computes per-slide `locked` on
-  // each NavItem; we could derive these from `items` directly, but
-  // taking them as props lets the parent share the canonical
-  // `slideStates` source of truth across all UI that reads it.
-  onLockAll,
-  onUnlockAll,
   onCancelGeneration,
   cancelDisabled = false,
   // Phase 16.B presence — viewers currently focused on each slide
@@ -131,12 +124,21 @@ export function SlideNavSidebar({
   // a teaser tile routes here instead of onSelect.
   currentTeaser = null,
   onTeaserSelect,
+  // Teaser paywall (free tier). When `teaserLocked`, the footer shows an accent
+  // "Unlock the remaining slides" CTA, wired to the parent's upgrade→unlock
+  // flow via `onTeaserUnlock`.
+  teaserLocked = false,
+  onTeaserUnlock,
+  teaserUnlockBusy = false,
 }: {
   items: NavItem[];
   currentIndex: number | null;
   onSelect: (idx: number) => void;
   currentTeaser?: number | null;
   onTeaserSelect?: (lockedIndex: number) => void;
+  teaserLocked?: boolean;
+  onTeaserUnlock?: () => void;
+  teaserUnlockBusy?: boolean;
   // Theme only — for the thumbnail SlideRenderer. Null during early
   // streaming (no manifest yet); placeholder tiles don't need it.
   manifest: SlideManifest | null;
@@ -158,13 +160,6 @@ export function SlideNavSidebar({
   actionsSlot?: ReactNode;
   collapsed?: boolean;
   language?: "ar" | "en";
-  // Fires when the user clicks the bulk pill. Parent owns the
-  // network call + optimistic state update so it can fan the result
-  // out across every dependent UI (sidebar locked badges, hero
-  // pill icon, regen-button gating). Omit both to hide the pill —
-  // e.g. during generation, when no SlideState rows exist yet.
-  onLockAll?: () => void | Promise<void>;
-  onUnlockAll?: () => void | Promise<void>;
   viewersBySlide?: Record<number, PresenceViewer[]>;
   // Cancel pill — shown at the bottom of the sidebar during the
   // generating phase only. Caller (DeckView) handles the
@@ -242,47 +237,11 @@ export function SlideNavSidebar({
     2;
   const thumbScale = thumbW / canvasW;
 
-  // Derive bulk-lock state from items so the pill's label flips
-  // reactively: "Lock all" when at least one slide is unlocked,
-  // "Unlock all" when every slide is locked. Placeholders during
-  // generation don't count (they have no SlideState yet); if the
-  // deck has no slide-kind items, the pill stays hidden.
-  const { slideCount, allLocked, anyUnlocked } = useMemo(() => {
-    let total = 0;
-    let locked = 0;
-    for (const it of items) {
-      if (it.kind === "slide") {
-        total += 1;
-        if (it.locked) locked += 1;
-      }
-    }
-    return {
-      slideCount: total,
-      allLocked: total > 0 && locked === total,
-      anyUnlocked: total > 0 && locked < total,
-    };
-  }, [items]);
-  // Pill is in-flight while the bulk request is round-tripping —
-  // disables further clicks (the optimistic flip already updated
-  // `items`, so a second click would race against the server's
-  // pending response).
-  const [bulkBusy, setBulkBusy] = useState(false);
-  const showBulkPill =
-    slideCount > 0 && (onLockAll != null || onUnlockAll != null);
-
-  const handleBulkClick = async () => {
-    if (bulkBusy) return;
-    setBulkBusy(true);
-    try {
-      if (allLocked) {
-        await onUnlockAll?.();
-      } else if (anyUnlocked) {
-        await onLockAll?.();
-      }
-    } finally {
-      setBulkBusy(false);
-    }
-  };
+  // Free-tier paywall CTA in the footer. The bulk "lock/unlock all" regen pill
+  // that used to live here was removed (2026-07-24): it confused free users
+  // (read as "unlock the gated slides") and duplicated the per-slide lock in
+  // the AI bar. Slide-level regen protection is now per-slide only, in AI mode.
+  const showTeaserUnlock = teaserLocked && onTeaserUnlock != null;
 
   // The rail's reading direction follows the DECK's content language, NOT the
   // UI locale: a fully-English deck viewed in an Arabic UI must still lay its
@@ -664,35 +623,24 @@ export function SlideNavSidebar({
         </footer>
       ) : null}
 
-      {/* Footer — Lock all / Unlock all bulk pill. Label flips
-          based on the global locked state across the deck. Hidden
-          during generation (placeholders don't have lock state),
-          when the parent didn't wire either handler, AND on the
-          Comments tab (the embedded panel owns the footer there). */}
-      {showBulkPill && tab === "slides" ? (
-        // §22: flush (no top border) when it sits under the Export/Share footer
-        // (user: "remove the separator under export and share"); but when that
-        // footer is absent (no actionsSlot — e.g. during generation / no
-        // manifest), keep a top border so the pill doesn't float borderless.
+      {/* Footer — teaser paywall CTA (free tier). Accent .btn-gradient matching
+          the per-slot unlock buttons on the locked tiles. Slides tab only. */}
+      {showTeaserUnlock && tab === "slides" ? (
         <footer className={actionsSlot ? "pt-2 px-1" : "border-t border-foreground/[0.08] pt-3 px-1"}>
           <button
             type="button"
-            onClick={handleBulkClick}
-            disabled={bulkBusy}
-            className="btn-pill w-full justify-center"
+            onClick={onTeaserUnlock}
+            disabled={teaserUnlockBusy}
+            className="btn-gradient inline-flex w-full items-center justify-center gap-1.5 px-3 py-1.5 text-xs disabled:opacity-70"
           >
             <span
               className="material-symbols-outlined leading-none"
               style={{ fontSize: 16 }}
               aria-hidden
             >
-              {allLocked ? "lock_open" : "lock"}
+              lock_open
             </span>
-            {bulkBusy
-              ? "..."
-              : allLocked
-                ? dict.editor.nav.unlockAll
-                : dict.editor.nav.lockAll}
+            {dict.editor.nav.teaserUnlock}
           </button>
         </footer>
       ) : null}

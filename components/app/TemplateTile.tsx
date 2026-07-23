@@ -285,7 +285,7 @@ export function TemplateTile({
       {/* Scrub counter — bottom-end (left in RTL), only while scrubbing a
           multi-slide showcase. */}
       {scrub.isMultiSlide && scrub.hoverIndex !== null ? (
-        <ScrubCounter index={scrub.hoverIndex} total={slides.length} />
+        <ScrubCounter index={scrub.hoverIndex} total={scrub.scrubCount} />
       ) : null}
 
       {/* Premium marker — top-start corner. */}

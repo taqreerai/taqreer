@@ -994,8 +994,8 @@
       "addComment": "إضافة تعليق",
       "addText": "إضافة نص",
       "versionHistory": "سجل الإصدارات",
-      "unlockSlide": "إلغاء قفل الشريحة",
-      "lockSlide": "قفل الشريحة",
+      "unlockSlide": "اسمح بتعديل الذكاء الاصطناعي",
+      "lockSlide": "امنع تعديل الذكاء الاصطناعي",
       "saved": "محفوظ",
       "saveProject": "حفظ",
       "backToDashboard": "الرجوع إلى لوحة التحكم"
@@ -1018,8 +1018,7 @@
       "slideSelected": " · مختارة",
       "slideLocked": " · مقفلة",
       "draftChip": "مسودة",
-      "unlockAll": "إلغاء قفل الكل",
-      "lockAll": "قفل الكل",
+      "teaserUnlock": "افتح باقي الشرائح",
       "cancelling": "جار الإلغاء…",
       "cancelGeneration": "إلغاء الإنشاء"
     },

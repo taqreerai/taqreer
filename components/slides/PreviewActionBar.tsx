@@ -803,9 +803,12 @@ export function PreviewActionBar({
           </motion.div>
         ) : null}
 
-        {/* Shared cluster (§16) — divider + History + Lock + Save, visible in
-            both modes. owners/edit only (History needs onOpenHistory, Lock
-            onToggleLock). Reflows via flex as the mode content width animates.
+        {/* Shared cluster (§16) — divider + History + Lock + Save. History +
+            Save show in both modes; the slide Lock shows ONLY in AI mode, since
+            all it does is shield the slide from an AI regeneration (its lone
+            effect). Surfacing it in plain edit mode read as a no-op control and,
+            worse, collided with the teaser paywall's padlock vocabulary. owners/
+            edit only. Reflows via flex as the mode content width animates.
             Dropped in the view-first (mobile) posture: history/lock/save act on
             the object editor, which isn't mounted there. */}
         {canEdit && editing ? (
@@ -822,7 +825,7 @@ export function PreviewActionBar({
                 buttonProps={{ "data-history-trigger": "true" }}
               />
             ) : null}
-            {onToggleLock ? (
+            {onToggleLock && effectiveMode === "ai" ? (
               <ToolButton
                 icon={focusedSlideLocked ? "lock" : "lock_open"}
                 label={
