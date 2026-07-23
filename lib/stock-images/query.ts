@@ -54,7 +54,7 @@ export type StockImagesPage = {
 
 // Default + hard cap on page size. Kept at/under the typical deck count so
 // the deck-diversity guarantee holds on the pages users actually browse.
-export const STOCK_IMAGES_PAGE_SIZE = 12;
+export const STOCK_IMAGES_PAGE_SIZE = 36;
 const MAX_PAGE_SIZE = 60;
 
 // Fallback salt for the shuffle when no (or an unknown) seed is supplied.
