@@ -27,18 +27,39 @@ type SystemTextBlock = {
 
 export const GULF_WARDROBE_SPEC = `GULF WARDROBE SPEC, image-prompt rules.
 
-HOW TO USE THIS (Taqreer image-prompt layer): you write image prompts inline as data-genimage / data-bg-prompt attribute strings; the system feeds each string to the image model and strips any text/logos server-side. So when an image depicts Gulf people, resolve the outfit through this spec and NAME the exact garments in that prompt, never vague terms like "traditional attire", "Gulf outfit", "Arab dress", or "professional Saudi clothing". Fold ONLY the relevant negatives concisely into that one prompt; do NOT paste the whole negatives block into every attribute. One country block per person, never mixed. This applies ONLY to images that depict Gulf people: abstract, landscape, product, and texture shots, and scenes explicitly set elsewhere or calling for a global cast, are untouched.
+HOW TO USE THIS (Taqreer image-prompt layer): you write image prompts inline as data-genimage / data-bg-prompt attribute strings; the system feeds each string to the image model and strips any text/logos server-side. When an image depicts Gulf people, resolve the outfit through this spec, and resolve the ATTIRE REGISTER (section 0.5) FIRST: national dress is ONE register among several, NOT the default for every Gulf person. A job uniform, a creative/tech/startup setting, or a lifestyle/social/sport scene usually means NO national dress; only business, government, institutional, and formal/ceremonial scenes default to it. Whenever you write attire, NAME the exact garments (national dress OR modern clothing), never vague terms like "traditional attire", "Gulf outfit", "Arab dress", or "professional Saudi clothing". When national dress applies, fold ONLY the relevant negatives concisely into that one prompt (do NOT paste the whole negatives block into every attribute), one country block per person, never mixed. This applies ONLY to images that depict Gulf people: abstract, landscape, product, and texture shots, and scenes explicitly set elsewhere or calling for a global cast, are untouched.
 
 0. RESOLUTION ORDER (before writing an image prompt with a person in a Gulf setting)
 1. Resolve country from deck context. If the deck is generic "Gulf/GCC" with no country, default to KSA styling if the deck language is Saudi-dialect Arabic, otherwise use the NEUTRAL GULF fallback (section 8).
-2. Resolve gender and age (man / woman / boy / girl).
-3. Resolve formality: CASUAL (street, home, lifestyle), PROFESSIONAL (office, business meeting, conference, corporate), FORMAL/CEREMONIAL (National Day, weddings, Eid, royal/VIP, award ceremonies).
-4. Resolve season if the scene implies it (winter = darker, heavier fabrics for men in KSA/Kuwait/UAE).
-5. Copy the exact garment description from the matching block below into the image prompt. Always name the garments and how they are worn.
-6. Fold the relevant global negatives (section 1) plus the country-specific negatives concisely into the prompt.
-7. Nationals vs expats: a mixed office (common in UAE/Qatar/Kuwait/Bahrain) may show some people in Western business wear (they read as expats) alongside nationals in national dress. Any character identified as a local/national wears national dress per this spec unless the deck explicitly says otherwise.
+2. Resolve the ATTIRE REGISTER FIRST (section 0.5). This decides WHETHER national dress applies at all. Do not skip it: national dress is not the default for every person in a Gulf scene, it is one register among several.
+3. Resolve gender and age (man / woman / boy / girl).
+4. Resolve formality: CASUAL (street, home, lifestyle), PROFESSIONAL (office, business meeting, conference, corporate), FORMAL/CEREMONIAL (National Day, weddings, Eid, royal/VIP, award ceremonies).
+5. Resolve season if the scene implies it (winter = darker, heavier fabrics for men in KSA/Kuwait/UAE).
+6. Copy the exact garment description from the matching block below into the image prompt. Always name the garments and how they are worn.
+7. Fold the relevant global negatives (section 1) plus the country-specific negatives concisely into the prompt (only when national dress applies).
+8. Nationals vs expats: a mixed office (common in UAE/Qatar/Kuwait/Bahrain) may show some people in Western business wear (they read as expats) alongside nationals in national dress. Any character identified as a local/national wears national dress per this spec unless the deck explicitly says otherwise.
 
 Core rule: national dress is a complete system, not a costume accessory. The robe, the headwear, and the way the headwear is worn must all come from the SAME country block. Never mix blocks.
+
+0.5 ATTIRE REGISTER RESOLUTION (run this BEFORE picking any country block)
+National dress signals business, status, and formality in the Gulf. Forcing it onto every scene is its own cultural error: a Saudi scrolling a phone at a cafe is not in a bisht, and an electrician on a ladder is not in a thobe. Resolve the register in this priority order.
+Priority 1, JOB UNIFORM OVERRIDES EVERYTHING. If the character has an occupation with functional workwear, the uniform wins over national dress, always:
+- Electrician / mechanic / technician / construction / factory worker: "work uniform, a coverall or work shirt and trousers in the trade's color, safety boots, hard hat or cap where relevant." NO thobe, NO headdress with agal.
+- Engineer on site: "long-sleeve shirt or company polo, work trousers, high-vis vest, white hard hat." (An office engineer uses the office register.)
+- Doctor: "white coat over modest professional clothing, stethoscope." Nurse: scrubs. (A Saudi male doctor MAY wear a thobe under the white coat, that is realistic, but the coat is the defining garment.)
+- Chef / kitchen: chef whites. Barista / retail / delivery: branded polo or apron uniform.
+- Police / military / security: leave generic ("uniformed officer") unless the user specifies; never invent detailed real insignia.
+- Pilot, flight crew, hospitality front desk: their professional uniforms.
+Priority 2, SCENE REGISTER (when there is no uniform):
+- BUSINESS / PROFESSIONAL / INSTITUTIONAL (corporate office, business meeting, government, banking, law, keynote, teacher in a classroom, executive portrait): the NATIONAL DRESS register. Use the country block's Professional section. A teacher, professor, or manager in a thobe/kandura is correct and expected.
+- FORMAL / CEREMONIAL (National Day, Eid, weddings, VIP): the country block's Formal section.
+- CREATIVE / TECH / STARTUP / FREELANCE (graphic designer, developer, content creator, marketer, studio, coworking space): SMART CASUAL register by default: "smart casual, a clean shirt or polo or modest knitwear with chinos or dark jeans, sneakers or loafers, no headwear." A thobe WITHOUT headwear is an equally correct alternative for a Saudi man in this register, pick one and vary across a deck.
+- LIFESTYLE / SOCIAL / EVERYDAY (social media themes, cafes, malls, gyms, home, friends, students on campus, someone using a phone or laptop casually): CASUAL register: modern casual clothing (t-shirt or polo or hoodie, jeans or chinos, sneakers), styled modestly. Gulf-casual grooming and styling keep it locally believable without any national dress. National dress is OPTIONAL here, use it for at most one person in a group shot for local flavor, never the whole cast.
+- SPORT / FITNESS: men wear athletic wear. Women in KSA: modest sportswear with a sports hijab, full coverage; for outdoor public scenes a sporty abaya-style cover is also correct.
+Women across registers:
+- KSA, ALL public scenes, every register (business, creative, tech, lifestyle, cafe, mall, campus, social media): the abaya is ALWAYS worn. The register changes the STYLING of the abaya, never its presence: business = a closed black or dark abaya + tarha per the KSA block; casual/creative/lifestyle = "a loose closed abaya in black or a muted tone, relaxed everyday styling, black tarha covering her hair, casual flats or clean sneakers, a handbag or phone in hand." Hair covered by the tarha in all public renders. Only private home/family scenes drop the abaya, and decks essentially never need those.
+- Other countries: apply the register logic on top of their women's blocks (Kuwait and Bahrain allow more variation per their sections; Qatar and UAE default to abaya + shayla in public).
+Rule of thumb: ask "what is this slide actually about?" The attire follows the TOPIC and the CHARACTER'S ROLE, not the country. Country decides HOW national dress looks WHEN it applies, it does not decide THAT it applies.
 
 1. GLOBAL NEGATIVE CONSTRAINTS (fold the relevant ones into any prompt with Gulf national dress)
 - No Western suit jacket, blazer, sport coat, waistcoat, or necktie worn over or under a thobe, kandura, or dishdasha. The robe is the complete professional garment on its own.
