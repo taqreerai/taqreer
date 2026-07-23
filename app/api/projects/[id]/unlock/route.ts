@@ -109,6 +109,13 @@ export async function POST(
     jobId = job.id;
     await sendInngestEventWithRetry({
       name: "deck.unlock.requested",
+      // Deterministic id so two concurrent unlock POSTs (which can both slip
+      // past the non-transactional in-flight guard above) dedup to ONE run -
+      // Inngest drops duplicate events by id, preventing a duplicate comped
+      // Opus generation. A second telemetry Job row is harmless. Keyed by the
+      // source version so a later legitimate unlock of a new version isn't
+      // wrongly deduped.
+      id: `deck-unlock:${project.id}:${sourceVersionId}`,
       data: {
         projectId: project.id,
         presentationId: presentation.id,

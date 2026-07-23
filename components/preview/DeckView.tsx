@@ -421,6 +421,18 @@ export function DeckView({
   const [focusedTeaser, setFocusedTeaser] = useState<number | null>(null);
   const [teaserUnlocking, setTeaserUnlocking] = useState(false);
   const [teaserUpgradeOpen, setTeaserUpgradeOpen] = useState(false);
+  // Terminal unlock failure → a bell warning so the owner isn't left guessing
+  // (mirrors failApply). Reused by both the fire path and the poll timeout.
+  // Declared here (early) so both the poll effect and fireTeaserUnlock below
+  // can reference it.
+  const notifyTeaserUnlockFailed = useCallback(() => {
+    notificationStore.push({
+      kind: "warning",
+      title: dict.editor.errors.teaserUnlockFailed,
+      desc: projectTitle,
+      href: `/project/${projectId}`,
+    });
+  }, [dict, projectTitle, projectId]);
 
   // Ref-mirror of manifest so realtime broadcast handlers can read the
   // latest slide list without re-binding to the channel on every
@@ -1595,27 +1607,41 @@ export function DeckView({
   useEffect(() => {
     if (!teaserUnlocking) return;
     let cancelled = false;
+    let ticks = 0;
+    // Hard cap so a stuck / failed / cancelled unlock job doesn't spin the
+    // "Unlocking..." CTA forever. ~4 min at 3s covers a 5-slide Opus author +
+    // image fill + bake with headroom; past that, surface a failure (bell +
+    // re-enabled CTA) so the owner can retry rather than reload.
+    const MAX_TICKS = 80;
     const tick = async () => {
+      ticks += 1;
       try {
         const res = await fetch(
           `/api/projects/${encodeURIComponent(projectId)}/status?includeManifest=true&includeSlideStates=true`,
           { credentials: "same-origin" },
         );
-        if (!res.ok || cancelled) return;
-        const data = (await res.json()) as {
-          manifest?: unknown;
-          teaserUnlocked?: boolean;
-        };
-        if (cancelled || !data.teaserUnlocked) return;
-        if (data.manifest) {
-          const parsed = SlideManifestSchema.safeParse(data.manifest);
-          if (parsed.success) setManifestStable(parsed.data);
+        if (!cancelled && res.ok) {
+          const data = (await res.json()) as {
+            manifest?: unknown;
+            teaserUnlocked?: boolean;
+          };
+          if (!cancelled && data.teaserUnlocked) {
+            if (data.manifest) {
+              const parsed = SlideManifestSchema.safeParse(data.manifest);
+              if (parsed.success) setManifestStable(parsed.data);
+            }
+            setTeaserUnlockedState(true);
+            setFocusedTeaser(null);
+            setTeaserUnlocking(false);
+            return;
+          }
         }
-        setTeaserUnlockedState(true);
-        setFocusedTeaser(null);
-        setTeaserUnlocking(false);
       } catch {
-        /* network blip - next tick retries */
+        /* network blip - counts toward the cap below, next tick retries */
+      }
+      if (!cancelled && ticks >= MAX_TICKS) {
+        setTeaserUnlocking(false);
+        notifyTeaserUnlockFailed();
       }
     };
     void tick();
@@ -1625,7 +1651,7 @@ export function DeckView({
       window.clearInterval(interval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- setManifestStable is a stable setState dispatch; intentionally not a re-run trigger
-  }, [teaserUnlocking, projectId]);
+  }, [teaserUnlocking, projectId, notifyTeaserUnlockFailed]);
 
   // How many reserved gen-image boxes does this deck have? Gates the
   // hydration poll below (text-only decks — the common case — never fire it)
@@ -2062,16 +2088,18 @@ export function DeckView({
         }
         if (!res.ok) {
           setTeaserUnlocking(false);
+          notifyTeaserUnlockFailed();
           return;
         }
         // Success: keep the spinner until the poll sees teaserUnlocked flip.
         return;
       } catch {
         setTeaserUnlocking(false);
+        notifyTeaserUnlockFailed();
         return;
       }
     }
-  }, [projectId]);
+  }, [projectId, notifyTeaserUnlockFailed]);
 
   // The unlock button. A free / unpaid owner opens the UpgradeModal (the unlock
   // fires on subscribe success); a paid owner / admin fires the unlock directly.
@@ -2899,11 +2927,14 @@ export function DeckView({
           return;
         case "Home":
           e.preventDefault();
-          setCurrentSlideIndex(0);
+          // Route through navigateToSlide (not setCurrentSlideIndex) so a
+          // focused teaser slot is cleared - else the lock overlay + disabled
+          // editing would strand on the real slide it lands on.
+          navigateToSlide(0);
           return;
         case "End":
           e.preventDefault();
-          setCurrentSlideIndex(totalSlides - 1);
+          navigateToSlide(totalSlides - 1);
           return;
         default:
           return;

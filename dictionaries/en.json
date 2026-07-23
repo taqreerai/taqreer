@@ -1176,7 +1176,7 @@
       "serverBusy": "Server is under heavy load, this may take a while",
       "takingLonger": "Taking longer than usual, still working",
       "failedApply": "Failed to apply comments",
-      "cancelledOrFailed": "Operation cancelled or failed. You can try again.",
+      "cancelledOrFailed": "Operation cancelled or failed. You can try again.", "teaserUnlockFailed": "Unlocking your slides failed. Please try again.",
       "stopped": "Operation stopped. It may have been cancelled. Try again.",
       "tookLonger": "Operation took longer than expected. Try again.",
       "disconnected": "Disconnected from server. Check your connection and try again.",
