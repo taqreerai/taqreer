@@ -108,6 +108,7 @@ export function LayersPanel({
   slideId,
   collapsed = false,
   tabsSlot,
+  locked = false,
 }: {
   // The editor iframe's document (from SlideEditor.onDocReady), or null when the
   // editor isn't mounted yet.
@@ -143,6 +144,9 @@ export function LayersPanel({
   // crossfade in the same rail slot). Omitted -> the classic title header
   // (decks with no GenChat history).
   tabsSlot?: ReactNode;
+  // Teaser (paywall-locked) slot is focused: the slide isn't editable, so the
+  // panel keeps its header/tabs but shows a lock in place of the layer list.
+  locked?: boolean;
 }) {
   const dict = useDict();
   const { dir } = useLocale();
@@ -419,7 +423,19 @@ export function LayersPanel({
         </header>
       )}
 
-      {displayOrder.length === 0 && !bgNode ? (
+      {locked ? (
+        // Teaser (paywall-locked) slot focused: hide the layer list and show a
+        // lock in its place. The header / tabs above stay.
+        <div className="flex flex-1 items-center justify-center py-8">
+          <span
+            className="material-symbols-outlined text-foreground/30"
+            style={{ fontSize: 40 }}
+            aria-hidden
+          >
+            lock
+          </span>
+        </div>
+      ) : displayOrder.length === 0 && !bgNode ? (
         doc == null ? (
           // No editor document yet = the deck is still generating (the panel is
           // shown disabled in the unified shell). Show the same branded

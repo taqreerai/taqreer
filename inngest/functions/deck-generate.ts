@@ -699,6 +699,17 @@ function sanitizeBriefFonts(brief: unknown): unknown {
   return { ...b, brand: { ...b.brand, fonts: nextFonts } };
 }
 
+// Internal harness-only fields carried on the brief (teaser bookkeeping)
+// that must NOT leak into the Brief JSON the model reads - the teaser plan
+// is delivered as an explicit natural-language directive instead. Returns a
+// shallow copy so the persisted brief is never mutated.
+function stripInternalBriefFields(brief: unknown): unknown {
+  if (!brief || typeof brief !== "object") return brief;
+  const { teaser: _teaser, ...rest } = brief as Record<string, unknown>;
+  void _teaser;
+  return rest;
+}
+
 // One theme font slot, as it appears on both the final manifest theme and the
 // raw mid-stream theme JSON. Loose shape so the same applier serves both.
 type ThemeFontSlotLike = {
@@ -899,18 +910,48 @@ function buildUserMessage(event: DeckGenerateEvent) {
     ...(brandColours ? [``, brandColours] : []),
     ``,
     `Brief:`,
-    JSON.stringify(sanitizeBriefFonts(event.brief), null, 2),
-    // AUTO slide count (owner ruling 2026-07-18): the model decides the
-    // length; the Brief's slideCount is the HELD ceiling, not a target.
-    // Exact user picks (slideCountMode "exact"/absent) keep the match-the-
-    // preference semantics unchanged.
-    ...((event.brief as { slideCountMode?: string } | null)?.slideCountMode ===
-    "ceiling"
-      ? [
+    JSON.stringify(
+      stripInternalBriefFields(sanitizeBriefFonts(event.brief)),
+      null,
+      2,
+    ),
+    // Slide-count directive. Priority: teaser > auto/ceiling > exact (none).
+    ...((() => {
+      const brief = event.brief as {
+        slideCountMode?: string;
+        teaser?: { plannedTotal?: number; lockedCount?: number } | null;
+      } | null;
+      const teaser = brief?.teaser;
+      // TEASER (free-tier conversion): the model designs ONE complete deck of
+      // `plannedTotal` slides, but the harness aborts the stream at the visible
+      // count - leaving those slides a deliberately-unfinished FIRST ACT. The
+      // closing must live in the withheld tail so the visible slides never read
+      // as a finished deck (which would remove the reason to unlock). Wins over
+      // the auto directive below (a free auto deck is also "ceiling" mode).
+      if (
+        teaser &&
+        typeof teaser.plannedTotal === "number" &&
+        teaser.plannedTotal > 0
+      ) {
+        const total = teaser.plannedTotal;
+        const visible = total - (teaser.lockedCount ?? 0);
+        return [
+          ``,
+          `SLIDE COUNT (teaser): Design ONE complete, coherent ${total}-slide presentation and set data-deck-slides="${total}" on the cover. The narrative arc, depth, and the CLOSING (summary, recap, call-to-action, thank-you, contact) span the FULL ${total} slides; any closing belongs on the FINAL slide only. Slides 1 through ${visible} are the OPENING ACT: build momentum, open threads, introduce but do not resolve, and set up payoffs that later slides deliver. Do NOT conclude, summarize, wrap up, thank the audience, or place any closing / CTA / summary slide within the first ${visible} slides. Author slides strictly in order starting from slide 1.`,
+        ];
+      }
+      // AUTO slide count (owner ruling 2026-07-18): the model decides the
+      // length; the Brief's slideCount is the HELD ceiling, not a target.
+      // Exact user picks (slideCountMode "exact"/absent) keep the match-the-
+      // preference semantics unchanged.
+      if (brief?.slideCountMode === "ceiling") {
+        return [
           ``,
           `SLIDE COUNT (auto): the Brief's slideCount is a MAXIMUM, not a target — the user left the deck length to YOU. Author the count the content actually calls for; honor any explicit structure in the content (numbered slides, sections, an outline) — up to that maximum. Never pad, stretch, or split content just to approach the maximum.`,
-        ]
-      : []),
+        ];
+      }
+      return [];
+    })()),
   ];
   if (event.type === "enhance" && event.enhance) {
     lines.push(``, `Enhancement settings:`, JSON.stringify(event.enhance, null, 2));

@@ -20,6 +20,8 @@ import { SourceMetaSchema, type SourceMeta } from "@/lib/types/source";
 import { detectImageRegion } from "@/lib/geo/image-region";
 import { preflightGenerate } from "@/lib/credits/preflight";
 import type { Flow as CreditFlow, SlideEstimateInput } from "@/lib/credits/cost";
+import { TEASER_LOCKED_COUNT } from "@/lib/credits/cost";
+import { normalizePlan } from "@/lib/plan";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
 import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 import { signupGeoFromHeaders } from "@/lib/api/geo";
@@ -777,6 +779,27 @@ export async function POST(request: Request) {
     ? resolvedSlideCount
     : preflight.holdSlides;
 
+  // Teaser paywall (free-tier conversion). A free-tier `create` deck is
+  // authored as a longer deck (visible + TEASER_LOCKED_COUNT) but ONLY the
+  // visible slides are held, charged, and streamed - deck-generate keeps its
+  // slide-cap abort at holdSlides, so cost is identical to today. The locked
+  // slides render blurred in the viewer and are generated (on Opus, comped)
+  // only if the owner subscribes. Images decks included: the unlock authors
+  // the tail with images too (deck-unlock mirrors the deck.images.requested
+  // fill when the source is an images deck). Admins are never gated.
+  // `plannedTotal` is what the model designs toward so the visible slides read
+  // as an unfinished first act.
+  const isTeaser =
+    creditFlow === "create" &&
+    dbUser.role !== "admin" &&
+    normalizePlan(dbUser.plan) === "free";
+  const teaserLockedCount = isTeaser ? TEASER_LOCKED_COUNT : 0;
+  // `cappedSlideCount` is only null in the (unreachable-for-teaser) exact path
+  // with no picked count; fall back to the held count so the planned total is
+  // always a number.
+  const teaserPlannedTotal =
+    (cappedSlideCount ?? preflight.holdSlides) + teaserLockedCount;
+
   // Location-aware lifestyle imagery: map the REQUEST's country (the "area of
   // generation") to a regional people descriptor so an images-deck made from
   // Saudi Arabia depicts local people, not a generic cast. Only resolved for
@@ -799,6 +822,19 @@ export async function POST(request: Request) {
     // the matching directive after the Brief JSON). The stream's slide-cap
     // abort at holdSlides stays the hard enforcement either way.
     slideCountMode: preflight.exact ? "exact" : "ceiling",
+    // Teaser paywall: when present, deck-generate declares `plannedTotal`
+    // slides to the model (so it designs a full arc) but still aborts the
+    // stream at slideCount/holdSlides, leaving the visible slides a
+    // deliberately-unfinished first act. Absent on non-teaser decks, so a
+    // normal brief (and the prompt built from it) is byte-for-byte unchanged.
+    ...(isTeaser
+      ? {
+          teaser: {
+            plannedTotal: teaserPlannedTotal,
+            lockedCount: teaserLockedCount,
+          },
+        }
+      : {}),
     // context/images.md — when on (create flow), deck-generate swaps the
     // SVG-only graphics directive for the images-deck override + reserves
     // generated-image boxes. OMITTED when off, so a normal deck's brief
@@ -884,6 +920,10 @@ export async function POST(request: Request) {
         format: payload.brand?.slideSize ?? "16:9",
         status: "queued",
         brandKitId: brandKit?.id,
+        // Teaser paywall: locked-slot count frozen at creation from the
+        // creator's tier (0 for paid/admin). Deck-level + stable across
+        // versions so the deck stays a teaser even if the owner upgrades.
+        teaserLockedCount,
         aiPrompt: JSON.stringify({
           type: projectType,
           content: payload.content,

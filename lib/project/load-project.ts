@@ -103,6 +103,17 @@ export type InitialState = {
    */
   brandingWatermark: boolean;
   /**
+   * Teaser paywall (free-tier conversion). `teaserLockedCount` is the
+   * number of locked slots this deck was created with (0 for paid/admin
+   * decks); `teaserUnlocked` flips true once the owner subscribes and the
+   * withheld slides are generated. The viewer appends
+   * `teaserUnlocked ? 0 : teaserLockedCount` blurred locked slots after the
+   * real slides. Never part of slideJson, so exports / bake / gallery ignore
+   * it by construction.
+   */
+  teaserLockedCount: number;
+  teaserUnlocked: boolean;
+  /**
    * Reload-defense for partial-slide regen (2026-05-27). When a Job
    * row of type `deck.regenerate.partial` is still in flight (status:
    * queued / processing / running), this carries the target slide
@@ -431,6 +442,10 @@ export async function loadProject(
       // Owner plan + role for the free-tier branding watermark (see
       // InitialState.brandingWatermark).
       user: { select: { plan: true, role: true } },
+      // Teaser paywall: locked-slot count + unlock timestamp (see
+      // InitialState.teaserLockedCount / teaserUnlocked).
+      teaserLockedCount: true,
+      teaserUnlockedAt: true,
       presentation: {
         select: {
           id: true,
@@ -493,6 +508,8 @@ export async function loadProject(
     initialActiveRegen,
     brandingWatermark:
       !isPaidPlan(project.user.plan) && project.user.role !== "admin",
+    teaserLockedCount: project.teaserLockedCount,
+    teaserUnlocked: project.teaserUnlockedAt != null,
   };
 }
 

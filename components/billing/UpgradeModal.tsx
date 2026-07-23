@@ -37,12 +37,17 @@ export function UpgradeModal({
   // so the tiers modal explains WHY it opened (replaces the old intermediate
   // CreditGateDialog card). Shown only on the plans step.
   gateContext = null,
+  // Optional: fires the instant the checkout succeeds (the success step is
+  // shown). The teaser paywall uses it to auto-fire the comped unlock right
+  // after subscribe. Existing callers omit it - the modal behaves as before.
+  onSuccess,
 }: {
   open: boolean;
   onClose: () => void;
   requiredTier?: KnownPlan | null;
   initialLookupKey?: string | null;
   gateContext?: { title: string; body: string } | null;
+  onSuccess?: () => void;
 }) {
   const dict = useDict();
   const { dir } = useLocale();
@@ -179,7 +184,10 @@ export function UpgradeModal({
                 ) : lookupKey ? (
                   <EmbeddedCheckout
                     lookupKey={lookupKey}
-                    onSuccess={() => setDone(true)}
+                    onSuccess={() => {
+                      setDone(true);
+                      onSuccess?.();
+                    }}
                   />
                 ) : (
                   <BillingSection variant="modal" minTier={requiredTier} onBuy={(key) => setLookupKey(key)} />

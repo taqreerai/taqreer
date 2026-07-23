@@ -106,6 +106,17 @@ model Project {
   // entitlement check.
   publicAccessLevel ProjectAccessLevel?
   hideBrandingBadge Boolean       @default(false)
+  // Teaser paywall (free-tier conversion play). A free-tier `create`
+  // deck is conceived as a 10-slide deck of which only the first 5
+  // render; the last `teaserLockedCount` slides show blurred/locked in
+  // the viewer and are NOT generated until the user subscribes. On
+  // unlock we author the remaining slides on Opus (comped) and stamp
+  // `teaserUnlockedAt`. Both are deck-level and stable across content
+  // versions. 0 / null == a normal (non-teaser) deck. Set once at
+  // creation from the creator's tier; never re-derived (so the deck
+  // stays a teaser even if the owner later upgrades).
+  teaserLockedCount Int           @default(0)
+  teaserUnlockedAt  DateTime?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -302,7 +313,7 @@ model SlideVersion {
   slideStateId  String
   versionNumber Int
   slideJson     Json
-  // create | regen | partial_regen | restore
+  // create | regen | partial_regen | restore | unlock
   source        String     @default("create")
   createdAt     DateTime   @default(now())
   slideState    SlideState @relation(fields: [slideStateId], references: [id], onDelete: Cascade)

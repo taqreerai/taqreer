@@ -132,6 +132,11 @@ export async function GET(
     where: { id },
     select: {
       status: true,
+      // Teaser paywall: locked-slot count + unlock timestamp, so the fat-sync
+      // can flip the viewer from blurred teasers to real slides IN PLACE the
+      // moment the unlock generation lands (mirrors load-project's shape).
+      teaserLockedCount: true,
+      teaserUnlockedAt: true,
       presentation: {
         select: {
           // `id` needed only on the includeSlideStates path — selected
@@ -334,5 +339,11 @@ export async function GET(
     versionStatus: latestVersion?.status ?? null,
     manifest,
     slideStates,
+    // Teaser paywall: the viewer appends `teaserUnlocked ? 0 :
+    // teaserLockedCount` blurred locked slots. On the unlock fat-sync,
+    // teaserUnlocked flips true (and the manifest carries the real 10 slides),
+    // so DeckView clears the teasers in place.
+    teaserLockedCount: project.teaserLockedCount,
+    teaserUnlocked: project.teaserUnlockedAt != null,
   });
 }

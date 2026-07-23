@@ -20,7 +20,7 @@
 // independently via `flex-1 overflow-y-auto`.
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { useDict } from "@/components/i18n/LocaleProvider";
 import { SegmentedToggle } from "@/components/create/controls";
 import { SlideRenderer, slideRootBackground } from "@/components/slides/SlideRenderer";
 import { SlidePresenceStack } from "@/components/preview/SlidePresenceStack";
@@ -65,6 +65,17 @@ export type NavItem =
       // for the whole deck the moment the completed manifest takes
       // over the nav items.
       draft?: boolean;
+    }
+  // Teaser paywall (free-tier): a WITHHELD slide shown locked. Never a real
+  // manifest slide - `index` continues past the real slides (so the number chip
+  // reads 06, 07, ...) but selection routes through `onTeaserSelect(lockedIndex)`,
+  // not `onSelect`. `gradient` is a CSS background built from the deck palette
+  // (random per slot), rendered under the padlock overlay.
+  | {
+      kind: "teaser";
+      index: number;
+      lockedIndex: number;
+      gradient: string;
     };
 
 export function SlideNavSidebar({
@@ -115,10 +126,17 @@ export function SlideNavSidebar({
   // Studio: collapsed → the card slides off the inline edge (kept mounted so the
   // thumbnails never remount/flash) and DeckView shows a bare edge arrow.
   collapsed = false,
+  // Teaser paywall: which locked slot (0-based) is currently focused, so its
+  // tile carries the active ring; null when a real slide is focused. Selecting
+  // a teaser tile routes here instead of onSelect.
+  currentTeaser = null,
+  onTeaserSelect,
 }: {
   items: NavItem[];
   currentIndex: number | null;
   onSelect: (idx: number) => void;
+  currentTeaser?: number | null;
+  onTeaserSelect?: (lockedIndex: number) => void;
   // Theme only — for the thumbnail SlideRenderer. Null during early
   // streaming (no manifest yet); placeholder tiles don't need it.
   manifest: SlideManifest | null;
@@ -159,7 +177,6 @@ export function SlideNavSidebar({
   cancelDisabled?: boolean;
 }) {
   const dict = useDict();
-  const { dir } = useLocale();
   const { width: canvasW, height: canvasH } = dimensionsForFormat(format);
   const aspectRatio = `${canvasW} / ${canvasH}`;
 
@@ -267,7 +284,12 @@ export function SlideNavSidebar({
     }
   };
 
-  const panelDir: "rtl" | "ltr" = dir;
+  // The rail's reading direction follows the DECK's content language, NOT the
+  // UI locale: a fully-English deck viewed in an Arabic UI must still lay its
+  // thumbnails out left-to-right (user direction 2026-07-23). The panel itself
+  // always docks physically right (see the `right:`/`border-l` note below); this
+  // only orders the thumbnail grid + header text.
+  const panelDir: "rtl" | "ltr" = language === "en" ? "ltr" : "rtl";
 
   return (
     <aside
@@ -405,7 +427,14 @@ export function SlideNavSidebar({
             inset doesn't reintroduce an overflow on the inline-end. */}
         <div className="grid grid-cols-2 gap-4 m-0.5">
         {items.map((item) => {
-          const isActive = currentIndex === item.index;
+          const isTeaser = item.kind === "teaser";
+          // Teaser tiles carry the active ring off `currentTeaser`; real tiles
+          // off `currentIndex` (and never while a teaser is focused). Narrow on
+          // item.kind inline so TS sees the teaser-only fields.
+          const isActive =
+            item.kind === "teaser"
+              ? currentTeaser === item.lockedIndex
+              : currentIndex === item.index && currentTeaser == null;
           // Active ring: 2 px neon-magenta (`--tq-magenta-hot` =
           // #F900FF), fully opaque. Brighter + thicker than the
           // previous 1 px brand-purple — the violet was reading too
@@ -422,11 +451,15 @@ export function SlideNavSidebar({
             <button
               key={item.index}
               type="button"
-              onClick={() => onSelect(item.index)}
+              onClick={() =>
+                item.kind === "teaser"
+                  ? onTeaserSelect?.(item.lockedIndex)
+                  : onSelect(item.index)
+              }
               aria-label={
                 dict.editor.nav.slideAria.replace("{n}", String(item.index + 1)) +
                 (isActive ? dict.editor.nav.slideSelected : "") +
-                (isLocked ? dict.editor.nav.slideLocked : "")
+                (isLocked || isTeaser ? dict.editor.nav.slideLocked : "")
               }
               aria-current={isActive ? "true" : undefined}
               // Only the active thumbnail carries a visible stroke now
@@ -493,6 +526,13 @@ export function SlideNavSidebar({
                       />
                     ) : null}
                   </div>
+                ) : item.kind === "teaser" ? (
+                  // Locked teaser tile: a palette gradient (no real content);
+                  // the padlock overlay below marks it locked.
+                  <div
+                    className="h-full w-full"
+                    style={{ background: item.gradient }}
+                  />
                 ) : manifest ? (
                   <div
                     className="h-full w-full"
@@ -540,7 +580,7 @@ export function SlideNavSidebar({
                   (user feedback 2026-05-20). The opacity dim on the
                   thumbnail content above + this overlay together
                   give the slide a "frozen" look. */}
-              {isLocked ? (
+              {isLocked || isTeaser ? (
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/15">
                   <span
                     className="material-symbols-outlined text-foreground drop-shadow-lg"

@@ -457,6 +457,56 @@ RULES:
 - Numerals in RTL decks: a digit block with dir="ltr" renders text-align:start as LEFT - keep dir=ltr, set text-align explicitly to place the numerals where the composition needs them.`;
 }
 
+// ── TEASER UNLOCK (continuation, frame decks) ───────────────────────────────
+// A free deck was authored as a `total`-slide arc but only the first
+// `visibleCount` slides were streamed (the rest were withheld as a paywall
+// teaser). When the owner subscribes, this authors the WITHHELD tail
+// (positions visibleCount+1 .. total) as net-new slides that COMPLETE the arc,
+// on Opus, comped. system = frameSystemPrompt verbatim (shared prompt cache);
+// this user message overrides the output to N continuation sections, no deck
+// <style> (the shared deck css is FIXED and passed in), seeded with the
+// existing slides + brief so the tail is on-topic and matches the look. Unlike
+// a regen (redesign ONE existing slide), this emits multiple net-new sections.
+export type FrameContinuationInput = {
+  visibleCount: number; // slides already authored (positions 1..visibleCount)
+  total: number; // planned deck size (the closing lives on slide `total`)
+  lockedCount: number; // slides to author now (visibleCount+1 .. total)
+  deckTitle: string | null;
+  brief: string; // compact topic/brief context for on-theme continuity
+  existingSlides: { position: number; sectionTag: string; wellHtml: string }[];
+};
+
+export function frameContinuationUserMessage(
+  input: FrameContinuationInput,
+  deckCss: string,
+): string {
+  const firstNew = input.visibleCount + 1;
+  const existing = input.existingSlides
+    .map(
+      (s) =>
+        `--- Slide ${s.position} ---\nSection attributes: ${s.sectionTag}\nWell (content + look reference; FROZEN machine output, never a layout to copy):\n${s.wellHtml}`,
+    )
+    .join("\n\n");
+
+  return `CONTINUE an EXISTING deck. It currently has ${input.visibleCount} slides but was designed as a complete ${input.total}-slide presentation. Author the remaining ${input.lockedCount} slides (positions ${firstNew} through ${input.total}) that COMPLETE the deck's arc. The existing ${input.visibleCount} slides are the opening act and are FIXED - do not restate them; pick up where they leave off and carry the narrative to its conclusion. The CLOSING (summary / recap / call-to-action / thank-you / contact) belongs on the FINAL slide (${input.total}) only.
+
+${input.deckTitle ? `Deck title: ${input.deckTitle}\n\n` : ""}Original brief (topic + content the deck is about):
+${input.brief}
+
+The existing slides, in order (for CONTINUITY and to match the look - do NOT repeat their content):
+${existing}
+
+Shared deck stylesheet (FIXED - you cannot change it; reuse its classes or use inline styles, and do NOT emit a <style> block):
+${deckCss}
+
+RULES:
+- Reply with EXACTLY ${input.lockedCount} <section> elements in the generation contract, in ORDER (position ${firstNew} first, ${input.total} last). Each section declares its data attributes (data-label, data-role, data-bg, and any bg-css / bg-prompt / bg-scrim per the system rules) and contains exactly one <div class="well"> authored in PURE FLOW. No <style> block, no data-revises, no prose, no fences - the FIRST character of your reply is the < of the first section.
+- The FINAL section (position ${input.total}) is the deck's closing - give it a closing role (data-role="closing").
+- Build genuinely NEW slides that advance and finish the story; a tail that restates the opening act is a failure.
+- Match the established design system: reuse the deck stylesheet's classes, the same headline/type treatment, and the same chrome the existing slides use, so the tail reads as one designer on one grid.
+- Preserve numerals as Latin digits (0-9). In RTL decks a digit-only block with dir="ltr" renders text-align:start as LEFT - set text-align explicitly to place numerals where the composition needs them.`;
+}
+
 // ── VISION QUALITY PASS (the bake's revision call) ──────────────────────────
 // The deck is rendered in the real export browser and every pending slide is
 // handed back as [rendered image + current code + measured findings] so the

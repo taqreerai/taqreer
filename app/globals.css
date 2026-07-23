@@ -1396,6 +1396,36 @@ html.app-shell-scroll body {
   opacity: 1;
 }
 
+/* ─── Teaser paywall locked slide ────────────────────────────────────
+   Free-tier conversion: the last N slides of a free deck are WITHHELD (never
+   generated) and shown as locked slots. Each slot's background is a random
+   gradient built from the DECK's own palette (see teaserGradient in DeckView),
+   under this dark scrim carrying the lock + CTA. No real content sits behind
+   it, so there is nothing to bypass. The scrim's dark value is the same in both
+   themes on purpose - it overlays a palette gradient, not app chrome. */
+.tq-teaser-lock-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+  /* Dark scrim over the palette gradient - reads as a locked panel with a hint
+     of the deck's colors. */
+  background: rgba(0, 0, 0, 0.55);
+  text-align: center;
+}
+.tq-teaser-lock-icon {
+  color: #fff;
+  opacity: 0.92;
+  line-height: 1;
+  /* Solid padlock (Material Symbols fill axis) so it reads at hero scale. */
+  font-variation-settings: "FILL" 1, "wght" 500;
+}
+
 .btn-gradient-anim:hover::before { opacity: 0; }
 
 .btn-gradient-anim:disabled {

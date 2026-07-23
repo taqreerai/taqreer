@@ -99,6 +99,15 @@ export function slideCapForFlow(flow: Flow, tierCap: number): number {
   return flow === "social" ? Math.min(tierCap, SOCIAL_SLIDE_CAP) : tierCap;
 }
 
+// Teaser paywall (free-tier conversion). A free `create` deck is authored
+// as a longer deck of which only the visible (tier-cap) slides render; the
+// remaining TEASER_LOCKED_COUNT slides show blurred/locked in the viewer
+// and are generated (on Opus, comped) only when the user subscribes. Kept
+// here so the generation route, the viewer, and the unlock endpoint share
+// one number. The visible count is the free tier's own slideCap, so the
+// hold/charge is identical to today; only the locked count is added on top.
+export const TEASER_LOCKED_COUNT = 5;
+
 // Top-up packs expire 12 months after purchase (§1).
 export const TOPUP_EXPIRY_MONTHS = 12;
 

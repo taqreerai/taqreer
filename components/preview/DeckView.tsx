@@ -27,6 +27,8 @@ import {
 } from "@/lib/schema/slide";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import { BrandWatermark } from "@/components/preview/BrandWatermark";
+import { TeaserLockCanvas } from "@/components/preview/TeaserLockCanvas";
+import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import { SlideEditor } from "@/components/preview/editor/SlideEditor";
 import { StylePill } from "@/components/preview/editor/StylePill";
 import { LayersPanel } from "@/components/preview/editor/LayersPanel";
@@ -119,6 +121,30 @@ function stabilizeStreamingSlides(
 // which compares theme by reference).
 function themesEqual(a: ThemeType, b: ThemeType): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+// A locked teaser slot's background: a random-but-stable mesh gradient built
+// from the DECK's own palette under a dark scrim (user direction 2026-07-23 -
+// replaced the blurred slide-copy). Seeded by the slot index so each slot gets
+// a different gradient that doesn't reshuffle on every paint. Falls back to a
+// flat dark if the palette is somehow empty.
+function teaserGradient(palette: readonly string[], seed: number): string {
+  if (!palette || palette.length === 0) return "#0a0e17";
+  let s = (0x9e3779b9 ^ Math.imul(seed + 1, 2654435761)) >>> 0;
+  const rand = () => {
+    s = (Math.imul(s, 1103515245) + 12345) >>> 0;
+    return s / 0x100000000;
+  };
+  const pick = () => palette[Math.floor(rand() * palette.length)];
+  const c1 = pick();
+  const c2 = pick();
+  const c3 = pick();
+  const p = () => Math.round(rand() * 100);
+  return (
+    `radial-gradient(at ${p()}% ${p()}%, ${c1} 0%, transparent 60%), ` +
+    `radial-gradient(at ${p()}% ${p()}%, ${c2} 0%, transparent 55%), ` +
+    `linear-gradient(135deg, ${c3}, ${c1})`
+  );
 }
 
 type Props = {
@@ -230,6 +256,16 @@ type Props = {
    * baked. Clicking it upsells (UpgradeModal).
    */
   brandingWatermark?: boolean;
+  /**
+   * Teaser paywall (free-tier conversion). `teaserLockedCount` = how many
+   * locked slots this deck was created with (0 = not a teaser); `teaserUnlocked`
+   * flips true once the owner subscribed and the withheld slides were authored.
+   * The viewer appends `teaserUnlocked ? 0 : teaserLockedCount` blurred, locked
+   * slots after the real slides; unlocking them opens the UpgradeModal (free) or
+   * fires the comped Opus unlock (paid).
+   */
+  teaserLockedCount?: number;
+  teaserUnlocked?: boolean;
 };
 
 type DerivedStatus = "generating" | "completed" | "failed" | "cancelled";
@@ -355,6 +391,8 @@ export function DeckView({
   initialMainSidebarWidth = 260,
   initialActiveRegen = null,
   brandingWatermark = false,
+  teaserLockedCount = 0,
+  teaserUnlocked = false,
 }: Props) {
   // Capability flags derived from role — passed/used wherever the
   // UI gates a mutation affordance. View-only sees the deck and
@@ -370,6 +408,20 @@ export function DeckView({
   // Initial state seeds from server props. The parent (re)keys this component
   // on status transitions, so a remount reseeds — no in-effect prop sync.
   const [manifest, setManifest] = useState<SlideManifest | null>(initialManifest);
+
+  // ─── Teaser paywall (free-tier conversion) ──────────────────────────
+  // A free deck is authored as more slides than render; the withheld tail
+  // shows as blurred, locked slots (SlideNavSidebar teaser tiles +
+  // TeaserLockCanvas in the hero). `teaserUnlockedState` mirrors the server
+  // flag but is mutable so the unlock fat-sync can flip it IN PLACE;
+  // `focusedTeaser` is which locked slot is open in the hero (null = a real
+  // slide is focused). The unlock is comped, on Opus, for the owner's tier.
+  // Declared early so the unlock poll effect + navigateToSlide can read it.
+  const [teaserUnlockedState, setTeaserUnlockedState] = useState(teaserUnlocked);
+  const [focusedTeaser, setFocusedTeaser] = useState<number | null>(null);
+  const [teaserUnlocking, setTeaserUnlocking] = useState(false);
+  const [teaserUpgradeOpen, setTeaserUpgradeOpen] = useState(false);
+
   // Ref-mirror of manifest so realtime broadcast handlers can read the
   // latest slide list without re-binding to the channel on every
   // manifest change. Kept in sync via the useEffect right below the
@@ -1534,6 +1586,47 @@ export function DeckView({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- setManifestStable is a stable setState dispatch; intentionally not a re-run trigger
   }, [peerRegenInProgress, projectId]);
 
+  // Teaser unlock swap-in. While an unlock generation is in flight
+  // (teaserUnlocking), poll the status route until the server flips
+  // teaserUnlocked, then swap in the freshly-authored 10-slide manifest IN
+  // PLACE and drop the locked slots (no router refresh). Reuses the same
+  // fat-sync the peer-regen catch-up poll uses. A reload mid-unlock recovers
+  // via loadProject, which returns the unlocked deck once the job lands.
+  useEffect(() => {
+    if (!teaserUnlocking) return;
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const res = await fetch(
+          `/api/projects/${encodeURIComponent(projectId)}/status?includeManifest=true&includeSlideStates=true`,
+          { credentials: "same-origin" },
+        );
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          manifest?: unknown;
+          teaserUnlocked?: boolean;
+        };
+        if (cancelled || !data.teaserUnlocked) return;
+        if (data.manifest) {
+          const parsed = SlideManifestSchema.safeParse(data.manifest);
+          if (parsed.success) setManifestStable(parsed.data);
+        }
+        setTeaserUnlockedState(true);
+        setFocusedTeaser(null);
+        setTeaserUnlocking(false);
+      } catch {
+        /* network blip - next tick retries */
+      }
+    };
+    void tick();
+    const interval = window.setInterval(tick, 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setManifestStable is a stable setState dispatch; intentionally not a re-run trigger
+  }, [teaserUnlocking, projectId]);
+
   // How many reserved gen-image boxes does this deck have? Gates the
   // hydration poll below (text-only decks — the common case — never fire it)
   // AND gives the poll a completion target.
@@ -1896,7 +1989,6 @@ export function DeckView({
     setEditorSelected([]);
   }, [currentSlideIndex]);
 
-
   // ─── Phase 16.B presence ────────────────────────────────────────────
   // Track which collaborators are online + which slide each is focused
   // on. Skip for anonymous public-view callers (no prisma id — they're
@@ -1927,9 +2019,71 @@ export function DeckView({
     (next: number | ((prev: number) => number)) => {
       if (localDirtyRef.current) void saveProjectRef.current();
       setCurrentSlideIndex(next);
+      // Focusing a real slide exits the teaser hero.
+      setFocusedTeaser(null);
     },
     [],
   );
+
+  // Open a locked teaser slot in the hero. Leaves comment / AI sub-modes so the
+  // teaser overlay isn't fighting a draw surface.
+  const navigateToTeaser = useCallback((lockedIndex: number) => {
+    if (localDirtyRef.current) void saveProjectRef.current();
+    setFocusedTeaser(lockedIndex);
+    setCommentMode(false);
+    setStudioMode((m) => (m === "ai" ? "edit" : m));
+  }, []);
+
+  // Fire the comped Opus unlock generation for the withheld slides. The job
+  // runs async; the unlock poll (below) swaps the finished 10-slide manifest in
+  // and drops the locked slots. A 402 (owner never / no longer paid) reopens
+  // the upgrade path.
+  const fireTeaserUnlock = useCallback(async () => {
+    setTeaserUnlocking(true);
+    // A 402 right after subscribe is usually the Stripe webhook lagging the
+    // client success callback (User.plan not paid YET). Retry a few times
+    // before falling back to the upgrade modal, so the auto-fire on subscribe
+    // rides through that window. A genuinely-free owner never reaches here
+    // (handleTeaserUnlock opens the modal directly on brandingWatermark).
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      try {
+        const res = await fetch(
+          `/api/projects/${encodeURIComponent(projectId)}/unlock`,
+          { method: "POST", credentials: "same-origin" },
+        );
+        if (res.status === 402) {
+          if (attempt < 4) {
+            await new Promise((r) => window.setTimeout(r, 2500));
+            continue;
+          }
+          setTeaserUnlocking(false);
+          setTeaserUpgradeOpen(true);
+          return;
+        }
+        if (!res.ok) {
+          setTeaserUnlocking(false);
+          return;
+        }
+        // Success: keep the spinner until the poll sees teaserUnlocked flip.
+        return;
+      } catch {
+        setTeaserUnlocking(false);
+        return;
+      }
+    }
+  }, [projectId]);
+
+  // The unlock button. A free / unpaid owner opens the UpgradeModal (the unlock
+  // fires on subscribe success); a paid owner / admin fires the unlock directly.
+  // `brandingWatermark` is the load-time free-owner signal; the endpoint also
+  // enforces the paid gate, so a stale-free click just gets a 402 → modal.
+  const handleTeaserUnlock = useCallback(() => {
+    if (brandingWatermark) {
+      setTeaserUpgradeOpen(true);
+      return;
+    }
+    void fireTeaserUnlock();
+  }, [brandingWatermark, fireTeaserUnlock]);
 
   // Touch swipe → prev/next slide (phones). Direction-aware via `dir` so the
   // gesture follows the reading flow. Clamped to the slide range; navigateToSlide
@@ -4263,6 +4417,45 @@ export function DeckView({
         // Still awaiting its bake outcome - the vision pass may revise it.
         draft: bakePendingIds.has(slide.slideId),
       }));
+
+  // Teaser paywall: locked slots appended after the real slides - OWNER +
+  // viewer only (never while generating, never once unlocked). Each slot's
+  // background is a random gradient built from the DECK's own palette under a
+  // dark scrim (not a copy of any real slide). Nothing here enters slideJson,
+  // so exports / bake / gallery ignore teasers by construction.
+  const effectiveTeaserLocked =
+    role === "owner" &&
+    !generating &&
+    !teaserUnlockedState &&
+    teaserLockedCount > 0 &&
+    viewSlides.length > 0
+      ? teaserLockedCount
+      : 0;
+  const teaserPalette = viewManifest?.theme.palette ?? [];
+  const teaserGradients: string[] = [];
+  if (effectiveTeaserLocked > 0) {
+    const base = navItems.length;
+    for (let i = 0; i < effectiveTeaserLocked; i++) {
+      const gradient = teaserGradient(teaserPalette, i);
+      teaserGradients.push(gradient);
+      navItems.push({
+        kind: "teaser",
+        index: base + i,
+        lockedIndex: i,
+        gradient,
+      });
+    }
+  }
+  // Which locked slot the hero is showing (guarded against a shrunk set, e.g.
+  // right after unlock lands).
+  const teaserFocusActive =
+    effectiveTeaserLocked > 0 &&
+    focusedTeaser != null &&
+    focusedTeaser < effectiveTeaserLocked;
+  const teaserGradientFocused = teaserFocusActive
+    ? teaserGradients[focusedTeaser!]
+    : null;
+
   // Peer/own regen overlay for the focused slide (completed only — no focused
   // slide identity to key on while generating).
   const isFocusedRegenerating =
@@ -4277,10 +4470,15 @@ export function DeckView({
   // discarded by the stale check anyway, this makes it impossible instead).
   const isFocusedDraft =
     !!focusedSlide && bakePendingIds.has(focusedSlide.slideId);
-  // Editing is disabled while generating (controls aren't live yet), or when
-  // the focused slide is mid-regen / locked / still a draft.
+  // Editing is disabled while generating (controls aren't live yet), when the
+  // focused slide is mid-regen / locked / still a draft, OR when a teaser
+  // (paywall-locked) slot is focused - a locked slide is not editable at all.
   const editingDisabled =
-    generating || isFocusedRegenerating || isFocusedLocked || isFocusedDraft;
+    generating ||
+    isFocusedRegenerating ||
+    isFocusedLocked ||
+    isFocusedDraft ||
+    teaserFocusActive;
 
   // Undo / redo enabled-state for the toolbar buttons — driven by the focused
   // slide's LOCAL stack (the same one ⌘Z / ⌘⇧Z + handleLocalUndo/Redo drive).
@@ -4432,6 +4630,8 @@ export function DeckView({
         items={navItems}
         currentIndex={focusedIndex}
         onSelect={(idx) => navigateToSlide(idx)}
+        currentTeaser={teaserFocusActive ? focusedTeaser : null}
+        onTeaserSelect={(lockedIndex) => navigateToTeaser(lockedIndex)}
         manifest={viewManifest}
         format={viewManifest?.format ?? initialFormat ?? "16:9"}
         title={viewManifest?.title ?? projectTitle}
@@ -4489,7 +4689,10 @@ export function DeckView({
 
       {/* Studio — Layers panel (left), mirroring the Slides nav on the right.
           Lists the focused slide's visual leaves from the live editor DOM;
-          clicking a row selects that element. Only while the editor is active. */}
+          clicking a row selects that element. Only while the editor is active.
+          On a focused teaser (paywall-locked) slot the panel stays, but shows a
+          lock in place of the layer list (the `locked` prop) - the slide there
+          isn't editable. */}
       {editMode ? (
         <motion.div
           animate={{ opacity: commentMode ? 0 : 1 }}
@@ -4498,6 +4701,7 @@ export function DeckView({
         >
           <LayersPanel
             collapsed={layersCollapsed}
+            locked={teaserFocusActive}
             tabsSlot={railTabsSlot}
             doc={editorDoc}
             // The full selection SET: a sole leaf highlights its row; a whole group
@@ -4625,7 +4829,9 @@ export function DeckView({
                 <PreviewActionBar
                   horizontal
                   // Generating: present but inert + dimmed; enables on completion.
-                  disabled={generating}
+                  // A focused teaser (paywall-locked) slot dims it too - the
+                  // whole editing surface is disabled for a locked slide.
+                  disabled={generating || teaserFocusActive}
                   // View-first on phones: the object-edit tools (add-text, undo/
                   // redo, history, lock, save) are dropped so the pill fits + stays
                   // centered; AI-instruct, comment, home stay. Desktop = always
@@ -5170,6 +5376,42 @@ export function DeckView({
           {!artboardFit && !generating && brandingWatermark ? (
             <BrandWatermark />
           ) : null}
+          {/* Teaser paywall: the focused locked slot. Covers the artboard
+              rect (edit mode) or the whole hero (viewer) with a heavily-
+              blurred copy of a visible slide + an unlock CTA. Rendered LAST at
+              z-40 so it sits above the editor / renderer + every canvas
+              overlay; its scrim captures clicks so the iframe beneath is
+              inert. */}
+          {teaserFocusActive && teaserGradientFocused ? (
+            <div
+              // Follow the UI locale so the CTA label reads correctly (the
+              // canvas row is dir="ltr").
+              dir={dir}
+              className={`absolute z-40 overflow-hidden${
+                artboardFit ? "" : " inset-0"
+              }`}
+              style={
+                artboardFit
+                  ? {
+                      left: artboardFit.offsetX,
+                      top: artboardFit.offsetY,
+                      width: artboardFit.width,
+                      height: artboardFit.height,
+                    }
+                  : undefined
+              }
+            >
+              <TeaserLockCanvas
+                gradient={teaserGradientFocused}
+                onUnlock={handleTeaserUnlock}
+                unlocking={teaserUnlocking}
+                labels={{
+                  cta: dict.components.creditGate.teaserUnlockCta,
+                  unlocking: dict.components.creditGate.teaserUnlocking,
+                }}
+              />
+            </div>
+          ) : null}
         </motion.div>
       </div>
       {/* History popover — portals to body so the canvas's
@@ -5220,6 +5462,22 @@ export function DeckView({
           full-deck). Opens the same UpgradeModal / top-up flow the generation
           flows use off their 402. */}
       <CreditGateDialog gate={creditGate} onClose={() => setCreditGate(null)} />
+      {/* Teaser paywall upsell: free owner clicked "unlock" on a locked slot.
+          On subscribe success, auto-fire the comped Opus unlock so the
+          withheld slides start generating without a second click. */}
+      <UpgradeModal
+        open={teaserUpgradeOpen}
+        requiredTier="plus"
+        gateContext={{
+          title: dict.components.creditGate.teaserUnlockTitle,
+          body: dict.components.creditGate.teaserUnlockBody.replace(
+            "{count}",
+            String(teaserLockedCount),
+          ),
+        }}
+        onSuccess={() => void fireTeaserUnlock()}
+        onClose={() => setTeaserUpgradeOpen(false)}
+      />
       {/* One-time "editing is on desktop" hint for phone owners/editors. */}
       <DesktopEditHint
         open={showDesktopHint && isMobileStudio}
