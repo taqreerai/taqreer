@@ -54,6 +54,12 @@ const SOCIAL_STYLES: ReadonlyArray<{ label: string; key: SocialStyleKey }> = [
   { label: "Photo Overlay", key: "photo" },
   { label: "Retro Print", key: "retro" },
   { label: "3D Pop", key: "pop3d" },
+  // The two structured looks the deck set had and social lacked. Their labels
+  // are deliberately NOT the deck ones ("Swiss / Grid", "Corporate / Data"):
+  // the map is keyed by label, so these carry their own portrait-tuned
+  // directives instead of the landscape 12-column / page-number ones.
+  { label: "Swiss Grid", key: "swiss" },
+  { label: "Corporate Data", key: "corporate" },
 ];
 type SocialStyleKey =
   | "boldtype"
@@ -63,7 +69,9 @@ type SocialStyleKey =
   | "minimal"
   | "photo"
   | "retro"
-  | "pop3d";
+  | "pop3d"
+  | "swiss"
+  | "corporate";
 
 // ── The static mini-slide previews ──────────────────────────────
 // Each is a 16:9 box composed of token-colored blocks. Percentage
@@ -265,6 +273,30 @@ function SocialStyleMini({
           <div style={abs({ top: "12%", left: "14%", width: "34%", aspectRatio: "1", borderRadius: "50%", background: ACCENT, boxShadow: "0 6px 12px rgba(0,0,0,0.25)" })} />
           <div style={abs({ bottom: "14%", left: "12%", right: "12%", height: "34%", borderRadius: 18, background: BAR_SOFT, boxShadow: "0 6px 14px rgba(0,0,0,0.18)" })} />
           <div style={abs({ bottom: "22%", left: "18%", width: "40%", height: "5%", borderRadius: 999, background: BAR })} />
+        </>
+      )}
+      {k === "swiss" && (
+        <>
+          {/* Column rules + blocks snapped to them: alignment IS the design. */}
+          <div style={abs({ top: 0, bottom: 0, left: "25%", width: 1, background: BAR_SOFT })} />
+          <div style={abs({ top: 0, bottom: 0, left: "50%", width: 1, background: BAR_SOFT })} />
+          <div style={abs({ top: 0, bottom: 0, left: "75%", width: 1, background: BAR_SOFT })} />
+          <div style={abs({ top: "12%", left: "10%", width: "40%", height: "7%", background: ACCENT })} />
+          <div style={abs({ top: "25%", left: "10%", width: "65%", height: "5%", background: BAR })} />
+          <div style={abs({ top: "35%", left: "10%", width: "40%", height: "3%", background: BAR_SOFT })} />
+          <div style={abs({ bottom: "14%", left: "52%", right: "10%", height: "28%", background: BAR_SOFT })} />
+        </>
+      )}
+      {k === "corporate" && (
+        <>
+          <div style={abs({ top: "10%", left: "10%", width: "62%", height: "6%", background: BAR })} />
+          <div style={abs({ top: "20%", left: "10%", width: "38%", height: "3%", background: BAR_SOFT })} />
+          {/* A small bar set on a baseline: one figure leads the card. */}
+          <div style={abs({ bottom: "22%", left: "14%", width: "12%", height: "24%", background: BAR_SOFT })} />
+          <div style={abs({ bottom: "22%", left: "31%", width: "12%", height: "38%", background: ACCENT })} />
+          <div style={abs({ bottom: "22%", left: "48%", width: "12%", height: "30%", background: BAR_SOFT })} />
+          <div style={abs({ bottom: "22%", left: "65%", width: "12%", height: "46%", background: BAR_SOFT })} />
+          <div style={abs({ bottom: "20%", left: "10%", right: "10%", height: 1, background: BAR })} />
         </>
       )}
       {k === "auto" && (

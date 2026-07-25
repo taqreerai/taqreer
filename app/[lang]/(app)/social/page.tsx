@@ -20,6 +20,7 @@ import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
 import { LogoRow } from "@/components/brand/LogoRow";
+import { PersistentRow } from "@/components/brand/PersistentRow";
 import {
   BrandKitDropdown,
   type BrandKitOption,
@@ -100,6 +101,8 @@ export default function SocialPage() {
   // ─── Content ───────────────────────────────────────────────────
   const [topic, setTopic] = useState("");
   const [language, setLanguage] = useState<LanguageCode>("ar");
+  // Persistent element (date, handle, website) repeated on every card.
+  const [persistentText, setPersistentText] = useState<string>("");
 
   // ─── Design / format ───────────────────────────────────────────
   const [platform, setPlatform] = useState<SocialPlatform>(DEFAULT_PLATFORM);
@@ -303,7 +306,11 @@ export default function SocialPage() {
         designStyle,
         fixTypos: false,
         pagination: false,
-        persistent: null,
+        // Same shape /create sends: null when blank, and no exclude (the
+        // persistent element is on every card by definition).
+        persistent: persistentText.trim()
+          ? { text: persistentText.trim(), exclude: [] as ("cover" | "closing")[] }
+          : null,
       };
 
       const response = await fetch("/api/projects", {
@@ -393,6 +400,16 @@ export default function SocialPage() {
                 dir={language === "en" ? "ltr" : "rtl"}
                 disabled={submitting}
                 className="input-dark min-h-[240px] flex-1 resize-none text-sm leading-6 disabled:cursor-not-allowed disabled:opacity-50"
+              />
+            </div>
+            {/* Persistent element: the same control /create and /datasheet put
+                at the bottom of the content card. Text only, Claude places it
+                (position picker went away 2026-06-02), on every card. */}
+            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
+              <PersistentRow
+                text={persistentText}
+                language={language}
+                onText={setPersistentText}
               />
             </div>
           </div>

@@ -303,6 +303,15 @@ const DESIGN_STYLE_DIRECTIVES: Record<string, string> = {
     "A nostalgic print / risograph aesthetic: a warm limited two-colour palette, visible halftone or paper grain, and slightly imperfect type. Characterful and analog. Imagery: grainy, limited-colour, screenprinted.",
   "3D Pop":
     "Playful, dopamine-bright depth: soft rounded shapes and clay-like 3D elements in saturated brand colours, gentle shadows, and friendly type. Imagery: bright, rounded 3D or soft clay renders.",
+  // The two structured looks ported from the deck set (owner request
+  // 2026-07-25), REWRITTEN for portrait cards. Deliberately separate keys from
+  // "Swiss / Grid" / "Corporate / Data": the deck text mandates a 12-column
+  // grid with asymmetric spans and a footer page number, both of which misfire
+  // at 1080x1350 (and social sends pagination: false).
+  "Swiss Grid":
+    "Swiss precision on a portrait card: everything snaps to a small, consistent column set with generous margins and one strong alignment axis running down the reading edge. Hierarchy comes from weight and scale only, never decoration; keep large calm gaps and let one brand colour act as a rule or a single filled block. The alignment IS the design. Imagery: clean, geometric, evenly lit.",
+  "Corporate Data":
+    "A clear, trustworthy data card: ONE takeaway per card, led by a single hero figure or a compact chart (a short bar set, one line, or one ring), with a brief supporting label. Neutral ground, brand colour reserved for the figure that matters. Type stays large enough to read at thumbnail size in a feed. Imagery: minimal or none, let the number lead.",
 };
 
 function ruleLines(rules: Rules): string[] {
