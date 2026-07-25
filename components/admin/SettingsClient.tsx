@@ -743,8 +743,7 @@ export function SettingsClient({ presets, tiers, models: initialModels, flows, c
                 onClick={refreshModels}
                 disabled={modelsLoading}
                 title="Re-fetch the live model list from Anthropic"
-                className="h-10 shrink-0 rounded-lg px-3 text-xs outline-none disabled:opacity-50"
-                style={inputStyle}
+                className="btn-pill h-10 shrink-0 px-4 disabled:opacity-50"
               >
                 {modelsLoading ? "Refreshing" : "Refresh"}
               </button>
