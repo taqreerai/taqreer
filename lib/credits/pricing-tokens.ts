@@ -1,15 +1,24 @@
-// Fill {credits}/{slides} tokens in a pricing dict string with live config
-// numbers. Latin numerals + thousands grouping (brand rule: "2,000", not Arabic
-// digits). Pure + client-safe, so PricingTiers (marketing) and BillingSection
-// (in-app) share it. A token with no value provided is left intact, so callers
-// must always pass the relevant number for a surface that shows it.
+// Fill {credits}/{slides}/{model} tokens in a pricing dict string with live
+// config numbers. Latin numerals + thousands grouping (brand rule: "2,000", not
+// Arabic digits). Pure + client-safe, so PricingTiers (marketing) and
+// BillingSection (in-app) share it. A token with no value provided is left
+// intact, so callers must always pass the relevant value for a surface that
+// shows it. {model} is the generation-model name (a preset LABEL, e.g.
+// "Opus 4.8") and stays Latin in both locales, like the brand name.
 export function fillPricingTokens(
   text: string,
-  vals: { credits?: number | null; slides?: number | null },
+  vals: {
+    credits?: number | null;
+    slides?: number | null;
+    model?: string | null;
+  },
 ): string {
   let out = text;
   if (vals.credits != null) {
     out = out.replaceAll("{credits}", vals.credits.toLocaleString("en-US"));
+  }
+  if (vals.model) {
+    out = out.replaceAll("{model}", vals.model);
   }
   if (vals.slides != null) {
     out = out.replaceAll("{slides}", vals.slides.toLocaleString("en-US"));
@@ -47,10 +56,35 @@ export function yearlyDiscountPct(
   return best;
 }
 
-// Per-tier display numbers shipped to the cards. `credits` is the free tier's
-// signup grant or a paid tier's monthly allotment; `slides` is the per-tier cap.
+// Per-tier display values shipped to the cards. `credits` is the free tier's
+// signup grant or a paid tier's monthly allotment; `slides` is the per-tier cap;
+// `model` is the LABEL of the top preset that tier unlocks, so the advertised
+// generation model tracks admin Settings instead of a hardcoded dict literal.
 // Plan-keyed so consumers look up by plan, not array position.
-export type TierDisplayNumber = { plan: string; credits: number; slides: number };
+export type TierDisplayNumber = {
+  plan: string;
+  credits: number;
+  slides: number;
+  model: string;
+};
+
+/**
+ * The label of the highest preset a tier unlocks: the LAST active entry of
+ * `ladder` (ascending sortOrder) whose key the tier unlocks. That is what the
+ * tier is really selling, so it is the name the pricing card should advertise.
+ * Returns null when nothing resolves; callers must supply their own fallback
+ * so a card never renders a raw {model} token.
+ */
+export function topUnlockedPresetLabel(
+  ladder: readonly { key: string; label: string; active: boolean }[],
+  unlockedKeys: readonly string[],
+): string | null {
+  let best: string | null = null;
+  for (const p of ladder) {
+    if (p.active && unlockedKeys.includes(p.key)) best = p.label;
+  }
+  return best;
+}
 
 /** Look up a tier's display numbers by plan, tolerating an absent list. */
 export function tierNumberFor(

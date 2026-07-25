@@ -814,7 +814,7 @@
           "name": "Free",
           "description": "To try it out and make simple decks fast.",
           "credits": "{credits} credits (signup gift)",
-          "features": ["Sonnet 5", "Up to {slides} slides per deck", "PNG export only", "Watermarked exports", "Latest GPT images", "All export formats", "No watermark", "All creation methods", "Custom brand identity"],
+          "features": ["{model}", "Up to {slides} slides per deck", "PNG export only", "Watermarked exports", "Latest GPT images", "All export formats", "No watermark", "All creation methods", "Custom brand identity"],
           "footnote": "Upgrade anytime",
           "cta": "Start free"
         },
@@ -822,7 +822,7 @@
           "name": "Plus",
           "description": "To create decks regularly with every creation method.",
           "credits": "{credits} credits / month",
-          "features": ["Opus 4.8", "Up to {slides} slides per deck", "All export formats", "No watermark", "All creation methods", "Latest GPT images", "Custom brand identity", "Premium templates", "Processing priority"],
+          "features": ["{model}", "Up to {slides} slides per deck", "All export formats", "No watermark", "All creation methods", "Latest GPT images", "Custom brand identity", "Premium templates", "Processing priority"],
           "footnote": "Upgrade or downgrade anytime",
           "cta": "Start now"
         },
@@ -830,7 +830,7 @@
           "name": "Pro",
           "description": "For pros who want top quality and premium templates.",
           "credits": "{credits} credits / month",
-          "features": ["Opus 4.8", "Up to {slides} slides per deck", "All export formats", "No watermark", "All creation methods", "Latest GPT images", "Custom brand identity", "Premium templates", "Processing priority"],
+          "features": ["{model}", "Up to {slides} slides per deck", "All export formats", "No watermark", "All creation methods", "Latest GPT images", "Custom brand identity", "Premium templates", "Processing priority"],
           "footnote": "Upgrade or downgrade anytime",
           "cta": "Start now"
         },
@@ -838,7 +838,7 @@
           "name": "Max",
           "description": "For heavy use, with maximum capacity and priority.",
           "credits": "{credits} credits / month",
-          "features": ["Fable 5", "Up to {slides} slides per deck", "All export formats", "No watermark", "All creation methods", "Latest GPT images", "Custom brand identity", "Premium templates", "Processing priority"],
+          "features": ["{model}", "Up to {slides} slides per deck", "All export formats", "No watermark", "All creation methods", "Latest GPT images", "Custom brand identity", "Premium templates", "Processing priority"],
           "footnote": "You can downgrade anytime",
           "cta": "Start now"
         }

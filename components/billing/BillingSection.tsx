@@ -27,8 +27,10 @@ import {
 import {
   fillPricingTokens,
   tierNumberFor,
+  topUnlockedPresetLabel,
   yearlyDiscountPct,
 } from "@/lib/credits/pricing-tokens";
+import { QUALITY_PRESETS } from "@/lib/types/quality";
 import { SegmentedToggle } from "@/components/create/controls";
 import { PlanUsage } from "@/components/app/PlanUsage";
 import { PRICING_TIER_FEATURES } from "@/components/marketing/PricingTiers";
@@ -217,10 +219,18 @@ export function BillingSection({
             const num = tierNumberFor(credits?.tierNumbers, tier) ?? {
               credits: isFree ? TIERS.free.signupGrant : TIERS[tier].monthlyAllotment,
               slides: TIERS[tier].slideCap,
+              // Model line falls back to the bundled ladder the same way the
+              // numbers do, so the card never shows a raw {model} token.
+              model:
+                topUnlockedPresetLabel(QUALITY_PRESETS, TIERS[tier].presets) ??
+                "",
             };
             const featureLabels = [
               fillPricingTokens(copy.credits, { credits: num.credits }),
-              ...copy.features.map((f) => fillPricingTokens(f, { slides: num.slides })),
+              // features[0] is the generation-model line ({model}).
+              ...copy.features.map((f) =>
+                fillPricingTokens(f, { slides: num.slides, model: num.model }),
+              ),
             ];
             return (
               <div

@@ -231,7 +231,11 @@ function PricingCard({
   // signup grant or a paid monthly allotment; slides = the per-tier cap.
   const featureLabels = [
     fillPricingTokens(copy.credits, { credits: nums?.credits }),
-    ...copy.features.map((f) => fillPricingTokens(f, { slides: nums?.slides })),
+    // features[0] is the generation-model line ({model} = the label of the top
+    // preset this tier unlocks), so it tracks admin Settings, not a dict literal.
+    ...copy.features.map((f) =>
+      fillPricingTokens(f, { slides: nums?.slides, model: nums?.model }),
+    ),
   ];
 
   return (

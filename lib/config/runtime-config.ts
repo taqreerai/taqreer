@@ -17,6 +17,7 @@
 
 import { prisma } from "@/lib/prisma";
 import type { AnthropicCallParams } from "@/lib/anthropic/quality-params";
+import { topUnlockedPresetLabel } from "@/lib/credits/pricing-tokens";
 
 type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 
@@ -312,7 +313,15 @@ export function pricingDisplayNumbers(): {
   plan: string;
   credits: number;
   slides: number;
+  model: string;
 }[] {
+  // Ladder in ascending sortOrder - the last active entry a tier unlocks is the
+  // model that tier is really selling, and the name its card advertises.
+  const ladder = getAllPresets();
+  // Never let a card render a raw {model} token: fall back to the default
+  // preset's label (what a user actually gets), then to the seed's first label.
+  const fallbackLabel =
+    getPreset(defaultPresetKey())?.label ?? SEED_PRESETS[0].label;
   // Iterate the FIXED plan set (not getTiers()) so the result ALWAYS carries
   // all four plans. A partially-wiped tiers table can't yield a short list that
   // would leave a card rendering a raw {credits}/{slides} token. getTier() falls
@@ -323,6 +332,8 @@ export function pricingDisplayNumbers(): {
       plan,
       credits: plan === "free" ? t.signupGrant : t.monthlyAllotment,
       slides: t.slideCap,
+      model:
+        topUnlockedPresetLabel(ladder, t.unlockedPresetKeys) ?? fallbackLabel,
     };
   });
 }
