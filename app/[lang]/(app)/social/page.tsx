@@ -306,8 +306,11 @@ export default function SocialPage() {
         designStyle,
         fixTypos: false,
         pagination: false,
-        // Same shape /create sends: null when blank, and no exclude (the
-        // persistent element is on every card by definition).
+        // Same shape /create sends: null when blank, else the text with an
+        // EMPTY exclude list (the element is on every card by definition).
+        // ‼️ `exclude` must stay present, not be dropped: the API payload type
+        // declares it required and ruleLines() reads `.exclude.length`
+        // unguarded, so omitting it throws at generation time.
         persistent: persistentText.trim()
           ? { text: persistentText.trim(), exclude: [] as ("cover" | "closing")[] }
           : null,
