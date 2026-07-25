@@ -43,6 +43,7 @@ import {
   formatCredits,
   type CreditPreset,
 } from "@/lib/credits/store";
+import { fillPricingTokens } from "@/lib/credits/pricing-tokens";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import { SlideCapUpsellDialog } from "./SlideCapUpsellDialog";
 import type { KnownPlan } from "@/lib/plan";
@@ -301,6 +302,27 @@ export function GenerateSplitButton({
             {presets.map((preset, presetRank) => {
               // Ladder rank drives the design-quality name (see designLevel).
               const level = designLevel(presetRank);
+              // The row's sub-line names the MODEL. `{model}` is filled from the
+              // preset's LIVE label (DB-driven once /api/credits resolves), so an
+              // admin model swap shows up here instead of the old hardcoded
+              // family names. `|| preset.key` because fillPricingTokens leaves the
+              // token intact on a falsy value. The thinking word comes off the
+              // preset's own flag, so it can't outlive a non-thinking preset.
+              const descTemplate =
+                level === "pro"
+                  ? dict.flows.generate.proDesignDesc
+                  : level === "premium"
+                    ? dict.flows.generate.premiumDesignDesc
+                    : level === "standard"
+                      ? dict.flows.generate.standardDesignDesc
+                      : dict.flows.generate.draftDesignDesc;
+              const rowDesc = `${fillPricingTokens(descTemplate, {
+                model: preset.label || preset.key,
+              })}${
+                preset.thinking
+                  ? ` ${dict.flows.generate.thinkingSuffix}`
+                  : ""
+              }`;
               const rowCost = (slides: number) =>
                 preset.baseCredits +
                 slides * preset.perSlideCredits +
@@ -372,13 +394,7 @@ export function GenerateSplitButton({
                             : dict.flows.generate.draftDesign}
                     </span>
                     <span className="truncate text-xs text-foreground/45">
-                      {level === "pro"
-                        ? dict.flows.generate.proDesignDesc
-                        : level === "premium"
-                          ? dict.flows.generate.premiumDesignDesc
-                          : level === "standard"
-                            ? dict.flows.generate.standardDesignDesc
-                            : dict.flows.generate.draftDesignDesc}
+                      {rowDesc}
                     </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-2.5">
