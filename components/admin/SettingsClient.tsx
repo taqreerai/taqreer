@@ -135,6 +135,31 @@ function Pill({ children, accent }: { children: React.ReactNode; accent?: boolea
   );
 }
 
+// Suggest a kebab-case preset key from the picked model + its thinking/effort,
+// e.g. claude-opus-4-8 -> "opus-4-8-fast" (thinking off) / "opus-4-8-low" (on).
+// De-duped against the existing keys so the suggestion always saves cleanly.
+// Matches the server's key rule: /^[a-z0-9]+(-[a-z0-9]+)*$/.
+function suggestKey(
+  modelId: string,
+  thinking: boolean,
+  effort: string,
+  taken: string[],
+): string {
+  const base = modelId
+    .trim()
+    .toLowerCase()
+    .replace(/^claude-/, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (!base) return "";
+  const root = `${base}-${thinking ? effort || "low" : "fast"}`;
+  if (!taken.includes(root)) return root;
+  for (let i = 2; i < 50; i++) {
+    if (!taken.includes(`${root}-${i}`)) return `${root}-${i}`;
+  }
+  return root;
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
@@ -146,8 +171,13 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export function SettingsClient({ presets, tiers, models, flows, configVersion, imageCredits, regenBaseCredits }: Props) {
+export function SettingsClient({ presets, tiers, models: initialModels, flows, configVersion, imageCredits, regenBaseCredits }: Props) {
   const router = useRouter();
+  // Live model list, seeded from the server prop. Kept in state so the picker's
+  // Refresh button can swap in a freshly fetched list without a page reload.
+  const [models, setModels] = useState<LiveModel[]>(initialModels);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsNote, setModelsNote] = useState<string | null>(null);
   const [presetModal, setPresetModal] = useState<{ mode: "add" | "edit"; key?: string } | null>(
     null,
   );
@@ -209,6 +239,71 @@ export function SettingsClient({ presets, tiers, models, flows, configVersion, i
 
   const fableModel = /fable/i.test(presetForm.model);
   const patch = (next: Partial<PresetForm>) => setPresetForm((f) => ({ ...f, ...next }));
+
+  // The stored model is no longer offered by the API (renamed / retired). Keep
+  // it selectable so editing an existing preset never silently reassigns it.
+  const staleModel =
+    presetForm.model.trim().length > 0 &&
+    !models.some((m) => m.id === presetForm.model);
+
+  const refreshModels = async () => {
+    if (modelsLoading) return;
+    setModelsLoading(true);
+    setModelsNote(null);
+    try {
+      const res = await fetch("/api/admin/settings/models?refresh=1", {
+        credentials: "same-origin",
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        models?: LiveModel[];
+        error?: string;
+      };
+      if (!res.ok) throw new Error(json.error ?? "Refresh failed");
+      const next = json.models ?? [];
+      setModels(next);
+      setModelsNote(
+        next.length ? `Updated: ${next.length} models` : "Live list unavailable",
+      );
+    } catch (e) {
+      setModelsNote(e instanceof Error ? e.message : "Refresh failed");
+    } finally {
+      setModelsLoading(false);
+    }
+  };
+
+  // Picking a model fills Label (its display name) and, when adding, suggests a
+  // Key. Both stay editable: they are only overwritten while still empty or
+  // still holding the value auto-derived from the PREVIOUS model, so a label or
+  // key you typed yourself is never clobbered.
+  const onModelChange = (nextId: string) => {
+    const prev = models.find((m) => m.id === presetForm.model);
+    const next = models.find((m) => m.id === nextId);
+    const update: Partial<PresetForm> = { model: nextId };
+    if (
+      next &&
+      (!presetForm.label.trim() || (prev && presetForm.label === prev.displayName))
+    ) {
+      update.label = next.displayName;
+    }
+    if (presetModal?.mode === "add") {
+      const taken = presets.map((p) => p.key);
+      // Fable forces thinking on, which changes the key suffix. Detect
+      // "still auto" with the thinking state that produced the CURRENT key
+      // (the previous model's), not the incoming one, or switching e.g.
+      // opus -> fable would strand the old "opus-5-fast" key.
+      const prevThinking = /fable/i.test(presetForm.model)
+        ? true
+        : presetForm.thinking;
+      const nextThinking = /fable/i.test(nextId) ? true : presetForm.thinking;
+      const prevSuggestion = prev
+        ? suggestKey(prev.id, prevThinking, presetForm.effort, taken)
+        : "";
+      if (!presetForm.key.trim() || presetForm.key === prevSuggestion) {
+        update.key = suggestKey(nextId, nextThinking, presetForm.effort, taken);
+      }
+    }
+    patch(update);
+  };
 
   const savePreset = async () => {
     if (saving) return;
@@ -560,7 +655,7 @@ export function SettingsClient({ presets, tiers, models, flows, configVersion, i
         {models.length === 0 ? (
           <p className="text-xs" style={{ color: MUTED }}>
             Live list unavailable (no API key or fetch failed). The model field
-            accepts the id as free text.
+            falls back to typing the id.
           </p>
         ) : (
           <div className="flex flex-wrap gap-1.5">
@@ -611,22 +706,60 @@ export function SettingsClient({ presets, tiers, models, flows, configVersion, i
             </Field>
           </div>
 
-          <Field label="Model (id)">
-            <input
-              list="tq-models"
-              value={presetForm.model}
-              onChange={(e) => patch({ model: e.target.value })}
-              placeholder="claude-opus-4-8"
-              className="h-10 w-full rounded-lg px-3 text-sm outline-none"
-              style={inputStyle}
-            />
-            <datalist id="tq-models">
-              {models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.displayName}
-                </option>
-              ))}
-            </datalist>
+          <Field label="Model">
+            <div className="flex items-center gap-2">
+              {models.length === 0 ? (
+                // Live list unavailable (no API key / fetch failed): fall back to
+                // typing the id so an existing preset stays editable.
+                <input
+                  value={presetForm.model}
+                  onChange={(e) => patch({ model: e.target.value })}
+                  placeholder="claude-opus-4-8"
+                  className="h-10 w-full rounded-lg px-3 text-sm outline-none"
+                  style={inputStyle}
+                />
+              ) : (
+                <select
+                  value={presetForm.model}
+                  onChange={(e) => onModelChange(e.target.value)}
+                  className="h-10 w-full rounded-lg px-3 text-sm outline-none"
+                  style={inputStyle}
+                >
+                  {!presetForm.model && <option value="">Select a model</option>}
+                  {staleModel && (
+                    <option value={presetForm.model}>
+                      {presetForm.model} (not in live list)
+                    </option>
+                  )}
+                  {models.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.displayName} ({m.id})
+                    </option>
+                  ))}
+                </select>
+              )}
+              <button
+                type="button"
+                onClick={refreshModels}
+                disabled={modelsLoading}
+                title="Re-fetch the live model list from Anthropic"
+                className="h-10 shrink-0 rounded-lg px-3 text-xs outline-none disabled:opacity-50"
+                style={inputStyle}
+              >
+                {modelsLoading ? "Refreshing" : "Refresh"}
+              </button>
+            </div>
+            {staleModel && models.length > 0 ? (
+              <p className="text-xs" style={{ color: DANGER }}>
+                This model is not in the live list. Saving will be rejected, pick
+                a current one.
+              </p>
+            ) : null}
+            {modelsNote ? (
+              <p className="text-xs" style={{ color: MUTED }}>
+                {modelsNote}
+              </p>
+            ) : null}
           </Field>
 
           <div className="flex items-center gap-4">
