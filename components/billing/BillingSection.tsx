@@ -30,7 +30,7 @@ import {
   topUnlockedPresetLabel,
   yearlyDiscountPct,
 } from "@/lib/credits/pricing-tokens";
-import { QUALITY_PRESETS } from "@/lib/types/quality";
+import { QUALITY_PRESETS, DEFAULT_QUALITY } from "@/lib/types/quality";
 import { SegmentedToggle } from "@/components/create/controls";
 import { PlanUsage } from "@/components/app/PlanUsage";
 import { PRICING_TIER_FEATURES } from "@/components/marketing/PricingTiers";
@@ -216,20 +216,30 @@ export function BillingSection({
             // numbers (/api/credits), so the cards track admin Settings. Falls
             // back to the bundled SEED only until /api/credits resolves (a
             // self-correcting skeleton, never a raw token).
+            // A NON-EMPTY model label from the bundled ladder: this tier's top
+            // unlocked preset, else the default preset, else the first ladder
+            // entry. Mirrors the fallback chain in pricingDisplayNumbers().
+            // fillPricingTokens leaves {model} intact on a falsy value, so an
+            // empty string here would render the raw token on the card.
+            const seedModel =
+              topUnlockedPresetLabel(QUALITY_PRESETS, TIERS[tier].presets) ??
+              QUALITY_PRESETS.find((p) => p.key === DEFAULT_QUALITY)?.label ??
+              QUALITY_PRESETS[0].label;
             const num = tierNumberFor(credits?.tierNumbers, tier) ?? {
               credits: isFree ? TIERS.free.signupGrant : TIERS[tier].monthlyAllotment,
               slides: TIERS[tier].slideCap,
-              // Model line falls back to the bundled ladder the same way the
-              // numbers do, so the card never shows a raw {model} token.
-              model:
-                topUnlockedPresetLabel(QUALITY_PRESETS, TIERS[tier].presets) ??
-                "",
+              model: seedModel,
             };
             const featureLabels = [
               fillPricingTokens(copy.credits, { credits: num.credits }),
-              // features[0] is the generation-model line ({model}).
+              // features[0] is the generation-model line ({model}). `|| seedModel`
+              // also covers a PRESENT tier entry whose model is missing (an older
+              // cached /api/credits payload), which the ?? above cannot catch.
               ...copy.features.map((f) =>
-                fillPricingTokens(f, { slides: num.slides, model: num.model }),
+                fillPricingTokens(f, {
+                  slides: num.slides,
+                  model: num.model || seedModel,
+                }),
               ),
             ];
             return (
