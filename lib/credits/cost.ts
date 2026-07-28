@@ -122,14 +122,14 @@ export type TierConfig = {
   flows: readonly Flow[];
 };
 
-// The tier ladder. 2026-07-14 repricing to Gamma parity (see
-// context/pricing-study-2026-07.md + the 2026-07-14 re-eval): prices match
-// Gamma's $12/$25/$100 (was $9/$19/$49), keeping our own credit scale
-// (Gamma credits are a ~10x-different unit). Max allotment 28,000 -> 35,000
-// (2026-07-14): keeps Max's credits-per-$ between Plus and Pro rather than the
-// worst on the ladder; ~33% full-burn gross margin at $100 on measured
-// ~$0.0019/credit COGS. Plus/Pro credits held generous as acquisition tiers. free = 400 /
-// 5-cap (admin-set 2026-07-14; ~1 deck, ~$0.76 worst-case COGS/user).
+// The tier ladder. 2026-07-28 reprice: Plus $9 and Max $79, Pro held at $25
+// (owner call on the 2026-07-28 margin re-eval; measured full-burn margins
+// Plus 72%->62%, Max 70%->62% with fable-low on claude-opus-5, Pro stays 52%
+// - a Pro cut to $19 would breach the >=50% floor). Supersedes the
+// 2026-07-14 Gamma-parity $12/$25/$100 (see context/pricing-study-2026-07.md).
+// Credits unchanged: Max 35,000 (2026-07-14), Plus/Pro held generous as
+// acquisition tiers. free = 400 / 5-cap (admin-set 2026-07-14; ~1 deck,
+// ~$0.36 measured COGS/user).
 // Names Free/Plus/Pro/Max per user direction 2026-06-11. Keys match
 // lib/plan.ts KNOWN_PLANS. NOTE: live charges come from Stripe (priceUsd is
 // display-only) and live allotments from the DB Tier rows; these constants
@@ -147,7 +147,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     flows: ["create"],
   },
   plus: {
-    priceUsd: 12,
+    priceUsd: 9,
     monthlyAllotment: 4000,
     signupGrant: 0,
     slideCap: 30,
@@ -163,7 +163,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     flows: ALL_FLOWS,
   },
   max: {
-    priceUsd: 100,
+    priceUsd: 79,
     monthlyAllotment: 35000,
     signupGrant: 0,
     slideCap: 75,
