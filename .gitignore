@@ -44,3 +44,6 @@ public/email-lab/
 # Local working files (screenshots, scratch notes), never shipped
 scratchpad/
 supa-signin.png
+
+# Saved implementation plan (local note, not source)
+winback-email.md
