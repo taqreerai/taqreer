@@ -239,11 +239,20 @@ async function getMrrUsd(): Promise<number | null> {
     let totalCents = 0;
     // Coupons referenced by discounts, fetched once per id across the run.
     const couponCache = new Map<string, Stripe.Coupon>();
+    // Runaway backstop, same convention as getBalanceTrend's transaction
+    // scan: a partial sum would silently understate revenue, so a truncated
+    // scan shows "n/a" instead. If the account ever nears this many active
+    // subs, this card needs a cached/snapshot approach anyway.
+    let scanned = 0;
     for await (const sub of client.subscriptions.list({
       status: "active",
       limit: 100,
       expand: ["data.discounts"],
     })) {
+      if (++scanned > 2000) {
+        console.warn("[admin/stats] mrr scan truncated at 2000 subs");
+        return null;
+      }
       // Per-month cents across this sub's items, interval-normalized. Our
       // catalog is month/year only; anything else (or a metered price with no
       // unit_amount) is skipped rather than guessed at.
