@@ -7,11 +7,14 @@
 //   - Active subscriptions  : Subscription status="active" on a paid plan.
 //   - Stripe balance        : real current Stripe account balance (available +
 //                             pending, USD) straight from the Stripe API.
+//   - Monthly revenue (MRR) : per-month sum of what the active Stripe
+//                             subscriptions actually bill (yearly seats
+//                             normalized /12, coupons applied).
 //   - Decks generated (30d) : Presentations created in the last 30 days.
-//   - Credits spent (30d)   : sum of settled CreditHold charges in the last 30d.
 // Sparklines + deltas are omitted for now (they need a daily-snapshot series;
 // the cards render value-only until that exists).
 
+import type Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
 import { getLiveStripeOrNull } from "@/lib/billing/stripe";
 import type { AdminStat, ActivityItem, Plan } from "@/lib/admin/mock";
@@ -34,9 +37,9 @@ function timeAgo(d: Date): string {
 
 // ─── KPI sparklines + deltas ────────────────────────────────────────────────
 // Real trend series derived from existing rows (no snapshot table needed) for
-// the metrics that have a natural time-axis: total users (cumulative stock),
-// decks/day and credits-spent/day (flow). Subs + Stripe balance have no
-// historical series in our data, so those cards stay value-only.
+// the metrics that have a natural time-axis: total users (cumulative stock)
+// and decks/day (flow). Subs + Stripe balance have no historical series in
+// our data, so those cards stay value-only.
 // Matches the "(30d)" KPI windows so a card's number and its sparkline/delta
 // cover the same period.
 const SPARK_DAYS = 30;
@@ -103,35 +106,29 @@ async function getStatTrends(): Promise<{
   users: Trend;
   subs: Trend;
   decks: Trend;
-  credits: Trend;
 }> {
   const now = Date.now();
   const windowStartMs = now - SPARK_DAYS * DAY_MS;
   const windowStart = new Date(windowStartMs);
 
-  const [usersBaseline, newUsers, newDecks, spentRows, activeSubs] =
-    await Promise.all([
-      prisma.user.count({
-        where: { role: { not: "admin" }, createdAt: { lt: windowStart } },
-      }),
-      prisma.user.findMany({
-        where: { role: { not: "admin" }, createdAt: { gte: windowStart } },
-        select: { createdAt: true },
-      }),
-      prisma.presentation.findMany({
-        where: { createdAt: { gte: windowStart } },
-        select: { createdAt: true },
-      }),
-      prisma.creditHold.findMany({
-        where: { status: "settled", createdAt: { gte: windowStart } },
-        select: { createdAt: true, amountCharged: true },
-      }),
-      // Currently-active paid subs, by createdAt — see the subs note below.
-      prisma.subscription.findMany({
-        where: { status: "active", plan: { in: [...PAID_PLANS] } },
-        select: { createdAt: true },
-      }),
-    ]);
+  const [usersBaseline, newUsers, newDecks, activeSubs] = await Promise.all([
+    prisma.user.count({
+      where: { role: { not: "admin" }, createdAt: { lt: windowStart } },
+    }),
+    prisma.user.findMany({
+      where: { role: { not: "admin" }, createdAt: { gte: windowStart } },
+      select: { createdAt: true },
+    }),
+    prisma.presentation.findMany({
+      where: { createdAt: { gte: windowStart } },
+      select: { createdAt: true },
+    }),
+    // Currently-active paid subs, by createdAt — see the subs note below.
+    prisma.subscription.findMany({
+      where: { status: "active", plan: { in: [...PAID_PLANS] } },
+      select: { createdAt: true },
+    }),
+  ]);
 
   // Users — cumulative daily total (running total from the pre-window count).
   let running = usersBaseline;
@@ -143,12 +140,6 @@ async function getStatTrends(): Promise<{
   // Decks — new decks per day (flow).
   const decksSpark = bucketDaily(
     newDecks.map((p) => ({ t: p.createdAt.getTime() })),
-    windowStartMs,
-  );
-
-  // Credits — settled charges summed per day (flow).
-  const creditsSpark = bucketDaily(
-    spentRows.map((r) => ({ t: r.createdAt.getTime(), w: r.amountCharged ?? 0 })),
     windowStartMs,
   );
 
@@ -167,13 +158,11 @@ async function getStatTrends(): Promise<{
 
   // Per-metric baseline floors below which a % is noise (one signup / deck
   // swings it wildly). Until the app clears these, the card shows value +
-  // sparkline only. Counts use unit floors; credits use a charge-scale floor
-  // (a single deck is ~200-660 cr, so ~3k ≈ several decks of real history).
+  // sparkline only.
   return {
     users: { spark: usersSpark, ...stockTrend(usersSpark, 25) },
     subs: { spark: subsSpark, ...stockTrend(subsSpark, 5) },
     decks: { spark: decksSpark, ...flowTrend(decksSpark, 15) },
-    credits: { spark: creditsSpark, ...flowTrend(creditsSpark, 3000) },
   };
 }
 
@@ -236,6 +225,76 @@ async function getBalanceTrend(): Promise<{ usd: number | null } & Trend> {
   }
 }
 
+// Monthly recurring revenue: what the currently-active subscriptions actually
+// bill per month, straight from Stripe (true item amounts, so coupons and
+// seats still on archived prices are counted correctly; the DB mirror only
+// knows list prices). Yearly seats normalize to a per-month figure (/12).
+// Subs set to cancel at period end still count: standard MRR, they pay until
+// they actually churn. Live-only + resilient like the balance card: null
+// (card shows "n/a") with test keys or on any Stripe hiccup.
+async function getMrrUsd(): Promise<number | null> {
+  const client = getLiveStripeOrNull();
+  if (!client) return null;
+  try {
+    let totalCents = 0;
+    // Coupons referenced by discounts, fetched once per id across the run.
+    const couponCache = new Map<string, Stripe.Coupon>();
+    for await (const sub of client.subscriptions.list({
+      status: "active",
+      limit: 100,
+      expand: ["data.discounts"],
+    })) {
+      // Per-month cents across this sub's items, interval-normalized. Our
+      // catalog is month/year only; anything else (or a metered price with no
+      // unit_amount) is skipped rather than guessed at.
+      let subCents = 0;
+      for (const item of sub.items.data) {
+        const amount = item.price.unit_amount;
+        const rec = item.price.recurring;
+        if (amount === null || !rec) continue;
+        const months =
+          rec.interval === "year"
+            ? 12 * rec.interval_count
+            : rec.interval === "month"
+              ? rec.interval_count
+              : null;
+        if (months === null) continue;
+        subCents += (amount * (item.quantity ?? 1)) / months;
+      }
+      // Subscription-level coupons (promo codes). `data.discounts` is
+      // expanded above, but the coupon itself lives at discount.source.coupon
+      // (dahlia API) and can still be an id string - resolve those with the
+      // per-run cache. Anything unexpected falls through to the undiscounted
+      // amount.
+      const yearlyMonths =
+        sub.items.data[0]?.price.recurring?.interval === "year" ? 12 : 1;
+      for (const d of sub.discounts ?? []) {
+        if (typeof d !== "object" || d === null) continue;
+        let coupon: Stripe.Coupon | null =
+          typeof d.source?.coupon === "object" ? d.source.coupon : null;
+        if (!coupon && typeof d.source?.coupon === "string") {
+          coupon =
+            couponCache.get(d.source.coupon) ??
+            (await client.coupons.retrieve(d.source.coupon).catch(() => null));
+          if (coupon) couponCache.set(coupon.id, coupon);
+        }
+        if (!coupon) continue;
+        if (coupon.percent_off) {
+          subCents *= 1 - coupon.percent_off / 100;
+        } else if (coupon.amount_off && coupon.currency === "usd") {
+          // amount_off is per invoice; spread a yearly invoice's cut over 12.
+          subCents = Math.max(0, subCents - coupon.amount_off / yearlyMonths);
+        }
+      }
+      totalCents += subCents;
+    }
+    return totalCents / 100;
+  } catch (err) {
+    console.error("[admin/stats] stripe mrr fetch failed", err);
+    return null;
+  }
+}
+
 export async function getOverviewStats(): Promise<{
   stats: AdminStat[];
   planSplit: Record<Plan, number>;
@@ -250,8 +309,8 @@ export async function getOverviewStats(): Promise<{
     planGroups,
     activeSubsCount,
     decks30,
-    spent,
     balance,
+    mrr,
     trends,
   ] = await Promise.all([
     prisma.user.count({ where: { role: { not: "admin" } } }),
@@ -264,17 +323,14 @@ export async function getOverviewStats(): Promise<{
       where: { status: "active", plan: { in: [...PAID_PLANS] } },
     }),
     prisma.presentation.count({ where: { createdAt: { gte: since30 } } }),
-    prisma.creditHold.aggregate({
-      _sum: { amountCharged: true },
-      where: { status: "settled", createdAt: { gte: since30 } },
-    }),
     getBalanceTrend(),
+    getMrrUsd(),
     // Sparklines are non-critical: a trend-query hiccup must not take down the
     // whole KPI overview — fall back to value-only cards (empty spark).
     getStatTrends().catch((err) => {
       console.error("[admin/stats] stat trends failed", err);
       const empty: Trend = { spark: [] };
-      return { users: empty, subs: empty, decks: empty, credits: empty };
+      return { users: empty, subs: empty, decks: empty };
     }),
   ]);
 
@@ -282,8 +338,6 @@ export async function getOverviewStats(): Promise<{
   for (const g of planGroups) {
     if (g.plan in planSplit) planSplit[g.plan as Plan] = g._count._all;
   }
-
-  const creditsSpent30 = spent._sum.amountCharged ?? 0;
 
   const stats: AdminStat[] = [
     { key: "users", label: "Total users", value: fmt(totalUsers), spark: trends.users.spark, delta: trends.users.delta, trend: trends.users.trend },
@@ -305,8 +359,21 @@ export async function getOverviewStats(): Promise<{
       delta: balance.delta,
       trend: balance.trend,
     },
+    // MRR has no historical series (like subs/balance, no snapshot table), so
+    // the card is value-only.
+    {
+      key: "mrr",
+      label: "Monthly revenue (MRR)",
+      value:
+        mrr === null
+          ? "n/a"
+          : `$${mrr.toLocaleString("en-US", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}`,
+      spark: [],
+    },
     { key: "decks", label: "Decks generated (30d)", value: fmt(decks30), spark: trends.decks.spark, delta: trends.decks.delta, trend: trends.decks.trend },
-    { key: "credits", label: "Credits spent (30d)", value: fmt(creditsSpent30), spark: trends.credits.spark, delta: trends.credits.delta, trend: trends.credits.trend },
   ];
 
   const activity = await activityPromise;
