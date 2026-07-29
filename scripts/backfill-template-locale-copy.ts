@@ -17,9 +17,11 @@
 // force-static detail pages pick the copy up on the next deploy (post-receive
 // also purges the Cloudflare edge).
 
+// .env.local first so it wins locally (dotenv never overrides keys already
+// set); .env is the fallback for the prod box, which only has .env.
 import { config } from "dotenv";
-config();
 config({ path: ".env.local" });
+config();
 
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
