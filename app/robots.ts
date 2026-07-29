@@ -28,6 +28,9 @@ export default function robots(): MetadataRoute.Robots {
         // Admin + banned.
         "/*/admin",
         "/*/banned",
+        // Auth entry points (no SEO value, dilute crawl budget).
+        "/*/login",
+        "/*/signup",
       ],
     },
     sitemap: "https://taqreer.ai/sitemap.xml",

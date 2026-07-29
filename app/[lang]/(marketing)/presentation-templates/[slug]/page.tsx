@@ -19,6 +19,7 @@ import {
   getPublicTemplateBySlug,
   getPublicTemplateSlugs,
   getTemplatesPageList,
+  templateLocales,
   type TemplateDetail,
 } from "@/lib/auth/marquee-projects";
 import { UseTemplateCta } from "@/components/marketing/UseTemplateCta";
@@ -74,7 +75,13 @@ export async function generateMetadata(props: {
   return {
     title,
     description: desc,
-    alternates: localeAlternates(locale, `presentation-templates/${slug}`),
+    // Only locales with real copy are advertised; a copyless locale's page
+    // stays reachable but canonicalizes to the real version (templateLocales).
+    alternates: localeAlternates(
+      locale,
+      `presentation-templates/${slug}`,
+      templateLocales(tpl),
+    ),
     openGraph: {
       title,
       description: desc,

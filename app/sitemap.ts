@@ -1,5 +1,8 @@
 import { MetadataRoute } from "next";
-import { getPublicTemplateSlugs } from "@/lib/auth/marquee-projects";
+import {
+  getPublicTemplateSlugs,
+  templateLocales,
+} from "@/lib/auth/marquee-projects";
 
 // Sitemap = the list of indexable, public URLs we want crawled. Every entry is
 // a real 200 URL (the locale-prefixed canonical), with hreflang alternates so
@@ -70,15 +73,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // Template detail pages. getPublicTemplateSlugs is fail-soft ([]) so a DB
   // hiccup degrades the sitemap to the static routes instead of 500ing.
+  // Unlike the static routes, a template only gets a locale's URL when it has
+  // that locale's copy (templateLocales): emitting an /en URL that renders
+  // Arabic fallback copy reads as an ar/en duplicate pair to Google.
   const slugs = await getPublicTemplateSlugs();
-  const templateEntries = slugs.flatMap(({ slug, updatedAt }) => {
-    const path = `presentation-templates/${slug}`;
-    return LOCALES.map((locale) => ({
+  const templateEntries = slugs.flatMap((tpl) => {
+    const path = `presentation-templates/${tpl.slug}`;
+    const locales = templateLocales(tpl);
+    const templateAlternates = {
+      languages: Object.fromEntries([
+        ...locales.map((locale) => [locale, href(locale, path)]),
+        // x-default → Arabic when it exists, else the only real locale.
+        ["x-default", href(locales.includes("ar") ? "ar" : locales[0], path)],
+      ]),
+    };
+    return locales.map((locale) => ({
       url: href(locale, path),
-      lastModified: updatedAt,
+      lastModified: tpl.updatedAt,
       changeFrequency: "monthly" as const,
       priority: 0.7,
-      alternates: alternates(path),
+      alternates: templateAlternates,
     }));
   });
 

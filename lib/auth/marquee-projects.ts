@@ -512,13 +512,50 @@ export const getPublicTemplateBySlug = unstable_cache(
   { revalidate: 300, tags: ["template-detail"] },
 );
 
-// Public slugs + updatedAt for the sitemap and generateStaticParams. Fail-soft
-// to [] so a DB hiccup degrades the sitemap to static routes instead of 500ing.
+// Locales a template has real (non-fallback) SEO copy for. Drives which locale
+// URLs we advertise to Google (sitemap entries, hreflang alternates, canonical):
+// a locale with no name renders the other language's copy via the detail page's
+// cross-language fallback, and advertising THAT as a translation makes Google
+// see the ar/en pair as duplicates and skip crawling. With no copy at all, the
+// template's content language is the only honest URL.
+export function templateLocales(tpl: {
+  nameAr: string | null;
+  nameEn: string | null;
+  language: string;
+}): ("ar" | "en")[] {
+  const locales: ("ar" | "en")[] = [];
+  if (tpl.nameAr) locales.push("ar");
+  if (tpl.nameEn) locales.push("en");
+  if (locales.length === 0) locales.push(tpl.language === "en" ? "en" : "ar");
+  return locales;
+}
+
+// Public slugs + updatedAt for the sitemap and generateStaticParams, plus the
+// per-locale names + content language the sitemap needs to gate which locale
+// URLs it emits (templateLocales above). Fail-soft to [] so a DB hiccup
+// degrades the sitemap to static routes instead of 500ing.
 export const getPublicTemplateSlugs = unstable_cache(
-  async (): Promise<{ slug: string; updatedAt: Date }[]> => {
+  async (): Promise<
+    {
+      slug: string;
+      updatedAt: Date;
+      language: string;
+      nameAr: string | null;
+      nameEn: string | null;
+    }[]
+  > => {
     try {
-      const rows = await prisma.$queryRaw<{ slug: string; updatedAt: Date }[]>`
-        SELECT t.slug AS slug, t."updatedAt" AS "updatedAt"
+      const rows = await prisma.$queryRaw<
+        {
+          slug: string;
+          updatedAt: Date;
+          language: string;
+          nameAr: string | null;
+          nameEn: string | null;
+        }[]
+      >`
+        SELECT t.slug AS slug, t."updatedAt" AS "updatedAt",
+               t.language AS language, t."nameAr" AS "nameAr", t."nameEn" AS "nameEn"
         FROM "Template" t
         INNER JOIN "User" u ON t."ownerId" = u.id
         LEFT JOIN "Project" p ON p.id = t."sourceProjectId"
