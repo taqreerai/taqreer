@@ -21,6 +21,7 @@
 // `ppt/notesSlides/` and are intentionally excluded.
 
 import JSZip from "jszip";
+import { MAX_SLIDE_TEXT_CHARS } from "@/lib/types/brief-limits";
 
 const SLIDE_RE = /^ppt\/slides\/slide\d+\.xml$/;
 
@@ -125,7 +126,16 @@ function textFromSlideXml(xml: string): string {
     return decodeXmlEntities(buf);
   });
   // Collapse runs of 3+ blank lines and trim the slide's edges.
-  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  const text = lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  // Clamp degenerate slides (a pasted document, a giant hidden textbox) to
+  // the cap the SourceEnhanceSchema enforces: without this, one oversized
+  // slide would make writeSource/the schema reject the WHOLE source and
+  // silently demote the enhance flow to scratch. Machine-extracted text, so
+  // truncation with an ellipsis (datasheet MAX_CELL_CHARS pattern) beats a
+  // hard failure.
+  return text.length > MAX_SLIDE_TEXT_CHARS
+    ? `${text.slice(0, MAX_SLIDE_TEXT_CHARS - 1)}…`
+    : text;
 }
 
 // PPTX <a:t> bodies are XML-escaped. Decode the standard entities +

@@ -48,6 +48,7 @@ import {
   type UploadedFontFieldBrief,
 } from "@/lib/brand/upload";
 import { DEFAULT_QUALITY, type Quality } from "@/lib/types/quality";
+import { MAX_CONTENT_TEXT_CHARS } from "@/lib/types/brief-limits";
 import {
   readBrandFromSession,
   fetchDefaultBrandKit,
@@ -401,6 +402,9 @@ export default function SocialPage() {
                 onChange={(e) => setTopic(e.target.value)}
                 placeholder={dict.flows.social.topicPlaceholder}
                 dir={language === "en" ? "ltr" : "rtl"}
+                // Mirrors the server's content.text 400 cap in
+                // /api/projects (brief-limits.ts).
+                maxLength={MAX_CONTENT_TEXT_CHARS}
                 disabled={submitting}
                 className="input-dark min-h-[240px] flex-1 resize-none text-sm leading-6 disabled:cursor-not-allowed disabled:opacity-50"
               />

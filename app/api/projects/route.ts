@@ -17,6 +17,10 @@ import {
   defaultPresetKey,
 } from "@/lib/config/runtime-config";
 import { SourceMetaSchema, type SourceMeta } from "@/lib/types/source";
+import {
+  MAX_CONTENT_TEXT_CHARS,
+  MAX_EVENT_DATA_BYTES,
+} from "@/lib/types/brief-limits";
 import { detectImageRegion } from "@/lib/geo/image-region";
 import { preflightGenerate } from "@/lib/credits/preflight";
 import type { Flow as CreditFlow, SlideEstimateInput } from "@/lib/credits/cost";
@@ -495,6 +499,20 @@ export async function POST(request: Request) {
   }
 
   const payload = (await request.json()) as CreateProjectPayload;
+  // User-typed deck content cap (PR #180 follow-up: the logo was capped
+  // there; content.text is the next unbounded rider on the 256KB Inngest
+  // event). Explicit 400, not silent truncation: this is the user's own
+  // content, and the flow textareas enforce the same maxLength so a legit
+  // client never sees this. Checked FIRST so no DB work happens for a
+  // payload that can't generate.
+  if ((payload.content?.text?.length ?? 0) > MAX_CONTENT_TEXT_CHARS) {
+    return NextResponse.json(
+      {
+        error: `content text exceeds the ${MAX_CONTENT_TEXT_CHARS.toLocaleString("en-US")} character limit`,
+      },
+      { status: 400 },
+    );
+  }
   const title = buildProjectTitle(payload, dict);
   const projectType =
     payload.type === "enhance"
@@ -888,6 +906,23 @@ export async function POST(request: Request) {
       flow: creditFlow,
     },
   };
+
+  // Backstop for the WHOLE event: Inngest hard-rejects deck.generate.requested
+  // over 256KB (the PR #180 failure class, Sentry 77f4c998), and the per-field
+  // caps above can't name every free-text rider (mimic userContent from a PDF
+  // text layer, datasheet userContext, enhance instructions, a maxed-out
+  // combination). Measured on the serialized form, the same unit Inngest
+  // enforces, BEFORE the tx so no rows exist for a job that could never
+  // enqueue. 413 so the client can tell "too big" apart from a shape error.
+  if (Buffer.byteLength(JSON.stringify(eventPayload), "utf8") > MAX_EVENT_DATA_BYTES) {
+    return NextResponse.json(
+      {
+        error:
+          "brief is too large to process; reduce the content text or use a smaller source file",
+      },
+      { status: 413 },
+    );
+  }
 
   // Allowlist-filtered logo blob for the optional brand-kit save.
   // Lives outside the tx because it's pure data shaping — no DB

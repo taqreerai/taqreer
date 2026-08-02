@@ -84,6 +84,7 @@ import {
   type UploadedFontFieldBrief,
 } from "@/lib/brand/upload";
 import { DEFAULT_QUALITY, type Quality } from "@/lib/types/quality";
+import { MAX_CONTENT_TEXT_CHARS } from "@/lib/types/brief-limits";
 import {
   readBrandFromSession,
   fetchDefaultBrandKit,
@@ -761,6 +762,10 @@ export default function CreatePage() {
                 placeholder={t.contentPlaceholder}
                 rows={2}
                 dir={language === "en" ? "ltr" : "rtl"}
+                // Mirrors the server's content.text 400 cap in
+                // /api/projects (brief-limits.ts) so the limit is felt
+                // here, not as a failed submit.
+                maxLength={MAX_CONTENT_TEXT_CHARS}
                 disabled={submitting || hasFile}
                 className="input-dark min-h-[60px] flex-1 resize-none text-sm leading-5 disabled:cursor-not-allowed disabled:opacity-50"
               />

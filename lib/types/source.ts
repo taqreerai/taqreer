@@ -23,6 +23,7 @@
 
 import { z } from "zod";
 import { MAX_MARKDOWN_CHARS } from "@/lib/extract/datasheet";
+import { MAX_SLIDE_TEXT_CHARS } from "@/lib/types/brief-limits";
 
 // ─── SourceMeta — the discriminated union ────────────────────────
 // Three upload-driven kinds + scratch (implicit, the default when
@@ -78,7 +79,12 @@ export const SourceEnhanceSchema = z.object({
   // reproduces content word-for-word while redesigning the visual.
   // Defaults to `[]` (back-compat — deck-generate already treats this as
   // possibly-empty and falls back to image-only enhance).
-  textPerSlide: z.array(z.string()).default([]),
+  // Per-slide cap mirrors the datasheet `markdown.max(MAX_MARKDOWN_CHARS)`
+  // pattern: lib/extract/text-pptx.ts clamps at extraction, and the schema
+  // re-applies the SAME constant as the hard boundary so a direct
+  // /api/projects caller can't ride an oversized payload into the Inngest
+  // event (256KB cap, the PR #180 logo failure class).
+  textPerSlide: z.array(z.string().max(MAX_SLIDE_TEXT_CHARS)).default([]),
   // Supabase staging location of the ORIGINAL upload (object key in the
   // source-files bucket) + its MIME. deck-generate re-fetches it at
   // generation time to rasterize the per-slide PNGs (transient — the

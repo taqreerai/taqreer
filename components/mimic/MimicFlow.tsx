@@ -70,6 +70,7 @@ import {
   type UploadedFontFieldBrief,
 } from "@/lib/brand/upload";
 import { DEFAULT_QUALITY, type Quality } from "@/lib/types/quality";
+import { MAX_CONTENT_TEXT_CHARS } from "@/lib/types/brief-limits";
 import type { SourceMeta } from "@/lib/types/source";
 import { detectStringLanguage } from "@/lib/extract/language-text";
 import {
@@ -709,7 +710,14 @@ export default function MimicFlow({
       // reproduce the source document's own boxes/layout as content, and
       // keeps its ORIGINAL LANGUAGE. Scanned/image-only PDFs extract no
       // text → fall back to the vision-block path (uglyAnthropicFileId).
-      const contentFileText = contentExtracted?.fullText?.trim() ?? "";
+      // Clamp to the same cap the typed textarea enforces: this is
+      // MACHINE-extracted text (PDF text layer), so silent truncation is
+      // acceptable and beats /api/projects rejecting the oversized brief
+      // after the user has configured everything (413 backstop there).
+      const contentFileText = (contentExtracted?.fullText?.trim() ?? "").slice(
+        0,
+        MAX_CONTENT_TEXT_CHARS,
+      );
       const contentFonts = [
         ...designExtracted.fonts,
         ...(contentExtracted?.fonts ?? []),
@@ -888,6 +896,9 @@ export default function MimicFlow({
               placeholder={dict.flows.contentPlaceholder}
               rows={2}
               dir={detectStringLanguage(contentText) === "en" ? "ltr" : "rtl"}
+              // Mirrors the server's content.text 400 cap in
+              // /api/projects (brief-limits.ts).
+              maxLength={MAX_CONTENT_TEXT_CHARS}
               disabled={submitting || !!contentFile}
               // flex-1 grows the textarea into whatever vertical space
               // is left over once the dropzone area and bottom row
