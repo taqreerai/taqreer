@@ -24,9 +24,22 @@ export const MAX_CONTENT_TEXT_CHARS = 40_000;
 // A real slide rarely exceeds 1-2K chars; 4K tolerates dense tables while
 // keeping a 72-slide max-tier deck's total well under the event budget.
 // lib/extract/text-pptx.ts clamps at extraction (machine text, so truncation
-// with ellipsis is fine); the Zod schema re-applies it as the hard boundary
-// so a direct /api/projects caller can't smuggle more.
+// with ellipsis is fine); the Zod schema re-applies the same cap as a
+// NORMALIZE boundary (transform-clamp, not reject) so an oversized entry from
+// a legacy session or a direct /api/projects caller is trimmed instead of
+// nulling the whole source and silently demoting enhance to scratch (CR #181).
 export const MAX_SLIDE_TEXT_CHARS = 4_000;
+
+// Truncate to `max` UTF-16 code units without leaving a lone high surrogate
+// when the boundary splits a surrogate pair (an emoji at the cut point would
+// otherwise serialize as U+FFFD garbage). Shared by every clamp site above so
+// the caps and the cut behave identically (CR #181).
+export function clampChars(text: string, max: number): string {
+  if (text.length <= max) return text;
+  let cut = text.slice(0, max);
+  if (/[\uD800-\uDBFF]$/.test(cut)) cut = cut.slice(0, -1);
+  return cut;
+}
 
 // Backstop on the WHOLE serialized deck.generate.requested payload, checked
 // in /api/projects before any rows are created. Inngest hard-fails at 256KB

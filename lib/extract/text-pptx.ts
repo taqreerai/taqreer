@@ -21,7 +21,7 @@
 // `ppt/notesSlides/` and are intentionally excluded.
 
 import JSZip from "jszip";
-import { MAX_SLIDE_TEXT_CHARS } from "@/lib/types/brief-limits";
+import { clampChars, MAX_SLIDE_TEXT_CHARS } from "@/lib/types/brief-limits";
 
 const SLIDE_RE = /^ppt\/slides\/slide\d+\.xml$/;
 
@@ -134,7 +134,7 @@ function textFromSlideXml(xml: string): string {
   // truncation with an ellipsis (datasheet MAX_CELL_CHARS pattern) beats a
   // hard failure.
   return text.length > MAX_SLIDE_TEXT_CHARS
-    ? `${text.slice(0, MAX_SLIDE_TEXT_CHARS - 1)}…`
+    ? `${clampChars(text, MAX_SLIDE_TEXT_CHARS - 1)}…`
     : text;
 }
 

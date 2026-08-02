@@ -583,6 +583,8 @@
     "fileTooLarge": "The file exceeds the 100 MB max ({size}).",
     "parseFailed": "Couldn't parse the content file. Try again.",
     "createFailed": "Couldn't create the project",
+    "contentTooLong": "Content text exceeds the {limit} character limit.",
+    "briefTooLarge": "The deck content is too large to process. Reduce the text or use a smaller source file.",
     "create2": "Create",
     "analyzing": "Analyzing…",
     "ready": "Ready",

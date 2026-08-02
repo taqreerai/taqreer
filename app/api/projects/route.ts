@@ -505,10 +505,16 @@ export async function POST(request: Request) {
   // content, and the flow textareas enforce the same maxLength so a legit
   // client never sees this. Checked FIRST so no DB work happens for a
   // payload that can't generate.
+  // Localized (CR #181): every flow client renders data.error verbatim, so
+  // the string must come from the requester's dict. {limit} mirrors the
+  // flows.fileTooLarge {size} pattern; Latin numerals per convention.
   if ((payload.content?.text?.length ?? 0) > MAX_CONTENT_TEXT_CHARS) {
     return NextResponse.json(
       {
-        error: `content text exceeds the ${MAX_CONTENT_TEXT_CHARS.toLocaleString("en-US")} character limit`,
+        error: dict.flows.contentTooLong.replace(
+          "{limit}",
+          MAX_CONTENT_TEXT_CHARS.toLocaleString("en-US"),
+        ),
       },
       { status: 400 },
     );
@@ -916,10 +922,7 @@ export async function POST(request: Request) {
   // enqueue. 413 so the client can tell "too big" apart from a shape error.
   if (Buffer.byteLength(JSON.stringify(eventPayload), "utf8") > MAX_EVENT_DATA_BYTES) {
     return NextResponse.json(
-      {
-        error:
-          "brief is too large to process; reduce the content text or use a smaller source file",
-      },
+      { error: dict.flows.briefTooLarge },
       { status: 413 },
     );
   }

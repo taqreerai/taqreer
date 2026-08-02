@@ -70,7 +70,7 @@ import {
   type UploadedFontFieldBrief,
 } from "@/lib/brand/upload";
 import { DEFAULT_QUALITY, type Quality } from "@/lib/types/quality";
-import { MAX_CONTENT_TEXT_CHARS } from "@/lib/types/brief-limits";
+import { clampChars, MAX_CONTENT_TEXT_CHARS } from "@/lib/types/brief-limits";
 import type { SourceMeta } from "@/lib/types/source";
 import { detectStringLanguage } from "@/lib/extract/language-text";
 import {
@@ -714,8 +714,8 @@ export default function MimicFlow({
       // MACHINE-extracted text (PDF text layer), so silent truncation is
       // acceptable and beats /api/projects rejecting the oversized brief
       // after the user has configured everything (413 backstop there).
-      const contentFileText = (contentExtracted?.fullText?.trim() ?? "").slice(
-        0,
+      const contentFileText = clampChars(
+        contentExtracted?.fullText?.trim() ?? "",
         MAX_CONTENT_TEXT_CHARS,
       );
       const contentFonts = [
