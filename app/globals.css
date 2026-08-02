@@ -2719,6 +2719,15 @@ img[data-genimage]:not([src]) {
   animation: tq-genimg-shimmer 1.4s ease-in-out infinite;
 }
 
+/* FAILED box (`.tq-genimg-failed`, added by SlideRenderer / DeckView from the
+   server's failed-image signal): generation was rejected permanently, so an
+   animated shimmer would lie ("still loading"). Stop the sweep and hold the
+   calm static dim; in the studio editor a retry overlay sits on top. */
+img[data-genimage].tq-genimg-failed:not([src]) {
+  animation: none;
+  background-image: none !important;
+}
+
 /* One-shot fade for a LIVE-patched image. SlideRenderer adds `.tq-genimg-in`
    on the <img>'s `load` event ONLY when it patches the src into the live DOM
    (an image landing mid-session). Images whose src is already baked into the

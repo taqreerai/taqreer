@@ -301,6 +301,13 @@ export const deckImagesGenerate = inngest.createFunction(
               error: err instanceof Error ? err.message : String(err),
             });
             await setStatus(b.genid, { status: "failed" }).catch(() => undefined);
+            // Tell open viewers the box failed permanently (usually a
+            // safety/copyright rejection of the prompt) so the client swaps
+            // the shimmer → a retry state instead of loading forever.
+            await broadcastToProject(projectId, "slide.image.failed", {
+              slideKey: b.slideKey,
+              genid: b.genid,
+            }).catch(() => undefined);
           }
         }
       };

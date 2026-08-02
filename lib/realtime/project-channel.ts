@@ -84,6 +84,11 @@ export type ProjectBroadcastEvent =
   // (and by regenerate later), so the client swaps the box's placeholder
   // → the real image live, while the deck is still streaming.
   | "slide.image.ready"
+  // Images-mode: a reserved image box's generation FAILED permanently
+  // (typically an OpenAI safety/copyright rejection of the prompt). The
+  // client swaps the box's shimmer → a "generation failed, retry" state
+  // instead of an eternal loading placeholder.
+  | "slide.image.failed"
   // Frame decks (context/frame-architecture-2026-07-10.md): the freeze
   // bake finished - vision revisions applied, wells frozen, bake markers
   // stamped. Pointer-only: clients fat-sync the manifest, which swaps any
@@ -106,6 +111,7 @@ const BROADCAST_EVENTS: readonly ProjectBroadcastEvent[] = [
   "slide.lock.changed",
   "slides.locks.bulk-changed",
   "slide.image.ready",
+  "slide.image.failed",
   "deck.baked",
   "deck.genchat",
 ];
@@ -162,6 +168,13 @@ export type ProjectBroadcastPayloadMap = {
     genid: string;
     // Permanent public URL of the generated image.
     url: string;
+  };
+  "slide.image.failed": {
+    // The slide whose box failed (== slide.slideId / SlideState key).
+    slideKey: string;
+    // data-genid of the failed box — the client finds the matching
+    // <img data-genid> and shows the failed/retry state.
+    genid: string;
   };
   "deck.baked": {
     // The PresentationVersion the bake wrote.
@@ -305,6 +318,7 @@ export async function openProjectChannel(
     "slide.lock.changed": [],
     "slides.locks.bulk-changed": [],
     "slide.image.ready": [],
+    "slide.image.failed": [],
     "deck.baked": [],
     "deck.genchat": [],
   };

@@ -1161,6 +1161,11 @@
       "regenHint": "Counts as one image",
       "generate": "Generate"
     },
+    "imageFailed": {
+      "title": "Image could not be generated",
+      "hint": "The description may include sensitive or copyrighted content. Select the image to edit its description, or try again.",
+      "retry": "Try again"
+    },
     "progress": {
       "thinking": "Thinking…",
       "validating": "Validating…",

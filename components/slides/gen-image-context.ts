@@ -24,3 +24,18 @@ export const GenImageProvider = GenImageContext.Provider;
 export function useGenImageFills(): GenImageFills {
   return useContext(GenImageContext);
 }
+
+// Genids whose generation FAILED permanently (safety/copyright rejection —
+// `slide.image.failed` broadcast + the status route's `imageFailed`).
+// SlideRenderer marks the matching boxes `.tq-genimg-failed` so the shimmer
+// stops lying about "loading". Additive like the fills context: no provider
+// (exports, thumbnails, showcases) → empty set → no-op.
+const EMPTY_FAILED: ReadonlySet<string> = new Set();
+
+const GenImageFailedContext = createContext<ReadonlySet<string>>(EMPTY_FAILED);
+
+export const GenImageFailedProvider = GenImageFailedContext.Provider;
+
+export function useGenImageFailed(): ReadonlySet<string> {
+  return useContext(GenImageFailedContext);
+}

@@ -301,6 +301,7 @@ export async function GET(
   // unchanged box's URL is stable, and a drifted box just swaps to its new
   // image the instant the warm fill lands.
   let imageFills: Record<string, string> | null = null;
+  let imageFailed: string[] | null = null;
   if (includeImageFills) {
     // genid → prompt for every reserved box the client is rendering. Canonical
     // slides first, then streamingPreview overlaid (the live prompt wins).
@@ -318,6 +319,23 @@ export async function GET(
       genBoxes,
     });
     imageFills = Object.fromEntries(fills);
+    // Boxes whose generation failed PERMANENTLY (safety/copyright rejection).
+    // Same (genid + promptHash) identity as fills: a failed row only counts
+    // while the live box still carries the exact prompt that failed — after
+    // the user edits the prompt / retries, the stale row stops reporting.
+    // Never contradict a fill: a box that resolved a URL is not failed.
+    if (latestVersion?.id && genBoxes.size > 0) {
+      const failedRows = await prisma.generatedImage.findMany({
+        where: { presentationVersionId: latestVersion.id, status: "failed" },
+        select: { genid: true, prompt: true },
+      });
+      imageFailed = failedRows
+        .filter(
+          (r) =>
+            !fills.has(r.genid) && genBoxes.get(r.genid) === r.prompt,
+        )
+        .map((r) => r.genid);
+    }
   }
 
   return NextResponse.json({
@@ -331,6 +349,7 @@ export async function GET(
     streamingLanguage,
     genChat,
     imageFills,
+    imageFailed,
     // Latest version id + its own status. DeckView's partial-regen polling
     // uses this to distinguish "applying is done" (versionId == the new
     // version's id AND status=completed) from "you're still looking at the

@@ -113,6 +113,38 @@ export const deckImageWarm = inngest.createFunction(
           genid: box.genid,
           error: err instanceof Error ? err.message : String(err),
         });
+        // Regen path: the regen route pre-upserted this box's row to
+        // "generating" with THIS prompt — flip it to "failed" and tell open
+        // viewers, so the retry UI comes back instead of a stuck spinner.
+        // Prompt equality scopes the write to that row; a mid-stream warm
+        // (rows not seeded yet, or a since-drifted prompt) matches 0 rows
+        // and stays silent — the end-of-deck reconcile owns its retry +
+        // failure signal.
+        try {
+          const { prisma } = await import("@/lib/prisma");
+          const marked = await prisma.generatedImage.updateMany({
+            where: {
+              version: { presentation: { projectId } },
+              genid: box.genid,
+              prompt: box.prompt,
+              status: { notIn: ["ready"] },
+            },
+            data: { status: "failed" },
+          });
+          if (marked.count > 0) {
+            await broadcastToProject(projectId, "slide.image.failed", {
+              slideKey,
+              genid: box.genid,
+            });
+          }
+        } catch (markErr) {
+          logger.warn("deck_image_warm_mark_failed", {
+            projectId,
+            genid: box.genid,
+            error:
+              markErr instanceof Error ? markErr.message : String(markErr),
+          });
+        }
         return { filled: 0, skipped: 0, failed: 1 };
       }
     });

@@ -31,6 +31,7 @@ import { TeaserLockCanvas } from "@/components/preview/TeaserLockCanvas";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import { SlideEditor } from "@/components/preview/editor/SlideEditor";
 import { StylePill } from "@/components/preview/editor/StylePill";
+import { GenImageFailedOverlay } from "@/components/preview/editor/GenImageFailedOverlay";
 import { LayersPanel } from "@/components/preview/editor/LayersPanel";
 import { GenChatPanel } from "@/components/preview/GenChatPanel";
 import { SegmentedToggle } from "@/components/create/controls";
@@ -41,6 +42,7 @@ import { UserMenu } from "@/components/app/UserMenu";
 import { MobileNav } from "@/components/app/MobileNav";
 import {
   GenImageProvider,
+  GenImageFailedProvider,
   type GenImageFills,
 } from "@/components/slides/gen-image-context";
 import { scanGenImages, injectImgSrc, type GenImageAspect } from "@/lib/images/slide-images";
@@ -1439,6 +1441,18 @@ export function DeckView({
   // placeholder → the image in place, no refresh. See the
   // `slide.image.ready` broadcast handler.
   const [filledImages, setFilledImages] = useState<GenImageFills>({});
+  // Boxes whose generation FAILED permanently (an OpenAI safety/copyright
+  // rejection of the prompt). Fed by the `slide.image.failed` broadcast + the
+  // status poll's `imageFailed`. Cleared per-genid when a fill lands or the
+  // user retries (the regen resets the row to "generating" server-side).
+  // Drives the editor's retry overlay + the `.tq-genimg-failed` shimmer-stop.
+  const [failedImages, setFailedImages] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  // Bumped on every image retry so the catch-up poll effect below restarts
+  // (fresh attempts budget) — a retry fired after the poll's cap would
+  // otherwise depend solely on the broadcast landing.
+  const [imagePollNonce, setImagePollNonce] = useState(0);
 
   // Export-ready manifest. The live preview shows generated images through the
   // GenImageProvider context, which NEVER mutates `manifest` — so the toolbar's
@@ -1461,6 +1475,26 @@ export function DeckView({
       }),
     };
   }, [manifest, filledImages]);
+
+  // The CURRENT DECK's colours for the colour pickers' preset swatches (palette
+  // first, then chrome background/text), deduped case-insensitively, capped to
+  // the picker's 2-row grid. Undefined (no theme yet) → the picker's generic
+  // defaults. Reads the raw manifest/streaming theme (not viewManifest, which is
+  // derived below the early returns — hooks can't live there).
+  const deckPresetColors = useMemo(() => {
+    const theme = manifest?.theme ?? streamingTheme;
+    if (!theme) return undefined;
+    const seen = new Set<string>();
+    const colors: string[] = [];
+    for (const c of [...theme.palette, theme.background, theme.text]) {
+      const hex = c.toUpperCase();
+      if (seen.has(hex)) continue;
+      seen.add(hex);
+      colors.push(hex);
+      if (colors.length >= 12) break;
+    }
+    return colors.length > 0 ? colors : undefined;
+  }, [manifest?.theme, streamingTheme]);
 
   // §19 — fire the single-image regen route. The StylePill already wrote the
   // new prompt onto the box (data-genimage, committed on deselect) and dropped
@@ -1485,6 +1519,14 @@ export function DeckView({
         delete next[input.genid];
         return next;
       });
+      // A retry leaves the failed state — back to the shimmer. If it fails
+      // again, `slide.image.failed` / the restarted poll re-flags it.
+      setFailedImages((prev) => {
+        if (!prev.has(input.genid)) return prev;
+        const next = new Set(prev);
+        next.delete(input.genid);
+        return next;
+      });
       try {
         const res = await fetch(
           `/api/projects/${projectId}/slides/${encodeURIComponent(
@@ -1504,6 +1546,12 @@ export function DeckView({
         }
       } catch (err) {
         console.error("[image-regen] failed", err);
+      } finally {
+        // Restart the catch-up poll AFTER the regen route committed its
+        // "generating" upsert — bumping before the POST landed made the
+        // restarted poll's first tick read the still-"failed" row and
+        // re-flag the box the user just retried.
+        setImagePollNonce((n) => n + 1);
       }
     },
     [projectId],
@@ -1537,6 +1585,23 @@ export function DeckView({
     // a slide switch re-runs this). SlideEditor's swap is a child effect, so it commits before
     // this parent effect re-patches the fresh <img>.
   }, [filledImages, editorDoc, inPlaceApply?.token]);
+
+  // Mirror `failedImages` onto the editor iframe's boxes as `.tq-genimg-failed`
+  // (the iframe is a separate document — SlideRenderer's context path doesn't
+  // reach it). Toggle, not add: a retry clears the set → the class drops → the
+  // shimmer honestly resumes. Same undo/redo re-apply reason as the fills sync.
+  useEffect(() => {
+    if (!editorDoc) return;
+    for (const img of editorDoc.querySelectorAll<HTMLImageElement>(
+      "img[data-genimage][data-genid]",
+    )) {
+      const genid = img.getAttribute("data-genid") ?? "";
+      img.classList.toggle(
+        "tq-genimg-failed",
+        failedImages.has(genid) && !img.getAttribute("src"),
+      );
+    }
+  }, [failedImages, editorDoc, inPlaceApply?.token]);
   // Catch-up poll for missed `slide.regen.finished` broadcasts. Safari
   // throttles backgrounded / out-of-focus WebSockets and occasionally
   // drops broadcast frames entirely — symptom: the spinner overlay
@@ -1754,6 +1819,7 @@ export function DeckView({
         if (!res.ok || cancelled) return;
         const data = (await res.json()) as {
           imageFills?: Record<string, string> | null;
+          imageFailed?: string[] | null;
         };
         if (cancelled) return;
         const fills = data.imageFills;
@@ -1774,13 +1840,36 @@ export function DeckView({
             return changed ? next : prev;
           });
         }
+        // Permanently failed boxes (safety/copyright rejection). RECONCILE —
+        // don't merge — against the server's report: the GeneratedImage row's
+        // status is authoritative, so a box the server no longer flags (its
+        // retry is "generating", or the prompt changed) must drop its overlay
+        // here too. Scoped to our own boxes; a fill always wins.
+        const failed = data.imageFailed;
+        if (failed) {
+          const serverFailed = new Set(
+            failed.filter((genid) => ownIds.has(genid) && !fills?.[genid]),
+          );
+          setFailedImages((prev) => {
+            if (
+              prev.size === serverFailed.size &&
+              [...prev].every((g) => serverFailed.has(g))
+            ) {
+              return prev;
+            }
+            return serverFailed;
+          });
+        }
         // Coverage is measured against OUR rendered boxes — NOT the server's
         // returned count — so a superset response can't stop the poll before
-        // our own boxes are filled. Keep polling until every rendered box has a
-        // fill (a late mid-deck image lands the instant the server has it), or
-        // the ~4-min cap (covers a box whose image failed permanently).
+        // our own boxes are filled. A box the server reports FAILED is settled
+        // too (it will never fill; the retry overlay owns it from here — and a
+        // retry bumps imagePollNonce, restarting this poll fresh). Keep polling
+        // until every rendered box is settled, or the ~4-min cap.
         let covered = 0;
-        for (const id of ownIds) if (fills && fills[id]) covered += 1;
+        for (const id of ownIds) {
+          if ((fills && fills[id]) || failed?.includes(id)) covered += 1;
+        }
         if (covered >= ownIds.size || attempts >= 40) done = true;
       } catch {
         /* network blip — next tick retries */
@@ -1798,7 +1887,7 @@ export function DeckView({
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [projectId, genBoxKey]);
+  }, [projectId, genBoxKey, imagePollNonce]);
   // Belt-and-braces clear for the peer-regen spinner: when a slide's
   // `currentVersionNumber` ticks up (a new version landed via the
   // fat-sync fetchAndSwapState in the slide.regen.finished handler),
@@ -2371,6 +2460,22 @@ export function DeckView({
           prev[payload.genid] === payload.url
             ? prev
             : { ...prev, [payload.genid]: payload.url },
+        );
+        // A landed fill supersedes any failed flag (e.g. a retry succeeded).
+        setFailedImages((prev) => {
+          if (!prev.has(payload.genid)) return prev;
+          const next = new Set(prev);
+          next.delete(payload.genid);
+          return next;
+        });
+      });
+      // A box's generation failed PERMANENTLY (safety/copyright rejection of
+      // the prompt) — flag it so the shimmer stops and the editor shows the
+      // retry overlay instead of loading forever.
+      localHandle.on("slide.image.failed", (payload) => {
+        if (cancelled) return;
+        setFailedImages((prev) =>
+          prev.has(payload.genid) ? prev : new Set(prev).add(payload.genid),
         );
       });
       // Peer started a FULL deck regen. Mark every slide in the current
@@ -4531,6 +4636,7 @@ export function DeckView({
 
   return (
     <GenImageProvider value={filledImages}>
+    <GenImageFailedProvider value={failedImages}>
     <section
       dir={viewManifest?.direction ?? streamingDirection}
       className="relative"
@@ -4690,6 +4796,7 @@ export function DeckView({
             onDelete={(el) => deleteEls([el])}
             restackTick={restackTick}
             slideId={focusedSlide?.slideId ?? ""}
+            presetColors={deckPresetColors}
             language={
               (viewManifest?.language ?? streamingLanguage) === "en"
                 ? "en"
@@ -5206,6 +5313,19 @@ export function DeckView({
                 onToggleLock={toggleLock}
                 onRestack={onRestack}
                 language={manifest!.language === "en" ? "en" : "ar"}
+                presetColors={deckPresetColors}
+              />
+            ) : null}
+            {/* Retry overlay for permanently failed gen-image boxes (safety /
+                copyright rejection) — same gating as the StylePill minus the
+                selection requirement, so it never fights the comment / AI
+                overlays and disappears while the slide regenerates. */}
+            {!generating && editMode && studioMode === "edit" && !commentMode && !editingDisabled && editorDoc && failedImages.size > 0 ? (
+              <GenImageFailedOverlay
+                editorDoc={editorDoc}
+                failed={failedImages}
+                slideId={focusedSlide!.slideId}
+                onRetry={handleRegenImage}
               />
             ) : null}
           </div>
@@ -5460,6 +5580,7 @@ export function DeckView({
         onDismiss={dismissDesktopHint}
       />
     </section>
+    </GenImageFailedProvider>
     </GenImageProvider>
   );
 }

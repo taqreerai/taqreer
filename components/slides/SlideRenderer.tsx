@@ -24,7 +24,10 @@ import { sanitizeSlideHtml } from "@/lib/export/sanitize";
 import { themeToCssVars } from "@/lib/export/theme-css-vars";
 import { scanGenImages } from "@/lib/images/slide-images";
 import { usedGoogleFonts, googleFontUrl } from "@/lib/editor/font-search";
-import { useGenImageFills } from "@/components/slides/gen-image-context";
+import {
+  useGenImageFills,
+  useGenImageFailed,
+} from "@/components/slides/gen-image-context";
 
 type SlideRendererProps = {
   slide: SlideType;
@@ -113,6 +116,7 @@ function SlideRendererImpl({
   // provider — so exports / standalone thumbnails are untouched and just
   // render the saved HTML (which already carries reconciled src).
   const fills = useGenImageFills();
+  const failed = useGenImageFailed();
 
   // The reserved-box genids present in THIS slide. Found via the shared
   // scanner, which is QUOTE-AGNOSTIC — Claude emits attributes single-OR
@@ -138,6 +142,17 @@ function SlideRendererImpl({
       .join("\n");
   }, [slideGenids, fills]);
 
+  // Signature of THIS slide's FAILED boxes (permanent safety/copyright
+  // rejections). Same string-primitive trick as fillSig: another slide's
+  // failure can't re-sanitise this one.
+  const failedSig = useMemo(() => {
+    if (!slideGenids) return "";
+    return Array.from(failed)
+      .filter((genid) => slideGenids.has(genid))
+      .sort()
+      .join(",");
+  }, [slideGenids, failed]);
+
   // Sanitise the slide HTML AND bake in THIS slide's ready image fills, as one
   // string. Keyed on `[slide.html, fillSig]` where `fillSig` is THIS slide's
   // fills only.
@@ -157,17 +172,18 @@ function SlideRendererImpl({
   useEffect(() => {
     // sanitizeSlideHtml() is fail-closed: empty string on any failure.
     const safe = sanitizeSlideHtml(slide.html);
-    if (!safe || !fillSig) {
+    if (!safe || (!fillSig && !failedSig)) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSanitized(safe);
       return;
     }
     const byGenid = new Map(
-      fillSig.split("\n").map((pair) => {
+      (fillSig ? fillSig.split("\n") : []).map((pair) => {
         const eq = pair.indexOf("=");
         return [pair.slice(0, eq), pair.slice(eq + 1)] as const;
       }),
     );
+    const failedIds = new Set(failedSig ? failedSig.split(",") : []);
     // Inject via the DOM (client-only effect) rather than string-splicing
     // unsanitised markup. URLs are our own deterministic Supabase public URLs.
     const scratch = document.createElement("div");
@@ -176,18 +192,26 @@ function SlideRendererImpl({
     for (const img of scratch.querySelectorAll<HTMLImageElement>(
       "img[data-genimage]",
     )) {
-      const url = byGenid.get(img.getAttribute("data-genid") ?? "");
-      // Skip a box whose src is ALREADY the reconciled URL (reload / export
-      // path, where the saved HTML carries src) so the fade-in doesn't replay
-      // on every navigation — it only runs for a box filled live this session.
-      if (!url || img.getAttribute("src") === url) continue;
-      img.setAttribute("src", url);
-      if (img.style.opacity === "0") img.style.removeProperty("opacity"); // stale placeholder value
-      img.classList.add("tq-genimg-in"); // one-shot fade for live-injected boxes
-      touched = true;
+      const genid = img.getAttribute("data-genid") ?? "";
+      const url = byGenid.get(genid);
+      if (url) {
+        // Skip a box whose src is ALREADY the reconciled URL (reload / export
+        // path, where the saved HTML carries src) so the fade-in doesn't replay
+        // on every navigation — it only runs for a box filled live this session.
+        if (img.getAttribute("src") === url) continue;
+        img.setAttribute("src", url);
+        if (img.style.opacity === "0") img.style.removeProperty("opacity"); // stale placeholder value
+        img.classList.add("tq-genimg-in"); // one-shot fade for live-injected boxes
+        touched = true;
+      } else if (!img.getAttribute("src") && failedIds.has(genid)) {
+        // Permanently failed box (safety/copyright rejection): freeze the
+        // shimmer into a static dim so the slide stops claiming "loading".
+        img.classList.add("tq-genimg-failed");
+        touched = true;
+      }
     }
     setSanitized(touched ? scratch.innerHTML : safe);
-  }, [slide.html, fillSig]);
+  }, [slide.html, fillSig, failedSig]);
 
   // Per-element picked fonts (font-search) — render side. SlideRenderer paints
   // INLINE in the parent document, so any Google font the slide references must
