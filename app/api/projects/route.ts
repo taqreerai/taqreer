@@ -125,16 +125,19 @@ function safeFontUrl(raw: string | null | undefined): string | null {
 type LogoRead = { svgMarkup: string | null; isPolychrome: boolean };
 const LOGO_READ_NONE: LogoRead = { svgMarkup: null, isPolychrome: false };
 
-// Max sanitised markup size (chars) a logo may have and still be INLINED into
-// the brief. The brief rides the deck.generate.requested Inngest event, which
-// hard-caps the WHOLE event at 256KB (a 15MB traced-photo "SVG" killed a real
-// create, Sentry 77f4c998 2026-08-02), and deck-generate inlines the markup
+// Max size a logo's sanitised markup may add to the SERIALIZED event and
+// still be INLINED into the brief — measured as UTF-8 bytes of the
+// JSON-escaped string, i.e. exactly what the markup contributes to the
+// deck.generate.requested Inngest event, which hard-caps the WHOLE event at
+// 256KB (a 15MB traced-photo "SVG" killed a real create, Sentry 77f4c998
+// 2026-08-02). 100K leaves >150KB for the rest of the payload (the only other
+// unbounded field, content.text, is a tracked follow-up) and is far beyond
+// any legitimate vector wordmark — and deck-generate inlines the markup
 // verbatim into the Claude prompt, so an oversized logo is a token bomb even
-// under the event cap. 100K leaves headroom for the rest of the brief and is
-// far beyond any legitimate vector wordmark; an over-cap logo falls back to
-// the existing URL-only <img> path (same delivery as polychrome logos), so
-// the deck still generates with the logo intact.
-const MAX_INLINE_LOGO_SVG_CHARS = 100_000;
+// under the event cap. An over-cap logo falls back to the existing URL-only
+// <img> path (same delivery as polychrome logos), so the deck still
+// generates with the logo intact.
+const MAX_INLINE_LOGO_SVG_BYTES = 100_000;
 
 async function readLogo(path: string): Promise<LogoRead> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -163,8 +166,13 @@ async function readLogo(path: string): Promise<LogoRead> {
     );
     // Over the inline cap (traced-photo / embedded-raster "SVG") → route to
     // the URL-only <img> fallback instead of blowing the Inngest event cap
-    // and the prompt. isPolychrome is kept: it still picks the right block.
-    if (svgMarkup.length > MAX_INLINE_LOGO_SVG_CHARS) {
+    // and the prompt. Measured on the JSON-escaped UTF-8 form (CR #180) so
+    // escaping/multi-byte inflation can't sneak past the byte budget.
+    // isPolychrome is kept: it still picks the right block.
+    if (
+      Buffer.byteLength(JSON.stringify(svgMarkup), "utf8") >
+      MAX_INLINE_LOGO_SVG_BYTES
+    ) {
       return { svgMarkup: null, isPolychrome };
     }
     return { svgMarkup, isPolychrome };
