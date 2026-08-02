@@ -150,11 +150,15 @@ export async function POST(
 
   // Fire the existing per-box warm pipeline. idemKey dedups a double-click on
   // the same new prompt; the existence/idempotency layers keep it bill-once.
+  // versionId scopes the on-failure row mark in deck-image-warm to the SAME
+  // version row this route just flipped to "generating" (CR #179) — mid-stream
+  // warms from deck-generate omit it and never mark rows.
   await sendInngestEventWithRetry({
     name: "deck.image.warm",
     data: {
       projectId,
       slideKey,
+      versionId: latestVersionId,
       box: { genid, prompt, aspect, hash },
       idemKey: `regen:${genid}:${hash}`,
     },

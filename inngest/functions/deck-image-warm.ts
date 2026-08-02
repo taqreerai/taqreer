@@ -65,9 +65,14 @@ export const deckImageWarm = inngest.createFunction(
     triggers: [{ event: "deck.image.warm" }],
   },
   async ({ event, step, logger }) => {
-    const { projectId, slideKey, box } = event.data as {
+    const { projectId, slideKey, versionId, box } = event.data as {
       projectId: string;
       slideKey: string;
+      // The PresentationVersion whose GeneratedImage row the dispatcher
+      // pre-flipped to "generating" (the regen route). Absent on mid-stream
+      // warms from deck-generate — those never mark rows on failure (the
+      // end-of-deck reconcile owns their retry + failure signal).
+      versionId?: string;
       box: WarmBox;
       idemKey: string;
     };
@@ -113,37 +118,41 @@ export const deckImageWarm = inngest.createFunction(
           genid: box.genid,
           error: err instanceof Error ? err.message : String(err),
         });
-        // Regen path: the regen route pre-upserted this box's row to
-        // "generating" with THIS prompt — flip it to "failed" and tell open
-        // viewers, so the retry UI comes back instead of a stuck spinner.
-        // Prompt equality scopes the write to that row; a mid-stream warm
-        // (rows not seeded yet, or a since-drifted prompt) matches 0 rows
-        // and stays silent — the end-of-deck reconcile owns its retry +
-        // failure signal.
-        try {
-          const { prisma } = await import("@/lib/prisma");
-          const marked = await prisma.generatedImage.updateMany({
-            where: {
-              version: { presentation: { projectId } },
+        // Regen path (versionId present): the regen route pre-upserted this
+        // box's row to "generating" with THIS prompt on THAT version — flip
+        // it to "failed" and tell open viewers, so the retry UI comes back
+        // instead of a stuck spinner. Scoped to the dispatcher's versionId so
+        // same-genid rows on OTHER versions of the project are never touched
+        // (CR #179); prompt equality guards a since-drifted prompt. Mid-stream
+        // warms carry no versionId and never mark — the end-of-deck reconcile
+        // owns their retry + failure signal.
+        if (versionId) {
+          try {
+            const { prisma } = await import("@/lib/prisma");
+            const marked = await prisma.generatedImage.updateMany({
+              where: {
+                presentationVersionId: versionId,
+                version: { presentation: { projectId } },
+                genid: box.genid,
+                prompt: box.prompt,
+                status: { notIn: ["ready"] },
+              },
+              data: { status: "failed" },
+            });
+            if (marked.count > 0) {
+              await broadcastToProject(projectId, "slide.image.failed", {
+                slideKey,
+                genid: box.genid,
+              });
+            }
+          } catch (markErr) {
+            logger.warn("deck_image_warm_mark_failed", {
+              projectId,
               genid: box.genid,
-              prompt: box.prompt,
-              status: { notIn: ["ready"] },
-            },
-            data: { status: "failed" },
-          });
-          if (marked.count > 0) {
-            await broadcastToProject(projectId, "slide.image.failed", {
-              slideKey,
-              genid: box.genid,
+              error:
+                markErr instanceof Error ? markErr.message : String(markErr),
             });
           }
-        } catch (markErr) {
-          logger.warn("deck_image_warm_mark_failed", {
-            projectId,
-            genid: box.genid,
-            error:
-              markErr instanceof Error ? markErr.message : String(markErr),
-          });
         }
         return { filled: 0, skipped: 0, failed: 1 };
       }

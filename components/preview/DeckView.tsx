@@ -1487,7 +1487,13 @@ export function DeckView({
     const seen = new Set<string>();
     const colors: string[] = [];
     for (const c of [...theme.palette, theme.background, theme.text]) {
-      const hex = c.toUpperCase();
+      // ThemeSchema's HexColor allows shorthand #RGB — expand it, or the
+      // picker's hexToRgb (which zero-pads to 6 digits) misreads #ABC as
+      // #000ABC (CR #179).
+      const hex =
+        c.length === 4
+          ? `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}`.toUpperCase()
+          : c.toUpperCase();
       if (seen.has(hex)) continue;
       seen.add(hex);
       colors.push(hex);
