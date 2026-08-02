@@ -64,6 +64,10 @@ type Props = {
   // Bring to front / send to back — owned by the parent so it uses the SAME
   // stacking-target z scheme as the Layers reorder and reflects in the sidebar.
   onRestack?: (dir: "front" | "back") => void;
+  // Preset swatches for the colour pickers — the CURRENT DECK's own palette
+  // (DeckView derives it from the manifest theme). Undefined → the picker's
+  // generic defaults.
+  presetColors?: readonly string[];
 };
 
 // Union of a list of rects (viewport coords) → the tight bounding box, or null
@@ -293,7 +297,7 @@ function Chevron({ up = false }: { up?: boolean }) {
   );
 }
 
-export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage, onGroup, onUngroup, onToggleLock, onRestack }: Props) {
+export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage, onGroup, onUngroup, onToggleLock, onRestack, presetColors }: Props) {
   // The primary target — anchors positioning, drives single-element controls
   // (image/svg), and supplies the DISPLAYED value for every text control. A
   // multi-text selection still reads/writes through `targets`.
@@ -891,6 +895,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
                 value={color}
                 onChange={(hex) => setStyle("color", hex)}
                 onClose={() => setColorOpen(false)}
+                presets={presetColors}
                 align="center"
                 flipUp={popoverFlipUp}
                 // Close instantly (no exit fade): the picker is a child of the pill,
@@ -961,6 +966,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
               flipUp={popoverFlipUp}
               instantExit
               surfaceClassName="surface-popover"
+              presets={presetColors}
             />
           </div>
           <Divider />
@@ -1010,6 +1016,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
               flipUp={popoverFlipUp}
               instantExit
               surfaceClassName="surface-popover"
+              presets={presetColors}
             />
           </div>
         </>

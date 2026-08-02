@@ -109,6 +109,7 @@ export function LayersPanel({
   collapsed = false,
   tabsSlot,
   locked = false,
+  presetColors,
 }: {
   // The editor iframe's document (from SlideEditor.onDocReady), or null when the
   // editor isn't mounted yet.
@@ -147,6 +148,10 @@ export function LayersPanel({
   // Teaser (paywall-locked) slot is focused: the slide isn't editable, so the
   // panel keeps its header/tabs but shows a lock in place of the layer list.
   locked?: boolean;
+  // Preset swatches for the background colour picker — the CURRENT DECK's own
+  // palette (DeckView derives it from the manifest theme). Undefined → the
+  // picker's generic defaults.
+  presetColors?: readonly string[];
 }) {
   const dict = useDict();
   const { dir } = useLocale();
@@ -550,6 +555,7 @@ export function LayersPanel({
                     flipUp
                     instantExit
                     surfaceClassName="surface-popover"
+                    presets={presetColors}
                   />
                 </div>
               </div>

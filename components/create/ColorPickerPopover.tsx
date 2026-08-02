@@ -114,11 +114,16 @@ export function ColorPickerPopover({
   flipUp = false,
   instantExit = false,
   surfaceClassName = "surface-card",
+  presets = PRESETS,
 }: {
   open: boolean;
   value: string;
   onChange: (hex: string) => void;
   onClose: () => void;
+  // Preset swatches under the picker. Defaults to the curated generic set
+  // (create/brand flows); the studio passes the CURRENT DECK's own colours
+  // (theme palette + background + text) so prefills match the design.
+  presets?: readonly string[];
   // Open ABOVE the swatch instead of below (when the trigger sits low in the
   // viewport and a downward popover would clip).
   flipUp?: boolean;
@@ -393,7 +398,7 @@ export function ColorPickerPopover({
 
           {/* Presets */}
           <div className="mt-2.5 grid grid-cols-6 gap-1.5">
-            {PRESETS.map((preset) => (
+            {presets.map((preset) => (
               <button
                 key={preset}
                 type="button"
