@@ -12,6 +12,7 @@ import { useDict } from "@/components/i18n/LocaleProvider";
 import { TOPUP_PACKS } from "@/lib/credits/cost";
 import { formatCredits, useCreditBalance } from "@/lib/credits/store";
 import { normalizePlan, planLabel } from "@/lib/plan";
+import { IMAGES_GATE_TIER } from "@/lib/images/images-gating";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
 
 // The 402 body POST /api/projects returns when preflight blocks.
@@ -20,6 +21,7 @@ export type CreditGatePayload = {
     | "insufficient_credits"
     | "flow_locked"
     | "preset_locked"
+    | "images_locked"
     | "slide_cap_exceeded";
   balance: number;
   slideCap: number | null;
@@ -40,6 +42,7 @@ export function isCreditGatePayload(data: unknown): data is CreditGatePayload {
     error === "insufficient_credits" ||
     error === "flow_locked" ||
     error === "preset_locked" ||
+    error === "images_locked" ||
     error === "slide_cap_exceeded"
   );
 }
@@ -98,6 +101,14 @@ export function CreditGateDialog({
       gateContext = {
         title: t.presetLockedTitle,
         body: `${t.presetLockedBody} ${cta}`.trim(),
+      };
+    } else if (gate.error === "images_locked") {
+      gateContext = {
+        title: t.imagesLockedTitle,
+        body: `${t.imagesLockedBody.replace(
+          "{tier}",
+          planLabel(dict.components.planUsage, IMAGES_GATE_TIER),
+        )} ${cta}`.trim(),
       };
     } else {
       gateContext = {

@@ -120,9 +120,10 @@ export default function SocialPage() {
   // downgrade). Preflight rejects an over-cap run server-side regardless.
   if (slideCountValue > slideCap) setSlideCountValue(slideCap);
   const [designStyle, setDesignStyle] = useState<string | null>(null);
-  // AI images toggle — same as /create (default on). Social posts lean hard on
-  // imagery, so it stays a first-class, user-controllable switch.
-  const [imagesMode, setImagesMode] = useState<boolean>(true);
+  // AI images toggle — same as /create: OFF by default since the Plus+ gate
+  // (2026-08, lib/images/images-gating.ts). Social posts lean hard on imagery,
+  // so it stays a first-class switch — subscribers opt in per post.
+  const [imagesMode, setImagesMode] = useState<boolean>(false);
 
   // ─── Branding (identical to /datasheet + /create) ──────────────
   const [colors, setColors] = useState<string[]>([]);
@@ -406,7 +407,21 @@ export default function SocialPage() {
                 // /api/projects (brief-limits.ts).
                 maxLength={MAX_CONTENT_TEXT_CHARS}
                 disabled={submitting}
-                className="input-dark min-h-[240px] flex-1 resize-none text-sm leading-6 disabled:cursor-not-allowed disabled:opacity-50"
+                // min-h matches /create's textarea (was 240px): the taller
+                // box pushed all 3 cards past the create flow's card height
+                // (owner direction 2026-08-03). flex-1 still grows it to
+                // fill whatever the card has.
+                className="input-dark min-h-[60px] flex-1 resize-none text-sm leading-6 disabled:cursor-not-allowed disabled:opacity-50"
+              />
+            </div>
+            {/* Generate-images toggle — inside the content card, same as
+                /create (owner direction 2026-08-03). Plus+ gated inside
+                the panel itself. */}
+            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
+              <AIImagesPanel
+                value={imagesMode}
+                onChange={setImagesMode}
+                disabled={submitting}
               />
             </div>
             {/* Persistent element: the same control /create and /datasheet put
@@ -597,6 +612,8 @@ export default function SocialPage() {
               </div>
             </div>
 
+            {/* Images toggle moved to the CONTENT card 2026-08-03 (same as
+                /create) — this block keeps only the style picker. */}
             <div className="mt-auto flex flex-col gap-3 border-t border-[var(--tq-border-hairline)] pt-3">
               <div className="space-y-1.5">
                 <span className="block text-xs font-semibold text-foreground/70">
@@ -609,11 +626,6 @@ export default function SocialPage() {
                   variant="social"
                 />
               </div>
-              <AIImagesPanel
-                value={imagesMode}
-                onChange={setImagesMode}
-                disabled={submitting}
-              />
             </div>
           </div>
         </div>

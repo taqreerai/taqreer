@@ -20,7 +20,7 @@
 // Only after all four pass may the caller place the hold.
 
 import type { Quality } from "@/lib/types/quality";
-import { normalizePlan } from "@/lib/plan";
+import { normalizePlan, isPaidPlan } from "@/lib/plan";
 import {
   type Flow,
   type SlideEstimateInput,
@@ -85,6 +85,7 @@ export type PreflightBlocked = {
   reason:
     | "flow_locked"
     | "preset_locked"
+    | "images_locked"
     | "slide_cap_exceeded"
     | "insufficient_credits";
   // For flow_locked: the cheapest tier whose flows include the requested
@@ -200,6 +201,13 @@ export async function preflightGenerate(args: {
     !getActivePresetKeys().includes(args.preset)
   ) {
     return { ok: false, plan, balance, reason: "preset_locked", quotes };
+  }
+  // Generated images are Plus+ (lib/images/images-gating.ts, 2026-08:
+  // imageCredits is priced below cost, so free images decks lose money).
+  // Explicit admin check (not resolvedTier): this isn't a tier-config field.
+  // The client toggle is locked for free users; this catches direct POSTs.
+  if (imagesMode && !args.isAdmin && !isPaidPlan(plan)) {
+    return { ok: false, plan, balance, reason: "images_locked", quotes };
   }
   // An EXACT size above the cap blocks BEFORE generating (enhance is a
   // 1:1 rebuild and knows its page count up front; a stepper above the

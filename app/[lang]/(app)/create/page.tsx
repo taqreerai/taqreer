@@ -43,7 +43,8 @@ import {
   isCreditGatePayload,
   type CreditGatePayload,
 } from "@/components/credits/CreditGateDialog";
-import { useSlideCap } from "@/lib/credits/store";
+import { useSlideCap, useCreditBalance } from "@/lib/credits/store";
+import { isImagesLocked } from "@/lib/images/images-gating";
 import { displaySlideEstimate } from "@/lib/credits/cost";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { AnimatePresence, motion } from "framer-motion";
@@ -310,21 +311,38 @@ export default function CreatePage() {
   const slideCap = useSlideCap();
   if (slideCountValue > slideCap) setSlideCountValue(slideCap);
   const [pagination, setPagination] = useState<boolean>(true);
-  // context/images.md — "images deck", ON by default (opt-out). On →
-  // deck-generate uses the photography-led system prompt + reserves
-  // generated-image boxes.
-  const [imagesMode, setImagesMode] = useState<boolean>(true);
+  // context/images.md — "images deck". OFF by default (opt-in) since the
+  // Plus+ gate (2026-08, lib/images/images-gating.ts): free users can't
+  // enable it, and paying users choose it deliberately. On → deck-generate
+  // uses the photography-led system prompt + reserves generated-image boxes.
+  const [imagesMode, setImagesMode] = useState<boolean>(false);
+  // Whether generated images are unlocked for this user (Plus+/admin). Also
+  // gates the design-style auto-enable below — a locked user picking an
+  // image-leaning style keeps images OFF (owner decision 2026-08-03) instead
+  // of silently arming a 402 at generate time. The panel's own toggle gate
+  // (AIImagesPanel) covers the direct path.
+  const creditsForImages = useCreditBalance();
+  const imagesUnlocked = !isImagesLocked({
+    plan: creditsForImages?.plan ?? null,
+    isAdmin: creditsForImages?.isAdmin ?? false,
+  });
   // Design style (Part B.3) — the chosen create-flow style, or null. Drives the
   // deck-generate DESIGN_STYLE_DIRECTIVES injection (the directive leads the
   // user message). UI-only picker for now; polished modal UX lands later.
   const [designStyle, setDesignStyle] = useState<string | null>(null);
-  const onDesignStyle = useCallback((style: string | null) => {
-    setDesignStyle(style);
-    // Image-leaning styles auto-enable images mode — overridable: we only flip
-    // it ON, never force it off, so the user keeps control (Duotone/Editorial/
-    // Minimal/Playful per STYLE_REQUIRES_IMAGES).
-    if (style && STYLE_REQUIRES_IMAGES.has(style)) setImagesMode(true);
-  }, []);
+  const onDesignStyle = useCallback(
+    (style: string | null) => {
+      setDesignStyle(style);
+      // Image-leaning styles auto-enable images mode — overridable: we only
+      // flip it ON, never force it off, so the user keeps control (Duotone/
+      // Editorial/Minimal/Playful per STYLE_REQUIRES_IMAGES). Unlocked users
+      // only — see imagesUnlocked above.
+      if (style && STYLE_REQUIRES_IMAGES.has(style) && imagesUnlocked) {
+        setImagesMode(true);
+      }
+    },
+    [imagesUnlocked],
+  );
   const [persistentText, setPersistentText] = useState<string>("");
 
   // ─── Submit-level state ────────────────────────────────────────
@@ -799,6 +817,18 @@ export default function CreatePage() {
               />
             </div>
 
+            {/* Generate-images toggle — moved INTO the content card
+                (owner direction 2026-08-03: next to where the content is
+                typed, so it can't be missed). Plus+ gated inside the
+                panel itself; free users get the crown + UpgradeModal. */}
+            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
+              <AIImagesPanel
+                value={imagesMode}
+                onChange={setImagesMode}
+                disabled={submitting}
+              />
+            </div>
+
             {/* Persistent footer element — text input only (position
                 picker removed 2026-06-02; Claude places it). No cover/
                 closing exclude — it's on every slide by definition. */}
@@ -972,10 +1002,14 @@ export default function CreatePage() {
                 gap consistent with the branding card). Sections
                 separated by `border-t pt-3` for visible breathing
                 room between distinct knob groups. */}
+            {/* stacked (3 full-width rows, not 3 columns): refills the
+                vertical space the AI-images panel freed when it moved to
+                the content card (2026-08-03). */}
             <SlideSizeFields
               slideSize={slideSize}
               onSlideSize={setSlideSize}
               withPost
+              stacked
             />
 
             <div className="border-t border-[var(--tq-border-hairline)] pt-3">
@@ -1058,14 +1092,11 @@ export default function CreatePage() {
               />
             </div>
 
-            {/* AI images panel — tinted feature panel at the card bottom.
-                context/images.md. The visual-direction (mimic) panel that
-                sat above it was removed 2026-06-03; this slot will host the
-                design-style picker. */}
+            {/* Design-style picker (Part B.3) — inline pills for now;
+                picking an image-leaning style auto-enables the images
+                toggle (now in the CONTENT card — moved 2026-08-03) for
+                unlocked users. Polished modal UX comes later. */}
             <div className="mt-auto flex flex-col gap-3 border-t border-[var(--tq-border-hairline)] pt-3">
-              {/* Design-style picker (Part B.3) — inline pills for now;
-                  picking an image-leaning style auto-enables the panel below.
-                  Polished modal UX comes later. */}
               <div>
                 <SectionLabel>{t.designStyle}</SectionLabel>
                 <div className="pt-2">
@@ -1076,11 +1107,6 @@ export default function CreatePage() {
                   />
                 </div>
               </div>
-              <AIImagesPanel
-                value={imagesMode}
-                onChange={setImagesMode}
-                disabled={submitting}
-              />
             </div>
           </div>
         </div>

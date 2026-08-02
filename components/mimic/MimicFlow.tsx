@@ -264,10 +264,11 @@ export default function MimicFlow({
   const [kitOptions, setKitOptions] = useState<BrandKitOption[]>([]);
   const kitRawRef = useRef<Map<string, unknown>>(new Map());
   const [saveBrandKit, setSaveBrandKit] = useState<boolean>(false);
-  // GPT images (ON by default, opt-out): when ON, Claude recreates the
-  // reference deck's imagery and fills empty placeholders with slide-relevant
-  // images (deck-generate MIMIC_IMG_ADDENDUM).
-  const [imagesMode, setImagesMode] = useState<boolean>(true);
+  // GPT images — OFF by default since the Plus+ gate (2026-08,
+  // lib/images/images-gating.ts). When ON, Claude recreates the reference
+  // deck's imagery and fills empty placeholders with slide-relevant images
+  // (deck-generate MIMIC_IMG_ADDENDUM).
+  const [imagesMode, setImagesMode] = useState<boolean>(false);
 
   // ─── Logo (always available — own logo can ride on mimicked brand)
   const [logoFile, setLogoFile] = useState<File | null>(null);
@@ -959,6 +960,17 @@ export default function MimicFlow({
                 onSlideSize={setSlideSize}
               />
             </div>
+
+            {/* Generate-images toggle — inside the content card, same as
+                /create and /social (owner direction 2026-08-03). Plus+
+                gated inside the panel itself. */}
+            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
+              <AIImagesPanel
+                value={imagesMode}
+                onChange={setImagesMode}
+                disabled={submitting}
+              />
+            </div>
           </motion.div>
 
           {/* ═══════════════════════════════════════════════════════
@@ -1219,15 +1231,6 @@ export default function MimicFlow({
                     compact
                   />
                 )}
-              </div>
-              {/* AI images (opt-in): recreate the reference's imagery. The
-                  flex-1 dropzone above shrinks so the card height stays the same. */}
-              <div className="border-t border-[var(--tq-border-hairline)] pt-3">
-                <AIImagesPanel
-                  value={imagesMode}
-                  onChange={setImagesMode}
-                  disabled={submitting}
-                />
               </div>
             </div>
           </motion.div>
