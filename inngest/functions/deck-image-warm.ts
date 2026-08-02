@@ -135,6 +135,9 @@ export const deckImageWarm = inngest.createFunction(
                 version: { presentation: { projectId } },
                 genid: box.genid,
                 prompt: box.prompt,
+                // Aspect too (CR #179): a same-prompt regen with a NEW aspect
+                // rewrites the row; this event's late failure must not mark it.
+                aspect: box.aspect,
                 status: { notIn: ["ready"] },
               },
               data: { status: "failed" },
