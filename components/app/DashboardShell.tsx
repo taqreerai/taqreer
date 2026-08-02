@@ -41,6 +41,10 @@ export function DashboardShell({
     pathname.startsWith("/enhance") ||
     pathname.startsWith("/mimic") ||
     pathname.startsWith("/datasheet") ||
+    // /social was missing since the flow shipped (2026-07-20): it fell into
+    // the list-page bucket, whose taller top padding pushed its headline
+    // ~40px below the other flows (and skipped the flow dot-field panel).
+    pathname.startsWith("/social") ||
     pathname.startsWith("/use-template");
 
   // §22: home + the 4 flows get the dot field; every other page is flat gray.
