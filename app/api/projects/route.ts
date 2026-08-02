@@ -125,6 +125,17 @@ function safeFontUrl(raw: string | null | undefined): string | null {
 type LogoRead = { svgMarkup: string | null; isPolychrome: boolean };
 const LOGO_READ_NONE: LogoRead = { svgMarkup: null, isPolychrome: false };
 
+// Max sanitised markup size (chars) a logo may have and still be INLINED into
+// the brief. The brief rides the deck.generate.requested Inngest event, which
+// hard-caps the WHOLE event at 256KB (a 15MB traced-photo "SVG" killed a real
+// create, Sentry 77f4c998 2026-08-02), and deck-generate inlines the markup
+// verbatim into the Claude prompt, so an oversized logo is a token bomb even
+// under the event cap. 100K leaves headroom for the rest of the brief and is
+// far beyond any legitimate vector wordmark; an over-cap logo falls back to
+// the existing URL-only <img> path (same delivery as polychrome logos), so
+// the deck still generates with the logo intact.
+const MAX_INLINE_LOGO_SVG_CHARS = 100_000;
+
 async function readLogo(path: string): Promise<LogoRead> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -150,6 +161,12 @@ async function readLogo(path: string): Promise<LogoRead> {
       (acc, re) => acc.replace(re, ""),
       text,
     );
+    // Over the inline cap (traced-photo / embedded-raster "SVG") → route to
+    // the URL-only <img> fallback instead of blowing the Inngest event cap
+    // and the prompt. isPolychrome is kept: it still picks the right block.
+    if (svgMarkup.length > MAX_INLINE_LOGO_SVG_CHARS) {
+      return { svgMarkup: null, isPolychrome };
+    }
     return { svgMarkup, isPolychrome };
   } catch {
     return LOGO_READ_NONE;
