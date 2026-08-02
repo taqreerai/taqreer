@@ -5,6 +5,7 @@ import { inngest } from "@/inngest/client";
 import { holdCredits, settleHold } from "@/lib/credits/server";
 import { generationCost } from "@/lib/credits/cost";
 import { type Quality } from "@/lib/types/quality";
+import { clampChars, MAX_SLIDE_TEXT_CHARS } from "@/lib/types/brief-limits";
 import { prisma } from "@/lib/prisma";
 import { deckFlowFor } from "@/lib/project/flow";
 import {
@@ -712,10 +713,26 @@ function sanitizeBriefFonts(brief: unknown): unknown {
 // that must NOT leak into the Brief JSON the model reads - the teaser plan
 // is delivered as an explicit natural-language directive instead. Returns a
 // shallow copy so the persisted brief is never mutated.
+//
+// source.textPerSlide is also dropped: the verbatim per-slide text reaches
+// the model exclusively through the labeled image+text block pairs
+// (buildSourceContentBlocks) - the authoritative delivery - so a copy inside
+// the Brief JSON was pure token duplication. New events arrive without the
+// field anyway (stripSlideTextForWire); removing it here too keeps the
+// prompt IDENTICAL for legacy in-flight events that still carry the array.
 function stripInternalBriefFields(brief: unknown): unknown {
   if (!brief || typeof brief !== "object") return brief;
   const { teaser: _teaser, ...rest } = brief as Record<string, unknown>;
   void _teaser;
+  const source = rest.source;
+  if (source && typeof source === "object" && "textPerSlide" in source) {
+    const { textPerSlide: _text, ...restSource } = source as Record<
+      string,
+      unknown
+    >;
+    void _text;
+    rest.source = restSource;
+  }
   return rest;
 }
 
@@ -1808,7 +1825,39 @@ export const deckGenerate = inngest.createFunction(
     const enhanceSource = sourceKind === "enhance" ? readSource(data) : null;
     if (enhanceSource && enhanceSource.kind === "enhance") {
       const { sourcePath, sourceMime } = enhanceSource;
-      const textPerSlide = enhanceSource.textPerSlide ?? [];
+      // textPerSlide no longer rides the wire event (stripSlideTextForWire -
+      // a dense deck's verbatim text could push the event over Inngest's
+      // 256KB cap). Key ABSENT = non-empty text exists in Job.inputJson, the
+      // durable brief home every emitter writes in full; fetch it by jobId.
+      // Key PRESENT = use as-is: a legacy in-flight event (full array) or the
+      // legitimately-empty [] of an image-only enhance, neither needs the
+      // fetch. Legacy jobs whose stored brief also lacks the field fall back
+      // to [] - identical to the pre-strip behavior.
+      const textPerSlide =
+        enhanceSource.textPerSlide ??
+        (jobId
+          ? await step.run("load-slide-text", async () => {
+              const job = await prisma.job.findUnique({
+                where: { id: jobId },
+                select: { inputJson: true },
+              });
+              const stored = (
+                job?.inputJson as {
+                  brief?: { source?: { textPerSlide?: unknown } };
+                } | null
+              )?.brief?.source?.textPerSlide;
+              // Re-apply the ingress normalization (string + per-slide clamp)
+              // rather than trusting the row shape: the wire path got it via
+              // the route's Zod parse, but this path reads the DB directly
+              // and manual repairs / legacy rows shouldn't be able to smuggle
+              // an unclamped or non-string entry into the prompt.
+              return Array.isArray(stored)
+                ? stored.map((t) =>
+                    clampChars(typeof t === "string" ? t : "", MAX_SLIDE_TEXT_CHARS),
+                  )
+                : [];
+            })
+          : []);
       if (!sourcePath || !sourceMime) {
         throw new Error(
           "enhance source is missing sourcePath/sourceMime — cannot rasterize",

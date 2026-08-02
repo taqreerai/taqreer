@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { sendInngestEventWithRetry, tierForUser } from "@/lib/inngest-helpers";
+import {
+  sendInngestEventWithRetry,
+  stripSlideTextForWire,
+  tierForUser,
+} from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
 import type { Prisma } from "@prisma/client";
@@ -112,7 +116,11 @@ export async function POST(
         // win the merge. The old order let a stale / tampered
         // `inputJson.projectId` (etc.) shadow the canonical project
         // ID we just resolved, sending the regen to the wrong place.
-        ...inputJson,
+        // Wire-stripped: enhance textPerSlide stays in the retry Job's
+        // inputJson (copied verbatim from the prior job above); deck-generate
+        // re-hydrates it by jobId. Keeps the retry event under Inngest's
+        // 256KB cap for dense decks.
+        ...stripSlideTextForWire(inputJson),
         projectId: project.id,
         presentationId: project.presentation.id,
         versionId: latestVersion?.id,

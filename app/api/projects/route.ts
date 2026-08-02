@@ -2,7 +2,10 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import type { Prisma } from "@prisma/client";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
-import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
+import {
+  sendInngestEventWithRetry,
+  stripSlideTextForWire,
+} from "@/lib/inngest-helpers";
 import { captureServerEvent } from "@/lib/analytics/posthog-server";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
@@ -913,14 +916,21 @@ export async function POST(request: Request) {
     },
   };
 
+  // What actually goes on the WIRE: enhance textPerSlide is stripped (it
+  // stays in Job.inputJson below - the durable brief home - and deck-generate
+  // re-hydrates it by jobId), so a dense multi-slide deck's verbatim text can
+  // no longer push the event over Inngest's cap. See stripSlideTextForWire.
+  const wireEventPayload = stripSlideTextForWire(eventPayload);
+
   // Backstop for the WHOLE event: Inngest hard-rejects deck.generate.requested
   // over 256KB (the PR #180 failure class, Sentry 77f4c998), and the per-field
   // caps above can't name every free-text rider (mimic userContent from a PDF
   // text layer, datasheet userContext, enhance instructions, a maxed-out
-  // combination). Measured on the serialized form, the same unit Inngest
-  // enforces, BEFORE the tx so no rows exist for a job that could never
-  // enqueue. 413 so the client can tell "too big" apart from a shape error.
-  if (Buffer.byteLength(JSON.stringify(eventPayload), "utf8") > MAX_EVENT_DATA_BYTES) {
+  // combination). Measured on the serialized WIRE form - the same unit Inngest
+  // enforces, textPerSlide already stripped - BEFORE the tx so no rows exist
+  // for a job that could never enqueue. 413 so the client can tell "too big"
+  // apart from a shape error.
+  if (Buffer.byteLength(JSON.stringify(wireEventPayload), "utf8") > MAX_EVENT_DATA_BYTES) {
     return NextResponse.json(
       { error: dict.flows.briefTooLarge },
       { status: 413 },
@@ -999,11 +1009,13 @@ export async function POST(request: Request) {
           // generating-state status copy in DeckView ("جار تحليل
           // البيانات..." for datasheet, etc.). Storing the full
           // SourceMeta here would bloat aiPrompt with the entire
-          // parsed-markdown / file_id payload — that data already
-          // lives in PresentationVersion.slideJson.brief.source,
-          // which is the canonical place deck-generate reads it
-          // from on retry. aiPrompt is the lightweight client-side
-          // hint surface, not the source of truth for the brief.
+          // parsed-markdown / file_id payload — that data lives in
+          // Job.inputJson, the durable brief home the retry/regen
+          // routes replay and deck-generate re-hydrates enhance
+          // slide text from (slideJson.brief is transient: the
+          // first progress write overwrites it). aiPrompt is the
+          // lightweight client-side hint surface, not the source
+          // of truth for the brief.
           ...(validatedSource
             ? { source: { kind: validatedSource.kind } }
             : {}),
@@ -1072,7 +1084,7 @@ export async function POST(request: Request) {
         actorPrismaUserId: result.dbUser.id,
         // Max-tier processing priority (see deck-generate `priority.run`).
         tier: result.dbUser.plan,
-        ...eventPayload,
+        ...wireEventPayload,
       },
     });
 

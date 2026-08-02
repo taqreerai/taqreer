@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
-import { sendInngestEventWithRetry, tierForUser } from "@/lib/inngest-helpers";
+import {
+  sendInngestEventWithRetry,
+  stripSlideTextForWire,
+  tierForUser,
+} from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
 import { regenCreditGate } from "@/lib/api/regen-helpers";
@@ -146,7 +150,10 @@ export async function POST(
     await sendInngestEventWithRetry({
       name: "deck.generate.requested",
       data: {
-        ...eventPayload,
+        // Wire-stripped: enhance textPerSlide stays in the new Job's
+        // inputJson (written full in the tx above); deck-generate re-hydrates
+        // it by jobId. Keeps the regen event under Inngest's 256KB cap.
+        ...stripSlideTextForWire(eventPayload),
         projectId: project.id,
         presentationId: project.presentation.id,
         versionId: result.newVersion.id,
