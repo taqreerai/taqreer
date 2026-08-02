@@ -9,28 +9,15 @@
 // button downloads it via the same-origin attachment proxy.
 //
 // Native <img> (Supabase storage host isn't in next remotePatterns, same
-// call as LibraryImageCard / TemplateTile), with the same resized-
-// thumbnail transform + onError escalation so tiles load fast and a
-// transient drop self-heals instead of leaving a blank cell.
+// call as LibraryImageCard / TemplateTile), with the STATIC pre-generated
+// thumbnail (gen-thumb.tsx — replaced the billed render/image transforms)
+// + onError escalation so tiles load fast and a missing thumb or transient
+// drop self-heals instead of leaving a blank cell.
 
-import { useState } from "react";
 import { useDict } from "@/components/i18n/LocaleProvider";
+import { useThumbSrc } from "@/components/app/gen-thumb";
 import { prefetchRelated } from "@/components/marketing/stockImagesCache";
 import type { StockImage } from "@/lib/stock-images/query";
-
-// Resized-thumbnail URL via Supabase's image-transform endpoint. A
-// generated image is a full-resolution JPEG (~0.5-2 MB); a masonry tile
-// renders it small. Rewriting the public-object URL to the render/image
-// path serves a ~30 KB webp instead. CRITICAL: pass a width+height
-// BOUNDING BOX with resize=contain (width-only squishes the image — see
-// LibraryImageCard for the full note). Non-storage URLs pass through.
-const OBJECT_MARKER = "/storage/v1/object/public/";
-export function thumbUrl(url: string): string {
-  if (!url.includes(OBJECT_MARKER)) return url;
-  const rendered = url.replace(OBJECT_MARKER, "/storage/v1/render/image/public/");
-  const sep = rendered.includes("?") ? "&" : "?";
-  return `${rendered}${sep}width=700&height=700&resize=contain&quality=60`;
-}
 
 // Natural-aspect box per orientation (matches the gpt-image output sizes:
 // landscape 3:2, portrait 2:3, square 1:1) so object-cover barely crops.
@@ -49,17 +36,8 @@ export function StockImageCard({
 }) {
   const dict = useDict();
   const t = dict.stockImages;
-  const [attempt, setAttempt] = useState(0);
-  const [broken, setBroken] = useState(false);
-
-  const thumb = thumbUrl(image.url);
-  // Attempt 0: resized thumbnail. 1: cache-busted retry. 2: full original.
-  const src =
-    attempt === 0
-      ? thumb
-      : attempt === 1
-        ? `${thumb}${thumb.includes("?") ? "&" : "?"}retry=1`
-        : image.url;
+  // Static thumb + escalation ladder (thumb → cache-bust → full original).
+  const { src, key, broken, onError } = useThumbSrc(image.url);
 
   // The whole tile is the open-button — no hover overlay (prompt + download
   // live in the lightbox now). A subtle zoom on hover is the only affordance.
@@ -89,16 +67,14 @@ export function StockImageCard({
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          key={attempt}
+          key={key}
           src={src}
           alt={image.prompt}
           loading="lazy"
           decoding="async"
           draggable={false}
           className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-          onError={() =>
-            attempt < 2 ? setAttempt((a) => a + 1) : setBroken(true)
-          }
+          onError={onError}
         />
       )}
     </button>

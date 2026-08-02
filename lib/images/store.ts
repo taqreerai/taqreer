@@ -53,6 +53,42 @@ function genImagePath(projectId: string, genid: string, hash: string): string {
   return `${projectId}/gen/${genImageFileName(genid, hash)}`;
 }
 
+// Static thumbnail sibling — `${projectId}/gen/thumb/${genid}-${hash}.webp`.
+// Written by storeGeneratedImage (+ the one-off backfill script) and consumed
+// by the gallery/library tiles via a pure client-side URL rewrite (ThumbImg),
+// replacing Supabase's render/image transformations (billed per distinct
+// origin image per month — 510 last period and climbing with SEO traffic).
+// `.webp` in exactly ONE place, same rationale as genImageFileName above.
+// The nested `thumb/` folder is invisible to listWarmedImageFiles /
+// generatedImageExists: its folder entry fails SAFE_GEN_FILENAME's `.jpg$`.
+export function genThumbFileName(genid: string, hash: string): string {
+  return `${genid}-${hash}.webp`;
+}
+export function genThumbPath(
+  projectId: string,
+  genid: string,
+  hash: string,
+): string {
+  return `${projectId}/gen/thumb/${genThumbFileName(genid, hash)}`;
+}
+
+// Shared by the live write below and scripts/backfill-image-thumbs.ts so the
+// two can never drift. 700px bounding box: tiles render ≤ ~350px (x2 retina);
+// `fit: "inside"` preserves aspect (the gpt-image outputs are 3:2 / 2:3 / 1:1).
+export const THUMB_MAX_EDGE_PX = 700;
+export const THUMB_WEBP_QUALITY = 65;
+export async function makeThumbBytes(source: Buffer): Promise<Buffer> {
+  return sharp(source)
+    .resize({
+      width: THUMB_MAX_EDGE_PX,
+      height: THUMB_MAX_EDGE_PX,
+      fit: "inside",
+      withoutEnlargement: true,
+    })
+    .webp({ quality: THUMB_WEBP_QUALITY })
+    .toBuffer();
+}
+
 // Memoised module singleton — the admin client is stateless (no session
 // persistence), and `publicGeneratedImageUrl` / `listWarmedGenids` are called
 // in a loop on the every-6s image-fills poll; constructing a fresh client each
@@ -109,6 +145,29 @@ export async function storeGeneratedImage(opts: {
   });
   if (error) {
     throw new Error(`generated-images upload failed: ${error.message}`);
+  }
+
+  // Static thumbnail for the gallery/library tiles — replaces Supabase
+  // render/image transformations (billed per origin image). Generated from
+  // the RAW PNG (not the JPEG re-encode: avoids double-lossy output and still
+  // works when the re-encode above fell back). Independent try/catch: a thumb
+  // failure must never fail the image store — the tiles' retry ladder falls
+  // back to the full original, and the backfill script sweeps up gaps.
+  try {
+    const thumb = await makeThumbBytes(pngBytes);
+    const { error: thumbError } = await admin.storage
+      .from(BUCKET)
+      .upload(genThumbPath(opts.projectId, opts.genid, opts.hash), thumb, {
+        contentType: "image/webp",
+        upsert: true,
+        cacheControl: "31536000",
+      });
+    if (thumbError) throw new Error(thumbError.message);
+  } catch (err) {
+    console.warn(
+      `[gen-thumb] thumb store failed for ${opts.projectId}/${opts.genid}:`,
+      err instanceof Error ? err.message : String(err),
+    );
   }
 
   return admin.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;

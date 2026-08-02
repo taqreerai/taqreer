@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { useThumbSrc } from "@/components/app/gen-thumb";
 
 // One image tile in the /library grid.
 //
@@ -29,30 +29,12 @@ export type LibraryImage = {
   createdAt: string; // ISO
 };
 
-// Resized-thumbnail URL via Supabase's image-transform endpoint. A generated
-// image is a full-resolution PNG (~2.5 MB); a library tile renders it at
-// ~280px (×2 retina). Loading 15 originals at once is ~37 MB capped at the
-// browser's ~6-connection-per-host limit — tiles sit blank for seconds, which
-// reads as "thumbnails fail to load". Rewriting the public-object URL to the
-// `render/image` path serves a ~30 KB webp instead (~80× smaller, browser-
-// negotiated format) so the grid loads near-instantly.
-//
-// CRITICAL: pass a width+height BOUNDING BOX with resize=contain. Supabase's
-// width-only mode does NOT scale proportionally — it forces width=N but keeps
-// the original height, squishing the image horizontally (e.g. 1024×1536 →
-// 480×1536) so it renders stretched/"zoomed in". A square box + contain scales
-// the image down INSIDE the box preserving aspect (1024×1536 → 400×600), so
-// the thumbnail crops identically to the full original under object-cover.
-// 600px long-edge is crisp for a ~280px (×2) tile. Any non-Supabase-storage
-// URL passes through untouched. Download + expand keep the full original
-// (image.url) — they show ONE image where size is fine.
-const OBJECT_MARKER = "/storage/v1/object/public/";
-function thumbUrl(url: string): string {
-  if (!url.includes(OBJECT_MARKER)) return url;
-  const rendered = url.replace(OBJECT_MARKER, "/storage/v1/render/image/public/");
-  const sep = rendered.includes("?") ? "&" : "?";
-  return `${rendered}${sep}width=600&height=600&resize=contain&quality=60`;
-}
+// Thumbnails: the STATIC pre-generated `gen/thumb/*.webp` sibling (~30 KB,
+// 700px long edge — see components/app/gen-thumb.tsx). Loading 15 full
+// originals at once was ~37 MB against the browser's ~6-connection-per-host
+// cap (tiles sat blank for seconds); the old fix was Supabase render/image
+// transforms, replaced 2026-08 because they bill per distinct origin image
+// per month. Download + expand keep the full original (image.url).
 
 export function LibraryImageCard({
   image,
@@ -69,22 +51,9 @@ export function LibraryImageCard({
     accent: dict.dialogs.libraryImage.accent,
   };
   const roleLabel = roleLabels[image.role] ?? image.role;
-  // Load escalation for a transient drop. Attempt 0: resized thumbnail.
-  // Attempt 1: same thumbnail with a cache-busting param (the transform
-  // endpoint ignores unknown params and re-serves). Attempt 2: the full
-  // original — covers the rare case the transform endpoint itself hiccups.
-  // After that, a calm placeholder so a cell is never an empty void. This,
-  // together with the resized thumbnail above, is the "some thumbnails fail
-  // on refresh" fix.
-  const [attempt, setAttempt] = useState(0);
-  const [broken, setBroken] = useState(false);
-  const thumb = thumbUrl(image.url);
-  const src =
-    attempt === 0
-      ? thumb
-      : attempt === 1
-        ? `${thumb}${thumb.includes("?") ? "&" : "?"}retry=1`
-        : image.url;
+  // Static thumb + escalation ladder (thumb → cache-bust → full original →
+  // calm placeholder) — shared with the stock gallery, see gen-thumb.tsx.
+  const { src, key, broken, onError } = useThumbSrc(image.url);
   return (
     <div className="group tq-thumbnail relative aspect-video w-full overflow-hidden rounded-[14px]">
       {/* Image surface — a button that opens the expand modal. */}
@@ -111,7 +80,7 @@ export function LibraryImageCard({
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            key={attempt}
+            key={key}
             src={src}
             alt={`${roleLabel} — ${image.projectTitle}`}
             // EAGER, not lazy. The grid is paginated to 15 tiles, so they're
@@ -129,9 +98,7 @@ export function LibraryImageCard({
             // them to the tile — the deliberate choice (over contain's side-
             // bars) so the grid reads as a clean, fully-filled set.
             className="h-full w-full object-cover"
-            onError={() =>
-              attempt < 2 ? setAttempt((a) => a + 1) : setBroken(true)
-            }
+            onError={onError}
           />
         )}
       </button>

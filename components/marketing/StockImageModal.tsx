@@ -24,12 +24,54 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
-import { thumbUrl } from "@/components/marketing/StockImageCard";
+import { useThumbSrc } from "@/components/app/gen-thumb";
 import {
   getCachedRelated,
   prefetchRelated,
 } from "@/components/marketing/stockImagesCache";
 import type { StockImage } from "@/lib/stock-images/query";
+
+// Modal image on the static-thumb ladder (gen-thumb.tsx). The transform-era
+// markup had NO onError here — safe then because the render endpoint always
+// resolved; with static thumbs a missing thumb (mid-backfill) must escalate
+// to the full original instead of rendering broken. One component serves the
+// lightbox main image and the suggestion tiles (their markup only differs by
+// className/loading).
+function ModalThumbImg({
+  url,
+  alt,
+  className,
+  lazy = false,
+}: {
+  url: string;
+  alt: string;
+  className: string;
+  lazy?: boolean;
+}) {
+  const { src, key, broken, onError } = useThumbSrc(url);
+  if (broken) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-[var(--tq-bg-dim)]">
+        <span className="material-symbols-outlined text-[26px] text-muted/50">
+          image
+        </span>
+      </div>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      key={key}
+      src={src}
+      alt={alt}
+      loading={lazy ? "lazy" : undefined}
+      decoding="async"
+      draggable={false}
+      className={className}
+      onError={onError}
+    />
+  );
+}
 
 export function StockImageModal({
   image,
@@ -166,11 +208,9 @@ export function StockImageModal({
                   the previous frame until the new (cached) thumbnail decodes:
                   no flash, no collapse. Sits on the panel surface (no dark fill). */}
               <div className="relative flex h-[45vh] shrink-0 items-center justify-center p-4 md:h-full md:min-h-0 md:flex-1">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={thumbUrl(shown.url)}
+                <ModalThumbImg
+                  url={shown.url}
                   alt={shown.prompt}
-                  draggable={false}
                   className="max-h-full max-w-full rounded-lg object-contain"
                 />
               </div>
@@ -233,13 +273,10 @@ export function StockImageModal({
                           aria-label={`${t.viewFull}: ${s.prompt}`}
                           className="tq-thumbnail group relative aspect-square overflow-hidden rounded-[8px]"
                         >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={thumbUrl(s.url)}
+                          <ModalThumbImg
+                            url={s.url}
                             alt={s.prompt}
-                            loading="lazy"
-                            decoding="async"
-                            draggable={false}
+                            lazy
                             className="h-full w-full object-cover transition-transform group-hover:scale-105"
                           />
                         </button>
