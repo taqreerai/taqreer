@@ -1002,13 +1002,13 @@ export default function CreatePage() {
                 gap consistent with the branding card). Sections
                 separated by `border-t pt-3` for visible breathing
                 room between distinct knob groups. */}
-            {/* stacked (3 full-width rows, not 3 columns): refills the
-                vertical space the AI-images panel freed when it moved to
-                the content card (2026-08-03). */}
+            {/* stacked (full-width rows, not columns): refills the vertical
+                space the AI-images panel freed when it moved to the content
+                card (2026-08-03). 3:4 منشور removed 2026-08-03: the /social
+                flow owns post formats now. */}
             <SlideSizeFields
               slideSize={slideSize}
               onSlideSize={setSlideSize}
-              withPost
               stacked
             />
 

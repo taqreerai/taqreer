@@ -459,24 +459,15 @@ export function SlideSizeFields({
   // vertical band the card can't afford. /create keeps its label
   // since the field shares space with other section headers.
   hideLabel = false,
-  // Third 3:4 "Post" tile (1080×1440 social carousel). /create only —
-  // /mimic and /datasheet omit the prop and stay at the 2-tile grid,
-  // and /enhance derives its format from the uploaded deck.
-  withPost = false,
 }: {
   slideSize: SlideSize;
   onSlideSize: (v: SlideSize) => void;
   stacked?: boolean;
   label?: string;
   hideLabel?: boolean;
-  withPost?: boolean;
 }) {
   const dict = useDict();
-  const cols = stacked
-    ? "grid grid-cols-1 gap-2"
-    : withPost
-      ? "grid grid-cols-3 gap-2"
-      : "grid grid-cols-2 gap-2";
+  const cols = stacked ? "grid grid-cols-1 gap-2" : "grid grid-cols-2 gap-2";
   return (
     <div className="space-y-2">
       {hideLabel ? null : <SectionLabel>{label ?? dict.flows.output.slideSize}</SectionLabel>}
@@ -495,15 +486,8 @@ export function SlideSizeFields({
           sub={dict.flows.output.portrait}
           ratio="9 / 16"
         />
-        {withPost ? (
-          <SizeChoice
-            active={slideSize === "3:4"}
-            onClick={() => onSlideSize("3:4")}
-            label="3:4"
-            sub={dict.flows.output.post}
-            ratio="3 / 4"
-          />
-        ) : null}
+        {/* 3:4 منشور tile removed 2026-08-03 — the /social flow owns post
+            formats (SocialFormatFields, its own labels). */}
       </div>
     </div>
   );
