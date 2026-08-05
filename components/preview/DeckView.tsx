@@ -1449,6 +1449,17 @@ export function DeckView({
   const [failedImages, setFailedImages] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  // Genids with a single-image regen in flight (PR #185 follow-up). Drives
+  // the editor boxes' `.tq-genimg-live` shimmer via the mirror effect below.
+  // React state, NOT a direct classList write: the iframe rebuilds on
+  // reloadKey / in-place undo and a DOM-only class would vanish mid-retry,
+  // freezing the box on the static placeholder while the regen still runs.
+  // Entries are cleared when the regen POST fails; a landed fill or a failed
+  // verdict neutralises the class through the mirror's src/failed checks, so
+  // stale entries (bounded by the per-deck box cap) are inert.
+  const [retryingImages, setRetryingImages] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   // Bumped on every image retry so the catch-up poll effect below restarts
   // (fresh attempts budget) — a retry fired after the poll's cap would
   // otherwise depend solely on the broadcast landing.
@@ -1533,16 +1544,15 @@ export function DeckView({
         next.delete(input.genid);
         return next;
       });
-      // Mark the editor box "live" so the srcDoc CSS shows the loading
-      // shimmer while THIS regen runs — the settled-deck default is the
-      // static placeholder glyph (PR #185 follow-up). Cleared by the fills
-      // sync when the image lands, or by the failed mirror if it fails
-      // again.
-      editorDoc
-        ?.querySelector<HTMLImageElement>(
-          `img[data-genid="${input.genid}"][data-genimage]`,
-        )
-        ?.classList.add("tq-genimg-live");
+      // Mark the box "retrying" so the mirror effect shows the editor's
+      // loading shimmer while THIS regen runs — the settled-deck default is
+      // the static placeholder glyph (PR #185 follow-up).
+      setRetryingImages((prev) => {
+        if (prev.has(input.genid)) return prev;
+        const next = new Set(prev);
+        next.add(input.genid);
+        return next;
+      });
       try {
         const res = await fetch(
           `/api/projects/${projectId}/slides/${encodeURIComponent(
@@ -1562,6 +1572,14 @@ export function DeckView({
         }
       } catch (err) {
         console.error("[image-regen] failed", err);
+        // The regen never started server-side — end the retry shimmer so the
+        // box falls back to the honest static placeholder / failed state.
+        setRetryingImages((prev) => {
+          if (!prev.has(input.genid)) return prev;
+          const next = new Set(prev);
+          next.delete(input.genid);
+          return next;
+        });
       } finally {
         // Restart the catch-up poll AFTER the regen route committed its
         // "generating" upsert — bumping before the POST landed made the
@@ -1570,7 +1588,7 @@ export function DeckView({
         setImagePollNonce((n) => n + 1);
       }
     },
-    [projectId, editorDoc],
+    [projectId],
   );
 
   // Keep the editor iframe's gen-image <img>s in sync with `filledImages`
@@ -1603,22 +1621,29 @@ export function DeckView({
     // this parent effect re-patches the fresh <img>.
   }, [filledImages, editorDoc, inPlaceApply?.token]);
 
-  // Mirror `failedImages` onto the editor iframe's boxes as `.tq-genimg-failed`
-  // (the iframe is a separate document — SlideRenderer's context path doesn't
-  // reach it). Toggle, not add: a retry clears the set → the class drops → the
-  // shimmer honestly resumes. Same undo/redo re-apply reason as the fills sync.
+  // Mirror `failedImages` / `retryingImages` onto the editor iframe's boxes
+  // as `.tq-genimg-failed` / `.tq-genimg-live` (the iframe is a separate
+  // document — SlideRenderer's context path doesn't reach it). Toggle, not
+  // add: a retry clears the failed set → the failed class drops → the live
+  // shimmer takes over; a failed verdict wins over a stale retry entry.
+  // Re-runs on iframe rebuilds (editorDoc / in-place undo), so the classes
+  // survive a reloadKey swap mid-retry — the reason retry state lives in
+  // React state instead of a one-shot DOM write (CR PR #185).
   useEffect(() => {
     if (!editorDoc) return;
     for (const img of editorDoc.querySelectorAll<HTMLImageElement>(
       "img[data-genimage][data-genid]",
     )) {
       const genid = img.getAttribute("data-genid") ?? "";
-      const isFailed = failedImages.has(genid) && !img.getAttribute("src");
+      const srcless = !img.getAttribute("src");
+      const isFailed = failedImages.has(genid) && srcless;
       img.classList.toggle("tq-genimg-failed", isFailed);
-      // A failed verdict ends the retry's "live" shimmer state.
-      if (isFailed) img.classList.remove("tq-genimg-live");
+      img.classList.toggle(
+        "tq-genimg-live",
+        retryingImages.has(genid) && srcless && !isFailed,
+      );
     }
-  }, [failedImages, editorDoc, inPlaceApply?.token]);
+  }, [failedImages, retryingImages, editorDoc, inPlaceApply?.token]);
   // Catch-up poll for missed `slide.regen.finished` broadcasts. Safari
   // throttles backgrounded / out-of-focus WebSockets and occasionally
   // drops broadcast frames entirely — symptom: the spinner overlay
@@ -4657,12 +4682,16 @@ export function DeckView({
     <section
       dir={viewManifest?.direction ?? streamingDirection}
       // `tq-deck-live`: while the model is actually working (generation
-      // stream / freeze bake / partial regen, own or a peer's) srcless
-      // gen-image boxes show the animated "loading" shimmer. On a settled
-      // deck the class drops and the same boxes fall back to the static
-      // placeholder-glyph default (globals.css) — an orphaned box must
-      // never claim "loading" forever (incident 2026-08-05, PR #185).
-      className={`relative${apiActive || peerRegenInProgress.size > 0 ? " tq-deck-live" : ""}`}
+      // stream / partial regen, own or a peer's) srcless gen-image boxes
+      // show the animated "loading" shimmer. On a settled deck the class
+      // drops and the same boxes fall back to the static placeholder-glyph
+      // default (globals.css) — an orphaned box must never claim "loading"
+      // forever (incident 2026-08-05, PR #185). Deliberately NOT
+      // `apiActive`: its `bakePendingIds` half can stay non-empty forever
+      // when a bake is abandoned past the capped poll (CR PR #185), and a
+      // bake never fills image boxes anyway — the shimmer would be the
+      // same eternal lie this class exists to prevent.
+      className={`relative${status === "generating" || applying != null || peerRegenInProgress.size > 0 ? " tq-deck-live" : ""}`}
       // Studio: the slide centers between the two floating panels (Slides on
       // the right, Layers on the left). Symmetric gutters reserve their space;
       // the panels themselves are fixed overlays so this only drives centering.

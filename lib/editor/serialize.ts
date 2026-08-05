@@ -17,6 +17,14 @@ const EDITOR_ATTRS = ["data-tq-id", "data-tq-cc", "data-tq-lock", "data-tq-fidx"
 // new editor attribute updates both the strip list and the query in one edit.
 const EDITOR_ATTR_SELECTOR = EDITOR_ATTRS.map((a) => `[${a}]`).join(",");
 
+// Runtime-only gen-image state classes DeckView toggles on the iframe's boxes
+// (retry shimmer / one-shot fade / failed dim). Session state, not content —
+// persisting them would freeze a transient look into the saved slide (a
+// stored `tq-genimg-live` would shimmer "loading" forever, the exact lie
+// PR #185 removes; a stored `tq-genimg-in` would replay its fade on every
+// future render).
+const TRANSIENT_GENIMG_CLASSES = ["tq-genimg-live", "tq-genimg-in", "tq-genimg-failed"] as const;
+
 export function serializeSlideSection(sec: Element): string {
   const clone = sec.cloneNode(true) as Element;
   // The clone root itself carries data-tq-id (the section is element 0); strip it
@@ -24,6 +32,12 @@ export function serializeSlideSection(sec: Element): string {
   for (const attr of EDITOR_ATTRS) clone.removeAttribute(attr);
   for (const el of clone.querySelectorAll(EDITOR_ATTR_SELECTOR)) {
     for (const attr of EDITOR_ATTRS) el.removeAttribute(attr);
+  }
+  for (const el of clone.querySelectorAll(
+    TRANSIENT_GENIMG_CLASSES.map((c) => `.${c}`).join(","),
+  )) {
+    el.classList.remove(...TRANSIENT_GENIMG_CLASSES);
+    if (el.classList.length === 0) el.removeAttribute("class");
   }
   return clone.outerHTML;
 }
