@@ -1537,7 +1537,12 @@ export function DeckView({
         return next;
       });
       // A retry leaves the failed state — back to the shimmer. If it fails
-      // again, `slide.image.failed` / the restarted poll re-flags it.
+      // again, `slide.image.failed` / the restarted poll re-flags it. The
+      // pre-retry failed flag is remembered so a retry whose POST never
+      // reaches the worker can put the retry overlay straight back (CR
+      // PR #185 round 3) instead of leaving the box on the bare static
+      // placeholder until a poll tick heals it.
+      const wasFailed = failedImages.has(input.genid);
       setFailedImages((prev) => {
         if (!prev.has(input.genid)) return prev;
         const next = new Set(prev);
@@ -1580,6 +1585,16 @@ export function DeckView({
           next.delete(input.genid);
           return next;
         });
+        // ...and restore the failed flag the retry optimistically cleared,
+        // so the retry overlay stays available immediately.
+        if (wasFailed) {
+          setFailedImages((prev) => {
+            if (prev.has(input.genid)) return prev;
+            const next = new Set(prev);
+            next.add(input.genid);
+            return next;
+          });
+        }
       } finally {
         // Restart the catch-up poll AFTER the regen route committed its
         // "generating" upsert — bumping before the POST landed made the
@@ -1588,7 +1603,7 @@ export function DeckView({
         setImagePollNonce((n) => n + 1);
       }
     },
-    [projectId],
+    [projectId, failedImages],
   );
 
   // Keep the editor iframe's gen-image <img>s in sync with `filledImages`
@@ -4523,6 +4538,14 @@ export function DeckView({
     ? Math.min(Math.max(currentSlideIndex, 0), viewSlides.length - 1)
     : 0;
   const focusedSlide: SlideType | null = viewSlides[focusedIndex] ?? null;
+  // Whether the FOCUSED slide is being regenerated (own partial regen or a
+  // peer's) — same recipe as the nav items' per-slide `regenerating` flag.
+  // Drives the `tq-deck-live` scope: a regen on ANOTHER slide must not
+  // shimmer this slide's srcless gen-boxes (CR PR #185 round 3).
+  const focusedSlideRegenerating =
+    focusedSlide != null &&
+    (!!applying?.targetSlideIds.includes(focusedSlide.slideId) ||
+      peerRegenInProgress.has(focusedSlide.slideId));
 
   // Nav items: streaming placeholders while generating, real slides once done.
   const navItems: NavItem[] = generating
@@ -4681,17 +4704,18 @@ export function DeckView({
     <GenImageFailedProvider value={failedImages}>
     <section
       dir={viewManifest?.direction ?? streamingDirection}
-      // `tq-deck-live`: while the model is actually working (generation
-      // stream / partial regen, own or a peer's) srcless gen-image boxes
-      // show the animated "loading" shimmer. On a settled deck the class
-      // drops and the same boxes fall back to the static placeholder-glyph
-      // default (globals.css) — an orphaned box must never claim "loading"
-      // forever (incident 2026-08-05, PR #185). Deliberately NOT
-      // `apiActive`: its `bakePendingIds` half can stay non-empty forever
-      // when a bake is abandoned past the capped poll (CR PR #185), and a
-      // bake never fills image boxes anyway — the shimmer would be the
-      // same eternal lie this class exists to prevent.
-      className={`relative${status === "generating" || applying != null || peerRegenInProgress.size > 0 ? " tq-deck-live" : ""}`}
+      // `tq-deck-live`: while the model is actually working ON WHAT THIS
+      // CANVAS SHOWS (the generation stream, or a regen of the focused
+      // slide — own or a peer's) srcless gen-image boxes show the animated
+      // "loading" shimmer. On a settled deck the class drops and the same
+      // boxes fall back to the static placeholder-glyph default
+      // (globals.css) — an orphaned box must never claim "loading" forever
+      // (incident 2026-08-05, PR #185). Deliberately NOT `apiActive`: its
+      // `bakePendingIds` half can stay non-empty forever when a bake is
+      // abandoned past the capped poll, and a bake never fills image boxes
+      // anyway. Scoped to the FOCUSED slide's regen (not any regen) so a
+      // regen elsewhere in the deck can't shimmer this slide's boxes.
+      className={`relative${status === "generating" || focusedSlideRegenerating ? " tq-deck-live" : ""}`}
       // Studio: the slide centers between the two floating panels (Slides on
       // the right, Layers on the left). Symmetric gutters reserve their space;
       // the panels themselves are fixed overlays so this only drives centering.
