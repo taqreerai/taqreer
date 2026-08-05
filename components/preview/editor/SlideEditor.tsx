@@ -334,16 +334,23 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
   .tqe-caret{position:fixed;width:2px;pointer-events:none;z-index:2147483646;display:none;animation:tqe-caret-blink 1.06s infinite}
   @keyframes tqe-caret-blink{0%,50%{opacity:1}50.01%,100%{opacity:0}}
   [contenteditable="true"]{outline:none}
-  /* §19 — gen-image placeholder shimmer + live-patch fade, mirrored from
-     globals.css so a regenerating image box reads as "loading" inside this
-     iframe (which doesn't load the app stylesheet). A box whose src was dropped
-     for a regen shows the shimmer; the patched src adds .tq-genimg-in to fade. */
+  /* §19 — gen-image placeholder states + live-patch fade, mirrored from
+     globals.css (this iframe doesn't load the app stylesheet). The editor only
+     opens on settled decks, so a srcless box DEFAULTS to the honest static
+     placeholder glyph (an orphaned box must never claim "loading" forever —
+     incident 2026-08-05, PR #185). A box whose src was dropped for an image
+     REGEN gets .tq-genimg-live from DeckView and shows the shimmer until the
+     fill lands (.tq-genimg-in fade) or it fails again (.tq-genimg-failed, which
+     must stay AFTER the live rule — equal specificity, source order decides).
+     The live rule's background-position carries no !important on purpose: the
+     shimmer animates it, and animations lose to important declarations. */
   @keyframes tq-genimg-shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
-  img[data-genimage]:not([src]){background-color:var(--tq-bg-dim,rgba(12,12,12,0.55))!important;background-image:linear-gradient(110deg,rgba(255,255,255,0.05) 30%,rgba(255,255,255,0.18) 50%,rgba(255,255,255,0.05) 70%)!important;background-size:200% 100%!important;background-repeat:no-repeat!important;animation:tq-genimg-shimmer 1.4s ease-in-out infinite}
+  img[data-genimage]:not([src]):not(.tq-genimg-live){background-color:var(--tq-bg-dim,rgba(12,12,12,0.55))!important;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.45)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='3'/%3E%3Ccircle cx='9' cy='9' r='2'/%3E%3Cpath d='m21 15-3.5-3.5a2 2 0 0 0-2.8 0L7 19'/%3E%3C/svg%3E")!important;background-size:min(64px,40%)!important;background-position:center!important;background-repeat:no-repeat!important;animation:none}
+  img[data-genimage].tq-genimg-live:not([src]){background-color:var(--tq-bg-dim,rgba(12,12,12,0.55))!important;background-image:linear-gradient(110deg,rgba(255,255,255,0.05) 30%,rgba(255,255,255,0.18) 50%,rgba(255,255,255,0.05) 70%)!important;background-size:200% 100%!important;background-repeat:no-repeat!important;background-position:200% 0;animation:tq-genimg-shimmer 1.4s ease-in-out infinite}
   img[data-genimage].tq-genimg-failed:not([src]){animation:none;background-image:none!important}
   @keyframes tq-genimg-fadein{from{opacity:0}to{opacity:1}}
   img[data-genimage].tq-genimg-in{animation:tq-genimg-fadein 450ms ease backwards}
-  @media (prefers-reduced-motion:reduce){img[data-genimage]:not([src]){animation:none;background-position:50% 0}img[data-genimage].tq-genimg-in{animation:none}}
+  @media (prefers-reduced-motion:reduce){img[data-genimage].tq-genimg-live:not([src]){animation:none;background-position:50% 0}img[data-genimage].tq-genimg-in{animation:none}}
   /* ── Moveable selection chrome (Canva-style). react-moveable injects its own
      stylesheet into THIS iframe document; these override it: a thin accent border,
      white round corner handles, white side pills (left/right), and a white

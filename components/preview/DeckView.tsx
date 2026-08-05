@@ -1533,6 +1533,16 @@ export function DeckView({
         next.delete(input.genid);
         return next;
       });
+      // Mark the editor box "live" so the srcDoc CSS shows the loading
+      // shimmer while THIS regen runs — the settled-deck default is the
+      // static placeholder glyph (PR #185 follow-up). Cleared by the fills
+      // sync when the image lands, or by the failed mirror if it fails
+      // again.
+      editorDoc
+        ?.querySelector<HTMLImageElement>(
+          `img[data-genid="${input.genid}"][data-genimage]`,
+        )
+        ?.classList.add("tq-genimg-live");
       try {
         const res = await fetch(
           `/api/projects/${projectId}/slides/${encodeURIComponent(
@@ -1560,7 +1570,7 @@ export function DeckView({
         setImagePollNonce((n) => n + 1);
       }
     },
-    [projectId],
+    [projectId, editorDoc],
   );
 
   // Keep the editor iframe's gen-image <img>s in sync with `filledImages`
@@ -1583,6 +1593,7 @@ export function DeckView({
       // 2026-06-12; the fill-mode change in globals.css is the other
       // half - see img[data-genimage].tq-genimg-in).
       if (img.style.opacity === "0") img.style.removeProperty("opacity");
+      img.classList.remove("tq-genimg-live"); // retry resolved — fill landed
       img.classList.add("tq-genimg-in");
     }
     // Re-run after an in-place undo/redo too: it swaps the section innerHTML, which replaces
@@ -1602,10 +1613,10 @@ export function DeckView({
       "img[data-genimage][data-genid]",
     )) {
       const genid = img.getAttribute("data-genid") ?? "";
-      img.classList.toggle(
-        "tq-genimg-failed",
-        failedImages.has(genid) && !img.getAttribute("src"),
-      );
+      const isFailed = failedImages.has(genid) && !img.getAttribute("src");
+      img.classList.toggle("tq-genimg-failed", isFailed);
+      // A failed verdict ends the retry's "live" shimmer state.
+      if (isFailed) img.classList.remove("tq-genimg-live");
     }
   }, [failedImages, editorDoc, inPlaceApply?.token]);
   // Catch-up poll for missed `slide.regen.finished` broadcasts. Safari
@@ -4645,7 +4656,13 @@ export function DeckView({
     <GenImageFailedProvider value={failedImages}>
     <section
       dir={viewManifest?.direction ?? streamingDirection}
-      className="relative"
+      // `tq-deck-live`: while the model is actually working (generation
+      // stream / freeze bake / partial regen, own or a peer's) srcless
+      // gen-image boxes show the animated "loading" shimmer. On a settled
+      // deck the class drops and the same boxes fall back to the static
+      // placeholder-glyph default (globals.css) — an orphaned box must
+      // never claim "loading" forever (incident 2026-08-05, PR #185).
+      className={`relative${apiActive || peerRegenInProgress.size > 0 ? " tq-deck-live" : ""}`}
       // Studio: the slide centers between the two floating panels (Slides on
       // the right, Layers on the left). Symmetric gutters reserve their space;
       // the panels themselves are fixed overlays so this only drives centering.

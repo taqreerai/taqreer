@@ -2699,14 +2699,40 @@ html.app-shell-scroll body {
     background-position: -200% 0;
   }
 }
-img[data-genimage]:not([src]) {
-  /* Bright highlight that slides across an EMPTY box (no src yet) so the slide
-     reads as "image loading here". Every STATIC background sub-property is
-     `!important` to beat Claude's inline placeholder gradient (which would
-     otherwise reset size/repeat and kill the slide); the ANIMATED
-     background-position wins over inline on its own. The rule drops the instant
-     `src` lands — SlideRenderer patches src straight into THIS node (it never
-     rebuilds the slide for an image), so the swap is in-place. */
+img[data-genimage]:not([src]):not(.tq-deck-live *) {
+  /* DEFAULT for an empty box (no src yet): an honest STATIC placeholder —
+     the dim tint + a centered Lucide "image" glyph. The animated "loading"
+     shimmer only renders under the `.tq-deck-live` scope below, which
+     DeckView applies while generation / regen is actually in flight; every
+     other surface (settled decks, share views, the editor, legacy decks
+     with orphaned boxes from before the PR #185 write guard) shows this
+     glyph instead of shimmering forever about an image that will never
+     arrive. Every background sub-property is `!important` to beat Claude's
+     inline placeholder gradient (which would otherwise reset size/repeat
+     and kill the slide) — which is exactly why the `:not(.tq-deck-live *)`
+     exclusion exists: an `!important` background-position would also
+     OVERRIDE the live rule's shimmer animation (important declarations
+     outrank animated values in the cascade), so this rule must not match
+     live boxes at all. The rule drops the instant `src` lands —
+     SlideRenderer patches src straight into THIS node (it never rebuilds
+     the slide for an image), so the swap is in-place. `--tq-bg-dim` is a
+     dark translucent in BOTH app themes (it floats over arbitrary slide
+     backgrounds), so the fixed light glyph stays readable everywhere. */
+  background-color: var(--tq-bg-dim) !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.45)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='3'/%3E%3Ccircle cx='9' cy='9' r='2'/%3E%3Cpath d='m21 15-3.5-3.5a2 2 0 0 0-2.8 0L7 19'/%3E%3C/svg%3E") !important;
+  background-size: min(64px, 40%) !important;
+  background-position: center !important;
+  background-repeat: no-repeat !important;
+  animation: none;
+}
+
+.tq-deck-live img[data-genimage]:not([src]) {
+  /* LIVE deck (generation stream / partial regen in flight — the class is
+     set by DeckView): the bright highlight sliding across the box reads as
+     "image loading here". Static sub-properties are `!important` to beat
+     the inline placeholder gradient; background-position deliberately is
+     NOT — the shimmer animates it, and animated values only outrank
+     non-important declarations. */
   background-color: var(--tq-bg-dim) !important;
   background-image: linear-gradient(
     110deg,
@@ -2749,11 +2775,12 @@ img[data-genimage].tq-genimg-in {
   animation: tq-genimg-fadein 450ms ease backwards;
 }
 
-/* Honour reduced-motion: drop the placeholder shimmer + the fade-in (matches
-   the other prefers-reduced-motion opt-outs in this stylesheet). The box still
-   reads as "loading" via its background, just without the animated sweep. */
+/* Honour reduced-motion: drop the live shimmer sweep + the fade-in (matches
+   the other prefers-reduced-motion opt-outs in this stylesheet). Only the
+   `.tq-deck-live` rule animates now — the default placeholder is already
+   static. The live box still reads as "loading" via its background. */
 @media (prefers-reduced-motion: reduce) {
-  img[data-genimage]:not([src]) {
+  .tq-deck-live img[data-genimage]:not([src]) {
     animation: none;
     background-position: 50% 0;
   }
