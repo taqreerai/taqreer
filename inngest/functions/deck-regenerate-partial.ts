@@ -1045,25 +1045,29 @@ export const deckRegeneratePartial = inngest.createFunction(
       // on an imageless enhance deck, the model complied with data-genimage
       // boxes, and nothing in the partial-regen path generates images — the
       // boxes shimmered as "loading" forever). Keep a srcless gen-box ONLY
-      // when this version owns a GeneratedImage row for its genid (rows are
-      // carried across versions by allocateNextVersionInTx, so pre-existing
-      // failed boxes keep their retry overlay); every box the model invents
-      // has no row and gets its gen attributes stripped — it degrades to
-      // the static placeholder gradient instead of lying about loading.
-      const keepGenids = new Set(
-        (
-          await prisma.generatedImage.findMany({
-            where: { presentationVersionId: versionId },
-            select: { genid: true },
-          })
-        ).map((r) => r.genid),
-      );
+      // when this version owns a GeneratedImage row for its genid ON THAT
+      // SLIDE (rows are carried across versions by allocateNextVersionInTx,
+      // so pre-existing failed boxes keep their retry overlay). Per-slide,
+      // not version-wide: fills + retries resolve by the row's slideKey, so
+      // a genid the model copied onto ANOTHER slide could never be filled
+      // there (CR PR #185). Every box without a matching row gets its gen
+      // attributes stripped — it degrades to the static placeholder
+      // gradient instead of lying about loading.
+      const keepGenidsBySlide = new Map<string, Set<string>>();
+      for (const row of await prisma.generatedImage.findMany({
+        where: { presentationVersionId: versionId },
+        select: { slideKey: true, genid: true },
+      })) {
+        const set = keepGenidsBySlide.get(row.slideKey) ?? new Set<string>();
+        set.add(row.genid);
+        keepGenidsBySlide.set(row.slideKey, set);
+      }
       const slides = source.slides.map((s) => {
         const update = regenResults.find((r) => r.slideId === s.slideId);
         if (!update) return s;
         const html = neutralizeGenImages(
           logoInner ? injectLogoMarkers(update.html, logoInner) : update.html,
-          keepGenids,
+          keepGenidsBySlide.get(s.slideId),
         );
         return { ...s, html };
       });

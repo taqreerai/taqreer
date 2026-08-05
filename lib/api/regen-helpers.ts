@@ -46,6 +46,12 @@ export function toJson(value: unknown): Prisma.InputJsonValue {
 export async function allocateNextVersionInTx(
   tx: Prisma.TransactionClient,
   presentationId: string,
+  // The version the CALLER builds the new manifest from. The GeneratedImage
+  // row copy below must read the SAME version — copying from the highest
+  // versionNumber instead could pair the new manifest with another
+  // concurrent version's rows (CR PR #185). Optional for callers that
+  // genuinely mean "whatever is latest".
+  sourceVersionId?: string,
 ): Promise<{ id: string; versionNumber: number }> {
   const latest = await tx.presentationVersion.findFirst({
     where: { presentationId },
@@ -70,9 +76,15 @@ export async function allocateNextVersionInTx(
   // shimmer (incident 2026-08-05). `generating` is copied as `pending` so
   // an in-flight claim on the OLD version's row can't wedge the new one:
   // pending is re-claimable by every fill path, generating is not.
-  if (latest) {
+  const copyFromId = sourceVersionId ?? latest?.id;
+  if (copyFromId) {
     const rows = await tx.generatedImage.findMany({
-      where: { presentationVersionId: latest.id },
+      // The relation guard pins the source to THIS presentation, so a
+      // caller bug can never graft another deck's rows onto the version.
+      where: {
+        presentationVersionId: copyFromId,
+        version: { presentationId },
+      },
       select: {
         slideKey: true,
         genid: true,

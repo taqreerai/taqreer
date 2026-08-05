@@ -82,7 +82,11 @@ async function runSnapshotAndPromoteTx(args: {
       });
       if (drafts.length === 0) return { kind: "empty" as const };
 
-      const newVersion = await allocateNextVersionInTx(tx, presentationId);
+      const newVersion = await allocateNextVersionInTx(
+        tx,
+        presentationId,
+        sourceVersionId,
+      );
 
       // Promote the drafts. The `status: "draft"` guard means concurrent
       // deletions / concurrent applies show up as `count < drafts.length`.

@@ -167,7 +167,11 @@ export async function POST(
   let newVersion: { id: string; versionNumber: number };
   try {
     newVersion = await retryOnP2002(() =>
-      prisma.$transaction((tx) => allocateNextVersionInTx(tx, presentation.id)),
+      prisma.$transaction((tx) =>
+        // `?? undefined`: the 404 guard above makes currentVersionId
+        // non-null here, but the narrowing doesn't survive the alias.
+        allocateNextVersionInTx(tx, presentation.id, sourceVersionId ?? undefined),
+      ),
     );
   } catch {
     return NextResponse.json(

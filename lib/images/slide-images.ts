@@ -224,10 +224,12 @@ export function neutralizeGenImages(
   for (const [start, end] of imgTagRanges(html)) {
     const tag = html.slice(start, end);
     // Loose presence test, NOT readAttr: readAttr only parses QUOTED
-    // values, but an unquoted `data-genimage=x` still matches the CSS
-    // shimmer selector while staying invisible to the seed scan — the
-    // exact never-fillable shape this guard must catch.
-    if (!/\sdata-genimage\s*=/i.test(tag)) continue; // not a gen-box
+    // values, but an unquoted `data-genimage=x` or bare valueless
+    // `data-genimage` still matches the CSS shimmer selector while
+    // staying invisible to the seed scan — the exact never-fillable
+    // shapes this guard must catch. The lookahead stops the name from
+    // matching a prefix of a longer attribute (data-genimage-foo).
+    if (!/\sdata-genimage(?=\s|=|\/?>)/i.test(tag)) continue; // not a gen-box
     if (SRC_ATTR.test(tag)) continue; // filled — leave untouched
     const genid = readAttr(tag, "data-genid");
     const keepThis =
@@ -237,13 +239,13 @@ export function neutralizeGenImages(
       !seen.has(genid); // in-slide dupe — only the first is fillable
     if (genid && keepThis) seen.add(genid);
     if (keepThis) continue;
-    // Unquoted values ([^\s>]*) matter here: readAttr/scanGenImages only
-    // parse QUOTED attributes, so an unquoted `data-genimage=x` box is
-    // invisible to the seed scan — exactly the kind of never-fillable box
-    // this guard exists to strip. The CSS shimmer selector matches it
-    // regardless of quoting.
+    // Unquoted values ([^\s>]*) and bare valueless attributes (the
+    // optional assignment group) matter here: readAttr/scanGenImages
+    // only parse QUOTED attributes, so those shapes are invisible to
+    // the seed scan — exactly the never-fillable boxes this guard
+    // exists to strip. The CSS shimmer selector matches all of them.
     const stripped = tag.replace(
-      /\s(?:data-genimage|data-genid|data-genrole|data-genaspect)\s*=\s*("[^"]*"|'[^']*'|[^\s>]*)/gi,
+      /\s(?:data-genimage|data-genid|data-genrole|data-genaspect)(?=\s|=|\/?>)(?:\s*=\s*("[^"]*"|'[^']*'|[^\s>]*))?/gi,
       "",
     );
     out += html.slice(last, start) + stripped;

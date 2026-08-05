@@ -324,7 +324,11 @@ export const deckUnlock = inngest.createFunction(
       const newManifest = parsed.data;
       return retryOnP2002(() =>
         prisma.$transaction(async (tx) => {
-          const version = await allocateNextVersionInTx(tx, presentationId);
+          const version = await allocateNextVersionInTx(
+            tx,
+            presentationId,
+            sourceVersionId,
+          );
           await tx.presentationVersion.update({
             where: { id: version.id },
             data: { slideJson: newManifest as never, status: "completed" },
