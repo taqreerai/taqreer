@@ -50,10 +50,10 @@ export async function allocateNextVersionInTx(
   const latest = await tx.presentationVersion.findFirst({
     where: { presentationId },
     orderBy: { versionNumber: "desc" },
-    select: { versionNumber: true, slideJson: true },
+    select: { id: true, versionNumber: true, slideJson: true },
   });
   const nextNumber = (latest?.versionNumber ?? 0) + 1;
-  return tx.presentationVersion.create({
+  const created = await tx.presentationVersion.create({
     data: {
       presentationId,
       versionNumber: nextNumber,
@@ -62,6 +62,39 @@ export async function allocateNextVersionInTx(
     },
     select: { id: true, versionNumber: true },
   });
+  // Carry the GeneratedImage rows forward with the manifest they annotate.
+  // The rows are keyed to the VERSION, so without this every partial regen
+  // orphaned them on the old version: failed boxes lost their retry overlay
+  // (the status route reads the latest version's rows) and the per-image
+  // regen route lost its row — the box degraded to an eternal loading
+  // shimmer (incident 2026-08-05). `generating` is copied as `pending` so
+  // an in-flight claim on the OLD version's row can't wedge the new one:
+  // pending is re-claimable by every fill path, generating is not.
+  if (latest) {
+    const rows = await tx.generatedImage.findMany({
+      where: { presentationVersionId: latest.id },
+      select: {
+        slideKey: true,
+        genid: true,
+        prompt: true,
+        role: true,
+        aspect: true,
+        size: true,
+        status: true,
+        storageUrl: true,
+      },
+    });
+    if (rows.length > 0) {
+      await tx.generatedImage.createMany({
+        data: rows.map((r) => ({
+          ...r,
+          status: r.status === "generating" ? "pending" : r.status,
+          presentationVersionId: created.id,
+        })),
+      });
+    }
+  }
+  return created;
 }
 
 /**

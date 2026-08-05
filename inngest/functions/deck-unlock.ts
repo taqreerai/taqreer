@@ -42,6 +42,10 @@ import {
   parseFrameSlide,
 } from "@/lib/deck/frame";
 import { allocateNextVersionInTx, retryOnP2002 } from "@/lib/api/regen-helpers";
+import {
+  collectSeedableGenImages,
+  neutralizeGenImages,
+} from "@/lib/images/slide-images";
 
 function getClient(): Anthropic {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -278,6 +282,25 @@ export const deckUnlock = inngest.createFunction(
         html,
       };
     });
+
+    // Orphan-box guard (incident 2026-08-05): the tail may only carry
+    // srcless data-genimage boxes the deck.images.requested dispatch below
+    // will actually seed — the doc-order capped walk over the FULL spliced
+    // deck (the originals' boxes consume cap slots first, mirroring the
+    // seed scan). A non-images deck never dispatches, so every authored
+    // box is stripped to its static placeholder gradient; on an images
+    // deck the overflow past the cap is. Prevents forever-"loading" boxes
+    // no pipeline owns.
+    {
+      const seedable = isImagesDeck
+        ? collectSeedableGenImages([...manifest.slides, ...newSlides])
+        : null;
+      for (let i = 0; i < newSlides.length; i += 1) {
+        const s = newSlides[i];
+        const html = neutralizeGenImages(s.html, seedable?.get(s.slideId));
+        if (html !== s.html) newSlides[i] = { ...s, html };
+      }
+    }
 
     // ── 4. Splice into a fresh version + stamp teaserUnlockedAt ──
     const saved = await step.run("save-unlocked-version", async () => {

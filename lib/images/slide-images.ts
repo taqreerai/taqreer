@@ -174,6 +174,86 @@ export function scanGenImages(html: string): GenImageMarker[] {
 }
 
 /**
+ * The per-slide keep-sets of gen-boxes the fill pipeline can actually
+ * service: walk slides in document order, first occurrence per genid,
+ * capped at MAX_GENERATED_IMAGES — the EXACT set deck-images-generate's
+ * scan-and-seed collects (both sides share scanGenImages + this walk
+ * order, so the sets can't drift). Everything outside these sets is a
+ * box no pipeline will ever fill.
+ */
+export function collectSeedableGenImages(
+  slides: ReadonlyArray<{ slideId: string; html: string }>,
+): Map<string, Set<string>> {
+  const keep = new Map<string, Set<string>>();
+  const seen = new Set<string>();
+  for (const slide of slides) {
+    if (seen.size >= MAX_GENERATED_IMAGES) break;
+    for (const marker of scanGenImages(slide.html)) {
+      if (seen.has(marker.genid)) continue; // cross-slide dupe — first wins
+      seen.add(marker.genid);
+      const set = keep.get(slide.slideId) ?? new Set<string>();
+      set.add(marker.genid);
+      keep.set(slide.slideId, set);
+      if (seen.size >= MAX_GENERATED_IMAGES) break;
+    }
+  }
+  return keep;
+}
+
+/**
+ * Strip the gen-box attributes off every SRCLESS `<img data-genimage>`
+ * whose genid is not in `keep` (or is a duplicate / invalid), returning
+ * the new HTML. The box keeps its inline style — size + the branded
+ * placeholder gradient — so it degrades to a STATIC placeholder instead
+ * of the infinite `img[data-genimage]:not([src])` loading shimmer.
+ *
+ * This is the orphan-box guard (incident 2026-08-05): any slide write
+ * that can carry model-authored boxes runs through it, so a deck can
+ * never persist a "loading" box that no pipeline will ever fill —
+ * either a box is in the seedable set (rows exist / will exist, the
+ * fill or retry path owns it) or it loses the gen attributes here.
+ * Boxes that already carry a src are never touched.
+ */
+export function neutralizeGenImages(
+  html: string,
+  keep: ReadonlySet<string> = new Set<string>(),
+): string {
+  const seen = new Set<string>();
+  let out = "";
+  let last = 0;
+  for (const [start, end] of imgTagRanges(html)) {
+    const tag = html.slice(start, end);
+    // Loose presence test, NOT readAttr: readAttr only parses QUOTED
+    // values, but an unquoted `data-genimage=x` still matches the CSS
+    // shimmer selector while staying invisible to the seed scan — the
+    // exact never-fillable shape this guard must catch.
+    if (!/\sdata-genimage\s*=/i.test(tag)) continue; // not a gen-box
+    if (SRC_ATTR.test(tag)) continue; // filled — leave untouched
+    const genid = readAttr(tag, "data-genid");
+    const keepThis =
+      genid !== null &&
+      SAFE_GENID.test(genid) &&
+      keep.has(genid) &&
+      !seen.has(genid); // in-slide dupe — only the first is fillable
+    if (genid && keepThis) seen.add(genid);
+    if (keepThis) continue;
+    // Unquoted values ([^\s>]*) matter here: readAttr/scanGenImages only
+    // parse QUOTED attributes, so an unquoted `data-genimage=x` box is
+    // invisible to the seed scan — exactly the kind of never-fillable box
+    // this guard exists to strip. The CSS shimmer selector matches it
+    // regardless of quoting.
+    const stripped = tag.replace(
+      /\s(?:data-genimage|data-genid|data-genrole|data-genaspect)\s*=\s*("[^"]*"|'[^']*'|[^\s>]*)/gi,
+      "",
+    );
+    out += html.slice(last, start) + stripped;
+    last = end;
+  }
+  if (last === 0) return html;
+  return out + html.slice(last);
+}
+
+/**
  * Inject (or replace) the `src` of the `<img>` whose `data-genid` matches
  * `genid`, returning the new HTML. If no matching box exists the HTML is
  * returned unchanged. Used server-side by the reconcile step and

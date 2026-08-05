@@ -52,6 +52,8 @@ import { signBrandAssetUrl } from "@/lib/storage/sign";
 import { sourceToSlideImages } from "@/lib/extract/source-to-slide-images";
 import {
   scanGenImages,
+  collectSeedableGenImages,
+  neutralizeGenImages,
   MAX_GENERATED_IMAGES,
   type GenImageMarker,
 } from "@/lib/images/slide-images";
@@ -2776,6 +2778,29 @@ export const deckGenerate = inngest.createFunction(
     // sees the signed URL); fill each with the real logo <img> here so the
     // long token is never hand-copied per slide.
     injectDeckLogo(manifest, data.brief);
+
+    // Orphan-box guard (incident 2026-08-05): strip the gen attributes
+    // off any srcless data-genimage box the fill pipeline will never
+    // service — ALL of them on a non-images deck (the model can author
+    // boxes unprompted), and the overflow past the seedable cap on an
+    // images deck. Without this they shimmer as "loading" forever
+    // (img[data-genimage]:not([src])) with no retry surface; stripped,
+    // they degrade to their static placeholder gradient. In the BODY,
+    // not inside the save step: the mutation must survive an Inngest
+    // replay (the memoized step skips its code, the body re-runs), and
+    // every later reader — the save + SlideVersion seeding, the settle's
+    // box count, the deck.images.requested seed scan — must see the same
+    // kept set. Pure function of the streamed manifest, so every replay
+    // recomputes it identically.
+    {
+      const seedable = isImagesMode(data)
+        ? collectSeedableGenImages(manifest.slides)
+        : null;
+      manifest.slides = manifest.slides.map((s) => {
+        const html = neutralizeGenImages(s.html, seedable?.get(s.slideId));
+        return html === s.html ? s : { ...s, html };
+      });
+    }
 
     await step.run("save-to-database", async () => {
       // Stamp the format the user picked onto the manifest so every

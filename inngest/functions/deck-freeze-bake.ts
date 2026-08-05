@@ -95,7 +95,11 @@ import {
   type FrameVisionSlideInput,
 } from "@/lib/deck/frame";
 import { buildSlideHtml, canvasFrameCss } from "@/lib/deck/scaffold";
-import { injectImgSrc } from "@/lib/images/slide-images";
+import {
+  injectImgSrc,
+  neutralizeGenImages,
+  scanGenImages,
+} from "@/lib/images/slide-images";
 import { appendGenChat } from "@/lib/deck/genchat-store";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 
@@ -981,7 +985,16 @@ export const deckFreezeBake = inngest.createFunction(
           return s;
         }
         written.add(s.slideId);
-        return { ...s, html: next };
+        // Orphan-box guard (incident 2026-08-05): a vision revision may
+        // only keep gen-boxes the slide already had — the image pipeline
+        // finished before this bake (freezeAfter ordering), so a srcless
+        // box the revision INTRODUCED has no row and would "load" forever.
+        // Pre-existing srcless boxes (failed, retry-overlay-owned) pass
+        // through untouched via the keep set.
+        const preBake = new Set(
+          scanGenImages(baseById.get(s.slideId) ?? "").map((m) => m.genid),
+        );
+        return { ...s, html: neutralizeGenImages(next, preBake) };
       });
       const reparsed = SlideManifestSchema.safeParse({
         ...fm,

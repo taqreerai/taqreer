@@ -132,10 +132,18 @@ export const deckImagesGenerate = inngest.createFunction(
         );
       }
 
-      // Collect boxes across slides in document order, capped.
+      // Collect boxes across slides in document order, capped. First
+      // occurrence per genid wins across slides too (the row upsert is
+      // keyed (versionId, genid), so a cross-slide dupe could never fill
+      // both boxes anyway — don't let it burn a cap slot). MUST stay in
+      // lockstep with collectSeedableGenImages (slide-images.ts): the
+      // save-time orphan-box guard keeps exactly the boxes this seeds.
       const collected: ImageBox[] = [];
+      const seenGenids = new Set<string>();
       for (const slide of parsed.data.slides) {
         for (const marker of scanGenImages(slide.html)) {
+          if (seenGenids.has(marker.genid)) continue;
+          seenGenids.add(marker.genid);
           collected.push({
             slideKey: slide.slideId,
             ...marker,

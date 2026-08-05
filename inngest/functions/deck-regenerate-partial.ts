@@ -41,7 +41,7 @@ import {
   frameSystemPrompt,
   parseFrameSlide,
 } from "@/lib/deck/frame";
-import { injectImgSrc } from "@/lib/images/slide-images";
+import { injectImgSrc, neutralizeGenImages } from "@/lib/images/slide-images";
 import { findInjectedLogoInner, injectLogoMarkers } from "@/lib/deck/logo-inject";
 import { recordSlidePartialRegen } from "@/lib/db/slide-versioning";
 import { appendGenChatEntries } from "@/lib/deck/genchat-store";
@@ -1041,12 +1041,30 @@ export const deckRegeneratePartial = inngest.createFunction(
       // copied (and possibly mangled the signed URL of) would persist. No-op
       // for decks generated before the marker convention (no marker found).
       const logoInner = findInjectedLogoInner(source.slides.map((s) => s.html));
+      // Orphan-box guard (incident 2026-08-05: a comment asked for images
+      // on an imageless enhance deck, the model complied with data-genimage
+      // boxes, and nothing in the partial-regen path generates images — the
+      // boxes shimmered as "loading" forever). Keep a srcless gen-box ONLY
+      // when this version owns a GeneratedImage row for its genid (rows are
+      // carried across versions by allocateNextVersionInTx, so pre-existing
+      // failed boxes keep their retry overlay); every box the model invents
+      // has no row and gets its gen attributes stripped — it degrades to
+      // the static placeholder gradient instead of lying about loading.
+      const keepGenids = new Set(
+        (
+          await prisma.generatedImage.findMany({
+            where: { presentationVersionId: versionId },
+            select: { genid: true },
+          })
+        ).map((r) => r.genid),
+      );
       const slides = source.slides.map((s) => {
         const update = regenResults.find((r) => r.slideId === s.slideId);
         if (!update) return s;
-        const html = logoInner
-          ? injectLogoMarkers(update.html, logoInner)
-          : update.html;
+        const html = neutralizeGenImages(
+          logoInner ? injectLogoMarkers(update.html, logoInner) : update.html,
+          keepGenids,
+        );
         return { ...s, html };
       });
       // Carry the GenChat feed into the rebuilt manifest. The version row
