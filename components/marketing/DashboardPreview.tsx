@@ -325,6 +325,10 @@ function DemoSidebar({
           type="button"
           onClick={() => onNavigate("dashboard")}
           aria-label={dict.nav.home}
+          // Pinned spoke previews: keep the hover animation but take the
+          // no-op control out of the tab order (CR PR #186).
+          tabIndex={locked ? -1 : undefined}
+          aria-disabled={locked || undefined}
           className="pw-hover-trigger flex h-8 w-8 items-center justify-center"
         >
           <ParagraphWriteIcon mode="hover" size={22} />
@@ -432,6 +436,11 @@ function SidebarDot({
       onMouseLeave={() => iconRef.current?.stopAnimation()}
       aria-label={dict.nav[item.labelKey]}
       aria-current={active ? "page" : undefined}
+      // Non-interactive dots (library group, or ALL dots in a locked spoke
+      // preview) stay hover-animated but leave the tab order - a keyboard
+      // user should never land on a no-op control (CR PR #186).
+      tabIndex={interactive ? undefined : -1}
+      aria-disabled={!interactive || undefined}
       className={`my-1 flex h-8 w-8 items-center justify-center rounded-full transition-all duration-200 ${
         active ? "nav-active" : "nav-item"
       } ${interactive ? "cursor-pointer" : "cursor-default"}`}
@@ -1264,6 +1273,11 @@ export function getFlows(
                 <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
               </div>
               <FakeDropzone title={f.dropTitle} hint={f.dropSubtitle} />
+              {/* AI-images panel lives in the CONTENT card, matching the
+                  real /create (moved there 2026-08-03; mock synced CR
+                  PR #186). */}
+              <CardSeparator />
+              <FakeAIImagesPanel dict={dict} dir={dir} />
               <CardSeparator />
               <FakePersistentRow dict={dict} dir={dir} />
             </>
@@ -1286,8 +1300,6 @@ export function getFlows(
               </FieldRow>
               <CardSeparator />
               <FakeDesignStyleRow dict={dict} />
-              <CardSeparator />
-              <FakeAIImagesPanel dict={dict} dir={dir} />
             </>
           ),
         },

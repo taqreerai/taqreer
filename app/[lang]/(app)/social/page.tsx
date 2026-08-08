@@ -149,6 +149,32 @@ export default function SocialPage() {
   // (sub-Plus) users get the UpgradeModal instead - same derivation as
   // AIImagesPanel, incl. the null-plan-gates-like-free hydration rule.
   const [productFile, setProductFile] = useState<File | null>(null);
+  // Blob-URL preview for the thumbnail. Lifecycle lives in the EVENT paths
+  // (select / remove), never inside a state updater: React may replay
+  // updaters, which would leak an uncommitted URL and double-revoke the
+  // previous one (CR PR #186). The ref mirrors the live URL purely for the
+  // unmount revoke.
+  const [productPreviewUrl, setProductPreviewUrl] = useState<string | null>(
+    null,
+  );
+  const productPreviewUrlRef = useRef<string | null>(null);
+  useEffect(
+    () => () => {
+      if (productPreviewUrlRef.current) {
+        URL.revokeObjectURL(productPreviewUrlRef.current);
+      }
+    },
+    [],
+  );
+  const setProductPhoto = (f: File | null) => {
+    if (productPreviewUrlRef.current) {
+      URL.revokeObjectURL(productPreviewUrlRef.current);
+    }
+    const next = f ? URL.createObjectURL(f) : null;
+    productPreviewUrlRef.current = next;
+    setProductFile(f);
+    setProductPreviewUrl(next);
+  };
   const [productUpgradeOpen, setProductUpgradeOpen] = useState(false);
   const credits = useCreditBalance();
   const imagesLocked = isImagesLocked({
@@ -299,7 +325,7 @@ export default function SocialPage() {
       return;
     }
     setError("");
-    setProductFile(f);
+    setProductPhoto(f);
     setImagesMode(true);
   };
 
@@ -510,11 +536,12 @@ export default function SocialPage() {
                   imagesMode back off (the photo won't be sent). */}
               <ProductPhotoRow
                 file={productFile}
+                previewUrl={productPreviewUrl}
                 submitting={submitting}
                 locked={imagesLocked}
                 muted={Boolean(productFile) && !imagesMode}
                 onPick={acceptProductPhoto}
-                onRemove={() => setProductFile(null)}
+                onRemove={() => setProductPhoto(null)}
                 onLocked={() => setProductUpgradeOpen(true)}
               />
             </div>
@@ -762,9 +789,11 @@ export default function SocialPage() {
 // ProductPhotoRow - compact dropzone under the content textarea (same visual
 // language as /create's ContentDropzone: 44px dashed pill, icon chip, title +
 // hint; violet drag state like LogoRow). Selected state swaps the chip for a
-// 32px blob-URL thumbnail (LogoRow's revoke lifecycle) + filename + size.
+// 32px thumbnail; the blob URL's lifecycle is owned by the PARENT's select /
+// remove handlers (CR PR #186: no side effects in state updaters).
 function ProductPhotoRow({
   file,
+  previewUrl,
   submitting,
   locked,
   muted,
@@ -773,6 +802,7 @@ function ProductPhotoRow({
   onLocked,
 }: {
   file: File | null;
+  previewUrl: string | null;
   submitting: boolean;
   locked: boolean;
   muted: boolean;
@@ -783,28 +813,6 @@ function ProductPhotoRow({
   const dict = useDict();
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
-
-  // Blob-URL lifecycle for the thumbnail (revoke on change / unmount) -
-  // LogoRow's exact pattern.
-  const [objectUrl, setObjectUrl] = useState<string | null>(null);
-  const lastFileRef = useRef<File | null>(null);
-  const liveUrlRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (file === lastFileRef.current) return;
-    lastFileRef.current = file;
-    setObjectUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      const next = file ? URL.createObjectURL(file) : null;
-      liveUrlRef.current = next;
-      return next;
-    });
-  }, [file]);
-  useEffect(
-    () => () => {
-      if (liveUrlRef.current) URL.revokeObjectURL(liveUrlRef.current);
-    },
-    [],
-  );
 
   return (
     <div className={`relative ${muted ? "opacity-60" : ""}`}>
@@ -844,10 +852,10 @@ function ProductPhotoRow({
             : "border-foreground/20 bg-overlay-soft hover:border-foreground/30"
         }`}
       >
-        {file && objectUrl ? (
+        {file && previewUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={objectUrl}
+            src={previewUrl}
             alt={dict.flows.social.productPhoto}
             className="h-8 w-8 shrink-0 rounded-md object-cover"
           />

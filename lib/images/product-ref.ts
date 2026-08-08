@@ -34,6 +34,13 @@ export function isAllowedProductRefUrl(url: string | null | undefined): boolean 
   return url.startsWith(prefix);
 }
 
+// Server-side mirror of the social UI's raster policy (CR PR #186): the
+// upload-image route also stores GIFs (editor use), but a product photo must
+// be a still PNG/JPG/WebP - images.edit's supported inputs. The extension is
+// trustworthy: upload-image sniffs magic bytes and derives the stored
+// extension from the SNIFFED type, never the client header.
+const PRODUCT_RASTER_EXT_RE = /\.(png|jpe?g|webp)$/i;
+
 export function isOwnedUploadedImageUrl(
   url: string | null | undefined,
   supabaseUserId: string,
@@ -41,5 +48,6 @@ export function isOwnedUploadedImageUrl(
   if (!isAllowedProductRefUrl(url)) return false;
   const prefix = uploadedImagePublicPrefix();
   if (!prefix || !supabaseUserId) return false;
+  if (!PRODUCT_RASTER_EXT_RE.test(url as string)) return false;
   return (url as string).startsWith(`${prefix}${supabaseUserId}/`);
 }
