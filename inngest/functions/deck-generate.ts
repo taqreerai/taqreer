@@ -54,10 +54,12 @@ import {
   scanGenImages,
   collectSeedableGenImages,
   neutralizeGenImages,
+  stampProductRef,
   MAX_GENERATED_IMAGES,
   type GenImageMarker,
 } from "@/lib/images/slide-images";
-import { genImageHash } from "@/lib/images/store";
+import { genImageIdentityHash } from "@/lib/images/store";
+import { isAllowedProductRefUrl } from "@/lib/images/product-ref";
 import {
   uploadFileToAnthropic,
   deleteFileFromAnthropic,
@@ -189,6 +191,17 @@ export function isImagesMode(event: DeckGenerateEvent): boolean {
     sourceKind !== "enhance" &&
     sourceKind !== "data"
   );
+}
+
+// Product photo (social flow): /api/projects validated ownership and put the
+// public uploads URL on the brief. Re-validate the prefix here anyway (the
+// worker trusts no client-shaped field) and only surface it in images mode -
+// the photo can only materialize through generated-image boxes.
+function readProductImageUrl(event: DeckGenerateEvent): string | null {
+  if (!isImagesMode(event)) return null;
+  const url = (event.brief as { productImage?: { url?: unknown } } | null)
+    ?.productImage?.url;
+  return typeof url === "string" && isAllowedProductRefUrl(url) ? url : null;
 }
 
 // HTML-authoring flows (context/plan-create-agent-pivot.md): Claude streams
@@ -564,7 +577,9 @@ function dispatchImageWarm(
   const addedKeys: string[] = [];
   const addedGenids: string[] = [];
   for (const m of scanGenImages(slideHtml)) {
-    const hash = genImageHash(m.prompt);
+    // Identity folds the product ref (when stamped): a ref'd box must never
+    // adopt - or be adopted by - a same-prompt no-ref image at the same path.
+    const hash = genImageIdentityHash(m.prompt, m.ref);
     const key = `${m.genid}:${hash}`;
     if (warmedKeys.has(key)) continue;
     if (
@@ -724,8 +739,16 @@ function sanitizeBriefFonts(brief: unknown): unknown {
 // prompt IDENTICAL for legacy in-flight events that still carry the array.
 function stripInternalBriefFields(brief: unknown): unknown {
   if (!brief || typeof brief !== "object") return brief;
-  const { teaser: _teaser, ...rest } = brief as Record<string, unknown>;
+  // productImage is also dropped: the product-photo URL is harness plumbing
+  // (stamped into marked boxes server-side). The model gets the PRODUCT
+  // PHOTO directive instead - it must author the bare marker, never the URL.
+  const {
+    teaser: _teaser,
+    productImage: _productImage,
+    ...rest
+  } = brief as Record<string, unknown>;
   void _teaser;
+  void _productImage;
   const source = rest.source;
   if (source && typeof source === "object" && "textPerSlide" in source) {
     const { textPerSlide: _text, ...restSource } = source as Record<
@@ -933,6 +956,20 @@ function buildUserMessage(event: DeckGenerateEvent) {
     )
       ? [
           `For any Gulf national dress, follow the GULF WARDROBE SPEC in the system prompt: name the exact garments and headwear (never vague "traditional attire"), one country block per person, and fold in the relevant negatives.`,
+        ]
+      : []),
+    // Product photo (social flow): rides the user message, NOT the cached
+    // system prompt, so non-product decks keep the shared prompt cache. The
+    // model authors only the bare marker attributes; the harness resolves
+    // them to the actual photo URL at assembly (stampProductRef / bgRef).
+    ...(readProductImageUrl(event)
+      ? [
+          ``,
+          `PRODUCT PHOTO - the user uploaded a photo of THEIR product and this post is designed AROUND it. The system hands the actual photo to the image generator for every box you mark as a product shot, so never describe or reinvent the product itself:
+- The HERO visual (the post's main image) MUST be a product shot. Mark it by adding data-gensource="product" to an in-well <img data-genimage> box, or by declaring the section background with data-bg-source="product" next to its data-bg-prompt.
+- Mark ADDITIONAL boxes as product shots only where the composition genuinely calls for the product again (a lifestyle scene, a detail crop). Every unmarked box follows the normal image rules.
+- For product-marked boxes, the prompt (data-genimage / data-bg-prompt) describes the SCENE AROUND the product: surface, environment, props, lighting, camera angle, mood. Never re-describe, rename, or restyle the product, and still no text inside the image.
+- On portrait canvases (4:5, 9:16) prefer an in-well hero or a band panel for the product shot rather than a full-bleed background.`,
         ]
       : []),
     ...(brandColours ? [``, brandColours] : []),
@@ -2174,6 +2211,10 @@ export const deckGenerate = inngest.createFunction(
         let scopedStyle = "";
         let rawCssSeen = "";
 
+        // Social product photo - resolved ONCE per run; stamped into every
+        // product-marked box at assembly below.
+        const productImageUrl = readProductImageUrl(data);
+
         const ingestSlide = (parsed: ParsedSlide) => {
           // ── FRAME self-correction (data-revises) ── thinking mode re-emits
           // improved slides; the frame prompt's revision contract marks them
@@ -2190,15 +2231,22 @@ export const deckGenerate = inngest.createFunction(
               const target = slides[revises];
               const decl = parseFrameSlide(parsed.html);
               if (decl.deckTitle) frameCtx.deckTitle = decl.deckTitle;
+              if (productImageUrl && decl.bgSource === "product") {
+                decl.bgRef = productImageUrl;
+              }
+              let revisedSection = assembleFramedSlide(
+                decl,
+                frameCtx,
+                revises,
+                SLIDE_DIMENSIONS[slideFormat],
+              );
+              if (productImageUrl) {
+                revisedSection = stampProductRef(revisedSection, productImageUrl);
+              }
               const revised: SlideType = {
                 ...target,
                 html: buildSlideHtml(
-                  assembleFramedSlide(
-                    decl,
-                    frameCtx,
-                    revises,
-                    SLIDE_DIMENSIONS[slideFormat],
-                  ),
+                  revisedSection,
                   `${frameCss}\n${scopedStyle}`,
                   SLIDE_DIMENSIONS[slideFormat],
                 ),
@@ -2315,12 +2363,21 @@ export const deckGenerate = inngest.createFunction(
               logger.info("deck_declared_total", { declared: n, clamped: declaredTotal });
             }
           }
-          const sectionHtml = assembleFramedSlide(
+          if (productImageUrl && decl.bgSource === "product") {
+            decl.bgRef = productImageUrl;
+          }
+          let sectionHtml = assembleFramedSlide(
             decl,
             frameCtx,
             slides.length,
             SLIDE_DIMENSIONS[slideFormat],
           );
+          // Bake the product-photo URL into marked boxes BEFORE the html
+          // reaches the preview, the saved manifest, or the warm dispatch -
+          // every downstream consumer recovers the ref by re-scanning HTML.
+          if (productImageUrl) {
+            sectionHtml = stampProductRef(sectionHtml, productImageUrl);
+          }
           const slide: SlideType = {
             slideId: parsed.slideId,
             ...(role ? { role } : {}),

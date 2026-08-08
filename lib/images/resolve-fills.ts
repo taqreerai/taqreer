@@ -23,23 +23,24 @@ import { prisma } from "@/lib/prisma";
 import {
   listWarmedImageFiles,
   publicGeneratedImageUrl,
-  genImageHash,
+  genImageIdentityHash,
   genImageFileName,
 } from "@/lib/images/store";
 
 /**
  * Resolve `genid → public image URL` for a set of reserved boxes.
  *
- * @param genBoxes genid → the box's CURRENT prompt (from the live manifest /
- *   the slide HTML). Hashing the current prompt is what makes a drifted or
- *   regenerated box resolve to its NEW image, never a discarded draft's.
+ * @param genBoxes genid → the box's CURRENT prompt + product ref (from the
+ *   live manifest / the slide HTML). Hashing the current identity is what
+ *   makes a drifted or regenerated box resolve to its NEW image, never a
+ *   discarded draft's.
  * Returns only the boxes that actually have a stored image; a box still
  * generating (no ready row AND no warmed file yet) is omitted.
  */
 export async function resolveGenImageFills(args: {
   projectId: string;
   versionId: string | null;
-  genBoxes: Map<string, string>;
+  genBoxes: Map<string, { prompt: string; ref: string | null }>;
 }): Promise<Map<string, string>> {
   const { projectId, versionId, genBoxes } = args;
   const fills = new Map<string, string>();
@@ -71,10 +72,10 @@ export async function resolveGenImageFills(args: {
   const readyByGenid = new Map<string, string>();
   for (const r of ready) if (r.storageUrl) readyByGenid.set(r.genid, r.storageUrl);
 
-  for (const [genid, prompt] of genBoxes) {
-    // Identity is (genid + promptHash): resolve to the CURRENT prompt's image,
-    // never a stale one. The current prompt's file is `${genid}-${hash}.jpg`.
-    const hash = genImageHash(prompt);
+  for (const [genid, box] of genBoxes) {
+    // Identity is (genid + prompt/ref hash): resolve to the CURRENT box's
+    // image, never a stale one. The current file is `${genid}-${hash}.jpg`.
+    const hash = genImageIdentityHash(box.prompt, box.ref);
     const fileName = genImageFileName(genid, hash);
     // A ready DB row wins ONLY when its stored path encodes the CURRENT hash. A
     // row left over from a since-changed prompt (e.g. an in-place data-genimage

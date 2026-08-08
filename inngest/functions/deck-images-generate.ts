@@ -36,7 +36,7 @@ import {
   storeGeneratedImage,
   generatedImageExists,
   publicGeneratedImageUrl,
-  genImageHash,
+  genImageIdentityHash,
 } from "@/lib/images/store";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 
@@ -51,10 +51,14 @@ type ImageBox = {
   prompt: string;
   role: string;
   aspect: GenImageAspect;
-  // sha256→12hex of `prompt` (genImageHash). Folds the prompt into the
-  // storage path so this reconcile adopts ONLY a warm image whose prompt
-  // matches the FINAL manifest — a drifted (reused-genid, changed-prompt)
-  // box generates fresh instead of adopting the discarded draft's image
+  // Product-photo reference URL (data-genref, re-scanned from the saved
+  // manifest) - the gpt-image images.edit input. null for ordinary boxes.
+  ref: string | null;
+  // sha256→12hex identity of `prompt` (+ ref when present -
+  // genImageIdentityHash). Folds the identity into the storage path so this
+  // reconcile adopts ONLY a warm image whose prompt AND reference match the
+  // FINAL manifest - a drifted (reused-genid, changed-prompt) box generates
+  // fresh instead of adopting the discarded draft's image
   // (context/images.md §12).
   hash: string;
 };
@@ -147,7 +151,7 @@ export const deckImagesGenerate = inngest.createFunction(
           collected.push({
             slideKey: slide.slideId,
             ...marker,
-            hash: genImageHash(marker.prompt),
+            hash: genImageIdentityHash(marker.prompt, marker.ref),
           });
           if (collected.length >= MAX_GENERATED_IMAGES) break;
         }
@@ -287,6 +291,7 @@ export const deckImagesGenerate = inngest.createFunction(
             const { b64, size } = await generateImageWithRetry({
               prompt: b.prompt,
               aspect: b.aspect,
+              referenceUrl: b.ref,
             });
             const url = await storeGeneratedImage({
               projectId,

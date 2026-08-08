@@ -190,6 +190,14 @@ export type FrameSlideDecl = {
   bg: string;
   bgCss: string | null;
   bgPrompt: string | null;
+  /** data-bg-source - "product" marks a photo background that must be
+   *  generated FROM the user's uploaded product photo (social flow).
+   *  Claude authors the bare marker; deck-generate resolves it to bgRef. */
+  bgSource: string | null;
+  /** data-bg-ref - the product photo URL, stamped server-side (never by
+   *  Claude) and persisted on the stored section so post-hoc re-assemblies
+   *  (vision revision, partial regen, unlock) re-emit it without the brief. */
+  bgRef: string | null;
   bgScrim: "none" | "soft" | "strong";
   deckTitle: string | null;
   /** Cover's data-deck-slides = the model's declared intended slide total
@@ -243,6 +251,8 @@ export function parseFrameSlide(sectionHtml: string): FrameSlideDecl {
     bg: attr(openTag, "data-bg") ?? "color",
     bgCss: attr(openTag, "data-bg-css"),
     bgPrompt: attr(openTag, "data-bg-prompt"),
+    bgSource: attr(openTag, "data-bg-source"),
+    bgRef: attr(openTag, "data-bg-ref"),
     bgScrim: scrim === "soft" || scrim === "strong" ? scrim : "none",
     deckTitle: attr(openTag, "data-deck-title"),
     deckSlides: attr(openTag, "data-deck-slides"),
@@ -311,8 +321,12 @@ export function assembleFramedSlide(
   // Photo layers are data-genimage BOXES: the existing warm/reconcile pipeline
   // generates + injects the src (aspect via explicit data-genaspect - these
   // boxes are %-sized so px derivation has nothing to read).
+  const isProductBg = decl.bgSource === "product";
   const bgImg = (aspect: "landscape" | "portrait") =>
-    `<img data-genimage="${esc(decl.bgPrompt ?? "")}" data-genid="${bgGenId(slideIndex)}" data-genaspect="${aspect}" alt="" style="width:100%;height:100%;object-fit:cover;display:block;${placeholder}"/>`;
+    `<img data-genimage="${esc(decl.bgPrompt ?? "")}" data-genid="${bgGenId(slideIndex)}" data-genaspect="${aspect}"` +
+    (isProductBg ? ` data-gensource="product"` : "") +
+    (isProductBg && decl.bgRef ? ` data-genref="${esc(decl.bgRef)}"` : "") +
+    ` alt="" style="width:100%;height:100%;object-fit:cover;display:block;${placeholder}"/>`;
 
   // ── Layer 0: ground + tier-1 full-bleed / tier-2 panel ──
   const ground = decl.bgCss
@@ -367,6 +381,8 @@ export function assembleFramedSlide(
       ` data-bg="${esc(decl.bg)}"` +
       (decl.bgCss ? ` data-bg-css="${esc(decl.bgCss)}"` : "") +
       (decl.bgPrompt ? ` data-bg-prompt="${esc(decl.bgPrompt)}"` : "") +
+      (decl.bgSource ? ` data-bg-source="${esc(decl.bgSource)}"` : "") +
+      (decl.bgRef ? ` data-bg-ref="${esc(decl.bgRef)}"` : "") +
       (decl.bgScrim !== "none" ? ` data-bg-scrim="${decl.bgScrim}"` : "") +
       (isCover && ctx.deckTitle ? ` data-deck-title="${esc(ctx.deckTitle)}"` : "") +
       `>${ground}${panelHtml}${wellHtml}${chromeHtml}</section>`,
@@ -453,7 +469,7 @@ RULES:
 - Reply with EXACTLY ONE corrected <section> in the generation contract: keep the declared data attributes from the section tag above (change data-bg-css only if your design needs it; keep data-label and data-role), containing exactly one <div class="well"> in PURE FLOW. No <style> block, no data-revises, no prose, no fences - the FIRST character of your reply is the < of the section.
 - Never copy position:absolute, left/top offsets, or fixed pixel insets from the current code - they are machine output, not design.
 - Keep the message and text content as written${input.comments.length ? " except where a comment asks otherwise" : ""}.
-- Preserve every <img> src EXACTLY. Keep data-genimage boxes exactly as they are (same data-genimage and data-genaspect values, no new image slots).
+- Preserve every <img> src EXACTLY. Keep data-genimage boxes exactly as they are (same data-genimage, data-genaspect, data-gensource, and data-genref values, no new image slots).
 - Numerals in RTL decks: a digit block with dir="ltr" renders text-align:start as LEFT - keep dir=ltr, set text-align explicitly to place the numerals where the composition needs them.`;
 }
 
@@ -589,7 +605,7 @@ RULES:
 - THEN emit the corrected <section> for every REVISING slide, in the exact generation contract (same declared attributes unless the fix requires changing one, exactly one <div class="well">) PLUS data-revises="<the slide's position number>".
 - Beyond the findings, revise when a correction genuinely improves the slide: a real defect or a clear visual upgrade. Never re-emit for a minor taste difference.
 - Keep the message and text content as written (trim or rewrap text only when the defect demands it).
-- Preserve every <img> src EXACTLY. Keep data-genimage boxes exactly as they are (same data-genimage and data-genaspect values, no new image slots).
+- Preserve every <img> src EXACTLY. Keep data-genimage boxes exactly as they are (same data-genimage, data-genaspect, data-gensource, and data-genref values, no new image slots).
 - Numerals in RTL decks: a digit block with dir="ltr" renders text-align:start as LEFT - keep dir=ltr, set text-align explicitly to place the numerals where the composition needs them.`,
   });
   return blocks;

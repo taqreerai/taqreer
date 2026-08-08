@@ -9,7 +9,9 @@
 // forbid ALL typography; words always stay as real HTML overlaid on the
 // box, never baked into the generated pixels.
 
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
+
+import { isAllowedProductRefUrl } from "@/lib/images/product-ref";
 
 export type ImageAspect = "landscape" | "portrait" | "square";
 
@@ -27,6 +29,23 @@ const SIZE_FOR_ASPECT: Record<ImageAspect, "1536x1024" | "1024x1536" | "1024x102
 const TEXTLESS_GUARD =
   "Absolutely no text, words, letters, numbers, captions, labels, " +
   "watermarks, logos, signage, or UI of any kind anywhere in the image.";
+
+// Product-reference variant of the guard: the supplied photo IS the
+// subject, and real products carry printed labels/branding that must
+// survive faithfully - so the blanket "no logos" rule would fight the
+// input. Forbid only ADDED typography around it.
+const PRODUCT_GUARD =
+  "Feature the supplied product photo as the subject: keep the product " +
+  "exactly faithful in shape, proportions, colors, materials, and any " +
+  "label or text printed on the product itself. Add no other text, words, " +
+  "letters, numbers, captions, watermarks, logos, signage, or UI anywhere " +
+  "else in the image.";
+
+// Reference-photo fetch bounds: the pipeline downloads the product photo
+// from OUR public uploads prefix (isAllowedProductRefUrl) before handing
+// it to images.edit. Upload route caps files at 10MB; mirror it here.
+const REF_FETCH_TIMEOUT_MS = 20_000;
+const REF_MAX_BYTES = 10 * 1024 * 1024;
 
 const MODEL = "gpt-image-2";
 const QUALITY = "medium";
@@ -48,21 +67,65 @@ export type GeneratedImageResult = {
   size: string;
 };
 
+// Download the product reference photo for an images.edit call. Refuses
+// anything outside our public uploads prefix (data-genref lives in
+// user-editable slide HTML - an arbitrary URL here would be SSRF).
+async function fetchReferenceImage(url: string): Promise<{
+  bytes: Buffer;
+  type: string;
+}> {
+  if (!isAllowedProductRefUrl(url)) {
+    throw new Error("Reference image URL is not an allowed uploads URL");
+  }
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(REF_FETCH_TIMEOUT_MS),
+    redirect: "error",
+  });
+  if (!res.ok) {
+    throw new Error(`Reference image fetch failed: ${res.status}`);
+  }
+  const bytes = Buffer.from(await res.arrayBuffer());
+  if (bytes.byteLength === 0 || bytes.byteLength > REF_MAX_BYTES) {
+    throw new Error(`Reference image size out of bounds: ${bytes.byteLength}`);
+  }
+  return { bytes, type: res.headers.get("content-type") ?? "image/png" };
+}
+
 /**
  * Generate a single textless image for a reserved slide box.
+ * With `referenceUrl` (a product photo), the call switches to
+ * `images.edit` so gpt-image composes the scene AROUND the supplied
+ * photo instead of imagining a product from text.
  * Throws on API error or moderation rejection — the caller decides the
  * fallback (e.g. keep the box as a branded gradient).
  */
 export async function generateImage(opts: {
   prompt: string;
   aspect: ImageAspect;
+  referenceUrl?: string | null;
 }): Promise<GeneratedImageResult> {
   const size = SIZE_FOR_ASPECT[opts.aspect];
-  const prompt = `${opts.prompt.trim()} ${TEXTLESS_GUARD}`;
+
+  if (opts.referenceUrl) {
+    const ref = await fetchReferenceImage(opts.referenceUrl);
+    const image = await toFile(ref.bytes, "product.png", { type: ref.type });
+    const res = await getClient().images.edit({
+      model: MODEL,
+      image,
+      prompt: `${opts.prompt.trim()} ${PRODUCT_GUARD}`,
+      size,
+      quality: QUALITY,
+      input_fidelity: "high",
+      n: 1,
+    });
+    const b64 = res.data?.[0]?.b64_json;
+    if (!b64) throw new Error("gpt-image-2 returned no image data");
+    return { b64, size };
+  }
 
   const res = await getClient().images.generate({
     model: MODEL,
-    prompt,
+    prompt: `${opts.prompt.trim()} ${TEXTLESS_GUARD}`,
     size,
     quality: QUALITY,
     n: 1,
@@ -97,7 +160,7 @@ function isTransientImageError(err: unknown): boolean {
  * three identical-theme prompts succeeded — a one-off 429).
  */
 export async function generateImageWithRetry(
-  opts: { prompt: string; aspect: ImageAspect },
+  opts: { prompt: string; aspect: ImageAspect; referenceUrl?: string | null },
   attempts = 3,
 ): Promise<GeneratedImageResult> {
   // Clamp to ≥1 so a 0/negative `attempts` can't skip the loop and fall through

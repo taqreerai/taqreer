@@ -35,6 +35,22 @@ export function genImageHash(prompt: string): string {
   return createHash("sha256").update(prompt).digest("hex").slice(0, 12);
 }
 
+// Identity hash for a box = prompt + (optional) reference image. A product
+// photo changes what gpt-image produces for the SAME prompt, so the ref
+// must fold into the identity or a ref'd generation would adopt (and serve)
+// a stale no-ref image at the same path - and vice versa. genImageHash
+// itself stays untouched so every existing no-ref deck keeps byte-identical
+// paths, warm idempotency keys, and adopt matches. "\n@ref:" can't occur at
+// that position in a real prompt+ref concatenation ambiguity (prompts are
+// single-purpose text, refs are https URLs), so the fold is injective enough
+// for a 48-bit fingerprint scoped to one box's versions.
+export function genImageIdentityHash(
+  prompt: string,
+  refUrl?: string | null,
+): string {
+  return genImageHash(refUrl ? `${prompt}\n@ref:${refUrl}` : prompt);
+}
+
 // Single source for the stored generated-image filename. `.jpg` because
 // storeGeneratedImage re-encodes the gpt-image PNG to JPEG. Used by the path
 // builder, the existence check, the safe-filename guard, AND the status

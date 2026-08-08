@@ -44,13 +44,16 @@ function getSlideJson(value: unknown): SlideJson | null {
   return value as SlideJson;
 }
 
-// Collect the reserved image boxes (genid → prompt) from a slides array,
-// scanning the SAME HTML the client renders. Used to resolve each live box to
-// the URL for its CURRENT prompt's hash — so a drift's reused genid surfaces
-// the new image, never the discarded draft's (context/images.md §12). First
-// prompt per genid wins; the caller overlays streamingPreview (live) last.
-function collectGenBoxes(slides: unknown[] | undefined): Map<string, string> {
-  const map = new Map<string, string>();
+// Collect the reserved image boxes (genid → prompt + product ref) from a
+// slides array, scanning the SAME HTML the client renders. Used to resolve
+// each live box to the URL for its CURRENT identity hash - so a drift's
+// reused genid surfaces the new image, never the discarded draft's
+// (context/images.md §12). First box per genid wins; the caller overlays
+// streamingPreview (live) last.
+function collectGenBoxes(
+  slides: unknown[] | undefined,
+): Map<string, { prompt: string; ref: string | null }> {
+  const map = new Map<string, { prompt: string; ref: string | null }>();
   if (!Array.isArray(slides)) return map;
   for (const s of slides) {
     const html =
@@ -59,7 +62,7 @@ function collectGenBoxes(slides: unknown[] | undefined): Map<string, string> {
         : null;
     if (!html) continue;
     for (const m of scanGenImages(html)) {
-      if (!map.has(m.genid)) map.set(m.genid, m.prompt);
+      if (!map.has(m.genid)) map.set(m.genid, { prompt: m.prompt, ref: m.ref });
     }
   }
   return map;
@@ -303,11 +306,11 @@ export async function GET(
   let imageFills: Record<string, string> | null = null;
   let imageFailed: string[] | null = null;
   if (includeImageFills) {
-    // genid → prompt for every reserved box the client is rendering. Canonical
-    // slides first, then streamingPreview overlaid (the live prompt wins).
+    // genid → prompt + ref for every reserved box the client is rendering.
+    // Canonical slides first, then streamingPreview overlaid (the live box wins).
     const genBoxes = collectGenBoxes(slideJson?.slides);
-    for (const [genid, prompt] of collectGenBoxes(slideJson?.streamingPreview)) {
-      genBoxes.set(genid, prompt);
+    for (const [genid, box] of collectGenBoxes(slideJson?.streamingPreview)) {
+      genBoxes.set(genid, box);
     }
     // ONE shared resolver (resolve-fills.ts) — the SAME two sources (ready DB
     // rows + warmed storage files) the server export path uses, so the live
@@ -332,7 +335,7 @@ export async function GET(
       imageFailed = failedRows
         .filter(
           (r) =>
-            !fills.has(r.genid) && genBoxes.get(r.genid) === r.prompt,
+            !fills.has(r.genid) && genBoxes.get(r.genid)?.prompt === r.prompt,
         )
         .map((r) => r.genid);
     }

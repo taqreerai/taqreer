@@ -251,7 +251,7 @@
     },
     "preview": {
       "title": "From a brief to a post",
-      "subtitle": "Choose a platform and size, apply your brand, and set the design. This is how designing a social post starts."
+      "subtitle": "Choose a platform and size, add your product photo if you like and we design the post around it, apply your brand, and set the design. This is how designing a social post starts."
     },
     "why": {
       "title": "Why taqreer.ai",
@@ -629,7 +629,13 @@
       "ratio": "Size",
       "ratios": { "square": "Square", "portrait": "Portrait", "story": "Story", "landscape": "Landscape" },
       "count": "Slides",
-      "style": "Design style"
+      "style": "Design style",
+      "productPhoto": "Product photo",
+      "productPhotoHint": "Optional: we design the post around your product",
+      "productPhotoRemove": "Remove product photo",
+      "productPhotoTooLarge": "Image too large, the limit is 10MB",
+      "productPhotoInvalidType": "Unsupported file type: use PNG, JPG, or WebP",
+      "productPhotoUploadFailed": "Product photo upload failed, please try again"
     },
     "mimic": {
       "title": "Mimic another deck's design",

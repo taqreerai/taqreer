@@ -1198,9 +1198,9 @@ export function getFlows(
   const f = dict.flows;
   const cta = f.generate.create;
   // The real flows all render ONE consolidated brand-identity card (palette +
-  // fonts + logo + save-default). `withAi` appends the AI-images panel — the
-  // create + mimic flows have it, enhance + social don't (social's AI-images
-  // panel lives in its Design card, not the brand card).
+  // fonts + logo + save-default). `withAi` appends the AI-images panel to the
+  // BRAND card - only mimic has it there; create + social carry the panel in
+  // their CONTENT cards (2026-08-03), enhance has none.
   const brandCard = (palette: string[], withAi: boolean): FlowCardSpec => ({
     icon: "palette",
     title: f.brandCard,
@@ -1346,6 +1346,10 @@ export function getFlows(
       title: f.social.title,
       subtitle: f.social.subtitle,
       cta,
+      // Mirrors the real /social content card order (2026-08-08): language →
+      // textarea → product-photo dropzone → AI-images panel → persistent row;
+      // the design card no longer carries the images panel (it moved to the
+      // content card 2026-08-03, same as /create).
       cards: [
         {
           icon: "edit_note",
@@ -1355,7 +1359,16 @@ export function getFlows(
               <FieldRow label={f.language}>
                 <FakeSegmented options={[f.langArabic, f.langEnglish]} active={0} variant="primary" />
               </FieldRow>
-              <FakeTextarea placeholder={f.social.topicPlaceholder} rows={5} />
+              <FakeTextarea placeholder={f.social.topicPlaceholder} rows={2} />
+              <FakeDropzone
+                icon="photo_camera"
+                title={f.social.productPhoto}
+                hint={f.social.productPhotoHint}
+              />
+              <CardSeparator />
+              <FakeAIImagesPanel dict={dict} dir={dir} />
+              <CardSeparator />
+              <FakePersistentRow dict={dict} dir={dir} />
             </>
           ),
         },
@@ -1372,8 +1385,6 @@ export function getFlows(
               </FieldRow>
               <CardSeparator />
               <FakeDesignStyleRow dict={dict} label={f.social.style} />
-              <CardSeparator />
-              <FakeAIImagesPanel dict={dict} dir={dir} />
             </>
           ),
         },

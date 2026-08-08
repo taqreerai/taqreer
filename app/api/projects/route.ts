@@ -10,6 +10,7 @@ import { captureServerEvent } from "@/lib/analytics/posthog-server";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { isOwnedBrandAssetPath, signBrandAssetUrl } from "@/lib/storage/sign";
+import { isOwnedUploadedImageUrl } from "@/lib/images/product-ref";
 import { decodeSvgBytes } from "@/lib/brand/svg-decode";
 import { isPolychromeSvg } from "@/lib/brand/svg-polychrome";
 import { ALLOWED_FONT_HOSTS } from "@/lib/schema/slide";
@@ -257,6 +258,12 @@ type CreateProjectPayload = {
   // deck-generate, which branches the Claude message shape on
   // source.kind (see buildSourceContentBlocks in deck-generate.ts).
   source?: unknown;
+  // Social flow product photo: a public generated-images/uploads URL
+  // (from POST /api/storage/upload-image) the post is designed around.
+  // gpt-image receives it as an images.edit input for the boxes Claude
+  // marks as product shots. Social + imagesMode only; ownership of the
+  // URL's uploads namespace is enforced below.
+  productImage?: { url?: string } | null;
 };
 
 // Whitelist-validated language → direction mapping. Centralised so
@@ -736,6 +743,29 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  // Product photo (social flow): the URL rides the brief, gets baked into
+  // slide HTML as data-genref, and is FETCHED by the image pipeline as the
+  // gpt-image edit input - so it must be (a) confined to the flow + mode
+  // that uses it and (b) inside the CALLER's own public uploads namespace
+  // (same forged-path threat as the logo storageUrl above).
+  const productImageUrl =
+    typeof payload.productImage?.url === "string"
+      ? payload.productImage.url
+      : null;
+  if (productImageUrl) {
+    if (projectType !== "social" || payload.imagesMode !== true) {
+      return NextResponse.json(
+        { error: "productImage requires the social flow with imagesMode on" },
+        { status: 400 },
+      );
+    }
+    if (!isOwnedUploadedImageUrl(productImageUrl, user.id)) {
+      return NextResponse.json(
+        { error: "productImage.url is not owned by the current user" },
+        { status: 403 },
+      );
+    }
+  }
   await ensureFresh();
   const quality = resolveQuality(payload.quality);
 
@@ -895,6 +925,10 @@ export async function POST(request: Request) {
     // Regional people descriptor for generated lifestyle images (only when
     // resolvable). buildUserMessage turns this into the cast directive.
     ...(imageRegion ? { imageRegion } : {}),
+    // Social product photo (validated above): deck-generate turns this into
+    // the product addendum + stamps the URL into marked gen-boxes. OMITTED
+    // otherwise so every non-product brief stays byte-for-byte unchanged.
+    ...(productImageUrl ? { productImage: { url: productImageUrl } } : {}),
     // Only include `source` when a valid SourceMeta was provided.
     // deck-generate's readSource() also treats `kind: "scratch"`
     // as null, so a future explicit-scratch payload remains a

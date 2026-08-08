@@ -39,6 +39,11 @@ export interface GenImageMarker {
   /** Derived from the box's width/height (or legacy data-genaspect);
    *  defaults to "landscape" when the shape can't be determined. */
   aspect: GenImageAspect;
+  /** data-genref - reference image URL (user's product photo) sent to
+   *  gpt-image alongside the prompt. Stamped server-side by deck-generate
+   *  (Claude only writes the bare data-gensource="product" marker, never
+   *  the URL). null for ordinary prompt-only boxes. */
+  ref: string | null;
 }
 
 // Accept only safe genids. The genid flows into a Supabase storage path
@@ -141,6 +146,20 @@ function escapeAttrValue(url: string): string {
   return url.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
 }
 
+// Cheap client-safe sanity bounds for data-genref values read out of slide
+// HTML (user-editable). The REAL fetch gate is server-side
+// (isAllowedProductRefUrl in lib/images/product-ref.ts); this just keeps
+// junk values from riding the markers at all.
+const MAX_GENREF_LEN = 600;
+function readGenRef(tag: string): string | null {
+  const raw = readAttr(tag, "data-genref");
+  if (raw == null) return null;
+  const ref = decodeEntities(raw).trim();
+  if (!ref || ref.length > MAX_GENREF_LEN) return null;
+  if (!ref.startsWith("https://")) return null;
+  return ref;
+}
+
 /**
  * Find every reserved image box in one slide's HTML. Skips `<img>` tags
  * that aren't gen-boxes (no `data-genimage`), have an empty prompt, or
@@ -168,9 +187,39 @@ export function scanGenImages(html: string): GenImageMarker[] {
         ? (aspectRaw as GenImageAspect)
         : (deriveAspectFromStyle(tag) ?? "landscape");
     seen.add(genid);
-    out.push({ genid, prompt, role, aspect });
+    out.push({ genid, prompt, role, aspect, ref: readGenRef(tag) });
   }
   return out;
+}
+
+/**
+ * Bake the product-photo reference URL into every marked gen-box: any
+ * `<img>` carrying data-genimage + data-gensource="product" and no
+ * existing data-genref gains ` data-genref="<url>"`. Claude authors only
+ * the bare marker; deck-generate calls this at the assembly chokepoint so
+ * the URL persists in the slide HTML itself - which is what lets the warm
+ * fill, end reconcile, status poll, export hydration, and regen all
+ * recover the ref by re-scanning saved markup (the deck.images.requested
+ * event carries no prompts).
+ */
+export function stampProductRef(html: string, url: string): string {
+  let out = "";
+  let last = 0;
+  for (const [start, end] of imgTagRanges(html)) {
+    const tag = html.slice(start, end);
+    if (readAttr(tag, "data-genimage") == null) continue;
+    if (readAttr(tag, "data-gensource") !== "product") continue;
+    if (readAttr(tag, "data-genref") != null) continue;
+    const insertAt = tag.endsWith("/>") ? tag.length - 2 : tag.length - 1;
+    const stamped =
+      tag.slice(0, insertAt) +
+      ` data-genref="${escapeAttrValue(url)}"` +
+      tag.slice(insertAt);
+    out += html.slice(last, start) + stamped;
+    last = end;
+  }
+  if (last === 0) return html;
+  return out + html.slice(last);
 }
 
 /**
@@ -245,7 +294,7 @@ export function neutralizeGenImages(
     // the seed scan — exactly the never-fillable boxes this guard
     // exists to strip. The CSS shimmer selector matches all of them.
     const stripped = tag.replace(
-      /\s(?:data-genimage|data-genid|data-genrole|data-genaspect)(?=\s|=|\/?>)(?:\s*=\s*("[^"]*"|'[^']*'|[^\s>]*))?/gi,
+      /\s(?:data-genimage|data-genid|data-genrole|data-genaspect|data-gensource|data-genref)(?=\s|=|\/?>)(?:\s*=\s*("[^"]*"|'[^']*'|[^\s>]*))?/gi,
       "",
     );
     out += html.slice(last, start) + stripped;

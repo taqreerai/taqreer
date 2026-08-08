@@ -38,9 +38,13 @@ type WarmBox = {
   genid: string;
   prompt: string;
   aspect: GenImageAspect;
-  // sha256→12hex of `prompt` (lib/images/store genImageHash). Folded into the
-  // storage path AND the idempotency key so a drift's changed prompt is a
-  // distinct image, never a collision with the discarded draft.
+  // Product-photo reference URL (data-genref) - sent to gpt-image as the
+  // images.edit input. Absent/null for ordinary prompt-only boxes.
+  ref?: string | null;
+  // sha256→12hex identity of `prompt` (+ ref when present) - lib/images/store
+  // genImageIdentityHash. Folded into the storage path AND the idempotency
+  // key so a drift's changed prompt (or a ref'd vs no-ref box) is a distinct
+  // image, never a collision with the discarded draft.
   hash: string;
 };
 
@@ -96,6 +100,7 @@ export const deckImageWarm = inngest.createFunction(
         const { b64 } = await generateImageWithRetry({
           prompt: box.prompt,
           aspect: box.aspect,
+          referenceUrl: box.ref ?? null,
         });
         const url = await storeGeneratedImage({
           projectId,

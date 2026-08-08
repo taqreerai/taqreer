@@ -33,10 +33,12 @@ export async function hydrateManifestImages(
 ): Promise<SlideManifest> {
   // Scan every slide once: markers[i] = the gen boxes on slide i.
   const markersPerSlide = manifest.slides.map((s) => scanGenImages(s.html));
-  const genBoxes = new Map<string, string>();
+  const genBoxes = new Map<string, { prompt: string; ref: string | null }>();
   for (const markers of markersPerSlide) {
     for (const m of markers) {
-      if (!genBoxes.has(m.genid)) genBoxes.set(m.genid, m.prompt);
+      if (!genBoxes.has(m.genid)) {
+        genBoxes.set(m.genid, { prompt: m.prompt, ref: m.ref });
+      }
     }
   }
   if (genBoxes.size === 0) return manifest;

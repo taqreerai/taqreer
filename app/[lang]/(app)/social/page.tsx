@@ -14,8 +14,11 @@ import {
   isCreditGatePayload,
   type CreditGatePayload,
 } from "@/components/credits/CreditGateDialog";
-import { useSlideCap } from "@/lib/credits/store";
+import { useSlideCap, useCreditBalance } from "@/lib/credits/store";
 import { displaySlideEstimate, slideCapForFlow } from "@/lib/credits/cost";
+import { isImagesLocked, IMAGES_GATE_TIER } from "@/lib/images/images-gating";
+import { planLabel } from "@/lib/plan";
+import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
@@ -69,6 +72,19 @@ const MIN_PALETTE = 2;
 const MAX_PALETTE = 6;
 const DEFAULT_PALETTE = ["#000000", "#FFFFFF"];
 const CARD_MIN_H_CLASS = "min-h-[440px]";
+
+// Product photo caps - mirror POST /api/storage/upload-image (10MB, raster
+// only). GIF is deliberately excluded here: gpt-image's images.edit input
+// wants a still photo (the route itself stays permissive for the editor).
+const PRODUCT_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
+const PRODUCT_IMAGE_EXT_RE = /\.(png|jpe?g|webp)$/i;
+const PRODUCT_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+
+// Same tiny helper /create + /mimic each keep locally.
+function formatFileSize(size: number, kb: string, mb: string) {
+  if (size < 1024 * 1024) return `${Math.max(1, Math.round(size / 1024))} ${kb}`;
+  return `${(size / (1024 * 1024)).toFixed(1)} ${mb}`;
+}
 
 type ResolvedFontField = {
   name: string;
@@ -124,6 +140,21 @@ export default function SocialPage() {
   // (2026-08, lib/images/images-gating.ts). Social posts lean hard on imagery,
   // so it stays a first-class switch — subscribers opt in per post.
   const [imagesMode, setImagesMode] = useState<boolean>(false);
+
+  // ─── Product photo ─────────────────────────────────────────────
+  // The post is designed AROUND this shot: it uploads at submit time and
+  // gpt-image receives it (images.edit) for the boxes Claude marks as
+  // product shots. Needs imagesMode, so picking a photo auto-enables it
+  // (one-way flip, mirroring /create's STYLE_REQUIRES_IMAGES); locked
+  // (sub-Plus) users get the UpgradeModal instead - same derivation as
+  // AIImagesPanel, incl. the null-plan-gates-like-free hydration rule.
+  const [productFile, setProductFile] = useState<File | null>(null);
+  const [productUpgradeOpen, setProductUpgradeOpen] = useState(false);
+  const credits = useCreditBalance();
+  const imagesLocked = isImagesLocked({
+    plan: credits?.plan ?? null,
+    isAdmin: credits?.isAdmin ?? false,
+  });
 
   // ─── Branding (identical to /datasheet + /create) ──────────────
   const [colors, setColors] = useState<string[]>([]);
@@ -247,6 +278,31 @@ export default function SocialPage() {
   );
   const generateDisabled = topic.trim().length === 0 || submitting;
 
+  // Validate + adopt a picked/dropped product photo. Locked users never reach
+  // the picker (ProductPhotoRow gates the open), but the drop path lands here
+  // too - gate again so a drag-drop can't bypass the crown.
+  const acceptProductPhoto = (f: File | undefined | null) => {
+    if (!f) return;
+    if (imagesLocked) {
+      setProductUpgradeOpen(true);
+      return;
+    }
+    const typeOk = f.type
+      ? PRODUCT_IMAGE_TYPES.has(f.type)
+      : PRODUCT_IMAGE_EXT_RE.test(f.name);
+    if (!typeOk) {
+      setError(dict.flows.social.productPhotoInvalidType);
+      return;
+    }
+    if (f.size > PRODUCT_IMAGE_MAX_BYTES) {
+      setError(dict.flows.social.productPhotoTooLarge);
+      return;
+    }
+    setError("");
+    setProductFile(f);
+    setImagesMode(true);
+  };
+
   const handleGenerate = async (overrideSlideCount?: number) => {
     const reduced =
       typeof overrideSlideCount === "number" ? overrideSlideCount : null;
@@ -255,6 +311,27 @@ export default function SocialPage() {
     setSubmitting(true);
     try {
       const logoUploaded = await uploadAsset("brand-assets", "logos", logoFile);
+
+      // Product photo uploads at SUBMIT time (like the logo above): on-select
+      // uploads would leak a permanent public object per abandoned pick -
+      // generated-images/uploads has no cleanup cron. Skipped when the user
+      // manually turned imagesMode back off (the row renders muted then).
+      let productImage: { url: string } | null = null;
+      if (productFile && imagesMode) {
+        const fd = new FormData();
+        fd.append("file", productFile);
+        const res = await fetch("/api/storage/upload-image", {
+          method: "POST",
+          body: fd,
+        });
+        const uploaded = res.ok
+          ? ((await res.json().catch(() => null)) as { url?: string } | null)
+          : null;
+        if (!uploaded?.url) {
+          throw new Error(dict.flows.social.productPhotoUploadFailed);
+        }
+        productImage = { url: uploaded.url };
+      }
 
       let fontField: ResolvedFontField = null;
       const uploadedFontFields: UploadedFontFieldBrief[] = [];
@@ -333,6 +410,7 @@ export default function SocialPage() {
             (slideCountMode === "custom" ? slideCountValue : null),
           quality,
           imagesMode,
+          ...(productImage ? { productImage } : {}),
         }),
       });
 
@@ -374,6 +452,19 @@ export default function SocialPage() {
           void handleGenerate(slides);
         }}
       />
+      {/* Product-photo Plus+ gate - same modal + copy AIImagesPanel opens
+          for a locked toggle enable. */}
+      <UpgradeModal
+        open={productUpgradeOpen}
+        gateContext={{
+          title: dict.components.creditGate.imagesLockedTitle,
+          body: `${dict.components.creditGate.imagesLockedBody.replace(
+            "{tier}",
+            planLabel(dict.components.planUsage, IMAGES_GATE_TIER),
+          )} ${dict.components.creditGate.chooseTier}`.trim(),
+        }}
+        onClose={() => setProductUpgradeOpen(false)}
+      />
       <div className="mt-[6vh] flex w-full flex-col items-center gap-6 px-4">
         <header className="text-center">
           <h1 className="tq-h1">{dict.flows.social.title}</h1>
@@ -412,6 +503,19 @@ export default function SocialPage() {
                 // (owner direction 2026-08-03). flex-1 still grows it to
                 // fill whatever the card has.
                 className="input-dark min-h-[60px] flex-1 resize-none text-sm leading-6 disabled:cursor-not-allowed disabled:opacity-50"
+              />
+              {/* Product photo - under the textarea; the textarea is the
+                  card's only flex-1 child so it shrinks to make room and
+                  the card keeps its height. Muted when the user turned
+                  imagesMode back off (the photo won't be sent). */}
+              <ProductPhotoRow
+                file={productFile}
+                submitting={submitting}
+                locked={imagesLocked}
+                muted={Boolean(productFile) && !imagesMode}
+                onPick={acceptProductPhoto}
+                onRemove={() => setProductFile(null)}
+                onLocked={() => setProductUpgradeOpen(true)}
               />
             </div>
             {/* Generate-images toggle — inside the content card, same as
@@ -651,6 +755,154 @@ export default function SocialPage() {
           {error || " "}
         </p>
       </div>
+    </div>
+  );
+}
+
+// ProductPhotoRow - compact dropzone under the content textarea (same visual
+// language as /create's ContentDropzone: 44px dashed pill, icon chip, title +
+// hint; violet drag state like LogoRow). Selected state swaps the chip for a
+// 32px blob-URL thumbnail (LogoRow's revoke lifecycle) + filename + size.
+function ProductPhotoRow({
+  file,
+  submitting,
+  locked,
+  muted,
+  onPick,
+  onRemove,
+  onLocked,
+}: {
+  file: File | null;
+  submitting: boolean;
+  locked: boolean;
+  muted: boolean;
+  onPick: (f: File | undefined | null) => void;
+  onRemove: () => void;
+  onLocked: () => void;
+}) {
+  const dict = useDict();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
+
+  // Blob-URL lifecycle for the thumbnail (revoke on change / unmount) -
+  // LogoRow's exact pattern.
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const lastFileRef = useRef<File | null>(null);
+  const liveUrlRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (file === lastFileRef.current) return;
+    lastFileRef.current = file;
+    setObjectUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      const next = file ? URL.createObjectURL(file) : null;
+      liveUrlRef.current = next;
+      return next;
+    });
+  }, [file]);
+  useEffect(
+    () => () => {
+      if (liveUrlRef.current) URL.revokeObjectURL(liveUrlRef.current);
+    },
+    [],
+  );
+
+  return (
+    <div className={`relative ${muted ? "opacity-60" : ""}`}>
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(event) => {
+          onPick(event.target.files?.[0]);
+          event.currentTarget.value = "";
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => {
+          if (locked) {
+            onLocked();
+            return;
+          }
+          inputRef.current?.click();
+        }}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragging(false);
+          onPick(event.dataTransfer.files?.[0]);
+        }}
+        disabled={submitting}
+        className={`flex min-h-[44px] w-full items-center gap-3 rounded-xl border border-dashed p-2 text-start transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+          dragging
+            ? "border-[var(--tq-violet)]/60 bg-[var(--tq-violet)]/10"
+            : "border-foreground/20 bg-overlay-soft hover:border-foreground/30"
+        }`}
+      >
+        {file && objectUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={objectUrl}
+            alt={dict.flows.social.productPhoto}
+            className="h-8 w-8 shrink-0 rounded-md object-cover"
+          />
+        ) : (
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--tq-surface)]">
+            <span
+              className="material-symbols-outlined text-foreground/80"
+              style={{ fontSize: 18 }}
+            >
+              photo_camera
+            </span>
+          </span>
+        )}
+        {file ? (
+          <div className="min-w-0 flex-1 pe-7">
+            <p className="truncate text-sm font-semibold text-foreground">
+              {file.name}
+            </p>
+            <p className="mt-0.5 truncate text-xs text-foreground/60">
+              {formatFileSize(file.size, dict.flows.unitKB, dict.flows.unitMB)}
+            </p>
+          </div>
+        ) : (
+          <div className="min-w-0 flex-1">
+            <p className="flex items-center gap-1.5 truncate text-sm font-semibold text-foreground">
+              {dict.flows.social.productPhoto}
+              {locked ? (
+                // Gold crown = paid feature (AIImagesPanel's affordance).
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: 14, color: "var(--tq-premium-gold)" }}
+                  aria-hidden
+                >
+                  crown
+                </span>
+              ) : null}
+            </p>
+            <p className="mt-0.5 truncate text-[11px] text-foreground/40">
+              {dict.flows.social.productPhotoHint}
+            </p>
+          </div>
+        )}
+      </button>
+      {file && !submitting ? (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={dict.flows.social.productPhotoRemove}
+          className="absolute end-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md bg-black/35 text-foreground/60 transition-colors hover:bg-foreground/10 hover:text-foreground"
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+            close
+          </span>
+        </button>
+      ) : null}
     </div>
   );
 }

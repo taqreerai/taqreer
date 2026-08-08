@@ -5,7 +5,7 @@
 // EXISTING per-box `deck.image.warm` pipeline for that single box.
 //
 // Why this needs no new generation machinery: the image identity is
-// (genid, hash) where hash = genImageHash(prompt). Because the prompt CHANGED,
+// (genid, hash) where hash = genImageIdentityHash(prompt, ref). Because the prompt CHANGED,
 // the deterministic storage path (`${projectId}/gen/${genid}-${hash}.png`) is
 // NEW — so warm generates fresh there with no dedup/existence collision and the
 // bill-once contract is preserved. (Same prompt re-confirmed = the warm
@@ -13,7 +13,8 @@
 //
 // Persistence: the box's `data-genimage` is updated client-side and committed
 // as a normal slide edit; the status route then DERIVES the box's URL from
-// `genImageHash(data-genimage)`. We ALSO clear the latest version's
+// `genImageIdentityHash(data-genimage, data-genref)`. We ALSO clear the latest
+// version's
 // GeneratedImage row (prompt = new prompt, status = "generating",
 // storageUrl = null) so the status route's "ready row" shortcut
 // (status === "ready" && storageUrl != null) doesn't keep serving the OLD
@@ -24,8 +25,8 @@ import { rateLimited } from "@/lib/api/rate-limit";
 import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
-import { genImageHash } from "@/lib/images/store";
-import type { GenImageAspect } from "@/lib/images/slide-images";
+import { genImageIdentityHash } from "@/lib/images/store";
+import { scanGenImages, type GenImageAspect } from "@/lib/images/slide-images";
 
 // Mirror SAFE_GENID (lib/images/slide-images): the genid flows into a storage
 // path, so bound it to a filename-safe charset before it reaches the pipeline.
@@ -98,7 +99,7 @@ export async function POST(
           versions: {
             orderBy: { versionNumber: "desc" },
             take: 1,
-            select: { id: true },
+            select: { id: true, slideJson: true },
           },
         },
       },
@@ -110,7 +111,28 @@ export async function POST(
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
-  const hash = genImageHash(prompt);
+  // Product-photo reference: derived from the STORED slide HTML, never from
+  // the client body (a client-supplied ref would be an SSRF vector - the warm
+  // pipeline fetches this URL). A prompt edit on a product box keeps producing
+  // product images; ordinary boxes scan to null and behave exactly as before.
+  let ref: string | null = null;
+  {
+    const slideJson = presentation.versions[0]?.slideJson as {
+      slides?: { html?: unknown }[];
+    } | null;
+    const slides = Array.isArray(slideJson?.slides) ? slideJson.slides : [];
+    outer: for (const s of slides) {
+      if (typeof s?.html !== "string") continue;
+      for (const m of scanGenImages(s.html)) {
+        if (m.genid === genid) {
+          ref = m.ref;
+          break outer;
+        }
+      }
+    }
+  }
+
+  const hash = genImageIdentityHash(prompt, ref);
 
   // Clear the stale "ready" row so the status route stops serving the previous
   // prompt's URL and falls through to the hash-derived URL for the new prompt.
@@ -159,7 +181,7 @@ export async function POST(
       projectId,
       slideKey,
       versionId: latestVersionId,
-      box: { genid, prompt, aspect, hash },
+      box: { genid, prompt, aspect, ref, hash },
       idemKey: `regen:${genid}:${hash}`,
     },
   });
