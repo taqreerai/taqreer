@@ -2699,7 +2699,7 @@ html.app-shell-scroll body {
     background-position: -200% 0;
   }
 }
-img[data-genimage]:not([src]):not(.tq-deck-live *) {
+img[data-genimage]:not([src]):where(:not(.tq-deck-live *)):where(:not(.tq-genimg-live)) {
   /* DEFAULT for an empty box (no src yet): an honest STATIC placeholder —
      the dim tint + a centered Lucide "image" glyph. The animated "loading"
      shimmer only renders under the `.tq-deck-live` scope below, which
@@ -2709,11 +2709,16 @@ img[data-genimage]:not([src]):not(.tq-deck-live *) {
      glyph instead of shimmering forever about an image that will never
      arrive. Every background sub-property is `!important` to beat Claude's
      inline placeholder gradient (which would otherwise reset size/repeat
-     and kill the slide) — which is exactly why the `:not(.tq-deck-live *)`
-     exclusion exists: an `!important` background-position would also
-     OVERRIDE the live rule's shimmer animation (important declarations
-     outrank animated values in the cascade), so this rule must not match
-     live boxes at all. The rule drops the instant `src` lands —
+     and kill the slide) — which is exactly why the two live exclusions
+     exist: an `!important` background-position would also OVERRIDE the
+     live rules' shimmer animation (important declarations outrank animated
+     values in the cascade), so this rule must not match live boxes at all.
+     They are wrapped in `:where()` (zero specificity) so this rule stays
+     at (0,2,1), below the FAILED rule's (0,3,1) — bare `:not(class)`
+     exclusions would lift it to (0,4,1) and its !important icon would beat
+     the failed rule's `background-image: none` (higher specificity wins
+     between same-origin importants), putting the glyph on failed boxes.
+     The rule drops the instant `src` lands —
      SlideRenderer patches src straight into THIS node (it never rebuilds
      the slide for an image), so the swap is in-place. `--tq-bg-dim` is a
      dark translucent in BOTH app themes (it floats over arbitrary slide
@@ -2726,13 +2731,17 @@ img[data-genimage]:not([src]):not(.tq-deck-live *) {
   animation: none;
 }
 
-.tq-deck-live img[data-genimage]:not([src]) {
-  /* LIVE deck (generation stream / partial regen in flight — the class is
-     set by DeckView): the bright highlight sliding across the box reads as
-     "image loading here". Static sub-properties are `!important` to beat
-     the inline placeholder gradient; background-position deliberately is
-     NOT — the shimmer animates it, and animated values only outrank
-     non-important declarations. */
+.tq-deck-live img[data-genimage]:not([src]),
+img[data-genimage].tq-genimg-live:not([src]) {
+  /* LIVE box: the deck-wide scope (generation stream / focused-slide regen,
+     set by DeckView) or the PER-BOX class (a server row still pending /
+     generating — SlideRenderer bakes it from the status poll's imagePending
+     so the shimmer survives the post-stream fill window). The bright
+     highlight sliding across the box reads as "image loading here". Static
+     sub-properties are `!important` to beat the inline placeholder
+     gradient; background-position deliberately is NOT — the shimmer
+     animates it, and animated values only outrank non-important
+     declarations. */
   background-color: var(--tq-bg-dim) !important;
   background-image: linear-gradient(
     110deg,
@@ -2780,7 +2789,8 @@ img[data-genimage].tq-genimg-in {
    `.tq-deck-live` rule animates now — the default placeholder is already
    static. The live box still reads as "loading" via its background. */
 @media (prefers-reduced-motion: reduce) {
-  .tq-deck-live img[data-genimage]:not([src]) {
+  .tq-deck-live img[data-genimage]:not([src]),
+  img[data-genimage].tq-genimg-live:not([src]) {
     animation: none;
     background-position: 50% 0;
   }

@@ -305,6 +305,7 @@ export async function GET(
   // image the instant the warm fill lands.
   let imageFills: Record<string, string> | null = null;
   let imageFailed: string[] | null = null;
+  let imagePending: string[] | null = null;
   if (includeImageFills) {
     // genid → prompt + ref for every reserved box the client is rendering.
     // Canonical slides first, then streamingPreview overlaid (the live box wins).
@@ -328,15 +329,26 @@ export async function GET(
     // the user edits the prompt / retries, the stale row stops reporting.
     // Never contradict a fill: a box that resolved a URL is not failed.
     if (latestVersion?.id && genBoxes.size > 0) {
-      const failedRows = await prisma.generatedImage.findMany({
-        where: { presentationVersionId: latestVersion.id, status: "failed" },
-        select: { genid: true, prompt: true },
+      const stateRows = await prisma.generatedImage.findMany({
+        where: {
+          presentationVersionId: latestVersion.id,
+          status: { in: ["failed", "pending", "generating"] },
+        },
+        select: { genid: true, prompt: true, status: true },
       });
-      imageFailed = failedRows
-        .filter(
-          (r) =>
-            !fills.has(r.genid) && genBoxes.get(r.genid)?.prompt === r.prompt,
-        )
+      const liveRows = stateRows.filter(
+        (r) =>
+          !fills.has(r.genid) && genBoxes.get(r.genid)?.prompt === r.prompt,
+      );
+      imageFailed = liveRows
+        .filter((r) => r.status === "failed")
+        .map((r) => r.genid);
+      // Boxes whose fill is still IN FLIGHT (seeded pending / claimed
+      // generating). The client keeps their loading shimmer through the
+      // post-stream fill window. A box with NO row at all is orphaned and
+      // deliberately absent — it renders the static placeholder glyph.
+      imagePending = liveRows
+        .filter((r) => r.status !== "failed")
         .map((r) => r.genid);
     }
   }
@@ -353,6 +365,7 @@ export async function GET(
     genChat,
     imageFills,
     imageFailed,
+    imagePending,
     // Latest version id + its own status. DeckView's partial-regen polling
     // uses this to distinguish "applying is done" (versionId == the new
     // version's id AND status=completed) from "you're still looking at the

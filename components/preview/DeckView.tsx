@@ -43,6 +43,7 @@ import { MobileNav } from "@/components/app/MobileNav";
 import {
   GenImageProvider,
   GenImageFailedProvider,
+  GenImagePendingProvider,
   type GenImageFills,
 } from "@/components/slides/gen-image-context";
 import { scanGenImages, injectImgSrc, type GenImageAspect } from "@/lib/images/slide-images";
@@ -1460,6 +1461,18 @@ export function DeckView({
   const [retryingImages, setRetryingImages] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  // Genids whose fill is still in flight server-side (rows pending /
+  // generating — the status route's `imagePending`). Keeps the viewer's
+  // srcless boxes on the loading shimmer through the post-stream fill
+  // window via GenImagePendingProvider. `null` until the fill poll's first
+  // response — SlideRenderer then treats every srcless box as in-flight, so
+  // the shimmer never flashes off between deck completion and the poll's
+  // first verdict (regression 2026-08-09). The poll reconciles it every
+  // tick and clears it on exhaustion, so an orphaned box (no row) settles
+  // to the static glyph within one tick.
+  const [pendingImages, setPendingImages] = useState<ReadonlySet<
+    string
+  > | null>(null);
   // Bumped on every image retry so the catch-up poll effect below restarts
   // (fresh attempts budget) — a retry fired after the poll's cap would
   // otherwise depend solely on the broadcast landing.
@@ -1653,12 +1666,18 @@ export function DeckView({
       const srcless = !img.getAttribute("src");
       const isFailed = failedImages.has(genid) && srcless;
       img.classList.toggle("tq-genimg-failed", isFailed);
+      // Retry in flight OR the deck-wide fill still owns this box (row
+      // pending/generating server-side — e.g. the editor opened during the
+      // post-stream fill window). No null-assume here: the editor opens on
+      // settled decks, where the poll has almost always verdicted already.
       img.classList.toggle(
         "tq-genimg-live",
-        retryingImages.has(genid) && srcless && !isFailed,
+        (retryingImages.has(genid) || (pendingImages?.has(genid) ?? false)) &&
+          srcless &&
+          !isFailed,
       );
     }
-  }, [failedImages, retryingImages, editorDoc, inPlaceApply?.token]);
+  }, [failedImages, retryingImages, pendingImages, editorDoc, inPlaceApply?.token]);
   // Catch-up poll for missed `slide.regen.finished` broadcasts. Safari
   // throttles backgrounded / out-of-focus WebSockets and occasionally
   // drops broadcast frames entirely — symptom: the spinner overlay
@@ -1877,6 +1896,7 @@ export function DeckView({
         const data = (await res.json()) as {
           imageFills?: Record<string, string> | null;
           imageFailed?: string[] | null;
+          imagePending?: string[] | null;
         };
         if (cancelled) return;
         const fills = data.imageFills;
@@ -1917,6 +1937,26 @@ export function DeckView({
             return serverFailed;
           });
         }
+        // In-flight boxes (rows pending/generating). RECONCILE like `failed`:
+        // the server is authoritative, so a box it stops reporting (filled,
+        // failed, or an orphan with no row at all) drops its shimmer here.
+        // This is also the poll's FIRST verdict — it replaces the `null`
+        // "assume everything is in flight" state SlideRenderer starts from.
+        const serverPending = new Set(
+          (data.imagePending ?? []).filter(
+            (genid) => ownIds.has(genid) && !fills?.[genid],
+          ),
+        );
+        setPendingImages((prev) => {
+          if (
+            prev !== null &&
+            prev.size === serverPending.size &&
+            [...prev].every((g) => serverPending.has(g))
+          ) {
+            return prev;
+          }
+          return serverPending;
+        });
         // Coverage is measured against OUR rendered boxes — NOT the server's
         // returned count — so a superset response can't stop the poll before
         // our own boxes are filled. A box the server reports FAILED is settled
@@ -1928,6 +1968,10 @@ export function DeckView({
           if ((fills && fills[id]) || failed?.includes(id)) covered += 1;
         }
         if (covered >= ownIds.size || attempts >= 40) done = true;
+        // Poll exhaustion with boxes still unsettled: end their shimmer
+        // honestly — nothing is coming without a user retry. (Full coverage
+        // already reconciled pending to empty above.)
+        if (done && covered < ownIds.size) setPendingImages(new Set());
       } catch {
         /* network blip — next tick retries */
       }
@@ -4702,6 +4746,7 @@ export function DeckView({
   return (
     <GenImageProvider value={filledImages}>
     <GenImageFailedProvider value={failedImages}>
+    <GenImagePendingProvider value={pendingImages}>
     <section
       dir={viewManifest?.direction ?? streamingDirection}
       // `tq-deck-live`: while the model is actually working ON WHAT THIS
@@ -5656,6 +5701,7 @@ export function DeckView({
         onDismiss={dismissDesktopHint}
       />
     </section>
+    </GenImagePendingProvider>
     </GenImageFailedProvider>
     </GenImageProvider>
   );

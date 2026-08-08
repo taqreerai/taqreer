@@ -27,6 +27,7 @@ import { usedGoogleFonts, googleFontUrl } from "@/lib/editor/font-search";
 import {
   useGenImageFills,
   useGenImageFailed,
+  useGenImagePending,
 } from "@/components/slides/gen-image-context";
 
 type SlideRendererProps = {
@@ -117,6 +118,7 @@ function SlideRendererImpl({
   // render the saved HTML (which already carries reconciled src).
   const fills = useGenImageFills();
   const failed = useGenImageFailed();
+  const pending = useGenImagePending();
 
   // The reserved-box genids present in THIS slide. Found via the shared
   // scanner, which is QUOTE-AGNOSTIC — Claude emits attributes single-OR
@@ -153,6 +155,22 @@ function SlideRendererImpl({
       .join(",");
   }, [slideGenids, failed]);
 
+  // Signature of THIS slide's IN-FLIGHT boxes (server rows still pending /
+  // generating). They keep the loading shimmer (`.tq-genimg-live`) after the
+  // generation stream ends, until the fill lands or the server settles them.
+  // `pending === null` = no poll verdict yet — the sentinel `*` treats every
+  // srcless box as in-flight so the shimmer never flashes off in the gap
+  // between deck completion and the fill poll's first response. Same
+  // string-primitive trick as fillSig/failedSig.
+  const pendingSig = useMemo(() => {
+    if (!slideGenids) return "";
+    if (pending === null) return "*";
+    return Array.from(pending)
+      .filter((genid) => slideGenids.has(genid))
+      .sort()
+      .join(",");
+  }, [slideGenids, pending]);
+
   // Sanitise the slide HTML AND bake in THIS slide's ready image fills, as one
   // string. Keyed on `[slide.html, fillSig]` where `fillSig` is THIS slide's
   // fills only.
@@ -172,7 +190,7 @@ function SlideRendererImpl({
   useEffect(() => {
     // sanitizeSlideHtml() is fail-closed: empty string on any failure.
     const safe = sanitizeSlideHtml(slide.html);
-    if (!safe || (!fillSig && !failedSig)) {
+    if (!safe || (!fillSig && !failedSig && !pendingSig)) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSanitized(safe);
       return;
@@ -184,6 +202,11 @@ function SlideRendererImpl({
       }),
     );
     const failedIds = new Set(failedSig ? failedSig.split(",") : []);
+    // `*` = no poll verdict yet — every srcless box counts as in-flight.
+    const pendingAll = pendingSig === "*";
+    const pendingIds = new Set(
+      pendingSig && !pendingAll ? pendingSig.split(",") : [],
+    );
     // Inject via the DOM (client-only effect) rather than string-splicing
     // unsanitised markup. URLs are our own deterministic Supabase public URLs.
     const scratch = document.createElement("div");
@@ -208,10 +231,19 @@ function SlideRendererImpl({
         // shimmer into a static dim so the slide stops claiming "loading".
         img.classList.add("tq-genimg-failed");
         touched = true;
+      } else if (
+        !img.getAttribute("src") &&
+        (pendingAll || pendingIds.has(genid))
+      ) {
+        // Fill still in flight server-side (or no poll verdict yet): keep
+        // the loading shimmer through the post-stream fill window instead
+        // of flashing the static placeholder glyph (regression 2026-08-09).
+        img.classList.add("tq-genimg-live");
+        touched = true;
       }
     }
     setSanitized(touched ? scratch.innerHTML : safe);
-  }, [slide.html, fillSig, failedSig]);
+  }, [slide.html, fillSig, failedSig, pendingSig]);
 
   // Per-element picked fonts (font-search) — render side. SlideRenderer paints
   // INLINE in the parent document, so any Google font the slide references must
