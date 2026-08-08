@@ -1668,13 +1668,16 @@ export function DeckView({
       img.classList.toggle("tq-genimg-failed", isFailed);
       // Retry in flight OR the deck-wide fill still owns this box (row
       // pending/generating server-side — e.g. the editor opened during the
-      // post-stream fill window). No null-assume here: the editor opens on
-      // settled decks, where the poll has almost always verdicted already.
+      // post-stream fill window). `null` = the fill poll hasn't verdicted
+      // yet — treat as in-flight, mirroring SlideRenderer's sentinel, so
+      // the editor never flashes the static glyph in that gap (CR PR #187).
+      // Harmless on decks whose poll never runs: those have no srcless
+      // boxes for this toggle to match.
+      const fillOwned =
+        pendingImages === null || pendingImages.has(genid);
       img.classList.toggle(
         "tq-genimg-live",
-        (retryingImages.has(genid) || (pendingImages?.has(genid) ?? false)) &&
-          srcless &&
-          !isFailed,
+        (retryingImages.has(genid) || fillOwned) && srcless && !isFailed,
       );
     }
   }, [failedImages, retryingImages, pendingImages, editorDoc, inPlaceApply?.token]);
@@ -1962,18 +1965,24 @@ export function DeckView({
         // our own boxes are filled. A box the server reports FAILED is settled
         // too (it will never fill; the retry overlay owns it from here — and a
         // retry bumps imagePollNonce, restarting this poll fresh). Keep polling
-        // until every rendered box is settled, or the ~4-min cap.
+        // until every rendered box is settled, or the ~4-min cap below.
         let covered = 0;
         for (const id of ownIds) {
           if ((fills && fills[id]) || failed?.includes(id)) covered += 1;
         }
-        if (covered >= ownIds.size || attempts >= 40) done = true;
-        // Poll exhaustion with boxes still unsettled: end their shimmer
-        // honestly — nothing is coming without a user retry. (Full coverage
-        // already reconciled pending to empty above.)
-        if (done && covered < ownIds.size) setPendingImages(new Set());
+        if (covered >= ownIds.size) done = true;
       } catch {
-        /* network blip — next tick retries */
+        /* network blip — the cap below still counts the attempt */
+      }
+      // The attempt cap runs OUTSIDE the success path so a persistently
+      // failing route / rejecting fetch can't poll forever — and, worse,
+      // can't leave `pendingImages` stuck on its `null` "assume in flight"
+      // sentinel shimmering unfillable boxes indefinitely (CR PR #187).
+      // On exhaustion the shimmer ends honestly: nothing is coming without
+      // a user retry (which bumps imagePollNonce and starts fresh).
+      if (!cancelled && !done && attempts >= 40) {
+        done = true;
+        setPendingImages(new Set());
       }
     };
     void poll();
