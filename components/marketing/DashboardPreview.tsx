@@ -174,6 +174,7 @@ function useScrollSyncedToPage<T extends HTMLElement>() {
 
 export function DashboardPreview({
   onPathChange,
+  lockedView,
 }: {
   /**
    * Fired whenever the active view changes. Parent uses this to update
@@ -181,15 +182,23 @@ export function DashboardPreview({
    * navigation between flows.
    */
   onPathChange?: (path: string) => void;
+  /**
+   * Marketing spoke pages pin the demo to THEIR flow: the full dashboard
+   * chrome renders (rail + top bar) with the flow's sidebar dot active,
+   * but every navigation is a no-op so a visitor can't wander off the
+   * page's subject. Omit for the free-roaming hero demo.
+   */
+  lockedView?: Exclude<View, "dashboard">;
 }) {
   const dict = useDict();
   const { dir } = useLocale();
-  const [view, setViewRaw] = useState<View>("dashboard");
+  const [view, setViewRaw] = useState<View>(lockedView ?? "dashboard");
 
   // Wrap setView so every view change emits the new path to the
   // parent. Keeps DashboardPreview the source of truth for the
   // current view; Hero just mirrors the path for the URL pill.
   const setView = (next: View) => {
+    if (lockedView) return;
     setViewRaw(next);
     onPathChange?.(VIEW_TO_PATH[next]);
   };
@@ -217,7 +226,12 @@ export function DashboardPreview({
       }}
     >
       {/* §24: thin always-collapsed icon rail (mirrors the real Sidebar). */}
-      <DemoSidebar view={view} onNavigate={setView} dict={dict} />
+      <DemoSidebar
+        view={view}
+        onNavigate={setView}
+        dict={dict}
+        locked={Boolean(lockedView)}
+      />
 
       {/* Main column — the rounded content panel floats on the dark gutter,
           exactly like the real DashboardShell `.tq-content-panel`. No header
@@ -278,18 +292,18 @@ function DemoSidebar({
   view,
   onNavigate,
   dict,
+  locked = false,
 }: {
   view: View;
   onNavigate: (v: View) => void;
   dict: Dictionary;
+  // Spoke-page pinned mode: the rail renders (active dot included) but
+  // nothing navigates and no dot advertises a pointer cursor.
+  locked?: boolean;
 }) {
-  const interactiveIds = new Set<string>([
-    "dashboard",
-    "create",
-    "enhance",
-    "mimic",
-    "social",
-  ]);
+  const interactiveIds = locked
+    ? new Set<string>()
+    : new Set<string>(["dashboard", "create", "enhance", "mimic", "social"]);
 
   const groupedItems = {
     home: SIDEBAR_ITEMS.filter((i) => i.group === "home"),

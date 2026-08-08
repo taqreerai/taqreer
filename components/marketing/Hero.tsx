@@ -275,9 +275,12 @@ function BrowserChromeBar({ path }: { path: string }) {
         <span className="h-3 w-3 rounded-full bg-[#28C840]" />
       </div>
 
-      {/* Address bar only — centered, no icons inside (just the URL). */}
+      {/* Address bar only - centered, no icons inside (just the URL).
+          Pill sits on --tq-surface (white in light, raised glass in dark);
+          the recessed black/25 fill read as a dark blob on the light theme
+          (user direction 2026-08-08). */}
       <div className="absolute left-1/2 w-full max-w-[300px] -translate-x-1/2 px-4">
-        <div className="truncate rounded-md border border-[var(--tq-border-hairline)] bg-black/25 px-3 py-1 text-center font-mono text-[11px] text-[var(--tq-text-muted)]">
+        <div className="truncate rounded-md border border-[var(--tq-border-hairline)] bg-[var(--tq-surface)] px-3 py-1 text-center font-mono text-[11px] text-[var(--tq-text-muted)]">
           taqreer.ai{path}
         </div>
       </div>

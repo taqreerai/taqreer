@@ -1,28 +1,27 @@
 "use client";
 
-// Inlines the EXACT static flow cards from the hero demo (DashboardPreview's
-// getFlows + FlowCard) on a marketing spoke page, framed in the same browser-
-// window chrome so a visitor sees the real, deeply-customizable flow form.
-// Static: the Generate button is disabled and no real inputs are mounted.
-// Reused by the flow spokes (/ai-presentations = create, /social-media-posts =
-// social, /redesign = enhance). Copy tracks dict.flows.* via getFlows, so it
-// can't drift from the live flows.
+// Embeds the FULL hero dashboard demo (DashboardPreview: icon rail + top
+// bar + flow body) on a marketing spoke page, framed in the same browser-
+// window chrome - but PINNED to that page's flow via `lockedView`: the
+// flow's sidebar dot reads active and every navigation is a no-op, so a
+// visitor sees the real app around the flow without wandering off the
+// page's subject (user direction 2026-08-08; previously this rendered
+// the bare flow cards with no dashboard chrome).
+// Reused by the flow spokes (/ai-presentations = create, /social-media-posts
+// = social, /redesign = enhance, /presentation-style = mimic). Copy tracks
+// dict.flows.* via getFlows inside the demo, so it can't drift from the
+// live flows.
 
-import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
-import { getFlows, FlowCard } from "@/components/marketing/DashboardPreview";
+import { DashboardPreview } from "@/components/marketing/DashboardPreview";
 
 export function FlowPreview({
   view,
 }: {
   view: "create" | "enhance" | "mimic" | "social";
 }) {
-  const dict = useDict();
-  const { dir } = useLocale();
-  const flow = getFlows(dict, dir)[view];
-
   return (
-    <div className="mx-auto w-full max-w-4xl overflow-hidden rounded-2xl border border-[var(--tq-border-hairline)] bg-[var(--tq-panel)]">
-      {/* Browser-chrome bar — mirrors the hero demo window (macOS traffic
+    <div className="mx-auto w-full max-w-5xl overflow-hidden rounded-2xl border border-[var(--tq-border-hairline)] bg-[var(--tq-panel)]">
+      {/* Browser-chrome bar - mirrors the hero demo window (macOS traffic
           lights + a centered URL pill showing the real in-app flow route). */}
       <div
         dir="ltr"
@@ -34,30 +33,21 @@ export function FlowPreview({
           <span className="h-3 w-3 rounded-full" style={{ background: "#28C840" }} />
         </div>
         <div className="absolute left-1/2 w-full max-w-[280px] -translate-x-1/2 px-4">
-          <div className="truncate rounded-md border border-[var(--tq-border-hairline)] bg-black/25 px-3 py-1 text-center font-mono text-[11px] text-[var(--tq-text-muted)]">
+          {/* Address pill on --tq-surface (white in light, raised glass in
+              dark) - the recessed black/25 fill read as a dark blob on the
+              light theme (user direction 2026-08-08). */}
+          <div className="truncate rounded-md border border-[var(--tq-border-hairline)] bg-[var(--tq-surface)] px-3 py-1 text-center font-mono text-[11px] text-[var(--tq-text-muted)]">
             taqreer.ai/{view}
           </div>
         </div>
       </div>
 
-      {/* Flow body — the real flow's card layout (content / brand identity /
-          output), rendered statically. */}
-      <div className="px-4 py-8" dir={dir}>
-        <div className="flex flex-wrap items-stretch justify-center gap-3">
-          {flow.cards.map((card, i) => (
-            <FlowCard key={i} card={card} />
-          ))}
-        </div>
-        <div className="mt-6 flex justify-center">
-          <button
-            type="button"
-            disabled
-            aria-disabled
-            className="btn-gradient-anim rounded-full px-6 py-2.5 text-sm font-medium opacity-90"
-          >
-            {flow.cta}
-          </button>
-        </div>
+      {/* The full dashboard demo, pinned to this page's flow. Same aspect
+          recipe as the hero: portrait below `sm` (the cards stack), 3:2 at
+          `sm`+; DashboardPreview's inner pane is absolutely positioned and
+          fills the box. */}
+      <div className="relative aspect-[4/5] w-full sm:aspect-[3/2]">
+        <DashboardPreview lockedView={view} />
       </div>
     </div>
   );
