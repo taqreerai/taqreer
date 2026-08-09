@@ -109,13 +109,16 @@ export async function generateImage(opts: {
   if (opts.referenceUrl) {
     const ref = await fetchReferenceImage(opts.referenceUrl);
     const image = await toFile(ref.bytes, "product.png", { type: ref.type });
+    // NO input_fidelity: the SDK types allow it but the gpt-image-2 API
+    // rejects it with a 400 ("does not support the 'input_fidelity'
+    // parameter") - every product box in the 2026-08-08 launch decks
+    // failed on exactly this. Product faithfulness rides PRODUCT_GUARD.
     const res = await getClient().images.edit({
       model: MODEL,
       image,
       prompt: `${opts.prompt.trim()} ${PRODUCT_GUARD}`,
       size,
       quality: QUALITY,
-      input_fidelity: "high",
       n: 1,
     });
     const b64 = res.data?.[0]?.b64_json;

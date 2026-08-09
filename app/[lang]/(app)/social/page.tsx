@@ -871,8 +871,12 @@ function ProductPhotoRow({
         )}
         {file ? (
           <div className="min-w-0 flex-1 pe-7">
+            {/* Fixed short label, NOT the filename: gen/camera filenames are
+                40+ chars and wrapped the compact row to 3 lines on mobile
+                (user direction 2026-08-08). The thumbnail + size line carry
+                the identity. */}
             <p className="truncate text-sm font-semibold text-foreground">
-              {file.name}
+              img
             </p>
             <p className="mt-0.5 truncate text-xs text-foreground/60">
               {formatFileSize(file.size, dict.flows.unitKB, dict.flows.unitMB)}

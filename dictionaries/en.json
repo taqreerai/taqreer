@@ -709,7 +709,7 @@
     },
     "generate": {
       "create": "Create",
-      "creating": "Creating...",
+      "creating": "Generating...",
       "closeQualityMenu": "Close quality menu",
       "chooseQuality": "Choose quality",
       "qualityLabel": "Quality",

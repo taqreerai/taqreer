@@ -709,7 +709,7 @@
     },
     "generate": {
       "create": "إنشاء",
-      "creating": "جار إنشاء العرض…",
+      "creating": "جاري الإنشاء…",
       "closeQualityMenu": "إغلاق قائمة الجودة",
       "chooseQuality": "اختيار جودة",
       "qualityLabel": "جودة",
