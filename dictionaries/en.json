@@ -590,6 +590,11 @@
     "ready": "Ready",
     "removeFile2": "Remove file",
     "prepStage": { "uploading": "Uploading the file", "converting": "Converting the file", "extracting": "Extracting content", "finishing": "Finishing up", "preparing": "Preparing" },
+    "extractErrors": {
+      "fileTooLarge": "The file is too large for the upload service right now. Compress it or split it, then try again.",
+      "pdfEncrypted": "This PDF is password-protected. Remove the password, then upload it again.",
+      "conversionFailed": "We couldn't convert this file. Make sure it opens correctly, then try again."
+    },
     "enhance": {
       "title": "Enhance your presentation",
       "subtitle": "Upload a PDF or PowerPoint and we'll rebuild it with a professional design while keeping your content exactly.",

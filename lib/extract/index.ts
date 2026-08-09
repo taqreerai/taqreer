@@ -214,6 +214,16 @@ export async function extract(
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    // pdf-lib refuses encrypted documents ("Input document to
+    // `PDFDocument.load` is encrypted"). That's a user-fixable input
+    // problem, not a pipeline fault: say so in a stable phrase the
+    // extract-error classifier maps to `pdf_encrypted`
+    // (lib/extract/error-codes.ts).
+    if (/is encrypted/i.test(message)) {
+      throw new Error(
+        "This PDF is password-protected: remove the password and upload it again.",
+      );
+    }
     throw new Error(`Failed to parse normalized PDF metadata: ${message}`);
   }
 

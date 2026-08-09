@@ -47,6 +47,7 @@ import { useSlideCap, useCreditBalance } from "@/lib/credits/store";
 import { isImagesLocked } from "@/lib/images/images-gating";
 import { displaySlideEstimate } from "@/lib/credits/cost";
 import { localizedHref } from "@/lib/i18n/navigation";
+import { localizedExtractError } from "@/lib/extract/error-codes";
 import { AnimatePresence, motion } from "framer-motion";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
@@ -499,7 +500,7 @@ export default function CreatePage() {
         console.error("[create] content extraction failed:", err);
         setError(
           err instanceof Error
-            ? err.message
+            ? localizedExtractError(dict.flows.extractErrors, err.message)
             : t.parseFailed,
         );
         setContentFileStage("idle");

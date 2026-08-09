@@ -37,6 +37,7 @@ import {
 } from "@/components/credits/CreditGateDialog";
 import { useSlideCap } from "@/lib/credits/store";
 import { displaySlideEstimate } from "@/lib/credits/cost";
+import { localizedExtractError } from "@/lib/extract/error-codes";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
 import { AIImagesPanel } from "@/components/brand/AIImagesPanel";
@@ -514,7 +515,7 @@ export default function MimicFlow({
         console.error("[mimic] design extraction failed:", err);
         setError(
           err instanceof Error
-            ? err.message
+            ? localizedExtractError(dict.flows.extractErrors, err.message)
             : dict.flows.mimic.extractRefFailed,
         );
         setDesignStage("idle");
@@ -571,7 +572,7 @@ export default function MimicFlow({
         console.error("[mimic] content extraction failed:", err);
         setError(
           err instanceof Error
-            ? err.message
+            ? localizedExtractError(dict.flows.extractErrors, err.message)
             : dict.flows.mimic.extractContentFailed,
         );
         setContentStage("idle");

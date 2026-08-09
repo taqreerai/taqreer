@@ -68,6 +68,7 @@ import {
   type UploadedFontFieldBrief,
 } from "@/lib/brand/upload";
 import { seedFromExtraction } from "@/lib/create/seed-from-extraction";
+import { localizedExtractError } from "@/lib/extract/error-codes";
 import { readSource, clearSource } from "@/lib/types/source";
 import { DEFAULT_QUALITY, type Quality } from "@/lib/types/quality";
 import {
@@ -629,7 +630,9 @@ export default function EnhanceContentPage() {
         }
         console.error("[enhance] extraction failed:", err);
         setError(
-          err instanceof Error ? err.message : dict.flows.enhance.extractFailed,
+          err instanceof Error
+            ? localizedExtractError(dict.flows.extractErrors, err.message)
+            : dict.flows.enhance.extractFailed,
         );
         setStage("idle");
       }
