@@ -631,6 +631,7 @@
       "count": "Slides",
       "style": "Design style",
       "productPhoto": "Product photo",
+      "productPhotoLabel": "img",
       "productPhotoHint": "Optional: we design the post around your product",
       "productPhotoRemove": "Remove product photo",
       "productPhotoTooLarge": "Image too large, the limit is 10MB",

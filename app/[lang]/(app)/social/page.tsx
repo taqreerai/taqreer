@@ -874,9 +874,9 @@ function ProductPhotoRow({
             {/* Fixed short label, NOT the filename: gen/camera filenames are
                 40+ chars and wrapped the compact row to 3 lines on mobile
                 (user direction 2026-08-08). The thumbnail + size line carry
-                the identity. */}
+                the identity. Localized per CR PR #188. */}
             <p className="truncate text-sm font-semibold text-foreground">
-              img
+              {dict.flows.social.productPhotoLabel}
             </p>
             <p className="mt-0.5 truncate text-xs text-foreground/60">
               {formatFileSize(file.size, dict.flows.unitKB, dict.flows.unitMB)}

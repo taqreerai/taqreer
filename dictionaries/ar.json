@@ -631,6 +631,7 @@
       "count": "الشرائح",
       "style": "نمط التصميم",
       "productPhoto": "صورة المنتج",
+      "productPhotoLabel": "صورة",
       "productPhotoHint": "اختياري: نصمم المنشور حول منتجك",
       "productPhotoRemove": "إزالة صورة المنتج",
       "productPhotoTooLarge": "الصورة كبيرة، الحد الأقصى 10MB",
