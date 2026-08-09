@@ -45,7 +45,9 @@ echo "==> pm2 reload"
 if pm2 describe taqreer-prod >/dev/null 2>&1; then
   pm2 reload taqreer-prod --update-env
 else
-  pm2 start npm --name taqreer-prod -- start -- -p "$PORT"
+  # -H 127.0.0.1: nginx is the only legitimate caller; never expose the
+  # Node port on all interfaces (UFW blocks it, but belt + suspenders).
+  pm2 start npm --name taqreer-prod -- start -- -p "$PORT" -H 127.0.0.1
 fi
 # Inngest runs on Inngest Cloud (INNGEST_DEV=0 + signing/event keys in .env), so
 # there is NO local inngest-cli dev worker to start here. After a deploy that

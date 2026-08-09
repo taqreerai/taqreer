@@ -183,7 +183,11 @@ export const thumbnailRender = inngest.createFunction(
             logger.warn("deck_contrast_violations", {
               projectId,
               count: violations.length,
-              items: violations,
+              // Frequency telemetry needs the count, not the whole
+              // element dump: full-deck item lists were the main
+              // source of pm2 error-log bloat (2026-08-09 audit).
+              // A capped sample keeps spot-checking possible.
+              items: violations.slice(0, 5),
             });
           }
         } catch (err) {
