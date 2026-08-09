@@ -23,9 +23,12 @@
 //
 // ─── Deployment ───────────────────────────────────────────────────
 // Local dev (macOS):  `brew install --cask libreoffice`
-// Production (Linux): `apt-get install -y libreoffice-impress`
-//   (the -impress subpackage pulls in just what we need for PPTX →
-//    PDF; the full libreoffice meta-package is ~600 MB and overkill)
+// Production (Linux): `apt-get install -y libreoffice-impress libreoffice-writer`
+//   BOTH subpackages are required: -impress imports PPTX, -writer
+//   imports DOCX. With -writer missing, DOCX conversion "succeeds"
+//   (exit 0) but writes no PDF - that outage ran for weeks before
+//   the 2026-08-09 prod audit caught it. The full libreoffice
+//   meta-package is ~600 MB and still overkill.
 // The Dockerfile / Vercel buildpack must include LibreOffice on the
 // runtime image for this to work in production.
 
@@ -122,10 +125,9 @@ async function officeToPdf(
 
     let lastError: Error | null = null;
     for (const bin of CANDIDATE_BINS) {
+      let run: { stdout: string; stderr: string };
       try {
-        await execFileAsync(bin, args, { timeout: CONVERT_TIMEOUT_MS });
-        // Success — read the produced PDF and return.
-        return await readFile(expectedOutPath);
+        run = await execFileAsync(bin, args, { timeout: CONVERT_TIMEOUT_MS });
       } catch (err) {
         // ENOENT = the binary doesn't exist; try the next candidate.
         if (isMissingBinary(err)) {
@@ -133,10 +135,30 @@ async function officeToPdf(
           continue;
         }
         // Other errors (timeout, non-zero exit code, malformed
-        // PPTX) — bail with the actual error message.
+        // PPTX) - bail with the actual error message.
         const message = err instanceof Error ? err.message : String(err);
         throw new Error(
           `LibreOffice conversion failed: ${message}`,
+        );
+      }
+
+      // The binary ran, but LibreOffice exits 0 even when it cannot
+      // load the input (e.g. the import filter's package isn't
+      // installed) - it just prints the error and writes nothing. So
+      // a missing output PDF here is a CONVERSION failure, and must
+      // not fall through to the "not installed" branch below (that
+      // misclassification shipped once: readFile's ENOENT looked
+      // identical to spawn's). Surface LibreOffice's own output.
+      try {
+        return await readFile(expectedOutPath);
+      } catch {
+        const detail = [run.stderr, run.stdout]
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .join(" | ");
+        throw new Error(
+          `LibreOffice ran but produced no PDF for the ${inputExt} input` +
+            (detail ? `: ${detail}` : ""),
         );
       }
     }
