@@ -437,7 +437,7 @@ async function getRecentActivity(): Promise<ActivityItem[]> {
     prisma.topupGrant.findMany({
       orderBy: { createdAt: "desc" },
       take: 8,
-      select: { id: true, amountGranted: true, createdAt: true, user: { select: { email: true } } },
+      select: { id: true, amountGranted: true, createdAt: true, sourceKey: true, user: { select: { email: true } } },
     }),
   ]);
 
@@ -495,10 +495,20 @@ async function getRecentActivity(): Promise<ActivityItem[]> {
       item: { id: `s-${u.id}`, kind: "signup" as const, text: `${u.email} signed up`, at: timeAgo(u.createdAt) },
     })),
     ...genEvents,
-    ...purchases.map((t) => ({
-      date: t.createdAt,
-      item: { id: `p-${t.id}`, kind: "purchase" as const, text: `${t.user.email} bought ${fmt(t.amountGranted)} credits`, at: timeAgo(t.createdAt) },
-    })),
+    ...purchases.map((t) => {
+      // TopupGrant.sourceKey encodes the origin: "admin:<grantId>:<userId>"
+      // for manual admin gifts, "firstmonth-gift:<userId>" for the automatic
+      // first-month gift, a Stripe event id for real purchases. Gifts must
+      // not read as revenue in the feed.
+      const isGift =
+        t.sourceKey.startsWith("admin:") ||
+        t.sourceKey.startsWith("firstmonth-gift:");
+      const verb = isGift ? "received a gift of" : "bought";
+      return {
+        date: t.createdAt,
+        item: { id: `p-${t.id}`, kind: "purchase" as const, text: `${t.user.email} ${verb} ${fmt(t.amountGranted)} credits`, at: timeAgo(t.createdAt) },
+      };
+    }),
   ];
 
   return events

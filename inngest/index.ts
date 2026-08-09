@@ -12,3 +12,4 @@ export { extractSource } from "./functions/extract-source";
 export { creditsMaintenance } from "./functions/credits-maintenance";
 export { notificationsCleanup } from "./functions/notifications-cleanup";
 export { sourceFilesCleanup } from "./functions/source-files-cleanup";
+export { firstMonthGift } from "./functions/first-month-gift";

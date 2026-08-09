@@ -383,11 +383,12 @@ export async function settleHold(args: {
   if (result.ok && !result.alreadySettled) {
     await notifyBalance(result.userId, now, args.notify ?? true);
     if (result.charged > 0) {
-      // First-month retention gift check. Dynamic import (no cycle:
-      // first-month-gift imports grantTopup/getBalance from here) and
-      // fire-and-forget: a gift hiccup must never fail a settle.
+      // First-month retention gift check (queues a DELAYED Inngest
+      // grant). Dynamic import (no cycle: first-month-gift imports
+      // grantTopup/getBalance from here) and fire-and-forget: a gift
+      // hiccup must never fail a settle.
       void import("@/lib/credits/first-month-gift")
-        .then((m) => m.maybeFirstMonthGift(result.userId))
+        .then((m) => m.queueFirstMonthGiftCheck(result.userId))
         .catch(() => undefined);
     }
   }
@@ -471,7 +472,7 @@ export async function chargeCredits(args: {
     // Same first-month gift check as settleHold: flat charges (regen,
     // name-gen) also drain the balance toward "used everything".
     void import("@/lib/credits/first-month-gift")
-      .then((m) => m.maybeFirstMonthGift(args.userId))
+      .then((m) => m.queueFirstMonthGiftCheck(args.userId))
       .catch(() => undefined);
   }
   return result;
