@@ -82,17 +82,18 @@ async function locallyEligible(userId: string): Promise<boolean> {
 
 /**
  * Fire-and-forget entry point for the settle/charge hooks: when the
- * cheap checks pass, queue the delayed Inngest gift check. The event id
- * dedupes repeat sends (several broke-state regens in a row) inside
- * Inngest's dedupe window; the sourceKey remains the once-ever truth.
- * Never throws.
+ * cheap checks pass, queue the delayed Inngest gift check. Deliberately
+ * NO event id (CR PR #191): Inngest suppresses a reused id for 24h, so
+ * a user who topped up during the sleep (grant skipped) and ran dry
+ * again the same day would have the re-queue silently dropped. Repeat
+ * queues are harmless instead - every resulting run converges on the
+ * once-ever sourceKey grant, and only the winner emails.
  */
 export async function queueFirstMonthGiftCheck(userId: string): Promise<void> {
   try {
     if (!(await locallyEligible(userId))) return;
     await inngest.send({
       name: FIRST_MONTH_GIFT_EVENT,
-      id: sourceKeyFor(userId),
       data: { userId },
     });
   } catch (err) {
@@ -115,14 +116,27 @@ export async function grantFirstMonthGift(userId: string): Promise<number> {
 
   const sub = await prisma.subscription.findUnique({
     where: { userId },
-    select: { stripeSubscriptionId: true },
+    select: { stripeSubscriptionId: true, stripeCustomerId: true },
   });
   if (!sub?.stripeSubscriptionId) return 0;
   const { stripe } = await import("@/lib/billing/stripe");
-  const stripeSub = await stripe.subscriptions.retrieve(
-    sub.stripeSubscriptionId,
-  );
-  const ageMs = Date.now() - stripeSub.start_date * 1000;
+  // "First month with us" anchors on the customer's EARLIEST-EVER
+  // subscription, not the current one (CR PR #191): a cancel +
+  // resubscribe mints a fresh start_date, and the current sub alone
+  // would re-open the window for returning subscribers. Stripe's
+  // status:"all" listing includes canceled history.
+  const customerId =
+    sub.stripeCustomerId ??
+    (await stripe.subscriptions.retrieve(sub.stripeSubscriptionId)).customer;
+  if (typeof customerId !== "string") return 0;
+  const history = await stripe.subscriptions.list({
+    customer: customerId,
+    status: "all",
+    limit: 100,
+  });
+  if (history.data.length === 0) return 0;
+  const earliestStart = Math.min(...history.data.map((s) => s.start_date));
+  const ageMs = Date.now() - earliestStart * 1000;
   if (ageMs > FIRST_MONTH_WINDOW_DAYS * 24 * 60 * 60 * 1000) return 0;
 
   const res = await grantTopup({
