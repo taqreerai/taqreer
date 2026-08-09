@@ -22,11 +22,18 @@ export async function POST(request: Request) {
     target?: string;
     amount?: number;
     sendEmail?: boolean;
+    reason?: string;
   } | null;
 
   const target = body?.target;
   const amount = body?.amount;
   const sendEmail = body?.sendEmail === true;
+  // The modal's optional Reason field: audited on the grant event, and
+  // when the email is sent it replaces the generic gift paragraph.
+  const reason =
+    typeof body?.reason === "string"
+      ? body.reason.trim().slice(0, 500) || undefined
+      : undefined;
   if (!target || !Number.isInteger(amount) || (amount ?? 0) <= 0) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
@@ -58,6 +65,7 @@ export async function POST(request: Request) {
       credits,
       sourceKey: `admin:${grantId}:${user.id}`,
       notify: true,
+      reason,
     });
     if (res.granted > 0) {
       granted += 1;
@@ -69,6 +77,7 @@ export async function POST(request: Request) {
           locale: user.language,
           appOrigin,
           credits: res.granted,
+          reason,
         });
       }
     }

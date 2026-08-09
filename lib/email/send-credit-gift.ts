@@ -7,7 +7,7 @@
 // Resend env is absent so local grants don't break, never throws.
 
 import { Resend } from "resend";
-import { renderEmail, templatesStrip, ltrIsolate } from "./shell";
+import { renderEmail, templatesStrip, ltrIsolate, escapeHtml } from "./shell";
 import {
   getWelcomeTemplates,
   type WelcomeTemplate,
@@ -66,6 +66,11 @@ export type SendCreditGiftInput = {
   templates: WelcomeTemplate[];
   // The credit amount actually granted.
   credits: number;
+  // Admin-entered why (the grant modal's Reason field). When present it
+  // REPLACES the hardcoded "earliest users" paragraph - that copy was
+  // written for the original appreciation campaign and reads wrong on
+  // e.g. a goodwill grant. Plain text; escaped before it enters HTML.
+  reason?: string;
 };
 
 export type SendCreditGiftResult =
@@ -93,12 +98,13 @@ export async function sendCreditGift(
     c.templatesLabel,
   );
 
+  const reason = input.reason?.trim();
   const html = renderEmail({
     lang,
     preheader: c.preheader(input.credits),
     eyebrowHtml: creditsPill(c.credits(input.credits)),
     title: c.title,
-    subHtml: c.sub,
+    subHtml: reason ? escapeHtml(reason) : c.sub,
     buttonLabel: c.button,
     buttonHref: `${input.appOrigin}/${lang}/dashboard`,
     extraHtml: tstrip,
@@ -134,6 +140,7 @@ export async function dispatchCreditGiftEmail(opts: {
   locale: string;
   appOrigin: string;
   credits: number;
+  reason?: string;
 }): Promise<void> {
   // The covers strip is decorative: if the template query fails (or runs
   // outside the Next runtime, where unstable_cache throws), send WITHOUT

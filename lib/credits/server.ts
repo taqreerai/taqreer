@@ -382,6 +382,14 @@ export async function settleHold(args: {
 
   if (result.ok && !result.alreadySettled) {
     await notifyBalance(result.userId, now, args.notify ?? true);
+    if (result.charged > 0) {
+      // First-month retention gift check. Dynamic import (no cycle:
+      // first-month-gift imports grantTopup/getBalance from here) and
+      // fire-and-forget: a gift hiccup must never fail a settle.
+      void import("@/lib/credits/first-month-gift")
+        .then((m) => m.maybeFirstMonthGift(result.userId))
+        .catch(() => undefined);
+    }
   }
   if (!result.ok) return result;
   const { userId: _userId, ...rest } = result;
@@ -460,6 +468,11 @@ export async function chargeCredits(args: {
 
   if (result.ok && !result.alreadyHeld) {
     await notifyBalance(args.userId, now, args.notify ?? true);
+    // Same first-month gift check as settleHold: flat charges (regen,
+    // name-gen) also drain the balance toward "used everything".
+    void import("@/lib/credits/first-month-gift")
+      .then((m) => m.maybeFirstMonthGift(args.userId))
+      .catch(() => undefined);
   }
   return result;
 }
@@ -858,6 +871,8 @@ export async function grantTopup(args: {
   sourceKey: string;
   now?: Date;
   notify?: boolean;
+  // Free-text why (admin grants) - lands in the audit event only.
+  reason?: string;
 }): Promise<{ granted: number; alreadyGranted: boolean; expiresAt: Date }> {
   const now = args.now ?? new Date();
   if (!Number.isInteger(args.credits) || args.credits <= 0) {
@@ -879,6 +894,7 @@ export async function grantTopup(args: {
       await logEvent(tx, args.userId, "credit.grant.topup", args.credits, {
         sourceKey: args.sourceKey,
         expiresAt: expiresAt.toISOString(),
+        ...(args.reason ? { reason: args.reason } : {}),
       });
     }, SERIALIZED);
   } catch (err) {
