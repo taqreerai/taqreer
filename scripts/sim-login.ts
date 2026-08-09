@@ -17,7 +17,11 @@ async function main() {
     process.exit(1);
   }
 
-  // realtime transport ws: supabase-js under tsx/Node 20 needs it explicitly.
+  // realtime transport ws: supabase-js EAGERLY constructs RealtimeClient in
+  // createClient and throws on Node 20 without native WebSocket, so the
+  // transport is required even for auth-only scripts. ws + @types/ws are
+  // devDependencies (the bare import failed the prod Next build type-check
+  // on 2026-08-09 - scripts/ is inside the build's tsconfig include).
   const admin = createClient(url, service, {
     auth: { autoRefreshToken: false, persistSession: false },
     realtime: { transport: ws as unknown as undefined },

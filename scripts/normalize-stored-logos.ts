@@ -19,10 +19,10 @@
 
 import { createClient } from "@supabase/supabase-js";
 import * as dotenv from "dotenv";
-// `ws` ships no bundled type declarations (@types/ws isn't installed); it's used
-// only as a runtime WebSocket shim for supabase-js's Realtime client under Node
-// 20, which has no global WebSocket.
-// @ts-expect-error - no types for 'ws'
+// Runtime WebSocket shim for supabase-js's Realtime client under Node 20
+// (no global WebSocket). ws + @types/ws are devDependencies since 2026-08-09
+// (the old @ts-expect-error became an unused-directive build error once the
+// types landed).
 import ws from "ws";
 import { decodeSvgBytes } from "../lib/brand/svg-decode";
 import { normalizeLogoViewBox } from "../lib/brand/normalize-logo-svg";
