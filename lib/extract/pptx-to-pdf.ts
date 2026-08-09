@@ -168,7 +168,7 @@ async function officeToPdf(
       `LibreOffice is not installed on the server. To enable PPTX/DOCX uploads, ` +
         `install LibreOffice on the host:\n` +
         `  • macOS:  brew install --cask libreoffice\n` +
-        `  • Linux:  apt-get install -y libreoffice-impress\n` +
+        `  • Linux:  apt-get install -y libreoffice-impress libreoffice-writer\n` +
         `Original error: ${lastError?.message ?? "no binary found"}`,
     );
   } finally {

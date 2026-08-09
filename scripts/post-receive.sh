@@ -41,14 +41,17 @@ NEXT_DIST_DIR=.next-build npx next build
 rm -rf .next-deploy
 mv .next-build .next-deploy
 
-echo "==> pm2 reload"
+echo "==> pm2 restart"
+# Recreate instead of reload (CR PR #190): pm2 reload keeps the process's
+# ORIGINAL start args forever, so arg changes here (like -H) would never
+# reach a long-lived process. Fork-mode reload is a stop+start anyway, so
+# recreating costs no extra downtime and guarantees args + fresh env.
 if pm2 describe taqreer-prod >/dev/null 2>&1; then
-  pm2 reload taqreer-prod --update-env
-else
-  # -H 127.0.0.1: nginx is the only legitimate caller; never expose the
-  # Node port on all interfaces (UFW blocks it, but belt + suspenders).
-  pm2 start npm --name taqreer-prod -- start -- -p "$PORT" -H 127.0.0.1
+  pm2 delete taqreer-prod
 fi
+# -H 127.0.0.1: nginx is the only legitimate caller; never expose the
+# Node port on all interfaces (UFW blocks it, but belt + suspenders).
+pm2 start npm --name taqreer-prod -- start -- -p "$PORT" -H 127.0.0.1
 # Inngest runs on Inngest Cloud (INNGEST_DEV=0 + signing/event keys in .env), so
 # there is NO local inngest-cli dev worker to start here. After a deploy that
 # adds or changes functions, re-sync the app from the Inngest Cloud dashboard.

@@ -31,10 +31,14 @@ export function classifyExtractError(
   if (/exceeded the maximum allowed size|payload too large/i.test(message)) {
     return "file_too_large";
   }
-  if (/encrypted|password/i.test(message)) {
+  // Producer-stable phrases only (CR PR #190): a generic /password/
+  // would swallow unrelated errors, and matching every "LibreOffice"
+  // mention would hide the "not installed" message whose remedy is a
+  // server-side install, not a user retry.
+  if (/PDFDocument\.load.*is encrypted|password-protected/i.test(message)) {
     return "pdf_encrypted";
   }
-  if (/libreoffice/i.test(message)) {
+  if (/LibreOffice (conversion failed|ran but produced no PDF)/i.test(message)) {
     return "conversion_failed";
   }
   return null;
