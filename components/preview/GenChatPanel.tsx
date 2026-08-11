@@ -76,6 +76,11 @@ export function GenChatPanel({
           "{n}",
           String(e.n ?? ""),
         );
+      case "fit":
+        return (isPost ? t.fitPost : t.fitSlide).replace(
+          "{n}",
+          String(e.n ?? ""),
+        );
       case "reviewDone":
         return (e.n ?? 0) > 0
           ? t.reviewImproved.replace("{n}", String(e.n))

@@ -1097,6 +1097,8 @@
       "revised": "Improving slide {n}",
       "postDone": "Designing post {n}",
       "revisedPost": "Improving post {n}",
+      "fitSlide": "Fitting slide {n} content",
+      "fitPost": "Fitting post {n} content",
       "reviewAsk": "Slide review",
       "reviewClean": "All slides approved as designed",
       "reviewImproved": "Improved {n} slides after review",

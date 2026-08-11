@@ -71,6 +71,7 @@ import {
 } from "@/lib/schema/slide";
 import { buildHtmlDocumentServer } from "@/lib/export/html-document-server";
 import { FREEZE_SCRIPT } from "@/lib/deck/freeze-script";
+import { FIT_SCRIPT, type FitCompressResult } from "@/lib/deck/fit-script";
 import { LEADING_NORMALIZE_SCRIPT } from "@/lib/deck/leading-normalize";
 import {
   AUDIT_SCRIPT,
@@ -658,6 +659,9 @@ export const deckFreezeBake = inngest.createFunction(
       // Per-pending-slide FINAL html, decided inside the render session.
       const finalHtml = new Map<string, string>();
       const reverted = new Set<string>();
+      // Slides the overflow backstop compressed (declared here so the
+      // post-render feed write can milestone them).
+      const compressedIds: string[] = [];
       let frozenCount = 0;
 
       const browser = await launchGuardedBrowser();
@@ -741,20 +745,91 @@ export const deckFreezeBake = inngest.createFunction(
 
         const toFreeze = pendingIds.filter((sid) => !reverted.has(sid));
 
+        // Shared by both deterministic backstops below: one re-measure of
+        // the FINAL composed state, plus the shot cache (a backstop that
+        // mutates a slide invalidates its entry so later passes re-shoot).
+        const preShots = revisedShots;
+        const finalAudit = await auditSlides(page, toFreeze, manifest.direction);
+
+        // ── DETERMINISTIC OVERFLOW BACKSTOP (2026-08-11) ── nothing freezes
+        // with measured vertical overflow while deterministic compression
+        // can fix it. The vision gets first shot at a design-quality fix;
+        // the 2026-08-11 prod deck proved a revision can IMPROVE overflow
+        // (194px -> 96px) yet still clip - the regression guard above only
+        // vetoes WORSE, so the partial fix froze with the last table row
+        // cut mid-row and the footer hidden. Same philosophy as the
+        // contrast backstop below: deterministic enforcement when the model
+        // doesn't deliver (fit-script.ts has the mechanism). Runs BEFORE
+        // the contrast pass so pixel-check rects measure the compressed
+        // layout.
+        await page.evaluate(
+          `${FIT_SCRIPT}; window.__tqFit = __tqCompressOverflow;`,
+        );
+        for (const sid of toFreeze) {
+          if (worstOverflowPx(finalAudit[sid]?.findings ?? []) === 0) continue;
+          const res = (await page.evaluate((id) => {
+            const escaped = id.replace(/[^a-zA-Z0-9_-]/g, "\\$&");
+            const sec = document
+              .querySelector(`[data-slide-id="${escaped}"]`)
+              ?.querySelector("section");
+            const well = sec?.querySelector(":scope > .tq-well");
+            if (!sec || !well) return null;
+            const fit = (
+              window as unknown as {
+                __tqFit: (w: Element) => FitCompressResult;
+              }
+            ).__tqFit(well);
+            return { ...fit, html: fit.changed ? sec.outerHTML : "" };
+          }, sid)) as (FitCompressResult & { html: string }) | null;
+          if (!res || !res.changed) continue;
+          logger.info("deck_overflow_backstop", {
+            slideId: sid,
+            beforePx: res.beforePx,
+            afterPx: res.afterPx,
+            wsFactor: res.wsFactor,
+            fontFactor: res.fontFactor,
+          });
+          // The DOM changed: the cached shot is stale (flow shot re-taken
+          // below), and the composed html must carry the compression so the
+          // kept-flow fallback + dual-store write ship it too.
+          preShots.delete(sid);
+          const ci = composed.findIndex((s) => s.slideId === sid);
+          if (ci >= 0 && res.html) {
+            composed[ci] = { ...composed[ci], html: res.html };
+          }
+          compressedIds.push(sid);
+        }
+        // Compression moved boxes: refresh those slides' audit entries so
+        // the contrast pass samples the right rects, and surface any slide
+        // that STILL clips after both floors (fixed-height driver) instead
+        // of shipping silently.
+        if (compressedIds.length > 0) {
+          const reFit = await auditSlides(
+            page,
+            compressedIds,
+            manifest.direction,
+          );
+          for (const sid of compressedIds) {
+            if (reFit[sid]) finalAudit[sid] = reFit[sid];
+            const residual = worstOverflowPx(reFit[sid]?.findings ?? []);
+            if (residual > 0) {
+              logger.warn("deck_overflow_backstop_residual", {
+                slideId: sid,
+                residualPx: residual,
+              });
+            }
+          }
+        }
+
         // ── DETERMINISTIC CONTRAST BACKSTOP (2026-07-15) ── nothing freezes
         // with measured-invisible text. The vision gets first shot at a
         // design-quality fix; the incident e2e proved a revision can rebuild
         // the layout yet KEEP the unreadable class ink (deck css is fixed),
         // and the guard's count parity (1 unfixed finding -> 1) ships it. So
-        // the FINAL composed state is re-measured here and any still-
-        // invisible box gets an explicit ink the system chose from the
-        // sampled ground (backstopInk: farthest palette color, else
-        // black/white by luminance) - same philosophy as the leading
-        // normalizer and latinizeDigits: deterministic enforcement when the
-        // model doesn't deliver. The freeze then captures the fixed ink into
-        // the stored html; kept-flow slides carry it via `composed`.
-        const preShots = revisedShots;
-        const finalAudit = await auditSlides(page, toFreeze, manifest.direction);
+        // any still-invisible box gets an explicit ink the system chose from
+        // the sampled ground (backstopInk: farthest palette color, else
+        // black/white by luminance). The freeze then captures the fixed ink
+        // into the stored html; kept-flow slides carry it via `composed`.
         await page.evaluate(
           `${AUDIT_SCRIPT}; window.__tqFixText = __tqFixInvisibleText;`,
         );
@@ -943,13 +1018,24 @@ export const deckFreezeBake = inngest.createFunction(
       const appliedRevised = pendingIds.filter(
         (sid) => observed.revisions[sid] !== undefined && !reverted.has(sid),
       );
-      if (appliedRevised.length > 0) {
+      if (appliedRevised.length > 0 || compressedIds.length > 0) {
         await chatWrite((chat) => {
           for (const sid of appliedRevised) {
             const pos = manifest.slides.findIndex((x) => x.slideId === sid) + 1;
             chat.push({
               role: "event",
               kind: "reviseSlide",
+              n: pos,
+              at: Date.now(),
+            });
+          }
+          // Overflow-backstop milestones: keep the feed honest about the
+          // system compressing a slide the review round left clipping.
+          for (const sid of compressedIds) {
+            const pos = manifest.slides.findIndex((x) => x.slideId === sid) + 1;
+            chat.push({
+              role: "event",
+              kind: "fit",
               n: pos,
               at: Date.now(),
             });
@@ -1024,6 +1110,7 @@ export const deckFreezeBake = inngest.createFunction(
         frozen: frozenCount,
         kept: pendingIds.length - frozenCount,
         revised: revisedApplied,
+        compressed: compressedIds.filter((sid) => written.has(sid)),
         reverted: [...reverted],
         skippedStale,
       };
@@ -1031,10 +1118,11 @@ export const deckFreezeBake = inngest.createFunction(
 
     // ─── Step 4: finalize (thumbnails + realtime) ────────────────────
     await step.run("finalize", async () => {
-      // Revisions changed what the deck LOOKS like - refresh the dashboard
-      // thumbnails, but only when this version is the promoted one (never
-      // repaint tiles for a version the user hasn't saved).
-      if (result.revised.length > 0) {
+      // Revisions and backstop compressions changed what the deck LOOKS
+      // like - refresh the dashboard thumbnails, but only when this version
+      // is the promoted one (never repaint tiles for a version the user
+      // hasn't saved).
+      if (result.revised.length > 0 || result.compressed.length > 0) {
         const { prisma } = await import("@/lib/prisma");
         const presentation = await prisma.presentation.findFirst({
           where: { projectId },
@@ -1069,6 +1157,7 @@ export const deckFreezeBake = inngest.createFunction(
       frozen: result.frozen,
       kept: result.kept,
       revised: result.revised.length,
+      compressed: result.compressed.length,
       reverted: result.reverted.length,
       skippedStale: result.skippedStale,
     });

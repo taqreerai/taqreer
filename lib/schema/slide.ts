@@ -243,6 +243,7 @@ export const GenChatEntrySchema = z.object({
       "revise", // the model swapped slide n in place (data-revises)
       "review", // the bake's review ASK (role user, carries the sent thumbs)
       "reviseSlide", // the review pass revised slide n (text only)
+      "fit", // the overflow backstop compressed slide n to fit its well
       "reviewDone", // vision pass returned: n = number of slides revised
       "finalizing", // freeze + write phase started (labels the quiet stretch)
       "baked", // freeze bake finished - the deck is final
