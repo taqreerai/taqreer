@@ -33,9 +33,15 @@
 // overflow remains (e.g. a fixed-height image is the driver), the caller
 // logs the residual instead of shipping silently.
 //
-// Vertical only by design: the compressor declines horizontal overflow
-// (returns changed:false) - shrinking vertical whitespace cannot fix it and
-// blind font shrink for a wide box trades one defect for another.
+// Vertical only by design: the fit criterion is BOTTOM overflow, so a
+// purely-horizontal case has nothing this script can fix and declines
+// (returns changed:false, no DOM mutation). A MIXED case (horizontal +
+// vertical) still gets the vertical fix on purpose: the whitespace phase
+// changes no widths and the font phase can only narrow text, so vertical
+// compression can never worsen the horizontal defect - declining would
+// ship a slide with both defects instead of one. Any surviving horizontal
+// clip shows up in the caller's post-compression re-audit (which measures
+// all four directions) as deck_overflow_backstop_residual.
 //
 // Input domain: frame wells are FLOW-ONLY by the generation contract, so
 // pulling content upward can never create overlap - later flow content
