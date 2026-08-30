@@ -1,21 +1,30 @@
 "use client";
 
 // Landing-page hero: centered title + subhead + CTA pair + scroll-tilted
-// dashboard preview. Brand chrome references --tq-violet / .btn-gradient
-// / .btn-pill / .text-muted to stay in lock-step with the dashboard.
+// product demo over the LIVING TEMPLATE WALL (the same rotated marquee
+// the auth pages paint - user direction 2026-08-10). Brand chrome
+// references --tq-violet / .btn-gradient / .btn-pill / .text-muted to
+// stay in lock-step with the dashboard.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
 import dynamic from "next/dynamic";
+import { AuthMarqueeBackground } from "@/components/auth/AuthMarqueeBackground";
+import type { MarqueeColumns } from "@/lib/auth/marquee-projects";
 
-// The dashboard preview is a large (~1,300-line) decorative demo, not SEO
-// content. Load it client-only so it stays out of the landing's SSR — that keeps
+// The create-flow showcase is a large decorative demo, not SEO content.
+// Load it client-only so it stays out of the landing's SSR — that keeps
 // the server render down to the lightweight text sections. The sized
 // `.hero-preview-frame` holds the space, so there's no layout shift.
-const DashboardPreview = dynamic(
-  () => import("./DashboardPreview").then((m) => m.DashboardPreview),
+// (Replaced the interactive DashboardPreview 2026-08-10 - the cinematic
+// create mini-tutorial from the feature-showcase lab.)
+const CreateScene = dynamic(
+  () =>
+    import("@/components/marketing/showcase/scenes/CreateScene").then(
+      (m) => m.CreateScene,
+    ),
   { ssr: false },
 );
 
@@ -25,15 +34,36 @@ const DashboardPreview = dynamic(
 // presentational — no client-side DB round-trip on a public page.
 // Undefined / 0 falls back to a hidden chip so we never render
 // "تم إنشاء 0 عرض تقديمي حتى الآن" on a fresh DB.
-export function Hero({ projectCount }: { projectCount?: number }) {
+// Lint-safe media-query read (same recipe as ScrollReveal): SSR assumes
+// motion-ok, the client corrects on commit - the scene then renders its
+// settled final frame instead of animating.
+const REDUCED_QUERY = "(prefers-reduced-motion: reduce)";
+function subscribeReduced(cb: () => void) {
+  const mq = window.matchMedia(REDUCED_QUERY);
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+}
+function usePrefersReducedMotion() {
+  return useSyncExternalStore(
+    subscribeReduced,
+    () => window.matchMedia(REDUCED_QUERY).matches,
+    () => false,
+  );
+}
+
+export function Hero({
+  projectCount,
+  marqueeColumns,
+}: {
+  projectCount?: number;
+  // Curated-template thumbnails for the living wall behind the hero
+  // (server-fetched in app/[lang]/page.tsx, same loader as the auth
+  // pages). Optional: an empty/missing set simply renders no wall.
+  marqueeColumns?: MarqueeColumns;
+}) {
   const dict = useDict();
   const { locale } = useLocale();
-
-  // Tracks the demo dashboard's active view as a path string so the
-  // browser-chrome URL pill stays in sync with whichever flow the
-  // visitor clicked into (DashboardPreview emits the path, Hero
-  // mirrors it here, BrowserChromeBar reads it). 2026-05-28.
-  const [demoPath, setDemoPath] = useState("/dashboard");
+  const reducedMotion = usePrefersReducedMotion();
 
   // Scroll-driven rotation: full 15° tilt at the top of the page,
   // flattening to 0° as the visitor scrolls. The flatten distance is
@@ -93,6 +123,50 @@ export function Hero({ projectCount }: { projectCount?: number }) {
 
   return (
     <section className="glow-effect relative overflow-hidden pt-40 pb-32">
+      {/* Living template wall - the login marquee embedded as the hero
+          backdrop (absolute, scoped to this section). Its built-in
+          center fade is tuned for the auth glass modal; the hero copy
+          sits bare on the wall, so a top-anchored scrim (below) adds
+          the missing separation. */}
+      {marqueeColumns && (
+        <>
+          {/* The wall is MASKED, not overpainted: fully visible behind
+              the first-viewport copy, it starts dissolving above the
+              animation window (top edge ~180px above the fold - see
+              globals.css "Hero fold composition") and is fully gone just
+              past the window's TOP - tiles peek faintly over the frame's
+              upper edge, nothing behind its center (user direction
+              2026-08-30). True mask = the page background shows through,
+              no solid band over the glow. */}
+          <div
+            aria-hidden
+            className="absolute inset-0"
+            style={{
+              // Wide EASED feather (same multi-stop trick as the aura /
+              // marquee masks - a 2-stop linear reads as a hard band):
+              // ~820px ramp starting mid-copy, fully gone just past the
+              // window's top edge.
+              WebkitMaskImage:
+                "linear-gradient(to bottom, black 0%, black calc(100vh - 700px), rgba(0,0,0,0.78) calc(100vh - 480px), rgba(0,0,0,0.5) calc(100vh - 290px), rgba(0,0,0,0.22) calc(100vh - 100px), transparent calc(100vh + 120px))",
+              maskImage:
+                "linear-gradient(to bottom, black 0%, black calc(100vh - 700px), rgba(0,0,0,0.78) calc(100vh - 480px), rgba(0,0,0,0.5) calc(100vh - 290px), rgba(0,0,0,0.22) calc(100vh - 100px), transparent calc(100vh + 120px))",
+            }}
+          >
+            <AuthMarqueeBackground columns={marqueeColumns} fixed={false} />
+          </div>
+          {/* Copy scrim - strongest behind the first-viewport headline,
+              feathering out so the tiles stay crisp around the demo. */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 top-0 h-[85vh]"
+            style={{
+              background:
+                "linear-gradient(to bottom, color-mix(in srgb, var(--tq-bg) 85%, transparent) 0%, color-mix(in srgb, var(--tq-bg) 55%, transparent) 55%, transparent 100%)",
+            }}
+          />
+        </>
+      )}
+
       <div className="relative z-10 mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
         {/* CSS-driven entrance (`.hero-enter`, per-element stagger via
             animationDelay) instead of Framer Motion: the copy must paint
@@ -202,45 +276,26 @@ export function Hero({ projectCount }: { projectCount?: number }) {
             className="relative origin-center"
           >
 
-            {/* Browser-chrome frame (traffic dots + URL pill showing
-                https://taqreer.ai/dashboard) wrapped around an
-                interactive HTML demo (<DashboardPreview/>) that
-                replaced the static /hero.png screenshot 2026-05-28.
-                The four QuickActions cards inside the demo are
-                clickable — each one swaps the panel to a static
-                rendering of the corresponding flow (/create,
-                /enhance, /mimic, /social). Files cannot actually
-                be uploaded — dropzones are visual chrome only.
+            {/* Browser-chrome frame (traffic dots + URL pill pinned to
+                taqreer.ai/create) wrapped around the cinematic create
+                mini-tutorial (<CreateScene/>) - replaced the interactive
+                DashboardPreview 2026-08-10. The scene loops on its own
+                (typing -> brand -> settings -> generate -> deck wall);
+                nothing inside is clickable.
 
                 The chrome bar + preview pane stack inside one outer
                 `rounded-2xl` border — a complete browser window with
                 crisp edges (no bottom-fade mask). */}
             <div className="relative mx-auto w-full overflow-hidden rounded-2xl border border-[var(--tq-border-hairline)]">
-              {/* Browser chrome — Mac Safari recipe: colored traffic
-                  lights, paired ‹ › nav arrows, shield, URL pill with
-                  lock + domain + refresh, and a right-side action
-                  cluster (download / share / + / all-tabs). Forced
-                  `dir="ltr"` so the URL + chrome read left-to-right
-                  inside an RTL page; traffic lights stay anchored to
-                  the visual left as users expect from real browsers.
-                  All surfaces (nav buttons, URL pill, right cluster)
-                  use the design-system tokens (`--tq-surface`,
-                  `--tq-border-hairline`, `--tq-text-muted`) so the bar
-                  inherits the same glass language as the rest of the
-                  app — no hardcoded surface colors. */}
-              <BrowserChromeBar path={demoPath} />
+              <BrowserChromeBar path="/create" />
 
-              {/* Interactive dashboard preview — aspect-[3/2] preserves
-                  the same outer ratio the static hero.png used (1440 ×
-                  960). The DashboardPreview's content scales within
-                  this box; its absolutely-positioned inner pane fills
-                  the aspect container so the chrome bar above stays
-                  in proportion. Below `sm` the quick-action grid stacks
-                  2×2 (vs 1×4) + the dashboard reads portrait, so the box
-                  goes taller (4:5) to fit the content without clipping;
-                  at `sm`+ it returns to the 3:2 landscape ratio. */}
-              <div className="relative aspect-[4/5] w-full sm:aspect-[3/2]">
-                <DashboardPreview onPathChange={setDemoPath} />
+              {/* The scene is authored for a 16:9 stage (its card rail,
+                  cursor waypoints and deck wall all assume it), so the
+                  box is aspect-video at every breakpoint. Solid --tq-bg
+                  underneath: the scene's aura layer has no base fill of
+                  its own and the marquee wall must not read through. */}
+              <div className="relative aspect-video w-full bg-[var(--tq-bg)]">
+                <CreateScene reduced={reducedMotion} />
               </div>
             </div>
           </motion.div>

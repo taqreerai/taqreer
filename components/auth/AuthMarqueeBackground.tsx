@@ -41,13 +41,20 @@ function delayMsFromId(id: string): number {
 
 type Props = {
   columns: MarqueeColumns;
+  // Auth pages paint the wall over the whole viewport (`fixed`, the
+  // default). The landing hero embeds the SAME wall as its section
+  // background - `fixed={false}` renders it absolute so it stays
+  // scoped (and scrolls) with the hero.
+  fixed?: boolean;
 };
 
-export function AuthMarqueeBackground({ columns }: Props) {
+export function AuthMarqueeBackground({ columns, fixed = true }: Props) {
   return (
     <div
       aria-hidden
-      className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
+      className={`pointer-events-none inset-0 z-0 overflow-hidden ${
+        fixed ? "fixed" : "absolute"
+      }`}
     >
       {/* `gap-4` between columns. 30° clockwise rotation tilts the
           whole wall — the corners stick past the viewport edges so

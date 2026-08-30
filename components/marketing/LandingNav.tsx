@@ -12,8 +12,8 @@ import { usePathname } from "next/navigation";
 import { useLocale, useDict } from "@/components/i18n/LocaleProvider";
 import { useIsAuthed } from "@/hooks/useIsAuthed";
 import { localizedHref, stripLocale } from "@/lib/i18n/navigation";
+import { isAppPath } from "@/lib/app-routes";
 import { LanguageMenu } from "@/components/i18n/LanguageMenu";
-import { ThemeToggle } from "@/components/app/ThemeToggle";
 import { ThemeLogo } from "@/components/brand/ThemeLogo";
 
 // Auth state is resolved CLIENT-side (useIsAuthed: a cookie-presence check, no
@@ -28,6 +28,24 @@ export function LandingNav() {
   const isAuthed = useIsAuthed();
   const [menuOpen, setMenuOpen] = useState(false);
   const navRef = useRef<HTMLElement>(null);
+
+  // Marketing surfaces are DARK-ONLY (user direction 2026-08-30): the theme
+  // toggle lives exclusively in the dashboard chrome. The pre-paint script
+  // (layout CHROME_INIT) already skips `.light` on non-app loads; this guard
+  // covers CLIENT-side navigations (app -> landing would keep the class
+  // otherwise) and restores the visitor's cookie preference only when they
+  // navigate back INTO the app shell (auth/marketing destinations stay
+  // dark). DOM side-effect only - no state, lint-safe.
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.remove("light");
+    return () => {
+      const prefersLight = /(?:^|;\s*)tq_theme=light(?:;|$)/.test(document.cookie);
+      if (prefersLight && isAppPath(stripLocale(window.location.pathname))) {
+        root.classList.add("light");
+      }
+    };
+  }, []);
 
   // Close the mobile menu on an outside click or Escape, matching the app's
   // popup convention (the landing has no iframe, so a document listener is
@@ -95,10 +113,10 @@ export function LandingNav() {
           </div>
 
           <div className="hidden items-center gap-2 md:flex">
-            {/* Theme + language as a tight icon pair so they don't read more
-                spaced than the auth pills beside them. */}
+            {/* Language only - the theme toggle left the marketing nav
+                2026-08-30 (marketing is dark-only; toggling lives in the
+                dashboard chrome). */}
             <div className="flex items-center gap-1">
-              <ThemeToggle />
               <LanguageMenu />
             </div>
             {isAuthed ? (
@@ -162,7 +180,6 @@ export function LandingNav() {
             ))}
             {/* Centered controls + content-width (not full-width) CTAs. */}
             <div className="mt-2 mb-2 flex items-center justify-center gap-2">
-              <ThemeToggle />
               <LanguageMenu />
             </div>
             {isAuthed ? (
