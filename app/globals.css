@@ -2382,6 +2382,7 @@ html.app-shell-scroll body {
    height; the eased top feather is baked in (same stops as .tq-aura). */
 .tq-aura-floor {
   --tq-aura-alpha: 0.5;
+
   background:
     radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #0042E0 0%, transparent 75%),
     radial-gradient(circle at var(--mesh-x2) var(--mesh-y2), #0057FF 0%, transparent 70%),
