@@ -36,6 +36,15 @@ import { prisma } from "@/lib/prisma";
 
 const COUNTRY = "IN";
 
+// Operator output identifies accounts by id + masked email - full addresses
+// stay out of stdout (which can end up in retained shell/session logs); the
+// admin console resolves ids when a full lookup is needed.
+function maskEmail(email: string): string {
+  const at = email.indexOf("@");
+  if (at <= 0) return "***";
+  return `${email.slice(0, 2)}***${email.slice(at)}`;
+}
+
 async function main() {
   const execute = process.argv.includes("--execute");
 
@@ -80,12 +89,12 @@ async function main() {
   );
   for (const u of eligible) {
     console.log(
-      `  ${u.email}  balance=${u.creditAccount?.subscriptionBalance}  signupGrant=${u.usageEvents.reduce((s2, e) => s2 + e.amount, 0)}  joined=${u.createdAt.toISOString().slice(0, 10)}`,
+      `  ${u.id}  ${maskEmail(u.email)}  balance=${u.creditAccount?.subscriptionBalance}  signupGrant=${u.usageEvents.reduce((s2, e) => s2 + e.amount, 0)}  joined=${u.createdAt.toISOString().slice(0, 10)}`,
     );
   }
   for (const u of overGrant) {
     console.log(
-      `  SKIP (balance exceeds signup grant - admin-granted money present): ${u.email}  balance=${u.creditAccount?.subscriptionBalance}`,
+      `  SKIP (balance exceeds signup grant - admin-granted money present): ${u.id}  ${maskEmail(u.email)}  balance=${u.creditAccount?.subscriptionBalance}`,
     );
   }
   if (!execute) {
@@ -99,6 +108,26 @@ async function main() {
     const balance = u.creditAccount?.subscriptionBalance ?? 0;
     if (balance <= 0) continue;
     await prisma.$transaction(async (tx) => {
+      // Revalidate eligibility inside the transaction: a purchase or
+      // goodwill refund landing between the scan and this write would not
+      // move subscriptionBalance (top-ups live in TopupGrant rows), so the
+      // CAS alone cannot catch it - re-check the paid/refund markers here.
+      const still = await tx.user.findFirst({
+        where: {
+          id: u.id,
+          plan: "free",
+          role: { not: "admin" },
+          subscriptions: { none: {} },
+          topupGrants: { none: {} },
+          usageEvents: { none: { eventType: "credit.refund" } },
+        },
+        select: { id: true },
+      });
+      if (!still) {
+        skipped += 1;
+        console.log(`  SKIP (became paid/refunded since scan): ${u.id}`);
+        return;
+      }
       // CAS: only zero if the balance is still what we read - a
       // concurrent spend/hold makes this miss and we skip (rerun-safe).
       const updated = await tx.creditAccount.updateMany({
@@ -107,7 +136,7 @@ async function main() {
       });
       if (updated.count === 0) {
         skipped += 1;
-        console.log(`  SKIP (balance moved): ${u.email}`);
+        console.log(`  SKIP (balance moved): ${u.id}`);
         return;
       }
       await tx.usageEvent.create({
