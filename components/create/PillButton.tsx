@@ -43,6 +43,7 @@ export function PillButton({
   children,
   disabled,
   type = "button",
+  style: styleProp,
   ...rest
 }: PillButtonProps) {
   // Size classes — fixed height so neighbouring buttons line up,
@@ -73,7 +74,10 @@ export function PillButton({
       type={type}
       disabled={disabled || loading}
       {...rest}
-      style={variantStyle}
+      // Caller style merges OVER the variant's (previously the variant
+      // style silently clobbered a passed `style` - CR-adjacent fix
+      // found wiring the /create wizard nav 2026-08-30).
+      style={{ ...variantStyle, ...styleProp }}
       className={`relative inline-flex items-center justify-center font-medium transition-opacity disabled:cursor-not-allowed disabled:opacity-50 ${sizeClasses} ${variantClasses}`}
     >
       {loading ? (

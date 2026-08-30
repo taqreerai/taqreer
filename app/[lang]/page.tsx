@@ -1,5 +1,6 @@
 // Public landing page (/). Simple stacked layout: a centered max-w-7xl column
-// on the panel background with the bottom aurora glow (MagneticGlow, dots off).
+// on the panel background with a low aura horizon band pinned to the bottom
+// (.tq-aura-floor - the hero demo's mesh paint).
 // No swiss-grid frame: the vertical border-x + the full-bleed `.rule-*`
 // separators were removed (2026-06-11) in favour of plain section spacing, so
 // the page reads like the app rather than a marketing grid. Single-column
@@ -15,7 +16,6 @@ import { Hero } from "@/components/marketing/Hero";
 import { FeatureFlowCards } from "@/components/marketing/FeatureFlowCards";
 import { BidiSection } from "@/components/marketing/BidiSection";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
-import { MagneticGlow } from "@/components/app/MagneticGlow";
 import { LandingTemplatesGrid } from "@/components/marketing/LandingTemplatesGrid";
 import { SiteFooter } from "@/components/marketing/SiteFooter";
 import { PricingTiers } from "@/components/marketing/PricingTiers";
@@ -162,7 +162,7 @@ export default async function LandingPage({
           itself. */}
       <div
         aria-hidden
-        className="tq-aura-floor pointer-events-none fixed inset-x-0 bottom-0 -z-[1] h-[62vh]"
+        className="tq-aura-floor pointer-events-none fixed inset-x-0 bottom-0 -z-[1] h-[18vh]"
       />
       <LandingNav />
 

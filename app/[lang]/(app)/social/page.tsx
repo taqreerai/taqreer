@@ -21,6 +21,8 @@ import { planLabel } from "@/lib/plan";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
+import { PillButton } from "@/components/create/PillButton";
+import { WizardStepRail } from "@/components/create/WizardChrome";
 import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
 import { LogoRow } from "@/components/brand/LogoRow";
 import { PersistentRow } from "@/components/brand/PersistentRow";
@@ -284,6 +286,11 @@ export default function SocialPage() {
     );
 
   // ─── Submit ────────────────────────────────────────────────────
+  // Wizard step (2026-08-30, user direction, mirrors /create): 0 Content,
+  // 1 Brand, 2 Design + Generate. Cards stay MOUNTED (single-cell grid,
+  // `invisible` when inactive) so heights stay constant and popovers /
+  // upload state survive step changes.
+  const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [creditGate, setCreditGate] = useState<CreditGatePayload | null>(null);
@@ -497,10 +504,25 @@ export default function SocialPage() {
           <p className="tq-subhead mt-2">{dict.flows.social.subtitle}</p>
         </header>
 
-        <div className="flex flex-wrap justify-center gap-4">
-          {/* ── CONTENT CARD ──────────────────────────────────── */}
+        <WizardStepRail
+          steps={[
+            dict.flows.social.contentCard,
+            dict.flows.brandCard,
+            dict.flows.social.designCard,
+          ]}
+          active={step}
+          onJump={setStep}
+        />
+
+        {/* Wizard column (was a wrapping 3-across row until 2026-08-30):
+            all three cards share ONE grid cell; inactive cards are
+            `invisible` (not display:none) so the stack keeps the tallest
+            card's height at every step. */}
+        <div className="flex w-full flex-col items-center gap-4">
+          <div className="grid w-full justify-items-center">
+          {/* ── CONTENT CARD (step 1) ─────────────────────────── */}
           <div
-            className={`surface-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card ${step === 0 ? "" : "invisible"} col-start-1 row-start-1 flex w-full sm:w-[430px] ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <CardHeader icon="edit_note" title={dict.flows.social.contentCard} />
             <div className="flex flex-1 flex-col space-y-1.5">
@@ -569,7 +591,7 @@ export default function SocialPage() {
 
           {/* ── BRAND CARD (identical to /datasheet) ──────────── */}
           <div
-            className={`surface-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card ${step === 1 ? "" : "invisible"} col-start-1 row-start-1 flex w-full sm:w-[430px] ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <header className="relative z-30 border-b border-foreground/[0.08] pb-4">
               <div className="relative flex items-center gap-2">
@@ -691,7 +713,7 @@ export default function SocialPage() {
 
           {/* ── DESIGN CARD ───────────────────────────────────── */}
           <div
-            className={`surface-card flex w-[360px] shrink-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card ${step === 2 ? "" : "invisible"} col-start-1 row-start-1 flex w-full sm:w-[430px] ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <CardHeader icon="tune" title={dict.flows.social.designCard} />
 
@@ -759,8 +781,23 @@ export default function SocialPage() {
               </div>
             </div>
           </div>
+          </div>
+
+          {/* Next only (`.btn-gradient` CTA); back-travel via the rail. */}
+          {step < 2 && (
+            <div className="flex w-full justify-end sm:w-[430px]">
+              <PillButton
+                variant="primary"
+                onClick={() => setStep((s) => Math.min(2, s + 1))}
+                disabled={submitting || (step === 0 && topic.trim().length === 0)}
+              >
+                {dict.flows.wizard.next}
+              </PillButton>
+            </div>
+          )}
         </div>
 
+        {step === 2 && (
         <div className="flex justify-center">
           <GenerateSplitButton
             onGenerate={handleGenerate}
@@ -773,6 +810,7 @@ export default function SocialPage() {
             loading={submitting}
           />
         </div>
+        )}
 
         <p
           className="min-h-5 text-center text-sm text-red-400"

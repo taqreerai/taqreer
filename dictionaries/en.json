@@ -551,6 +551,7 @@
     }
   },
   "flows": {
+    "wizard": { "next": "Next", "extracting": "Extracting your file..." },
     "stylePicker": { "boldSample": "Deck", "socialBoldSample": "BOLD", "dialogTitle": "Choose a design style", "auto": "Auto", "autoDesc": "We pick what fits your content", "change": "Change", "descs": { "swiss": "Strict grid, calm whitespace", "corporate": "Clear charts and figures", "minimal": "One element, generous space", "editorial": "Magazine-style columns", "bold": "Huge display headlines", "duotone": "Two tones, full-bleed imagery", "playful": "Free shapes, bold color", "brutalist": "Raw borders, stark contrast" }, "socialDescs": { "boldtype": "Giant type, one loud statement", "editorial": "Magazine kicker, big headline, hero", "grainy": "Dreamy gradient auras with grain", "brutalist": "Flat brights, thick borders, shadows", "minimal": "Airy whitespace, one calm idea", "photo": "Full-bleed photo, type on a scrim", "retro": "Risograph two-tone with halftone", "pop3d": "Soft 3D shapes, rounded cards", "swiss": "Strict columns, exact alignment", "corporate": "One hero figure, clean chart" } },
     "contentCard": "Content",
     "language": "Language",

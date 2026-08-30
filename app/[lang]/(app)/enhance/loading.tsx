@@ -5,5 +5,5 @@
 import { FlowPageSkeleton } from "@/components/app/PageSkeletons";
 
 export default function Loading() {
-  return <FlowPageSkeleton cards={2} fluid />;
+  return <FlowPageSkeleton cards={1} />;
 }

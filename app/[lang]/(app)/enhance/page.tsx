@@ -44,6 +44,8 @@ import {
 } from "@/components/credits/CreditGateDialog";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
+import { PillButton } from "@/components/create/PillButton";
+import { WizardStepRail } from "@/components/create/WizardChrome";
 import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
 import { LogoRow } from "@/components/brand/LogoRow";
 import {
@@ -250,6 +252,11 @@ export default function EnhanceContentPage() {
 
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
+  // Wizard step (2026-08-30, user direction, mirrors /create): 0 Source
+  // file, 1 Brand + Generate. Both cards stay MOUNTED (single-cell grid,
+  // `invisible` when inactive) so the frame height stays constant and
+  // upload/extraction state survives step changes.
+  const [step, setStep] = useState(0);
   const [stage, setStage] = useState<Stage>("idle");
   const [extracted, setExtracted] = useState<
     ExtractCompletedResponse["result"] | null
@@ -842,12 +849,18 @@ export default function EnhanceContentPage() {
             they share the row width equally; items-stretch makes the
             fonts card grow to match the source card's height (which
             is taller — dropzone + logo stacked + file chip). */}
-        {/* flex-wrap so the row collapses gracefully on narrow
-            viewports — same responsive pattern /create + /mimic use.
-            Cards keep flex-1 to share row width but each carries a
-            min-w so they wrap (rather than infinitely shrink) when
-            the container can't fit both side-by-side. */}
-        <div className="flex w-full flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-stretch">
+        <WizardStepRail
+          steps={[dict.flows.enhance.originalFile, dict.flows.brandCard]}
+          active={step}
+          onJump={setStep}
+        />
+
+        {/* Wizard column (was a fluid 2-across row until 2026-08-30):
+            both cards share ONE grid cell; the inactive one is
+            `invisible` (not display:none) so the stack keeps the taller
+            card's height and extraction keeps its live DOM. */}
+        <div className="flex w-full flex-col items-center gap-4">
+          <div className="grid w-full justify-items-center">
           {/* ─── Source + Logo card ──────────────────────────
               File dropzone on top (primary action), logo dropzone
               underneath (optional brand asset). One card because
@@ -855,7 +868,7 @@ export default function EnhanceContentPage() {
               the file area needs much more vertical real estate.
               p-4 + gap-4 deliberately tighter than the create-flow
               cards so the row reads compact, not airy. */}
-          <div className="surface-card flex min-h-[440px] min-w-0 flex-1 flex-col gap-4 rounded-2xl p-4 sm:min-w-[320px]">
+          <div className={`surface-card ${step === 0 ? "" : "invisible"} col-start-1 row-start-1 flex min-h-[440px] w-full flex-col gap-4 rounded-2xl p-4 sm:w-[430px]`}>
             <input
               ref={fileInputRef}
               type="file"
@@ -1019,7 +1032,7 @@ export default function EnhanceContentPage() {
               dropdown in the header, palette, single brand-font picker,
               logo row, save toggle. Same min-h / min-w / flex-1 sizing
               as the source card so the two-card row stays balanced. */}
-          <div className="surface-card flex min-h-[440px] min-w-0 flex-1 flex-col gap-4 rounded-2xl p-4 sm:min-w-[320px]">
+          <div className={`surface-card ${step === 1 ? "" : "invisible"} col-start-1 row-start-1 flex min-h-[440px] w-full flex-col gap-4 rounded-2xl p-4 sm:w-[430px]`}>
             {/* Inline header (not CardHeader) so the saved-kit pill can
                 overlay the title row. Mirrors /create's branding header:
                 pb-4 balances the card's p-4 top padding so the title sits
@@ -1141,15 +1154,25 @@ export default function EnhanceContentPage() {
               />
             </div>
           </div>
+          </div>
+
+          {/* Next only (`.btn-gradient` CTA); back-travel via the rail.
+              Gated on a file being picked - extraction may continue
+              across steps (the Generate CTA carries its loading). */}
+          {step < 1 && (
+            <div className="flex w-full justify-end sm:w-[430px]">
+              <PillButton
+                variant="primary"
+                onClick={() => setStep(1)}
+                disabled={stage === "idle"}
+              >
+                {dict.flows.wizard.next}
+              </PillButton>
+            </div>
+          )}
         </div>
 
-        {/* Generate split-button — sits OUTSIDE the cards, centered
-            horizontally below. Same chrome + size as /create/summary's
-            CTA. Disabled until extraction finishes; loading state
-            during extraction AND the final POST so the user sees
-            continuous progress through both phases. Preset menu
-            (right half of the split) lets the user pick a generation
-            quality. */}
+        {step === 1 && (
         <div className="flex justify-center">
           <GenerateSplitButton
             onGenerate={handleGenerate}
@@ -1162,6 +1185,7 @@ export default function EnhanceContentPage() {
             loadingLabel={generateLoadingLabel}
           />
         </div>
+        )}
 
         <p
           className="min-h-5 text-center text-sm text-red-400"

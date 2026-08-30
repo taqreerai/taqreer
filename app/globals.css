@@ -2381,7 +2381,10 @@ html.app-shell-scroll body {
    Consumer pins it `fixed inset-x-0 bottom-0` with a viewport-fraction
    height; the eased top feather is baked in (same stops as .tq-aura). */
 .tq-aura-floor {
-  --tq-aura-alpha: 0.5;
+  /* Slightly above the card aura's 0.5 cap: this is a short horizon
+     band (user direction: low but clearly visible), so the breathe
+     floor lands ~0.4 instead of ~0.31. */
+  --tq-aura-alpha: 0.65;
 
   background:
     radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #0042E0 0%, transparent 75%),
@@ -2392,19 +2395,19 @@ html.app-shell-scroll body {
   -webkit-mask-image: linear-gradient(
     to top,
     #000 0%,
-    #000 22%,
-    rgba(0, 0, 0, 0.72) 45%,
-    rgba(0, 0, 0, 0.38) 65%,
-    rgba(0, 0, 0, 0.14) 83%,
+    #000 42%,
+    rgba(0, 0, 0, 0.72) 62%,
+    rgba(0, 0, 0, 0.38) 78%,
+    rgba(0, 0, 0, 0.14) 90%,
     transparent 100%
   );
   mask-image: linear-gradient(
     to top,
     #000 0%,
-    #000 22%,
-    rgba(0, 0, 0, 0.72) 45%,
-    rgba(0, 0, 0, 0.38) 65%,
-    rgba(0, 0, 0, 0.14) 83%,
+    #000 42%,
+    rgba(0, 0, 0, 0.72) 62%,
+    rgba(0, 0, 0, 0.38) 78%,
+    rgba(0, 0, 0, 0.14) 90%,
     transparent 100%
   );
   animation:

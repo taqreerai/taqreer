@@ -39,6 +39,8 @@ import { useSlideCap } from "@/lib/credits/store";
 import { displaySlideEstimate } from "@/lib/credits/cost";
 import { localizedExtractError } from "@/lib/extract/error-codes";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
+import { PillButton } from "@/components/create/PillButton";
+import { WizardStepRail } from "@/components/create/WizardChrome";
 import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
 import { AIImagesPanel } from "@/components/brand/AIImagesPanel";
 import { LogoRow } from "@/components/brand/LogoRow";
@@ -103,7 +105,7 @@ const DEFAULT_PALETTE = ["#000000", "#FFFFFF"];
 // later promote a shared "flow card" primitive we can hoist this.
 // Full-width single column on phones; fixed 360px at sm+ so the desktop
 // wrapping row is preserved (see the card-row flex-col→flex-row switch below).
-const CARD_W_CLASS = "w-full sm:w-[360px]";
+const CARD_W_CLASS = "w-full sm:w-[430px]";
 // Fixed card height — pinned to /enhance's empty-state card height
 // measured live (2026-05-25, after /enhance content page polish):
 // 387 px. The static-math estimate from the section breakdown
@@ -372,6 +374,12 @@ export default function MimicFlow({
   };
 
   // ─── Submit-level state ────────────────────────────────────────
+  // Wizard step (2026-08-30, user direction, mirrors /create): 0 Content,
+  // 1 Brand, 2 Reference + Generate. Cards stay MOUNTED (single-cell
+  // grid, `invisible` when inactive) so heights stay constant and both
+  // extraction pipelines keep their live DOM across steps. Template mode
+  // (/use-template) walks the same steps with the reference preset.
+  const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   // 402 credit-gate payload from POST /api/projects (billing Phase A).
@@ -840,22 +848,30 @@ export default function MimicFlow({
           </p>
         </header>
 
-        {/* Row: 3 fixed-width cards centered, always all three.
-            items-stretch lets the cards share the tallest card's
-            height (the branding card, carrying palette + fonts +
-            ratio, is the tallest and pulls the row to its height). */}
-        {/* flex-wrap so the row collapses gracefully as the viewport
-            narrows. Same responsive pattern /create + /enhance use:
-            cards wrap into multiple rows when total width exceeds
-            container; items-stretch still equalizes per-row heights. */}
-        <div className="flex w-full flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-stretch sm:justify-center">
+        <WizardStepRail
+          steps={[
+            dict.flows.contentCard,
+            dict.flows.brandCard,
+            dict.flows.mimic.whatToMimic,
+          ]}
+          active={step}
+          onJump={setStep}
+        />
+
+        {/* Wizard column (was a wrapping 3-across row until 2026-08-30):
+            all three cards share ONE grid cell; inactive cards are
+            `invisible` (not display:none) so the stack keeps the tallest
+            card's height at every step and both file pipelines keep
+            their live DOM. */}
+        <div className="flex w-full flex-col items-center gap-4">
+          <div className="grid w-full justify-items-center">
           {/* ═══════════════════════════════════════════════════════
               CONTENT CARD (DOM 1st, visual right)
               ═══════════════════════════════════════════════════════ */}
           <motion.div
             layout
             transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
-            className={`surface-card flex ${CARD_W_CLASS} ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card ${step === 0 ? "" : "invisible"} col-start-1 row-start-1 flex ${CARD_W_CLASS} ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <input
               ref={contentInputRef}
@@ -980,7 +996,7 @@ export default function MimicFlow({
           <motion.div
             layout
             transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
-            className={`${CARD_W_CLASS} ${CARD_MIN_H_CLASS}`}
+            className={`${step === 1 ? "" : "invisible"} col-start-1 row-start-1 ${CARD_W_CLASS} ${CARD_MIN_H_CLASS}`}
           >
                 <div className={`surface-card flex h-full ${CARD_W_CLASS} ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}>
                   {/* Inline header (not CardHeader) so the saved-kit pill
@@ -1111,7 +1127,7 @@ export default function MimicFlow({
           <motion.div
             layout
             transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
-            className={`${CARD_W_CLASS} ${CARD_MIN_H_CLASS}`}
+            className={`${step === 2 ? "" : "invisible"} col-start-1 row-start-1 ${CARD_W_CLASS} ${CARD_MIN_H_CLASS}`}
           >
             <div
               className="canvas-gradient-border gradient-ring-2xl surface-card flex h-full w-full flex-col gap-4 rounded-2xl p-4"
@@ -1235,8 +1251,30 @@ export default function MimicFlow({
               </div>
             </div>
           </motion.div>
+          </div>
+
+          {/* Next only (`.btn-gradient` CTA); back-travel via the rail.
+              Step 1 gates on content present (text or picked file -
+              extraction may continue across steps). */}
+          {step < 2 && (
+            <div className="flex w-full justify-end sm:w-[430px]">
+              <PillButton
+                variant="primary"
+                onClick={() => setStep((s) => Math.min(2, s + 1))}
+                disabled={
+                  submitting ||
+                  (step === 0 &&
+                    contentText.trim().length === 0 &&
+                    contentFile === null)
+                }
+              >
+                {dict.flows.wizard.next}
+              </PillButton>
+            </div>
+          )}
         </div>
 
+        {step === 2 && (
         <div className="flex justify-center">
           <GenerateSplitButton
             onGenerate={handleGenerate}
@@ -1251,6 +1289,7 @@ export default function MimicFlow({
             loadingLabel={generateLoadingLabel}
           />
         </div>
+        )}
 
         <p
           className="min-h-5 text-center text-sm text-red-400"

@@ -19,6 +19,11 @@
 //     output card layout)
 //   • Language pills sit inline with the textarea (label right,
 //     pills left)
+// Phase 18 (2026-08-30, user direction): the three cards now present as
+// a 3-STEP WIZARD (Content -> Brand -> Output+Generate) with a step
+// rail - the single-shot all-cards-at-once layout read as overwhelming.
+// Cards stay mounted (display-toggled); state, submit and gating are
+// unchanged. The "no stepper chrome" note below predates this.
 //   • Ratio (16:9 / 9:16) sits in the OUTPUT card alongside slide
 //     count + pagination + persistent overlay
 //
@@ -50,6 +55,8 @@ import { localizedHref } from "@/lib/i18n/navigation";
 import { localizedExtractError } from "@/lib/extract/error-codes";
 import { AnimatePresence, motion } from "framer-motion";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
+import { PillButton } from "@/components/create/PillButton";
+import { WizardStepRail } from "@/components/create/WizardChrome";
 import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
 import { LogoRow } from "@/components/brand/LogoRow";
 import { PersistentRow } from "@/components/brand/PersistentRow";
@@ -345,6 +352,14 @@ export default function CreatePage() {
     [imagesUnlocked],
   );
   const [persistentText, setPersistentText] = useState<string>("");
+
+  // ─── Wizard step (2026-08-30, user direction) ─────────────────
+  // The three cards present one at a time: 0 Content, 1 Brand,
+  // 2 Output + Generate. Pure presentation - every card stays
+  // MOUNTED (display-toggled) so the hidden file input, logo blob
+  // URLs and fixed-position popovers survive step changes, and the
+  // /api/extract poll keeps running while the user moves on.
+  const [step, setStep] = useState(0);
 
   // ─── Submit-level state ────────────────────────────────────────
   const [submitting, setSubmitting] = useState(false);
@@ -729,16 +744,34 @@ export default function CreatePage() {
           <p className="tq-subhead mt-2">{t.create.subtitle}</p>
         </header>
 
-        {/* Card row: a single full-width column on phones (flex-col) so nothing
-            overflows the ~311px content width, switching to a centered wrapping
-            row of fixed 360px cards at sm+ (flex-wrap collapses 3→2→1 by width),
-            which preserves the desktop 3-across layout. */}
-        <div className="flex w-full flex-col gap-4 sm:flex-row sm:flex-wrap sm:justify-center">
+        {/* Step rail - labelled with the existing card titles, Latin
+            numerals; completed steps are click-to-jump, forward travel
+            goes through Next so gating stays in one place. */}
+        <WizardStepRail
+          steps={[t.contentCard, t.brandCard, t.outputCard]}
+          active={step}
+          onJump={setStep}
+        />
+
+        {/* Wizard column: ONE card visible per step (was a 3-across
+            wrapping row until 2026-08-30, user direction - three dense
+            cards at once read as overwhelming). All three stay mounted;
+            the inactive ones swap `flex` for `hidden`. Width is capped
+            per-card (not full-bleed) so the flex-1 textarea / logo zones
+            keep their designed proportions inside min-h-[440px]. */}
+        <div className="flex w-full flex-col items-center gap-4">
+          {/* Single-cell grid: all three cards occupy the SAME cell
+              (col/row-start-1) and the inactive ones are `invisible`
+              (visibility, not display) - they keep participating in
+              layout, so the stack's height is the TALLEST card at
+              every step and the frame never jumps between steps
+              (user direction 2026-08-30). */}
+          <div className="grid w-full justify-items-center">
           {/* ═══════════════════════════════════════════════════════
-              CONTENT CARD (DOM 1st, visual right)
+              CONTENT CARD (step 1)
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`surface-card flex w-full shrink-0 sm:w-[360px] ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card ${step === 0 ? "" : "invisible"} col-start-1 row-start-1 flex w-full sm:w-[430px] ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <CardHeader icon="subject" title={t.contentCard} />
 
@@ -843,10 +876,10 @@ export default function CreatePage() {
           </div>
 
           {/* ═══════════════════════════════════════════════════════
-              BRANDING CARD (DOM 2nd) — palette + one font + logo
+              BRANDING CARD (step 2) — palette + one font + logo
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`surface-card flex w-full shrink-0 sm:w-[360px] ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card ${step === 1 ? "" : "invisible"} col-start-1 row-start-1 flex w-full sm:w-[430px] ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             {/* Mirrors CardHeader exactly (icon + title + pb-4 hairline) so
                 the separator and title sit at the same heights as the other
@@ -992,10 +1025,10 @@ export default function CreatePage() {
           </div>
 
           {/* ═══════════════════════════════════════════════════════
-              EXPORT SETTINGS CARD (DOM 3rd, visual left)
+              EXPORT SETTINGS CARD (step 3)
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`surface-card flex w-full shrink-0 sm:w-[360px] ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card ${step === 2 ? "" : "invisible"} col-start-1 row-start-1 flex w-full sm:w-[430px] ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <CardHeader icon="settings" title={t.outputCard} />
 
@@ -1110,20 +1143,54 @@ export default function CreatePage() {
               </div>
             </div>
           </div>
+
+          </div>
+
+          {/* Wizard nav - Next only (`.btn-gradient` CTA via PillButton
+              primary, the /brand PATTERN 2 button). Going BACK happens by
+              clicking a completed step in the rail (user direction
+              2026-08-30 - no dedicated back button). The last step swaps
+              Next for the GenerateSplitButton below. Width matches the
+              card so the button hugs its end edge; logical flex only, so
+              RTL mirrors free. */}
+          {step < 2 && (
+            <div className="flex w-full justify-end sm:w-[430px]">
+              <PillButton
+                variant="primary"
+                onClick={() => setStep((s) => Math.min(2, s + 1))}
+                disabled={submitting || (step === 0 && !(hasText || hasFile))}
+              >
+                {t.wizard.next}
+              </PillButton>
+            </div>
+          )}
+
+          {/* Extraction status - the file poll keeps running while the
+              user moves past step 1; without this chip the disabled
+              Generate on the last step would reflect a state the user
+              can no longer see. */}
+          {fileExtracting && step > 0 && (
+            <p className="flex items-center gap-2 text-xs text-[var(--tq-text-muted)]">
+              <span className="spinner h-3.5 w-3.5 rounded-full border-2 border-foreground/30 border-t-foreground" />
+              {t.wizard.extracting}
+            </p>
+          )}
         </div>
 
-        <div className="flex justify-center">
-          <GenerateSplitButton
-            onGenerate={handleGenerate}
-            quality={quality}
-            onQualityChange={setQuality}
-            slideCount={estimatedSlideCount.slides}
-            slideCountUpTo={estimatedSlideCount.upTo}
-            imagesMode={imagesMode}
-            disabled={generateDisabled}
-            loading={generateLoading}
-          />
-        </div>
+        {step === 2 && (
+          <div className="flex justify-center">
+            <GenerateSplitButton
+              onGenerate={handleGenerate}
+              quality={quality}
+              onQualityChange={setQuality}
+              slideCount={estimatedSlideCount.slides}
+              slideCountUpTo={estimatedSlideCount.upTo}
+              imagesMode={imagesMode}
+              disabled={generateDisabled}
+              loading={generateLoading}
+            />
+          </div>
+        )}
 
         <p
           className="min-h-5 text-center text-sm text-red-400"
