@@ -7,7 +7,7 @@
 // stay in lock-step with the dashboard.
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { AnimatePresence, motion, useScroll, useTransform } from "framer-motion";
+import { motion, useScroll, useTransform } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
 import dynamic from "next/dynamic";
@@ -83,21 +83,45 @@ export function Hero({
   const reducedMotion = usePrefersReducedMotion();
   const isPhone = useIsPhone();
 
-  // Rotating headline (user direction 2026-08-30): the title's first line
-  // cycles through one phrase per flow (create / enhance / mimic / social)
-  // while line 2 stays anchored. Index 0 matches titleLine1, so the SSR
-  // paint and the first client frame agree; rotation starts after mount
-  // and pauses entirely under reduced motion.
+  // Typewriter headline (user direction 2026-08-31: "typewriter with the
+  // dash flashing", transition = fade-out not untyping): the title's first
+  // line types out one phrase per flow (create / enhance / mimic / social)
+  // with a blinking dash caret (.tq-type-caret), holds, FADES OUT, then
+  // types the next. The initial state is the FULL first phrase
+  // (= titleLine1) so SSR, SEO, and the first client frame agree; the
+  // cycle starts after mount and never runs under reduced motion.
+  // Code-point slicing (Array.from) keeps Arabic ligatures reshaping
+  // naturally as letters land - the authentic typewriter look.
   const titlePhrases = dict.landing.hero.titleRotate;
-  const [titleIndex, setTitleIndex] = useState(0);
+  const [typedTitle, setTypedTitle] = useState(
+    () => titlePhrases[0] ?? dict.landing.hero.titleLine1,
+  );
+  const [titleFading, setTitleFading] = useState(false);
   useEffect(() => {
     if (reducedMotion || titlePhrases.length < 2) return;
-    const iv = setInterval(
-      () => setTitleIndex((i) => (i + 1) % titlePhrases.length),
-      3000,
-    );
-    return () => clearInterval(iv);
-  }, [reducedMotion, titlePhrases.length]);
+    let timer: ReturnType<typeof setTimeout>;
+    let phrase = 0;
+    const chars = (s: string) => Array.from(s);
+    const typeStep = (arr: string[], n: number) => {
+      setTypedTitle(arr.slice(0, n).join(""));
+      if (n < arr.length) timer = setTimeout(() => typeStep(arr, n + 1), 75);
+      else timer = setTimeout(fadeOut, 2300);
+    };
+    const fadeOut = () => {
+      setTitleFading(true);
+      timer = setTimeout(() => {
+        // Fade finished: swap while invisible, then type the next phrase.
+        phrase = (phrase + 1) % titlePhrases.length;
+        setTypedTitle("");
+        setTitleFading(false);
+        timer = setTimeout(() => typeStep(chars(titlePhrases[phrase]), 1), 260);
+      }, 520);
+    };
+    timer = setTimeout(fadeOut, 2300);
+    return () => clearTimeout(timer);
+    // join-keyed so a dictionary hot-swap restarts the cycle cleanly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reducedMotion, titlePhrases.join(" ")]);
 
   // Scroll-driven rotation: full 15° tilt at the top of the page,
   // flattening to 0° as the visitor scrolls. The flatten distance is
@@ -232,22 +256,18 @@ export function Hero({
             className="hero-enter mb-8 w-full text-4xl font-medium leading-tight md:text-6xl"
             style={{ animationDelay: "0.15s" }}
           >
-            {/* Rotating flow phrase. The wrapper clips the vertical slide;
-                popLayout absolutizes the exiting phrase so the incoming one
-                takes the line immediately (no empty gap, no height jump). */}
-            <span className="relative inline-block overflow-hidden align-bottom">
-              <AnimatePresence mode="popLayout" initial={false}>
-                <motion.span
-                  key={titleIndex}
-                  initial={{ y: "0.95em", opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: "-0.95em", opacity: 0 }}
-                  transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
-                  className="inline-block whitespace-nowrap"
-                >
-                  {titlePhrases[titleIndex] ?? dict.landing.hero.titleLine1}
-                </motion.span>
-              </AnimatePresence>
+            {/* Typewriter flow phrase + blinking dash caret. aria-hidden on
+                the animated pair; the sr-only span gives screen readers the
+                stable primary phrase instead of a churning live region. */}
+            <span className="sr-only">{dict.landing.hero.titleLine1}</span>
+            <span
+              aria-hidden
+              className={`whitespace-nowrap transition-opacity duration-500 ${
+                titleFading ? "opacity-0" : "opacity-100"
+              }`}
+            >
+              {typedTitle}
+              <span className="tq-type-caret" />
             </span>{" "}
             <br />
             <span className="text-gradient">{dict.landing.hero.titleLine2}</span>
