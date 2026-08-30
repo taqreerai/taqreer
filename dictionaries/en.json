@@ -568,6 +568,8 @@
     "unitMB": "MB",
     "brandCard": "Brand identity",
     "colors": "Colors",
+    "instructionsLabel": "Extra instructions (optional)",
+    "instructionsPlaceholder": "e.g. use modern icons, highlight the key numbers, keep the original slide order",
     "addColor": "Add color",
     "autoColors": "Auto",
     "autoColorsHint": "AI picks colors that match your content",

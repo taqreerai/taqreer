@@ -23,7 +23,9 @@ import {
 import { SourceMetaSchema, type SourceMeta } from "@/lib/types/source";
 import {
   MAX_CONTENT_TEXT_CHARS,
+  MAX_ENHANCE_INSTRUCTIONS_CHARS,
   MAX_EVENT_DATA_BYTES,
+  clampChars,
 } from "@/lib/types/brief-limits";
 import { detectImageRegion } from "@/lib/geo/image-region";
 import { preflightGenerate } from "@/lib/credits/preflight";
@@ -935,9 +937,34 @@ export async function POST(request: Request) {
     // no-op on the multipart message shape.
     ...(validatedSource ? { source: validatedSource } : {}),
   };
+  // Free-text design instructions from the /enhance + /mimic flows.
+  // Whitelisted to the single `instructions` key (the legacy level/
+  // keepColors/keepFonts knobs never shipped a UI) and clamped, so a
+  // crafted POST can't ride arbitrary JSON into the prompt via
+  // deck-generate's `Enhancement settings` block - the raw
+  // `payload.enhance` object must never reach an event or a row.
+  // Gated to the two flows that expose the field; null otherwise so
+  // every other brief stays byte-for-byte unchanged.
+  const enhanceInstructions =
+    typeof payload.enhance?.instructions === "string"
+      ? payload.enhance.instructions.trim()
+      : undefined;
+  const sanitizedEnhance =
+    (projectType === "enhance" ||
+      validatedSource?.kind === "enhance" ||
+      validatedSource?.kind === "mimic") &&
+    enhanceInstructions
+      ? {
+          instructions: clampChars(
+            enhanceInstructions,
+            MAX_ENHANCE_INSTRUCTIONS_CHARS,
+          ),
+        }
+      : null;
+
   const eventPayload = {
     type: projectType,
-    enhance: projectType === "enhance" ? payload.enhance ?? null : null,
+    enhance: sanitizedEnhance,
     brief,
     quality,
     // Pre-auth contract for deck-generate's holdCredits step: the
@@ -1035,7 +1062,7 @@ export async function POST(request: Request) {
           type: projectType,
           content: payload.content,
           brand: payload.brand,
-          enhance: payload.enhance,
+          enhance: sanitizedEnhance,
           rules: payload.rules,
           slideCount: cappedSlideCount,
           // Persist only the SOURCE KIND — `loadProject`'s
@@ -1079,7 +1106,7 @@ export async function POST(request: Request) {
           slides: [],
           brief: {
             ...brief,
-            enhance: payload.enhance,
+            enhance: sanitizedEnhance,
           },
         }),
       },

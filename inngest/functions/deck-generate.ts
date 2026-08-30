@@ -1018,8 +1018,19 @@ function buildUserMessage(event: DeckGenerateEvent) {
       return [];
     })()),
   ];
-  if (event.type === "enhance" && event.enhance) {
+  // User-typed design instructions from the /enhance + /mimic flows.
+  // Presence-gated: the route whitelists to `{ instructions }` + clamps
+  // and only sets the field for those two flows, so every other brief's
+  // prompt stays byte-for-byte unchanged - and an instruction-less
+  // enhance/mimic run is unchanged too.
+  if (event.enhance) {
     lines.push(``, `Enhancement settings:`, JSON.stringify(event.enhance, null, 2));
+  }
+  // Enhance-only preserve directive. Gated on event.type, which no flow
+  // page sends today (enhance projects land as type "create"), so this
+  // stays dormant - kept as-is deliberately: activating it would change
+  // the locked, proven enhance prompt shape (see the flow-lock notes).
+  if (event.type === "enhance") {
     lines.push(
       ``,
       `For enhance flow: PRESERVE the original visual identity (palette, fonts, logo) while improving layout, hierarchy, typography, and spacing. Do not invent new colors or fonts unless explicitly overridden.`,

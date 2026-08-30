@@ -72,6 +72,7 @@ import {
 import { seedFromExtraction } from "@/lib/create/seed-from-extraction";
 import { localizedExtractError } from "@/lib/extract/error-codes";
 import { readSource, clearSource } from "@/lib/types/source";
+import { MAX_ENHANCE_INSTRUCTIONS_CHARS } from "@/lib/types/brief-limits";
 import { DEFAULT_QUALITY, type Quality } from "@/lib/types/quality";
 import {
   readBrandFromSession,
@@ -265,6 +266,9 @@ export default function EnhanceContentPage() {
   // 402 credit-gate payload from POST /api/projects (billing Phase A).
   const [creditGate, setCreditGate] = useState<CreditGatePayload | null>(null);
   const [quality, setQuality] = useState<Quality>(DEFAULT_QUALITY);
+  // Optional free-text design instructions forwarded to the model
+  // (payload.enhance.instructions — the route clamps + whitelists).
+  const [instructions, setInstructions] = useState("");
 
   // Accurate prep progress for the dropzone. The bar maps real signals
   // onto a single 0→100 scale: upload bytes = 0→35%, extraction
@@ -783,6 +787,11 @@ export default function EnhanceContentPage() {
           slideCount: resolvedSlideCount,
           quality,
           ...(source ? { source } : {}),
+          // Optional user design instructions. Omitted when empty so an
+          // instruction-less run's payload stays byte-for-byte unchanged.
+          ...(instructions.trim()
+            ? { enhance: { instructions: instructions.trim() } }
+            : {}),
         }),
       });
 
@@ -1023,6 +1032,33 @@ export default function EnhanceContentPage() {
                   </button>
                 ) : null}
               </div>
+            </div>
+
+            {/* Free-text design instructions — optional steering for the
+                model (e.g. "keep the original slide order, modern icons").
+                Fixed-height textarea BELOW the dropzone: the dropzone's
+                flex-1 absorbs the delta so the card keeps its min-h-[440px]
+                outer height (user direction 2026-08-30 — the field must
+                not change the card height). The placeholder carries
+                concrete examples so users discover they can steer the
+                design at all. */}
+            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
+              <label
+                htmlFor="enhance-instructions"
+                className="mb-2 block text-xs font-semibold text-foreground/70"
+              >
+                {dict.flows.instructionsLabel}
+              </label>
+              <textarea
+                id="enhance-instructions"
+                value={instructions}
+                onChange={(event) => setInstructions(event.target.value)}
+                placeholder={dict.flows.instructionsPlaceholder}
+                maxLength={MAX_ENHANCE_INSTRUCTIONS_CHARS}
+                rows={2}
+                disabled={stage === "submitting"}
+                className="input-dark w-full resize-none text-sm leading-6 disabled:cursor-not-allowed disabled:opacity-50"
+              />
             </div>
 
           </div>

@@ -34,6 +34,14 @@ export const MAX_CONTENT_TEXT_CHARS = 40_000;
 // nulling the whole source and silently demoting enhance to scratch (CR #181).
 export const MAX_SLIDE_TEXT_CHARS = 4_000;
 
+// Free-text design instructions typed on the /enhance + /mimic flows
+// (payload.enhance.instructions). Steering guidance, not deck content -
+// a couple of sentences is the intended use; 2K tolerates a detailed
+// brief while keeping the prompt block small. Enforced as textarea
+// maxLength client-side AND clamped (not rejected) in /api/projects -
+// machine-truncation is fine for guidance text, unlike content.text.
+export const MAX_ENHANCE_INSTRUCTIONS_CHARS = 2_000;
+
 // Truncate to `max` UTF-16 code units without leaving a lone high surrogate
 // when the boundary splits a surrogate pair (an emoji at the cut point would
 // otherwise serialize as U+FFFD garbage). Shared by every clamp site above so

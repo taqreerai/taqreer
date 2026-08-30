@@ -73,7 +73,11 @@ import {
   type UploadedFontFieldBrief,
 } from "@/lib/brand/upload";
 import { DEFAULT_QUALITY, type Quality } from "@/lib/types/quality";
-import { clampChars, MAX_CONTENT_TEXT_CHARS } from "@/lib/types/brief-limits";
+import {
+  clampChars,
+  MAX_CONTENT_TEXT_CHARS,
+  MAX_ENHANCE_INSTRUCTIONS_CHARS,
+} from "@/lib/types/brief-limits";
 import type { SourceMeta } from "@/lib/types/source";
 import { detectStringLanguage } from "@/lib/extract/language-text";
 import {
@@ -385,6 +389,9 @@ export default function MimicFlow({
   // 402 credit-gate payload from POST /api/projects (billing Phase A).
   const [creditGate, setCreditGate] = useState<CreditGatePayload | null>(null);
   const [quality, setQuality] = useState<Quality>(DEFAULT_QUALITY);
+  // Optional free-text design instructions forwarded to the model
+  // (payload.enhance.instructions — the route clamps + whitelists).
+  const [instructions, setInstructions] = useState("");
 
   // ─── File validation ───────────────────────────────────────────
   const validateFile = (next?: File | null): File | null => {
@@ -791,6 +798,11 @@ export default function MimicFlow({
           quality,
           source,
           imagesMode,
+          // Optional user design instructions. Omitted when empty so an
+          // instruction-less run's payload stays byte-for-byte unchanged.
+          ...(instructions.trim()
+            ? { enhance: { instructions: instructions.trim() } }
+            : {}),
         }),
       });
 
@@ -1248,6 +1260,32 @@ export default function MimicFlow({
                     compact
                   />
                 )}
+              </div>
+
+              {/* Free-text design instructions — optional steering for the
+                  model, mirrors /enhance's field. Fixed-height textarea
+                  BELOW the dropzone: the dropzone section's flex-1 absorbs
+                  the delta so the card keeps its min-h outer height (user
+                  direction 2026-08-30 — the field must not change the card
+                  height). The placeholder carries concrete examples so
+                  users discover they can steer the design at all. */}
+              <div className="border-t border-[var(--tq-border-hairline)] pt-3">
+                <label
+                  htmlFor="mimic-instructions"
+                  className="mb-2 block text-xs font-semibold text-foreground/70"
+                >
+                  {dict.flows.instructionsLabel}
+                </label>
+                <textarea
+                  id="mimic-instructions"
+                  value={instructions}
+                  onChange={(event) => setInstructions(event.target.value)}
+                  placeholder={dict.flows.instructionsPlaceholder}
+                  maxLength={MAX_ENHANCE_INSTRUCTIONS_CHARS}
+                  rows={2}
+                  disabled={submitting}
+                  className="input-dark w-full resize-none text-sm leading-6 disabled:cursor-not-allowed disabled:opacity-50"
+                />
               </div>
             </div>
           </motion.div>
