@@ -162,7 +162,7 @@ export default async function LandingPage({
           itself. */}
       <div
         aria-hidden
-        className="tq-aura-floor pointer-events-none fixed inset-x-0 bottom-0 -z-[1] h-[18vh]"
+        className="tq-aura-floor pointer-events-none fixed start-0 end-0 bottom-0 -z-[1] h-[18vh]"
       />
       <LandingNav />
 
