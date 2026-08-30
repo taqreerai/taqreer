@@ -2,8 +2,7 @@
 
 // ─── Create scene ────────────────────────────────────────────────────
 // The landing hero's looping /create mini-tutorial, staged over the
-// `.tq-aura` living-blue mesh + the dashboard's dot grid (the hero
-// section carries the same aura, so window + landing share a backdrop):
+// `.tq-aura` living-blue mesh + the design system's dot grid:
 //   1 content card - the brief types out
 //   2 brand card   - palette fills, font picked, then the cursor LEAVES
 //                    the scene, returns DRAGGING the logo chip, hovers
@@ -158,16 +157,9 @@ export function CreateScene({ reduced = false }: { reduced?: boolean }) {
     // restored 2026-08-30, user direction). The aura's light-theme
     // dark-island re-scope is moot now: marketing is dark-only.
     <div aria-hidden className="tq-aura relative h-full w-full overflow-hidden" dir={dir} data-scene-root>
-      {/* Dot field - same tiled grid as the real dashboard panel. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle, rgba(236,238,245,0.14) 0.9px, transparent 1.1px)",
-          backgroundSize: "23px 23px",
-        }}
-      />
+      {/* Dot field - the design system's tiled grid (.tq-dot-grid,
+          token-driven), same texture as the dashboard panel. */}
+      <div aria-hidden className="tq-dot-grid pointer-events-none absolute inset-0" />
       <ShowcaseKeyframes />
 
       {/* Card track (v3.5) - the three cards ride one sliding rail with

@@ -19,11 +19,17 @@ export function MagneticGlow({
   fixed = false,
   // When false, hide the dot field (landing keeps only the aurora glow).
   dots = true,
+  // Strength-matched to the hero demo's `.tq-aura` read (same brand
+  // hexes; the default blur + narrow mask band read far darker). The
+  // landing passes this so the page's bottom glow and the animation's
+  // backdrop look like ONE gradient (user direction 2026-08-30).
+  vivid = false,
 }: {
   glowYOffset?: number;
   aurora?: boolean;
   fixed?: boolean;
   dots?: boolean;
+  vivid?: boolean;
 } = {}) {
   return (
     <div
@@ -34,7 +40,7 @@ export function MagneticGlow({
           carry the drifting brand-colour gradients. */}
       {aurora ? (
         <div
-          className="tq-aurora absolute inset-0"
+          className={`tq-aurora ${vivid ? "tq-aurora-vivid" : ""} absolute inset-0`}
           style={{ "--yo": `${glowYOffset * 100}%` } as CSSProperties}
         >
           <div className="tq-aurora-a absolute inset-0" />
@@ -44,14 +50,7 @@ export function MagneticGlow({
 
       {/* Dot field — tiled radial-gradient (muted white, 23px grid). */}
       {dots ? (
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle, var(--tq-dot) 0.9px, transparent 1.1px)",
-            backgroundSize: "23px 23px",
-          }}
-        />
+        <div className="tq-dot-grid absolute inset-0" />
       ) : null}
     </div>
   );

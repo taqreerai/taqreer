@@ -12,7 +12,7 @@
 // dashes. Reduced-motion is handled by the scene (it renders its
 // settled final frame; the CSS keyframes below also gate themselves).
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import {
   useTime,
   useTransform,
@@ -95,12 +95,17 @@ export function Typing({
   caret?: boolean;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
+  // Mirror `reduced` into a ref: useMotionValueEvent subscribes the
+  // FIRST render's callback and never re-subscribes on prop change, so
+  // guarding on the prop directly leaves a stale `reduced: false`
+  // closure writing partial slices over the settled text (CR PR #193).
+  const reducedRef = useRef(reduced);
+  useEffect(() => {
+    reducedRef.current = reduced;
+  }, [reduced]);
   const chars = useTransform(loop, [0, start, end, 1], [0, 0, text.length, text.length]);
   useMotionValueEvent(chars, "change", (v) => {
-    // Reduced mode renders the full text as the span's child; the loop
-    // keeps ticking, so without this guard the listener would overwrite
-    // the settled text with a partial slice (CR PR #193).
-    if (reduced) return;
+    if (reducedRef.current) return;
     if (ref.current) ref.current.textContent = text.slice(0, Math.round(v));
   });
   return (

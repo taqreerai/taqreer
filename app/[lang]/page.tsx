@@ -156,7 +156,9 @@ export default async function LandingPage({
       <JsonLd data={faqPageSchema(landingFaq)} />
       {/* Panel-coloured base + the aurora glow, pinned behind everything. */}
       <div aria-hidden className="fixed inset-0 -z-[2] bg-[var(--tq-panel)]" />
-      <MagneticGlow fixed glowYOffset={0.2} dots={false} />
+      {/* vivid + raised peak: colour/strength-matched to the hero demo's
+          aura so the page's bottom glow reads as the same gradient. */}
+      <MagneticGlow fixed glowYOffset={0.05} dots={false} vivid />
       <LandingNav />
 
       {/* Hero sits OUTSIDE the max-w-7xl column: its dashboard preview

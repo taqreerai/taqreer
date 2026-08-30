@@ -1777,6 +1777,15 @@ html.app-shell-scroll body {
   overflow: hidden;
 }
 
+/* Dot-field texture — the tiled dot grid the dashboard panel / hero demo
+   sit on. One recipe, token-driven (`--tq-dot` flips per theme: light
+   dots on dark, dark dots on light). Consumers layer it as an
+   absolutely-positioned backdrop (`absolute inset-0 pointer-events-none`). */
+.tq-dot-grid {
+  background-image: radial-gradient(circle, var(--tq-dot) 0.9px, transparent 1.1px);
+  background-size: 23px 23px;
+}
+
 .feature-card-glow {
   position: relative;
   overflow: hidden;
@@ -2363,6 +2372,30 @@ html.app-shell-scroll body {
   animation: tq-aurora-b 17s ease-in-out infinite;
   will-change: transform, opacity;
 }
+/* Vivid variant (landing bottom glow) — strength-matched to the hero
+   demo's `.tq-aura` read: SAME brand hexes, but the default blur(55px)
+   + narrow 40-72% mask band crush them into a dark navy wash next to
+   the demo's unblurred high-alpha mesh. Less blur, more saturation and
+   a wider solid band close the gap so page + animation read as one
+   gradient (user direction 2026-08-30). */
+.tq-aurora-vivid {
+  filter: blur(38px) saturate(1.55);
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 34%,
+    #000 50%,
+    #000 64%,
+    transparent 78%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 34%,
+    #000 50%,
+    #000 64%,
+    transparent 78%
+  );
+}
+
 /* Light theme: `screen` blends to white against a light page, so the glow would
    vanish. Drop to `normal` so the same brand-colour gradients tint the page
    (colours unchanged, per user direction); soften so it reads as a wash. */

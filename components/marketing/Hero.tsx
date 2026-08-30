@@ -140,11 +140,7 @@ export function Hero({
       : null;
 
   return (
-    <section className="glow-effect tq-aura relative overflow-hidden pt-40 pb-32">
-      {/* `tq-aura` (bottom-anchored living-blue mesh) is the SAME gradient
-          the demo paints inside its window - the masked wall dissolves
-          into it, so the section and the animation share one backdrop
-          (user direction 2026-08-30). */}
+    <section className="glow-effect relative overflow-hidden pt-40 pb-32">
       {/* Living template wall - the login marquee embedded as the hero
           backdrop (absolute, scoped to this section). Its built-in
           center fade is tuned for the auth glass modal; the hero copy
