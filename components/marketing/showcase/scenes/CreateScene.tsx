@@ -153,11 +153,20 @@ export function CreateScene({ reduced = false }: { reduced?: boolean }) {
   const sign = dir === "rtl" ? -1 : 1;
 
   return (
-    // Plain theme-ambient stage (the `.tq-aura` blue gradient was removed
-    // 2026-08-30, user direction - it also forced the light theme's cards
-    // dark via the aura's dark-island token re-scope). The host supplies
-    // the backdrop (hero: solid --tq-bg).
-    <div className="relative h-full w-full overflow-hidden" dir={dir} data-scene-root>
+    // `.tq-aura` living-blue backdrop + the dashboard's dot field (both
+    // restored 2026-08-30, user direction). The aura's light-theme
+    // dark-island re-scope is moot now: marketing is dark-only.
+    <div className="tq-aura relative h-full w-full overflow-hidden" dir={dir} data-scene-root>
+      {/* Dot field - same tiled grid as the real dashboard panel. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          backgroundImage:
+            "radial-gradient(circle, rgba(236,238,245,0.14) 0.9px, transparent 1.1px)",
+          backgroundSize: "23px 23px",
+        }}
+      />
       <ShowcaseKeyframes />
 
       {/* Card track (v3.5) - the three cards ride one sliding rail with
