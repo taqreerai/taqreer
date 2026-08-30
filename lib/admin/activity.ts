@@ -65,20 +65,53 @@ export type ActivityUser = {
 };
 
 export async function getActivityUsers(): Promise<ActivityUser[]> {
-  const rows = await prisma.user.findMany({
-    where: { role: { not: "admin" } },
-    orderBy: { createdAt: "desc" },
-    take: 500,
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      plan: true,
-      createdAt: true,
-      signupCountry: true,
-      signupCity: true,
-    },
-  });
+  // Ordered by RECENT ACTIVITY, not signup (user direction 2026-08-30):
+  // a user's "last active" is the latest of their newest project write
+  // (generations / regens / edits all touch Project.updatedAt), their
+  // newest export (ExportEvent is the other timeline source), and the
+  // signup itself (so brand-new users still surface, and users with no
+  // activity fall back to signup order). Raw SQL because the ordering
+  // needs a GREATEST over two related MAXes - Prisma's orderBy can't
+  // express it, and sorting after a signup-ordered `take: 500` would
+  // silently DROP long-time users who are active today.
+  const rows = await prisma.$queryRaw<
+    {
+      id: string;
+      name: string | null;
+      email: string;
+      plan: string;
+      createdAt: Date;
+      signupCountry: string | null;
+      signupCity: string | null;
+    }[]
+  >`
+    SELECT
+      u.id,
+      u.name,
+      u.email,
+      u.plan,
+      u."createdAt",
+      u."signupCountry",
+      u."signupCity"
+    FROM "User" u
+    LEFT JOIN (
+      SELECT "userId", MAX("updatedAt") AS last
+      FROM "Project"
+      GROUP BY "userId"
+    ) p ON p."userId" = u.id
+    LEFT JOIN (
+      SELECT "userId", MAX("createdAt") AS last
+      FROM "ExportEvent"
+      GROUP BY "userId"
+    ) e ON e."userId" = u.id
+    WHERE u.role <> 'admin'
+    ORDER BY GREATEST(
+      COALESCE(p.last, u."createdAt"),
+      COALESCE(e.last, u."createdAt"),
+      u."createdAt"
+    ) DESC
+    LIMIT 500
+  `;
   return rows.map((u) => ({
     id: u.id,
     name: u.name?.trim() || u.email.split("@")[0] || "User",
