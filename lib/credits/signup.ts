@@ -40,6 +40,15 @@ import { grantSignupCreditsGuarded } from "@/lib/credits/server";
 const IP_VELOCITY_LIMIT = 3;
 const IP_VELOCITY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+// 5. COUNTRY BLOCK (2026-08-30, owner direction): signup-grant farming is
+// overwhelmingly concentrated from these countries and they are outside
+// the product's target market, so signups geolocated there get no free
+// grant. The account itself still works (0 credits; paying is unaffected).
+// Unknown/missing country (null) is NOT blocked, and CF's XX/T1 unknown
+// sentinels pass sanitizeCountry but are not in the set - false positives
+// hurt more than the occasional VPN evader this cheap layer misses.
+const GRANT_BLOCKED_COUNTRIES = new Set(["IN"]);
+
 /**
  * Canonical inbox identity for alias detection. Lowercases; strips
  * one `+suffix` from the local part; for gmail/googlemail also strips
@@ -120,6 +129,27 @@ export async function maybeGrantSignupCredits(args: {
     });
     return { granted: 0, blocked: "device_missing" };
   }
+
+  // Country block (guard 5) - like the device check, a pure input check:
+  // no DB read, no cross-user race, so reject before the serialized
+  // transaction. Null/unknown country passes (see GRANT_BLOCKED_COUNTRIES).
+  const country = args.geo?.country ?? null;
+  if (country && GRANT_BLOCKED_COUNTRIES.has(country)) {
+    await prisma.usageEvent.create({
+      data: {
+        userId: args.userId,
+        eventType: "credit.signup.blocked",
+        amount: 0,
+        metadata: {
+          reason: "country_blocked",
+          country,
+          ...(args.ip ? { ip: args.ip } : {}),
+        },
+      },
+    });
+    return { granted: 0, blocked: "country_blocked" };
+  }
+
   // Capture the narrowed (non-null) device id in a const so it stays
   // `string` inside the guard closure below.
   const deviceId = args.deviceId;
@@ -151,7 +181,8 @@ type BlockReason =
   | "ip_velocity"
   | "device_dup"
   | "device_missing"
-  | "same_person";
+  | "same_person"
+  | "country_blocked";
 
 /**
  * The cross-account abuse guards, run INSIDE the serialized grant
