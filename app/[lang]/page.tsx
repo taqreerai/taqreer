@@ -156,9 +156,14 @@ export default async function LandingPage({
       <JsonLd data={faqPageSchema(landingFaq)} />
       {/* Panel-coloured base + the aurora glow, pinned behind everything. */}
       <div aria-hidden className="fixed inset-0 -z-[2] bg-[var(--tq-panel)]" />
-      {/* vivid + raised peak: colour/strength-matched to the hero demo's
-          aura so the page's bottom glow reads as the same gradient. */}
-      <MagneticGlow fixed glowYOffset={0.05} dots={false} vivid />
+      {/* Bottom glow: the hero demo's aura paint as a page floor
+          (.tq-aura-floor) - the aurora's screen blending read cyan next
+          to the demo's royal blue, so the landing uses the aura recipe
+          itself. */}
+      <div
+        aria-hidden
+        className="tq-aura-floor pointer-events-none fixed inset-x-0 bottom-0 -z-[1] h-[62vh]"
+      />
       <LandingNav />
 
       {/* Hero sits OUTSIDE the max-w-7xl column: its dashboard preview

@@ -2372,28 +2372,56 @@ html.app-shell-scroll body {
   animation: tq-aurora-b 17s ease-in-out infinite;
   will-change: transform, opacity;
 }
-/* Vivid variant (landing bottom glow) — strength-matched to the hero
-   demo's `.tq-aura` read: SAME brand hexes, but the default blur(55px)
-   + narrow 40-72% mask band crush them into a dark navy wash next to
-   the demo's unblurred high-alpha mesh. Less blur, more saturation and
-   a wider solid band close the gap so page + animation read as one
-   gradient (user direction 2026-08-30). */
-.tq-aurora-vivid {
-  filter: blur(38px) saturate(1.55);
+/* Landing bottom glow — the hero demo's `.tq-aura` paint, EXACTLY, as a
+   page-level floor: same 4 radial stops, plain alpha stacking (no blend
+   modes), saturate 1.3, the same mesh drift + breathe. The aurora recipe
+   could never match it: its `screen` blending inflates the green channel
+   (sampled page glow rgb(13,102,189) vs the demo's rgb(6,40,120)), so
+   the page read cyan next to the demo's royal blue no matter the blur.
+   Consumer pins it `fixed inset-x-0 bottom-0` with a viewport-fraction
+   height; the eased top feather is baked in (same stops as .tq-aura). */
+.tq-aura-floor {
+  --tq-aura-alpha: 0.5;
+  background:
+    radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #0042E0 0%, transparent 75%),
+    radial-gradient(circle at var(--mesh-x2) var(--mesh-y2), #0057FF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #1E6BFF 0%, transparent 75%),
+    radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #3380FF 0%, transparent 70%);
+  filter: saturate(1.3);
   -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent 34%,
-    #000 50%,
-    #000 64%,
-    transparent 78%
+    to top,
+    #000 0%,
+    #000 22%,
+    rgba(0, 0, 0, 0.72) 45%,
+    rgba(0, 0, 0, 0.38) 65%,
+    rgba(0, 0, 0, 0.14) 83%,
+    transparent 100%
   );
   mask-image: linear-gradient(
-    to bottom,
-    transparent 34%,
-    #000 50%,
-    #000 64%,
-    transparent 78%
+    to top,
+    #000 0%,
+    #000 22%,
+    rgba(0, 0, 0, 0.72) 45%,
+    rgba(0, 0, 0, 0.38) 65%,
+    rgba(0, 0, 0, 0.14) 83%,
+    transparent 100%
   );
+  animation:
+    mx1 5.3s ease-in-out infinite alternate,
+    my1 8.9s ease-in-out infinite alternate,
+    mx2 9.7s ease-in-out infinite alternate,
+    my2 6.7s ease-in-out infinite alternate,
+    mx3 12.1s ease-in-out infinite alternate,
+    my3 4.9s ease-in-out infinite alternate,
+    mx4 7.9s ease-in-out infinite alternate,
+    my4 10.3s ease-in-out infinite alternate,
+    tq-aura-breathe 4.5s ease-in-out infinite alternate;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tq-aura-floor {
+    animation: none;
+    opacity: calc(var(--tq-aura-alpha) * 0.8);
+  }
 }
 
 /* Light theme: `screen` blends to white against a light page, so the glow would
