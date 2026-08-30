@@ -7,7 +7,7 @@
 // stay in lock-step with the dashboard.
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { AnimatePresence, motion, useScroll, useTransform } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
 import dynamic from "next/dynamic";
@@ -82,6 +82,22 @@ export function Hero({
   const { locale } = useLocale();
   const reducedMotion = usePrefersReducedMotion();
   const isPhone = useIsPhone();
+
+  // Rotating headline (user direction 2026-08-30): the title's first line
+  // cycles through one phrase per flow (create / enhance / mimic / social)
+  // while line 2 stays anchored. Index 0 matches titleLine1, so the SSR
+  // paint and the first client frame agree; rotation starts after mount
+  // and pauses entirely under reduced motion.
+  const titlePhrases = dict.landing.hero.titleRotate;
+  const [titleIndex, setTitleIndex] = useState(0);
+  useEffect(() => {
+    if (reducedMotion || titlePhrases.length < 2) return;
+    const iv = setInterval(
+      () => setTitleIndex((i) => (i + 1) % titlePhrases.length),
+      3000,
+    );
+    return () => clearInterval(iv);
+  }, [reducedMotion, titlePhrases.length]);
 
   // Scroll-driven rotation: full 15° tilt at the top of the page,
   // flattening to 0° as the visitor scrolls. The flatten distance is
@@ -216,7 +232,24 @@ export function Hero({
             className="hero-enter mb-8 w-full text-4xl font-medium leading-tight md:text-6xl"
             style={{ animationDelay: "0.15s" }}
           >
-            {dict.landing.hero.titleLine1} <br />
+            {/* Rotating flow phrase. The wrapper clips the vertical slide;
+                popLayout absolutizes the exiting phrase so the incoming one
+                takes the line immediately (no empty gap, no height jump). */}
+            <span className="relative inline-block overflow-hidden align-bottom">
+              <AnimatePresence mode="popLayout" initial={false}>
+                <motion.span
+                  key={titleIndex}
+                  initial={{ y: "0.95em", opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: "-0.95em", opacity: 0 }}
+                  transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
+                  className="inline-block whitespace-nowrap"
+                >
+                  {titlePhrases[titleIndex] ?? dict.landing.hero.titleLine1}
+                </motion.span>
+              </AnimatePresence>
+            </span>{" "}
+            <br />
             <span className="text-gradient">{dict.landing.hero.titleLine2}</span>
           </h1>
 
