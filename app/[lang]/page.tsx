@@ -1,6 +1,6 @@
 // Public landing page (/). Simple stacked layout: a centered max-w-7xl column
-// on the panel background with a low aura horizon band pinned to the bottom
-// (.tq-aura-floor - the hero demo's mesh paint).
+// on the panel background over the design system's fixed dot-grid texture
+// (.tq-dot-grid; replaced the bottom aura-floor glow, user direction 2026-08-30).
 // No swiss-grid frame: the vertical border-x + the full-bleed `.rule-*`
 // separators were removed (2026-06-11) in favour of plain section spacing, so
 // the page reads like the app rather than a marketing grid. Single-column
@@ -156,13 +156,18 @@ export default async function LandingPage({
       <JsonLd data={faqPageSchema(landingFaq)} />
       {/* Panel-coloured base + the aurora glow, pinned behind everything. */}
       <div aria-hidden className="fixed inset-0 -z-[2] bg-[var(--tq-panel)]" />
-      {/* Bottom glow: the hero demo's aura paint as a page floor
-          (.tq-aura-floor) - the aurora's screen blending read cyan next
-          to the demo's royal blue, so the landing uses the aura recipe
-          itself. */}
+      {/* Stitch-style backdrop (user direction 2026-08-30): the measured
+          stitch.withgoogle.com recipe in our brand blues - 16px dot grid
+          UNDER a blurred valley-arc ribbon (see globals.css
+          .tq-stitch-dots / .tq-stitch-wave). Replaces the bottom
+          aura-floor glow. */}
       <div
         aria-hidden
-        className="tq-aura-floor pointer-events-none fixed start-0 end-0 bottom-0 -z-[1] h-[18vh]"
+        className="tq-stitch-dots pointer-events-none fixed inset-0 -z-[1]"
+      />
+      <div
+        aria-hidden
+        className="tq-stitch-wave pointer-events-none fixed inset-0 -z-[1]"
       />
       <LandingNav />
 

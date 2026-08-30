@@ -1777,6 +1777,55 @@ html.app-shell-scroll body {
   overflow: hidden;
 }
 
+/* ─── Stitch-style landing backdrop (2026-08-30) ─────────────────────
+   Recreation of stitch.withgoogle.com's landing background in OUR brand
+   blues (user direction: "exactly copy it and instead use our colors").
+   Measured off the live site: pure-black base; 16px dot grid of 2px
+   rgba(255,255,255,0.22) dots; a blurred violet RIBBON that arcs as a
+   valley (high at the viewport edges, dipping past center) with a bright
+   core (their #7269E2 -> our #3380FF/#0057FF) feathering above AND below;
+   plus a faint broad haze beneath. The valley curve is the LOWER arc of a
+   huge ellipse centered above the viewport - drawn here as a radial ring
+   (transparent core -> colored band -> transparent), so the band sits
+   higher at the edges and dips in the middle, exactly like the original.
+   Dots layer UNDER the wave (measured: dots read only faintly inside the
+   glow core). Both layers pin fixed behind the landing content. */
+.tq-stitch-dots {
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.22) 1px, transparent 1.2px);
+  background-size: 16px 16px;
+}
+:root.light .tq-stitch-dots {
+  background-image: radial-gradient(circle, rgba(0, 0, 0, 0.18) 1px, transparent 1.2px);
+}
+.tq-stitch-wave {
+  background:
+    /* the ribbon: lower arc of a huge ellipse centered above the fold -
+       the arc dips mid-viewport and rises toward both edges (valley),
+       matching the original. Stops are tight so the core stays a thin
+       bright band that the blur feathers. */
+    radial-gradient(
+      ellipse 140% 205% at 50% -72%,
+      transparent 69%,
+      rgba(0, 66, 224, 0.18) 72%,
+      rgba(0, 87, 255, 0.55) 74%,
+      rgba(51, 128, 255, 0.9) 75%,
+      rgba(0, 87, 255, 0.5) 76.5%,
+      rgba(0, 66, 224, 0.16) 79.5%,
+      transparent 84%
+    ),
+    /* faint residual haze pooling under the ribbon */
+    radial-gradient(
+      ellipse 90% 25% at 50% 106%,
+      rgba(0, 66, 224, 0.16) 0%,
+      rgba(0, 66, 224, 0.06) 55%,
+      transparent 80%
+    );
+  filter: blur(24px) saturate(1.15);
+}
+:root.light .tq-stitch-wave {
+  opacity: 0.5;
+}
+
 /* Dot-field texture — the tiled dot grid the dashboard panel / hero demo
    sit on. One recipe, token-driven (`--tq-dot` flips per theme: light
    dots on dark, dark dots on light). Consumers layer it as an
@@ -2372,61 +2421,10 @@ html.app-shell-scroll body {
   animation: tq-aurora-b 17s ease-in-out infinite;
   will-change: transform, opacity;
 }
-/* Landing bottom glow — the hero demo's `.tq-aura` paint, EXACTLY, as a
-   page-level floor: same 4 radial stops, plain alpha stacking (no blend
-   modes), saturate 1.3, the same mesh drift + breathe. The aurora recipe
-   could never match it: its `screen` blending inflates the green channel
-   (sampled page glow rgb(13,102,189) vs the demo's rgb(6,40,120)), so
-   the page read cyan next to the demo's royal blue no matter the blur.
-   Consumer pins it `fixed inset-x-0 bottom-0` with a viewport-fraction
-   height; the eased top feather is baked in (same stops as .tq-aura). */
-.tq-aura-floor {
-  /* Slightly above the card aura's 0.5 cap: this is a short horizon
-     band (user direction: low but clearly visible), so the breathe
-     floor lands ~0.4 instead of ~0.31. */
-  --tq-aura-alpha: 0.65;
-
-  background:
-    radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #0042E0 0%, transparent 75%),
-    radial-gradient(circle at var(--mesh-x2) var(--mesh-y2), #0057FF 0%, transparent 70%),
-    radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #1E6BFF 0%, transparent 75%),
-    radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #3380FF 0%, transparent 70%);
-  filter: saturate(1.3);
-  -webkit-mask-image: linear-gradient(
-    to top,
-    #000 0%,
-    #000 42%,
-    rgba(0, 0, 0, 0.72) 62%,
-    rgba(0, 0, 0, 0.38) 78%,
-    rgba(0, 0, 0, 0.14) 90%,
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    to top,
-    #000 0%,
-    #000 42%,
-    rgba(0, 0, 0, 0.72) 62%,
-    rgba(0, 0, 0, 0.38) 78%,
-    rgba(0, 0, 0, 0.14) 90%,
-    transparent 100%
-  );
-  animation:
-    mx1 5.3s ease-in-out infinite alternate,
-    my1 8.9s ease-in-out infinite alternate,
-    mx2 9.7s ease-in-out infinite alternate,
-    my2 6.7s ease-in-out infinite alternate,
-    mx3 12.1s ease-in-out infinite alternate,
-    my3 4.9s ease-in-out infinite alternate,
-    mx4 7.9s ease-in-out infinite alternate,
-    my4 10.3s ease-in-out infinite alternate,
-    tq-aura-breathe 4.5s ease-in-out infinite alternate;
-}
-@media (prefers-reduced-motion: reduce) {
-  .tq-aura-floor {
-    animation: none;
-    opacity: calc(var(--tq-aura-alpha) * 0.8);
-  }
-}
+/* Landing bottom glow (.tq-aura-floor) removed 2026-08-30 (user direction:
+   no bottom glow on marketing) - the landing page pins the shared
+   .tq-dot-grid texture fixed instead. The mx1..my4 mesh keyframes and
+   tq-aura-breathe stay: .tq-aura (hero demo + pricing) still runs them. */
 
 /* Light theme: `screen` blends to white against a light page, so the glow would
    vanish. Drop to `normal` so the same brand-colour gradients tint the page
