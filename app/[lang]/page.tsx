@@ -23,7 +23,7 @@ import { FaqAccordion } from "@/components/marketing/FaqAccordion";
 import { LandingNav } from "@/components/marketing/LandingNav";
 import { SectionHeader } from "@/components/marketing/SectionHeader";
 import { localizedHref } from "@/lib/i18n/navigation";
-import { getLandingTemplates, getMarqueeColumns } from "@/lib/auth/marquee-projects";
+import { getLandingTemplates, getLandingMarqueeColumns } from "@/lib/auth/marquee-projects";
 import { SmoothScrollProvider } from "@/components/providers";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { JsonLd } from "@/components/seo/JsonLd";
@@ -131,8 +131,9 @@ export default async function LandingPage({
       getDictionary(lang),
       getDisplayPrices(),
       // Curated-template wall behind the hero - the same living marquee
-      // the auth pages paint (cached loader, edge-rewritten thumb URLs).
-      getMarqueeColumns(),
+      // the auth pages paint, via the 24h landing cache (the auth 60s
+      // cache would drag this force-static route to 60s regeneration).
+      getLandingMarqueeColumns(),
       ensureFresh(),
     ]);
   // Live config numbers for the pricing cards + the {credits} token in the FAQ

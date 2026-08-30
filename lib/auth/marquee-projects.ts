@@ -142,8 +142,8 @@ const SAMPLE_SIZE = COLUMN_COUNT * ROWS_PER_COLUMN;
  * Cached 60 s so repeated /signup hits during the same session reuse
  * the same wall (avoids the visual flicker of every page-nav reshuffling).
  */
-export const getMarqueeColumns = unstable_cache(
-  async (): Promise<MarqueeColumns> => {
+// Shared fetcher for both marquee caches below (auth 60s / landing 24h).
+const fetchMarqueeColumns = async (): Promise<MarqueeColumns> => {
     try {
       // Raw SQL because Prisma doesn't expose ORDER BY random(); doing
       // it in JS over a large set would mean reading every row. The
@@ -209,9 +209,25 @@ export const getMarqueeColumns = unstable_cache(
       console.error("[auth/marquee] random-thumbnails query failed", err);
       return Array.from({ length: COLUMN_COUNT }, () => []);
     }
-  },
+};
+
+export const getMarqueeColumns = unstable_cache(
+  fetchMarqueeColumns,
   ["auth-marquee-columns"],
   { revalidate: 60, tags: ["auth-marquee-columns"] },
+);
+
+// Landing-hero variant: SAME data + SAME bust tag, but a 24-hour TTL.
+// The landing is force-static with 24h loaders throughout; Next 16
+// lowers the enclosing document's revalidation to the SHORTEST
+// unstable_cache interval it renders with, so reusing the 60s auth
+// cache would drag the whole landing route down to 60s regeneration
+// (CR PR #193). Curation writes still bust this instantly via the
+// shared "auth-marquee-columns" tag in revalidateTemplateSurfaces.
+export const getLandingMarqueeColumns = unstable_cache(
+  fetchMarqueeColumns,
+  ["landing-marquee-columns"],
+  { revalidate: 86400, tags: ["auth-marquee-columns"] },
 );
 
 export const MARQUEE_COLUMN_COUNT = COLUMN_COUNT;

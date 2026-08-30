@@ -6,7 +6,7 @@
 // chrome direction: in RTL the logo reads at the start (right); in LTR it leads
 // from the left. Strings come from the active-locale dictionary.
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLocale, useDict } from "@/components/i18n/LocaleProvider";
@@ -35,8 +35,10 @@ export function LandingNav() {
   // covers CLIENT-side navigations (app -> landing would keep the class
   // otherwise) and restores the visitor's cookie preference only when they
   // navigate back INTO the app shell (auth/marketing destinations stay
-  // dark). DOM side-effect only - no state, lint-safe.
-  useEffect(() => {
+  // dark). Layout effect so the class flips BEFORE paint - a plain
+  // effect let one light-themed frame flash through on client
+  // navigation (CR PR #193). DOM side-effect only - no state, lint-safe.
+  useLayoutEffect(() => {
     const root = document.documentElement;
     root.classList.remove("light");
     return () => {

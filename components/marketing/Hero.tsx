@@ -34,9 +34,9 @@ const CreateScene = dynamic(
 // presentational — no client-side DB round-trip on a public page.
 // Undefined / 0 falls back to a hidden chip so we never render
 // "تم إنشاء 0 عرض تقديمي حتى الآن" on a fresh DB.
-// Lint-safe media-query read (same recipe as ScrollReveal): SSR assumes
-// motion-ok, the client corrects on commit - the scene then renders its
-// settled final frame instead of animating.
+// Lint-safe media-query reads (same recipe as ScrollReveal): SSR assumes
+// motion-ok desktop, the client corrects on commit - the scene then
+// renders its settled final frame instead of animating.
 const REDUCED_QUERY = "(prefers-reduced-motion: reduce)";
 function subscribeReduced(cb: () => void) {
   const mq = window.matchMedia(REDUCED_QUERY);
@@ -47,6 +47,23 @@ function usePrefersReducedMotion() {
   return useSyncExternalStore(
     subscribeReduced,
     () => window.matchMedia(REDUCED_QUERY).matches,
+    () => false,
+  );
+}
+
+// Phones get the scene's settled final frame instead of the animation:
+// at a 360px viewport the 16:9 stage is ~185px tall and the fixed-size
+// cards would clip (CR PR #193). The finished deck wall fills any size.
+const PHONE_QUERY = "(max-width: 767px)";
+function subscribePhone(cb: () => void) {
+  const mq = window.matchMedia(PHONE_QUERY);
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+}
+function useIsPhone() {
+  return useSyncExternalStore(
+    subscribePhone,
+    () => window.matchMedia(PHONE_QUERY).matches,
     () => false,
   );
 }
@@ -64,6 +81,7 @@ export function Hero({
   const dict = useDict();
   const { locale } = useLocale();
   const reducedMotion = usePrefersReducedMotion();
+  const isPhone = useIsPhone();
 
   // Scroll-driven rotation: full 15° tilt at the top of the page,
   // flattening to 0° as the visitor scrolls. The flatten distance is
@@ -122,7 +140,11 @@ export function Hero({
       : null;
 
   return (
-    <section className="glow-effect relative overflow-hidden pt-40 pb-32">
+    <section className="glow-effect tq-aura relative overflow-hidden pt-40 pb-32">
+      {/* `tq-aura` (bottom-anchored living-blue mesh) is the SAME gradient
+          the demo paints inside its window - the masked wall dissolves
+          into it, so the section and the animation share one backdrop
+          (user direction 2026-08-30). */}
       {/* Living template wall - the login marquee embedded as the hero
           backdrop (absolute, scoped to this section). Its built-in
           center fade is tuned for the auth glass modal; the hero copy
@@ -295,7 +317,7 @@ export function Hero({
                   underneath: the scene's aura layer has no base fill of
                   its own and the marquee wall must not read through. */}
               <div className="relative aspect-video w-full bg-[var(--tq-bg)]">
-                <CreateScene reduced={reducedMotion} />
+                <CreateScene reduced={reducedMotion || isPhone} />
               </div>
             </div>
           </motion.div>

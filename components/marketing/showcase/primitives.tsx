@@ -97,6 +97,10 @@ export function Typing({
   const ref = useRef<HTMLSpanElement>(null);
   const chars = useTransform(loop, [0, start, end, 1], [0, 0, text.length, text.length]);
   useMotionValueEvent(chars, "change", (v) => {
+    // Reduced mode renders the full text as the span's child; the loop
+    // keeps ticking, so without this guard the listener would overwrite
+    // the settled text with a partial slice (CR PR #193).
+    if (reduced) return;
     if (ref.current) ref.current.textContent = text.slice(0, Math.round(v));
   });
   return (

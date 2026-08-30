@@ -1,8 +1,9 @@
 "use client";
 
-// ─── Create scene v3.3 ───────────────────────────────────────────────
-// Sequential full-frame vignettes on a theme-ambient stage (host paints
-// the backdrop; the old `.tq-aura` blue gradient was removed 2026-08-30):
+// ─── Create scene ────────────────────────────────────────────────────
+// The landing hero's looping /create mini-tutorial, staged over the
+// `.tq-aura` living-blue mesh + the dashboard's dot grid (the hero
+// section carries the same aura, so window + landing share a backdrop):
 //   1 content card - the brief types out
 //   2 brand card   - palette fills, font picked, then the cursor LEAVES
 //                    the scene, returns DRAGGING the logo chip, hovers
@@ -156,7 +157,7 @@ export function CreateScene({ reduced = false }: { reduced?: boolean }) {
     // `.tq-aura` living-blue backdrop + the dashboard's dot field (both
     // restored 2026-08-30, user direction). The aura's light-theme
     // dark-island re-scope is moot now: marketing is dark-only.
-    <div className="tq-aura relative h-full w-full overflow-hidden" dir={dir} data-scene-root>
+    <div aria-hidden className="tq-aura relative h-full w-full overflow-hidden" dir={dir} data-scene-root>
       {/* Dot field - same tiled grid as the real dashboard panel. */}
       <div
         aria-hidden
@@ -803,30 +804,28 @@ function RatioPick({
   at: number;
   reduced: boolean;
 }) {
-  const ring = useTransform(
-    loop,
-    [at, at + F(0.15)],
-    ["var(--tq-border-hairline)", "var(--tq-blue)"],
-  );
-  const tint = useTransform(
-    loop,
-    [at, at + F(0.15)],
-    ["rgba(var(--tq-blue-rgb),0)", "rgba(var(--tq-blue-rgb),0.1)"],
-  );
+  // The selected state fades in as an OVERLAY (accent border + tint)
+  // animated by opacity: framer cannot interpolate between CSS-var color
+  // strings, so animating border-color snapped instead of easing
+  // (CR PR #193).
+  const selectedOpacity = useTransform(loop, [at, at + F(0.15)], [0, 1]);
   return (
     <div className="flex items-center gap-1.5">
-      <motion.span
+      <span
         data-cur="ratio"
-        className="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5"
-        style={
-          reduced
-            ? { borderColor: "var(--tq-blue)", background: "rgba(var(--tq-blue-rgb),0.1)" }
-            : { borderColor: ring, background: tint }
-        }
+        className="relative flex items-center gap-1.5 rounded-lg border border-[var(--tq-border-hairline)] px-2.5 py-1.5"
       >
+        <motion.span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 rounded-lg border border-[var(--tq-blue)]"
+          style={{
+            background: "rgba(var(--tq-blue-rgb),0.1)",
+            opacity: reduced ? 1 : selectedOpacity,
+          }}
+        />
         <span className="rounded-xs border border-foreground/40" style={{ width: 18, height: 10 }} />
         <span dir="ltr" className="text-[11px] font-semibold text-foreground tabular-nums">16:9</span>
-      </motion.span>
+      </span>
       <span className="flex items-center gap-1.5 rounded-lg border border-[var(--tq-border-hairline)] px-2.5 py-1.5 opacity-60">
         <span className="rounded-xs border border-foreground/40" style={{ width: 10, height: 16 }} />
         <span dir="ltr" className="text-[11px] font-semibold text-foreground/70 tabular-nums">9:16</span>
