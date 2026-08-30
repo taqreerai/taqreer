@@ -11,7 +11,7 @@
 import { isLocale, defaultLocale } from "@/lib/i18n/config";
 import { LandingNav } from "@/components/marketing/LandingNav";
 import { SiteFooter } from "@/components/marketing/SiteFooter";
-import { MagneticGlow } from "@/components/app/MagneticGlow";
+import { StitchBackdrop } from "@/components/marketing/StitchBackdrop";
 
 export default async function MarketingLayout({
   children,
@@ -25,9 +25,11 @@ export default async function MarketingLayout({
 
   return (
     <main className="relative overflow-x-clip">
-      {/* Panel-coloured base + the bottom aurora glow, same as the landing. */}
-      <div aria-hidden className="fixed inset-0 -z-[2] bg-[var(--tq-panel)]" />
-      <MagneticGlow fixed glowYOffset={0.2} dots={false} />
+      {/* Pure-black base + the animated Stitch backdrop (wave + reactive
+          dots), same as the landing (2026-08-30 - replaced the panel base
+          + MagneticGlow aurora so every marketing page matches). */}
+      <div aria-hidden className="tq-stitch-base fixed inset-0 -z-[2]" />
+      <StitchBackdrop />
 
       <LandingNav />
 

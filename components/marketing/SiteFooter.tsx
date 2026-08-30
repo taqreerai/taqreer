@@ -77,7 +77,7 @@ export async function SiteFooter({
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label={s.label}
-                      className="icon-hover"
+                      className="text-foreground transition-opacity hover:opacity-75"
                     >
                       <svg
                         viewBox="0 0 24 24"
@@ -94,11 +94,11 @@ export async function SiteFooter({
                 <ul className="space-y-3 text-sm">
                   {/* Block follows the page direction (right-aligned in RTL);
                       only the LTR content is BiDi-isolated. */}
-                  <li className="text-muted">
+                  <li className="text-foreground">
                     <bdi dir="ltr">{LEGAL_META.address}</bdi>
                   </li>
                   <li>
-                    <ContactEmail className="icon-hover" />
+                    <ContactEmail className="footer-link" />
                   </li>
                   <li>
                     <a
@@ -118,7 +118,7 @@ export async function SiteFooter({
                       : raw;
                     return (
                       <li key={label as string}>
-                        <a className="icon-hover" href={href}>
+                        <a className="footer-link" href={href}>
                           {label as string}
                         </a>
                       </li>
@@ -129,12 +129,12 @@ export async function SiteFooter({
             </div>
           ))}
         </div>
-        <div className="flex flex-col items-center justify-between pt-8 text-sm text-muted md:flex-row">
+        <div className="flex flex-col items-center justify-between pt-8 text-sm text-foreground md:flex-row">
           <div className="mb-4 flex items-center gap-2 md:mb-0">
             <ThemeLogo
               width={120}
               height={28}
-              className="h-7 w-auto object-contain opacity-80"
+              className="h-7 w-auto object-contain"
             />
           </div>
           <p>

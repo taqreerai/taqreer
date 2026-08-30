@@ -6,7 +6,7 @@
 import { isLocale, defaultLocale } from "@/lib/i18n/config";
 import { LandingNav } from "@/components/marketing/LandingNav";
 import { SiteFooter } from "@/components/marketing/SiteFooter";
-import { MagneticGlow } from "@/components/app/MagneticGlow";
+import { StitchBackdrop } from "@/components/marketing/StitchBackdrop";
 
 export default async function LegalLayout({
   children,
@@ -20,9 +20,10 @@ export default async function LegalLayout({
 
   return (
     <main className="relative overflow-x-clip">
-      {/* Panel-coloured base + the bottom aurora glow, same as the landing. */}
-      <div aria-hidden className="fixed inset-0 -z-[2] bg-[var(--tq-panel)]" />
-      <MagneticGlow fixed glowYOffset={0.2} dots={false} />
+      {/* Pure-black base + the animated Stitch backdrop (wave + reactive
+          dots), same as the landing + marketing spokes (2026-08-30). */}
+      <div aria-hidden className="tq-stitch-base fixed inset-0 -z-[2]" />
+      <StitchBackdrop />
 
       <LandingNav />
 

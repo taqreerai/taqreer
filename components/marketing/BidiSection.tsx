@@ -91,8 +91,14 @@ export function InlineSwitch({
       className="relative mx-1 inline-block h-[0.82em] w-[1.6em] shrink-0 rounded-full transition-colors duration-300"
       style={{
         verticalAlign: "middle",
-        background: on ? "var(--tq-gradient-brand)" : "#000",
-        border: "1px solid var(--tq-border-hairline)",
+        // OFF track lifted off the page (2026-08-30): the landing's base
+        // went pure black, so a #000 track + hairline border vanished into
+        // it - a faint overlay fill + the strong overlay stroke keep the
+        // pill legible on both themes (the tokens flip per theme).
+        background: on ? "var(--tq-gradient-brand)" : "var(--tq-overlay-soft)",
+        border: on
+          ? "1px solid var(--tq-border-hairline)"
+          : "1px solid var(--tq-border-focus)",
         boxShadow: on ? "0 0 18px rgba(var(--tq-violet-rgb),0.5)" : "none",
       }}
     >

@@ -1790,40 +1790,42 @@ html.app-shell-scroll body {
    higher at the edges and dips in the middle, exactly like the original.
    Dots layer UNDER the wave (measured: dots read only faintly inside the
    glow core). Both layers pin fixed behind the landing content. */
-.tq-stitch-dots {
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.22) 1px, transparent 1.2px);
-  background-size: 16px 16px;
+/* Canvas styling for components/marketing/StitchBackdrop.tsx - the JS
+   recreation of the video (the earlier static-gradient attempt is gone;
+   the wave is now drawn per-frame into a low-res canvas that this blur
+   melts into flowing light). Light theme softens the wave, and the
+   component recolors the dots itself (it watches the .light class). */
+/* Landing base: pure black behind the canvases (Stitch's ground), panel
+   tone on the light theme. */
+.tq-stitch-base {
+  background: #000;
 }
-:root.light .tq-stitch-dots {
-  background-image: radial-gradient(circle, rgba(0, 0, 0, 0.18) 1px, transparent 1.2px);
+:root.light .tq-stitch-base {
+  background: var(--tq-panel);
 }
-.tq-stitch-wave {
-  background:
-    /* the ribbon: lower arc of a huge ellipse centered above the fold -
-       the arc dips mid-viewport and rises toward both edges (valley),
-       matching the original. Stops are tight so the core stays a thin
-       bright band that the blur feathers. */
-    radial-gradient(
-      ellipse 140% 205% at 50% -72%,
-      transparent 69%,
-      rgba(0, 66, 224, 0.18) 72%,
-      rgba(0, 87, 255, 0.55) 74%,
-      rgba(51, 128, 255, 0.9) 75%,
-      rgba(0, 87, 255, 0.5) 76.5%,
-      rgba(0, 66, 224, 0.16) 79.5%,
-      transparent 84%
-    ),
-    /* faint residual haze pooling under the ribbon */
-    radial-gradient(
-      ellipse 90% 25% at 50% 106%,
-      rgba(0, 66, 224, 0.16) 0%,
-      rgba(0, 66, 224, 0.06) 55%,
-      transparent 80%
-    );
-  filter: blur(24px) saturate(1.15);
+.tq-stitch-wave-canvas {
+  filter: blur(26px) saturate(1.2);
+  /* Fade the glow out gradually toward the top so the wave dissolves
+     into the black base instead of ending on a defined silhouette. */
+  -webkit-mask-image: linear-gradient(
+    to top,
+    #000 0%,
+    #000 26%,
+    rgba(0, 0, 0, 0.45) 46%,
+    rgba(0, 0, 0, 0.15) 64%,
+    transparent 80%
+  );
+  mask-image: linear-gradient(
+    to top,
+    #000 0%,
+    #000 26%,
+    rgba(0, 0, 0, 0.45) 46%,
+    rgba(0, 0, 0, 0.15) 64%,
+    transparent 80%
+  );
 }
-:root.light .tq-stitch-wave {
-  opacity: 0.5;
+:root.light .tq-stitch-wave-canvas {
+  opacity: 0.45;
 }
 
 /* Dot-field texture — the tiled dot grid the dashboard panel / hero demo
@@ -2210,6 +2212,18 @@ html.app-shell-scroll body {
 }
 .icon-hover:hover {
   color: var(--tq-text-primary);
+}
+
+/* Marketing footer text links (2026-08-30, user direction): full-strength
+   foreground (100% white on dark) instead of the muted icon-hover ramp,
+   with an underline on hover. Shared by every marketing page via
+   SiteFooter. Social ICONS keep .icon-hover. */
+.footer-link {
+  color: var(--tq-text-primary);
+  text-underline-offset: 3px;
+}
+.footer-link:hover {
+  text-decoration: underline;
 }
 
 /* ─── Search Input ─── */

@@ -18,6 +18,7 @@ import { BidiSection } from "@/components/marketing/BidiSection";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 import { LandingTemplatesGrid } from "@/components/marketing/LandingTemplatesGrid";
 import { SiteFooter } from "@/components/marketing/SiteFooter";
+import { StitchBackdrop } from "@/components/marketing/StitchBackdrop";
 import { PricingTiers } from "@/components/marketing/PricingTiers";
 import { FaqAccordion } from "@/components/marketing/FaqAccordion";
 import { LandingNav } from "@/components/marketing/LandingNav";
@@ -154,21 +155,14 @@ export default async function LandingPage({
           (dict.landing.faq). Eligible for FAQ rich results + a strong source
           for AI answer extraction. */}
       <JsonLd data={faqPageSchema(landingFaq)} />
-      {/* Panel-coloured base + the aurora glow, pinned behind everything. */}
-      <div aria-hidden className="fixed inset-0 -z-[2] bg-[var(--tq-panel)]" />
-      {/* Stitch-style backdrop (user direction 2026-08-30): the measured
-          stitch.withgoogle.com recipe in our brand blues - 16px dot grid
-          UNDER a blurred valley-arc ribbon (see globals.css
-          .tq-stitch-dots / .tq-stitch-wave). Replaces the bottom
-          aura-floor glow. */}
-      <div
-        aria-hidden
-        className="tq-stitch-dots pointer-events-none fixed inset-0 -z-[1]"
-      />
-      <div
-        aria-hidden
-        className="tq-stitch-wave pointer-events-none fixed inset-0 -z-[1]"
-      />
+      {/* Pure-black base (Stitch's ground; panel tone on light), pinned
+          behind everything. */}
+      <div aria-hidden className="tq-stitch-base fixed inset-0 -z-[2]" />
+      {/* Stitch-style backdrop (user direction 2026-08-30): JS recreation
+          of stitch.withgoogle.com's animated background video in our brand
+          blues, plus the restored mouse-reactive dot grid (§23 water-push,
+          Stitch metrics). Replaces the bottom aura-floor glow. */}
+      <StitchBackdrop />
       <LandingNav />
 
       {/* Hero sits OUTSIDE the max-w-7xl column: its dashboard preview
