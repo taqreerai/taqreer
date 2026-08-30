@@ -104,6 +104,17 @@ class CreditStore {
         // so a burst of settles costs one fetch.
         this.scheduleRefetch();
       });
+      window.addEventListener("focus", () => {
+        // Heal the signed-out-at-load case: a page mounted with an
+        // invalid session hydrates to null (401), and signing in
+        // usually happens in another tab or via a redirect - so
+        // regaining focus is the moment to retry. Bounded: a no-op
+        // once data has ever landed, so normal sessions never pay a
+        // focus-driven fetch. (2026-08-30: without this, Generate
+        // silently swallowed clicks after a mid-session login - the
+        // `!credits` guard in GenerateSplitButton held forever.)
+        if (this.data === null) this.scheduleRefetch();
+      });
     }
   }
 
@@ -119,25 +130,41 @@ class CreditStore {
     }, 250);
   }
 
-  async refetch(): Promise<void> {
+  // Resolves true only when a payload was fetched AND applied, so
+  // ensureHydrated can tell a real hydration from a 401/network miss.
+  async refetch(): Promise<boolean> {
     try {
       const res = await fetch("/api/credits", { credentials: "same-origin" });
-      if (!res.ok) return;
+      if (!res.ok) return false;
       const data = (await res.json()) as CreditData;
       this.data = data;
       this.emit();
+      return true;
     } catch {
       /* network blip - last snapshot stays */
+      return false;
     }
   }
 
   ensureHydrated(): void {
     if (this.hydrated || this.hydrating) return;
     this.hydrating = true;
-    void this.refetch().finally(() => {
-      this.hydrating = false;
-      this.hydrated = true;
-    });
+    // Latch `hydrated` only on a SUCCESSFUL fetch. Pre-fix this latched in
+    // a `finally` regardless of outcome, so a 401 during a signed-out load
+    // left data null FOREVER (no consumer ever refetched) - the Generate
+    // button then silently swallowed clicks after the user signed in
+    // (found 2026-08-30 e2e-testing /ar/enhance). A failed attempt now
+    // leaves `hydrated` false so the next consumer mount (or the focus
+    // listener above) retries; `hydrating` still dedupes concurrent mounts.
+    void this.refetch().then(
+      (ok) => {
+        this.hydrating = false;
+        this.hydrated = ok;
+      },
+      () => {
+        this.hydrating = false;
+      },
+    );
   }
 
   subscribe(listener: Listener): () => void {
