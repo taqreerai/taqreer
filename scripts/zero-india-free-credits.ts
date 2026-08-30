@@ -42,7 +42,7 @@ const COUNTRY = "IN";
 function maskEmail(email: string): string {
   const at = email.indexOf("@");
   if (at <= 0) return "***";
-  return `${email.slice(0, 2)}***${email.slice(at)}`;
+  return `***${email.slice(at)}`;
 }
 
 async function main() {
@@ -108,9 +108,16 @@ async function main() {
     const balance = u.creditAccount?.subscriptionBalance ?? 0;
     if (balance <= 0) continue;
     await prisma.$transaction(async (tx) => {
-      // Revalidate eligibility inside the transaction: a purchase or
-      // goodwill refund landing between the scan and this write would not
-      // move subscriptionBalance (top-ups live in TopupGrant rows), so the
+      // Take the same per-account row lock every credit mutation takes
+      // (lib/credits/server.ts lockAccount): grantTopup / refunds /
+      // subscription writers all lock this row first, so the recheck and
+      // the write below are serialized against any concurrent purchase.
+      // The account row exists (it has a balance), so no upsert needed.
+      await tx.$queryRaw`
+        SELECT "userId" FROM "CreditAccount" WHERE "userId" = ${u.id} FOR UPDATE`;
+      // Revalidate eligibility under the lock: a purchase or goodwill
+      // refund landing between the scan and this write would not move
+      // subscriptionBalance (top-ups live in TopupGrant rows), so the
       // CAS alone cannot catch it - re-check the paid/refund markers here.
       const still = await tx.user.findFirst({
         where: {
