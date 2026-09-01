@@ -4,35 +4,37 @@
 // glow on stitch is animated ... let's use js to recreate it, also the dots
 // on stitch react to the mouse ... let's bring it back").
 //
-// Two fixed canvases modeled on stitch.withgoogle.com's landing background
-// (studied from their actual bg video - gweb-gemini-cdn 89e9004d...mp4 - a
-// 20s fluid aurora), in OUR brand blues:
+// Two fixed canvases, in OUR brand blues:
 //
-//   • WAVE (below): an undulating valley silhouette - a crest line that is
-//     high at the viewport edges and dips past center, rippled by traveling
-//     sine waves; filled beneath with a crest→deep-blue→black gradient;
-//     bright blobs drift inside it and dark "cells" churn through it (the
-//     video's turbulent holes); a hot highlight strokes ALONG the crest with
-//     brightness that travels (the video's moving streaks). Drawn into a
+//   • WAVE (below): an undulating valley silhouette modeled on
+//     stitch.withgoogle.com's landing bg video - a crest line high at the
+//     viewport edges dipping past center, rippled by traveling sine waves;
+//     filled beneath with a crest→deep-blue→black gradient; bright blobs
+//     drift inside it and dark "cells" churn through it; a hot highlight
+//     strokes ALONG the crest with brightness that travels. Drawn into a
 //     low-res buffer and blown up under CSS blur so it reads as flowing
 //     light, not geometry.
 //
-//   • DOTS (above): the §23 finger-in-water grid, restored from git history
-//     (29f74d5, removed by the §25 CSS-only revert) with Stitch's measured
-//     metrics - 16px grid, 1px-radius dots at 22% white (18% black on the
-//     light theme). The cursor pushes dots away; they ease out fast and
-//     settle back slow, leaving a wake.
+//   • DOTS (above): a dot-and-line grid on the Framer "Dot_Background"
+//     mechanics with a custom shrink-to-mouse interaction - see the
+//     constants block below for the full contract.
 //
-// Perf contract (same as the historical component): the wave redraws every
-// frame at 1/4 resolution; dots redraw only while the cursor is over the
-// page or a dot is still settling; everything pauses when the tab hides;
-// prefers-reduced-motion renders one static frame and disables the warp.
+// Perf contract: the wave redraws every frame at 1/4 resolution while
+// visible; the dot grid redraws only while the interaction is actually
+// changing (pointer moving, fade in/out, tilt easing) and skips entirely
+// once converged on a stationary pointer; the RAF loop stops scheduling
+// when both layers are idle and restarts from scroll/pointer/visibility;
+// everything pauses when the tab hides; prefers-reduced-motion renders one
+// static frame and disables the interaction.
 
 import { useEffect, useRef } from "react";
 
 // ─── Wave ────────────────────────────────────────────────────────────
 const WAVE_SCALE = 0.25; // low-res buffer; CSS blur + stretch → fluid light
-// Brand blues (the video's violet family mapped to ours).
+// Brand blues (the video's violet family mapped to ours). CORE mirrors
+// globals.css --tq-brand-blue (#0057FF) and LIGHT mirrors --tq-purple
+// (#3380FF) - keep in sync on a rebrand (canvas can't read CSS vars
+// without runtime plumbing; these are deliberate baked copies).
 const DEEP: [number, number, number] = [0, 66, 224]; // #0042E0
 const CORE: [number, number, number] = [0, 87, 255]; // #0057FF
 const LIGHT: [number, number, number] = [51, 128, 255]; // #3380FF
@@ -41,6 +43,9 @@ const HOT: [number, number, number] = [156, 197, 255]; // #9CC5FF crest streaks
 // past center - measured off the video (edges ~0.28H, dip ~0.60H).
 const CREST_EDGE = 0.38;
 const CREST_DIP = 0.72;
+// Cursor bulge: peak crest rise as a fraction of height. bulgeS itself
+// stays normalized 0..1 (the streak heat reuses it directly).
+const BULGE_MAX = 0.11;
 
 // Drifting interior blobs: bright brand-blue bodies + dark cells that churn
 // through the fill like the video's turbulent holes. Normalized coords are
@@ -81,17 +86,16 @@ function crestY(x: number, t: number): number {
   return base + tilt + w1 + w2;
 }
 
-// ─── Dots (restored §23 finger-in-water, Stitch metrics) ─────────────
-// Dot interaction ported from the Framer "Dot_Background" module
-// (framerusercontent.com/modules/AItUZNfSLs1G8nuIbAiR - a three.js grid
-// whose vertex shader offers Pull/Push/Twist/Lens styles), reimplemented
-// on the 2d canvas since the chosen behavior has no 3D component. Owner
-// direction: instead of the module's Lens zoom, the grid SHRINKS to the
-// mouse - dots contract toward the pointer (the module's Pull xy term)
-// and get smaller near it (inverted size term). Same mechanics
-// otherwise: gaussian falloff exp(-(d/(radius*0.4))^2), the effect
-// mouse LERPS toward the real pointer (12/s), and the whole effect
-// fades in/out on hover (10/s).
+// ─── Dots (Framer Dot_Background mechanics, shrink-to-mouse) ─────────
+// Ported from framerusercontent.com/modules/AItUZNfSLs1G8nuIbAiR - a
+// three.js grid whose vertex shader offers Pull/Push/Twist/Lens styles -
+// reimplemented on the 2d canvas since the chosen behavior has no 3D
+// geometry. Owner direction: instead of the module's Lens zoom, the grid
+// SHRINKS to the mouse - dots contract toward the pointer (the module's
+// Pull xy term) and get smaller near it. Same mechanics otherwise:
+// gaussian falloff exp(-(d/(radius*0.4))^2), the effect mouse LERPS
+// toward the real pointer (12/s), the whole effect fades in/out on hover
+// (10/s), and the connecting line mesh + 3D parallax tilt are kept.
 const DOT_SPACING = 36; // px grid gap (user direction: tighter than the module's ~56)
 const DOT_BASE_R = 1.5; // px dot radius (the module's dotSize 3 = diameter)
 const SHRINK_RADIUS = 600; // px - the module's default influence radius
@@ -99,7 +103,8 @@ const PULL = 0.15; // fraction of the dot->mouse vector removed at full falloff
 const SHRINK = 0.6; // dot radius loses up to 60% at the pointer
 const MOUSE_LERP = 12; // per-second easing of the effect mouse
 const ACTIVE_EASE = 10; // per-second fade of the whole interaction
-// Module appearance kept as-is (its defaults are already brand blues).
+// Module appearance kept as-is (its defaults are already brand-blue
+// adjacent; neither value has a globals.css token).
 const DOT_COLOR = "#4A8CFF";
 const LINE_COLOR = "rgba(42,60,107,0.3)"; // #2A3C6B at lineOpacity .3
 const LINE_WIDTH = 1;
@@ -115,23 +120,27 @@ export function StitchBackdrop() {
   const dotsRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    const waveCanvas = waveRef.current;
-    const dotsCanvas = dotsRef.current;
-    if (!waveCanvas || !dotsCanvas) return;
-    const wctxMaybe = waveCanvas.getContext("2d");
-    const dctxMaybe = dotsCanvas.getContext("2d");
-    if (!wctxMaybe || !dctxMaybe) return;
-    const wctx: CanvasRenderingContext2D = wctxMaybe;
-    const dctx: CanvasRenderingContext2D = dctxMaybe;
-    const wCanvas: HTMLCanvasElement = waveCanvas;
-    const dCanvas: HTMLCanvasElement = dotsCanvas;
+    const waveEl = waveRef.current;
+    const dotsEl = dotsRef.current;
+    if (!waveEl || !dotsEl) return;
+    // Re-bind to narrowed consts: the draw functions below are hoisted
+    // declarations, so TS can't carry the guard's narrowing into them.
+    const waveCanvas = waveEl;
+    const dotsCanvas = dotsEl;
+    const wctxOrNull = waveCanvas.getContext("2d");
+    const dctxOrNull = dotsCanvas.getContext("2d");
+    if (!wctxOrNull || !dctxOrNull) return;
+    const wctx = wctxOrNull;
+    const dctx = dctxOrNull;
 
     const reduceMotion =
       window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
     let cssW = 0;
     let cssH = 0;
-    let dCssW = 0; // dot canvas box (inset-0, smaller than the wave's)
+    let waveLeft = 0; // wave-canvas origin in client coords (cached: the
+    let waveTop = 0; // canvases are fixed, so it only moves on layout)
+    let dCssW = 0; // dot canvas box (it overscans MORE than the wave's)
     let dCssH = 0;
     let dotOffX = 0; // dot-canvas origin relative to the wave canvas
     let dotOffY = 0;
@@ -146,7 +155,7 @@ export function StitchBackdrop() {
     // bulge TRAILS the cursor with a springy, liquid lag - and relaxes to
     // flat when the pointer leaves.
     let bulgeX = 0.5; // smoothed cursor x, normalized
-    let bulgeS = 0; // smoothed strength, fraction of height
+    let bulgeS = 0; // smoothed strength, normalized 0..1
     // Scroll-linked reveal (user direction: "leak like water being spilled
     // slowly from the bottom, not an opacity"): at the top of the page the
     // whole wave sits BELOW the viewport; scrolling raises it into place,
@@ -176,6 +185,7 @@ export function StitchBackdrop() {
     };
     let dotsDirty = true;
     let dotsAnimating = false;
+    let dotsSettled = false; // converged on a stationary pointer → skip draws
     let cols = 0;
     let rows = 0;
     let offX = 0;
@@ -186,31 +196,38 @@ export function StitchBackdrop() {
     let lastFrameT = 0;
     let rotX = 0;
     let rotY = 0;
-    // Displaced grid node positions, rebuilt each frame while interacting.
+    // Per-node scratch: displaced positions + gaussian falloff, rebuilt
+    // each interactive frame and shared by the line and dot passes.
     let nodeX = new Float32Array(0);
     let nodeY = new Float32Array(0);
+    let nodeK = new Float32Array(0);
+    // Per-column crest ys (one entry every 2 buffer px), rebuilt each wave
+    // frame and shared by the body path, glow band, and streaks.
+    let crestYs = new Float32Array(0);
 
     function layout() {
-      const rect = wCanvas.getBoundingClientRect();
+      const rect = waveCanvas.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return;
       cssW = rect.width;
       cssH = rect.height;
+      waveLeft = rect.left;
+      waveTop = rect.top;
       ww = Math.max(1, Math.round(cssW * WAVE_SCALE));
       wh = Math.max(1, Math.round(cssH * WAVE_SCALE));
-      wCanvas.width = ww;
-      wCanvas.height = wh;
+      waveCanvas.width = ww;
+      waveCanvas.height = wh;
+      crestYs = new Float32Array(Math.floor(ww / 2) + 2);
       dpr = Math.min(window.devicePixelRatio || 1, 2);
-      // The dot canvas is inset-0 while the wave canvas overscans
-      // -inset-12: size and address the dot grid in ITS OWN box (the old
-      // shared cssW/cssH squeezed the grid ~5% and shifted the cursor
-      // target 48px).
-      const drect = dCanvas.getBoundingClientRect();
+      // Each canvas is addressed in its OWN measured box (they overscan by
+      // different amounts); the offsets convert wave-relative mouse coords
+      // into the dot canvas's frame.
+      const drect = dotsCanvas.getBoundingClientRect();
       dCssW = drect.width;
       dCssH = drect.height;
       dotOffX = drect.left - rect.left;
       dotOffY = drect.top - rect.top;
-      dCanvas.width = Math.round(dCssW * dpr);
-      dCanvas.height = Math.round(dCssH * dpr);
+      dotsCanvas.width = Math.round(dCssW * dpr);
+      dotsCanvas.height = Math.round(dCssH * dpr);
       dctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       cols = Math.ceil(dCssW / DOT_SPACING) + 1;
       rows = Math.ceil(dCssH / DOT_SPACING) + 1;
@@ -218,7 +235,9 @@ export function StitchBackdrop() {
       offY = (dCssH - (rows - 1) * DOT_SPACING) / 2;
       nodeX = new Float32Array(cols * rows);
       nodeY = new Float32Array(cols * rows);
+      nodeK = new Float32Array(cols * rows);
       dotsAnimating = false;
+      dotsSettled = false;
       dotsDirty = true;
     }
 
@@ -243,33 +262,38 @@ export function StitchBackdrop() {
           targetX = mouse.x / cssW;
           const my = mouse.y / cssH;
           const dy = Math.abs(my - (crestY(targetX, t) + rise));
-          targetS = Math.max(0, 1 - dy / 0.45) * 0.11;
+          targetS = Math.max(0, 1 - dy / 0.45);
         }
         bulgeX += (targetX - bulgeX) * 0.07;
         bulgeS += (targetS - bulgeS) * 0.05;
+        if (bulgeS < 0.001) bulgeS = 0; // let the bulge exp shut off fully
       }
       // Local crest = base crest + rise, minus a gaussian bump rising
       // toward the cursor's x (negative y = up).
       const crest = (x: number): number => {
+        const base = crestY(x, t) + rise;
+        if (bulgeS === 0) return base;
         const d = x - bulgeX;
-        return (
-          crestY(x, t) +
-          rise -
-          bulgeS * Math.exp(-(d * d) / (2 * 0.09 * 0.09))
-        );
+        return base - bulgeS * BULGE_MAX * Math.exp(-(d * d) / (2 * 0.09 * 0.09));
       };
+      // Sample the crest once per 2-px column; every pass below indexes
+      // this instead of re-evaluating the sines + bulge exp.
+      const nCols = Math.floor(ww / 2);
+      for (let i = 0; i <= nCols; i++) {
+        crestYs[i] = crest((i * 2) / ww) * wh;
+      }
 
       // 1. Valley body: path under the crest line, filled with a vertical
       //    crest→deep→black gradient. The crest edge stays sharp-ish (the
       //    CSS blur feathers it just enough, like the video's silhouette).
       wctx.beginPath();
       wctx.moveTo(0, wh + 2);
-      for (let px = 0; px <= ww; px += 2) {
-        wctx.lineTo(px, crest(px / ww) * wh);
+      for (let i = 0; i <= nCols; i++) {
+        wctx.lineTo(i * 2, crestYs[i]);
       }
       wctx.lineTo(ww, wh + 2);
       wctx.closePath();
-      const dipY = crest(0.5) * wh;
+      const dipY = crestYs[nCols >> 1];
       // Dim body: in the video the interior falls to near-black fast -
       // brightness lives in the crest band + blobs, not the fill.
       const g = wctx.createLinearGradient(0, dipY - wh * 0.1, 0, wh);
@@ -292,13 +316,12 @@ export function StitchBackdrop() {
       // the video's silhouette read as a glowing ridge rather than a flood.
       const band = wh * 0.12;
       wctx.beginPath();
-      for (let px = 0; px <= ww; px += 2) {
-        const y = crest(px / ww) * wh;
-        if (px === 0) wctx.moveTo(px, y);
-        else wctx.lineTo(px, y);
+      wctx.moveTo(0, crestYs[0]);
+      for (let i = 1; i <= nCols; i++) {
+        wctx.lineTo(i * 2, crestYs[i]);
       }
-      for (let px = ww; px >= 0; px -= 2) {
-        wctx.lineTo(px, crest(px / ww) * wh + band);
+      for (let i = nCols; i >= 0; i--) {
+        wctx.lineTo(i * 2, crestYs[i] + band);
       }
       wctx.closePath();
       wctx.fillStyle = `rgba(${LIGHT[0]},${LIGHT[1]},${LIGHT[2]},0.5)`;
@@ -326,12 +349,15 @@ export function StitchBackdrop() {
 
       // 3. Hot crest streaks: short bright segments along the crest whose
       //    intensity travels with time (the video's moving highlights).
+      //    One solid strokeStyle; per-segment brightness via globalAlpha
+      //    (avoids 24 rgba string allocations per frame).
       wctx.lineWidth = Math.max(1.5, wh * 0.012);
       wctx.lineCap = "round";
+      wctx.strokeStyle = `rgb(${HOT[0]},${HOT[1]},${HOT[2]})`;
       const SEG = 24;
+      const colStep = nCols / SEG;
       for (let s = 0; s < SEG; s++) {
         const x0 = s / SEG;
-        const x1 = (s + 1) / SEG;
         // brightness wave traveling along the crest (sped up with the rest),
         // plus a hot spot that glows around the cursor's x when it is near
         // the wave - the crest "heats up" under the pointer.
@@ -340,14 +366,18 @@ export function StitchBackdrop() {
           0.5 * Math.sin(2 * Math.PI * 1.1 * x0 - t * 1.4 + Math.sin(t * 0.2) * 2);
         const dxm = x0 - bulgeX;
         const cursorHeat =
-          (bulgeS / 0.11) * Math.exp(-(dxm * dxm) / (2 * 0.06 * 0.06));
-        const a = Math.min(0.9, 0.15 + 0.6 * heat * heat + 0.45 * cursorHeat);
-        wctx.strokeStyle = `rgba(${HOT[0]},${HOT[1]},${HOT[2]},${a})`;
+          bulgeS === 0
+            ? 0
+            : bulgeS * Math.exp(-(dxm * dxm) / (2 * 0.06 * 0.06));
+        wctx.globalAlpha = Math.min(0.9, 0.15 + 0.6 * heat * heat + 0.45 * cursorHeat);
+        const i0 = Math.round(s * colStep);
+        const i1 = Math.round((s + 1) * colStep);
         wctx.beginPath();
-        wctx.moveTo(x0 * ww, crest(x0) * wh);
-        wctx.lineTo(x1 * ww, crest(x1) * wh);
+        wctx.moveTo(i0 * 2, crestYs[i0]);
+        wctx.lineTo(i1 * 2, crestYs[i1]);
         wctx.stroke();
       }
+      wctx.globalAlpha = 1;
     }
 
     function drawDots(nowMs: number) {
@@ -360,9 +390,12 @@ export function StitchBackdrop() {
       const my = mouse.y - dotOffY;
 
       // Hover fade + effect-mouse lerp (the module's currentActive and
-      // u_mouse.lerp, converted from per-frame*delta to our clock).
+      // u_mouse.lerp, converted from per-frame*delta to our clock). Each
+      // eased value SNAPS onto its target once close so the interaction
+      // can report itself converged and stop redrawing.
       activeSm += ((active ? 1 : 0) - activeSm) * Math.min(1, ACTIVE_EASE * dt);
       if (activeSm < 0.005) activeSm = 0;
+      else if (activeSm > 0.995) activeSm = 1;
       if (active) {
         const t = Math.min(1, MOUSE_LERP * dt);
         if (fmouse.x < -5000) {
@@ -371,6 +404,10 @@ export function StitchBackdrop() {
         } else {
           fmouse.x += (mx - fmouse.x) * t;
           fmouse.y += (my - fmouse.y) * t;
+          if (Math.abs(mx - fmouse.x) < 0.05 && Math.abs(my - fmouse.y) < 0.05) {
+            fmouse.x = mx;
+            fmouse.y = my;
+          }
         }
       }
 
@@ -381,16 +418,20 @@ export function StitchBackdrop() {
       const targetRotY = active ? mouse.nx * TILT : 0;
       rotX += (targetRotX - rotX) * te;
       rotY += (targetRotY - rotY) * te;
-      const tilting = Math.abs(rotX) > 0.0005 || Math.abs(rotY) > 0.0005;
-      dCanvas.style.transform =
+      if (Math.abs(targetRotX - rotX) < 0.0005) rotX = targetRotX;
+      if (Math.abs(targetRotY - rotY) < 0.0005) rotY = targetRotY;
+      const tilting = rotX !== 0 || rotY !== 0;
+      dotsCanvas.style.transform =
         reduceMotion || (!tilting && !active)
           ? ""
           : `perspective(${TILT_PERSPECTIVE}px) rotateX(${rotX}rad) rotateY(${rotY}rad)`;
 
-      // Pass 1: displaced node positions (shared by lines AND dots, so
-      // the mesh bends with the shrink exactly like the module's shader).
+      // Pass 1: displaced node positions + falloff (shared by the line
+      // mesh AND the dot pass, so both stay in lockstep by construction).
+      // Beyond 3 sigma the falloff is invisible (<1e-4) - skip the exp.
       const sigma = SHRINK_RADIUS * 0.4;
       const inv2s2 = 1 / (sigma * sigma);
+      const cutoff2 = 9 * sigma * sigma;
       for (let cy = 0; cy < rows; cy++) {
         const baseY = offY + cy * DOT_SPACING;
         for (let cx = 0; cx < cols; cx++) {
@@ -398,15 +439,20 @@ export function StitchBackdrop() {
           const baseX = offX + cx * DOT_SPACING;
           let x = baseX;
           let y = baseY;
+          let k = 0;
           if (activeSm > 0) {
             const dx = baseX - fmouse.x;
             const dy = baseY - fmouse.y;
-            const k = Math.exp(-(dx * dx + dy * dy) * inv2s2) * activeSm;
-            x -= dx * PULL * k;
-            y -= dy * PULL * k;
+            const d2 = dx * dx + dy * dy;
+            if (d2 < cutoff2) {
+              k = Math.exp(-d2 * inv2s2) * activeSm;
+              x -= dx * PULL * k;
+              y -= dy * PULL * k;
+            }
           }
           nodeX[i] = x;
           nodeY[i] = y;
+          nodeK[i] = k;
         }
       }
 
@@ -429,29 +475,39 @@ export function StitchBackdrop() {
       }
       dctx.stroke();
 
-      // Pass 3: dots, shrinking toward the pointer.
+      // Pass 3: dots, shrinking toward the pointer (falloff from pass 1).
       dctx.fillStyle = DOT_COLOR;
       dctx.beginPath();
-      for (let cy = 0; cy < rows; cy++) {
-        for (let cx = 0; cx < cols; cx++) {
-          const i = cy * cols + cx;
-          let r = DOT_BASE_R;
-          if (activeSm > 0) {
-            const dx = offX + cx * DOT_SPACING - fmouse.x;
-            const dy = offY + cy * DOT_SPACING - fmouse.y;
-            const k = Math.exp(-(dx * dx + dy * dy) * inv2s2) * activeSm;
-            r = Math.max(0.1, DOT_BASE_R * (1 - SHRINK * k));
-          }
-          dctx.moveTo(nodeX[i] + r, nodeY[i]);
-          dctx.arc(nodeX[i], nodeY[i], r, 0, Math.PI * 2);
-        }
+      const n = cols * rows;
+      for (let i = 0; i < n; i++) {
+        const r =
+          nodeK[i] > 0
+            ? Math.max(0.1, DOT_BASE_R * (1 - SHRINK * nodeK[i]))
+            : DOT_BASE_R;
+        dctx.moveTo(nodeX[i] + r, nodeY[i]);
+        dctx.arc(nodeX[i], nodeY[i], r, 0, Math.PI * 2);
       }
       dctx.fill();
-      dotsAnimating = activeSm > 0 || tilting;
+
+      // Converged on a stationary pointer → nothing will change until the
+      // next pointermove; frame() skips drawDots while settled.
+      dotsSettled =
+        active &&
+        activeSm === 1 &&
+        fmouse.x === mx &&
+        fmouse.y === my &&
+        rotX === targetRotX &&
+        rotY === targetRotY;
+      dotsAnimating = !dotsSettled && (activeSm > 0 || tilting);
       dotsDirty = false;
     }
 
+    // RAF loop: runs only while something is actually changing. The wave
+    // animates continuously while visible, so the loop can only go fully
+    // idle at the top of the page (wave sunk) with the dot grid settled -
+    // which is exactly the landing page's initial state.
     let raf = 0;
+    let rafActive = false;
     let waveCleared = false;
     function frame(time: number) {
       // Ease the scroll reveal (water rising, not a hard scrollbar map).
@@ -464,9 +520,22 @@ export function StitchBackdrop() {
         wctx.clearRect(0, 0, ww, wh);
         waveCleared = true;
       }
-      if (mouse.active || dotsAnimating || dotsDirty) drawDots(time);
+      if (dotsDirty || dotsAnimating || (mouse.active && !dotsSettled)) {
+        drawDots(time);
+      }
+      const dotsIdle = !dotsDirty && !dotsAnimating && (!mouse.active || dotsSettled);
+      if (waveCleared && revealTarget <= 0.005 && dotsIdle) {
+        rafActive = false; // fully idle - scroll/pointer events restart us
+        return;
+      }
       raf = requestAnimationFrame(frame);
     }
+    const ensureRaf = () => {
+      if (!rafActive && !reduceMotion && !document.hidden) {
+        rafActive = true;
+        raf = requestAnimationFrame(frame);
+      }
+    };
     function drawStatic() {
       // Reduced motion: no easing loop - the reveal maps directly.
       reveal = revealTarget;
@@ -476,60 +545,45 @@ export function StitchBackdrop() {
 
     layout();
     readScrollTarget();
-    if (reduceMotion) {
-      reveal = revealTarget;
-      drawStatic();
-    } else {
-      raf = requestAnimationFrame(frame);
-    }
+    if (reduceMotion) drawStatic();
+    else ensureRaf();
 
     const ro = new ResizeObserver(() => {
       layout();
       if (reduceMotion) drawStatic();
+      else ensureRaf();
     });
-    ro.observe(wCanvas);
-
-    // Theme flips (.light on <html>) recolor the dots on the next draw.
-    const mo = new MutationObserver(() => {
-      dotsDirty = true;
-      if (reduceMotion) drawStatic();
-    });
-    mo.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
+    ro.observe(waveCanvas);
 
     const onMove = (e: PointerEvent) => {
-      const rect = wCanvas.getBoundingClientRect();
-      mouse.x = e.clientX - rect.left;
-      mouse.y = e.clientY - rect.top;
+      mouse.x = e.clientX - waveLeft;
+      mouse.y = e.clientY - waveTop;
       mouse.nx = (e.clientX / window.innerWidth) * 2 - 1;
       mouse.ny = -((e.clientY / window.innerHeight) * 2 - 1);
-      mouse.active =
-        e.clientX >= rect.left &&
-        e.clientX <= rect.right &&
-        e.clientY >= 0 &&
-        e.clientY <= window.innerHeight;
+      mouse.active = true;
+      dotsSettled = false;
+      ensureRaf();
     };
     const onLeave = () => {
       mouse.active = false;
+      dotsSettled = false;
       dotsDirty = true; // one relax redraw
+      ensureRaf();
     };
     const onVisibility = () => {
       if (document.hidden) {
         cancelAnimationFrame(raf);
-      } else if (!reduceMotion) {
-        raf = requestAnimationFrame(frame);
+        rafActive = false;
+      } else {
+        ensureRaf();
       }
     };
 
     const onScroll = () => {
       readScrollTarget();
       // Reduced motion has no RAF to ease/apply - map directly on scroll.
-      if (reduceMotion) {
-        reveal = revealTarget;
-        drawStatic();
-      }
+      if (reduceMotion) drawStatic();
+      else ensureRaf();
     };
 
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -541,7 +595,6 @@ export function StitchBackdrop() {
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
-      mo.disconnect();
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("blur", onLeave);
@@ -563,7 +616,10 @@ export function StitchBackdrop() {
         aria-hidden
         className="tq-stitch-wave-canvas pointer-events-none fixed -inset-12 -z-[1] h-[calc(100%+6rem)] w-[calc(100%+6rem)]"
       />
-      {/* Dots - crisp, warped by the cursor. */}
+      {/* Dots - crisp, warped by the cursor; overscanned -inset-32 so the
+          3D tilt never exposes a corner. Canvas is a REPLACED element, so
+          opposing insets do NOT auto-stretch it - the explicit
+          h-[calc]/w-[calc] pair must match the inset (16rem = 2x32). */}
       <canvas
         ref={dotsRef}
         aria-hidden
