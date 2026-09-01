@@ -92,9 +92,7 @@ function crestY(x: number, t: number): number {
 // otherwise: gaussian falloff exp(-(d/(radius*0.4))^2), the effect
 // mouse LERPS toward the real pointer (12/s), and the whole effect
 // fades in/out on hover (10/s).
-// Cell scale matches the module's on-screen look: gridSize 8000 /
-// density 160 = 50 world units per cell, ~56px at its camera distance.
-const DOT_SPACING = 56; // px grid gap
+const DOT_SPACING = 36; // px grid gap (user direction: tighter than the module's ~56)
 const DOT_BASE_R = 1.5; // px dot radius (the module's dotSize 3 = diameter)
 const SHRINK_RADIUS = 600; // px - the module's default influence radius
 const PULL = 0.15; // fraction of the dot->mouse vector removed at full falloff
