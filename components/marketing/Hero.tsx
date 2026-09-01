@@ -11,8 +11,6 @@ import { motion, useScroll, useTransform } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
 import dynamic from "next/dynamic";
-import { AuthMarqueeBackground } from "@/components/auth/AuthMarqueeBackground";
-import type { MarqueeColumns } from "@/lib/auth/marquee-projects";
 
 // The create-flow showcase is a large decorative demo, not SEO content.
 // Load it client-only so it stays out of the landing's SSR — that keeps
@@ -68,16 +66,7 @@ function useIsPhone() {
   );
 }
 
-export function Hero({
-  projectCount,
-  marqueeColumns,
-}: {
-  projectCount?: number;
-  // Curated-template thumbnails for the living wall behind the hero
-  // (server-fetched in app/[lang]/page.tsx, same loader as the auth
-  // pages). Optional: an empty/missing set simply renders no wall.
-  marqueeColumns?: MarqueeColumns;
-}) {
+export function Hero({ projectCount }: { projectCount?: number }) {
   const dict = useDict();
   const { locale } = useLocale();
   const reducedMotion = usePrefersReducedMotion();
@@ -181,50 +170,6 @@ export function Hero({
 
   return (
     <section className="glow-effect relative overflow-hidden pt-40 pb-32">
-      {/* Living template wall - the login marquee embedded as the hero
-          backdrop (absolute, scoped to this section). Its built-in
-          center fade is tuned for the auth glass modal; the hero copy
-          sits bare on the wall, so a top-anchored scrim (below) adds
-          the missing separation. */}
-      {marqueeColumns && (
-        <>
-          {/* The wall is MASKED, not overpainted: fully visible behind
-              the first-viewport copy, it starts dissolving above the
-              animation window (top edge ~180px above the fold - see
-              globals.css "Hero fold composition") and is fully gone just
-              past the window's TOP - tiles peek faintly over the frame's
-              upper edge, nothing behind its center (user direction
-              2026-08-30). True mask = the page background shows through,
-              no solid band over the glow. */}
-          <div
-            aria-hidden
-            className="absolute inset-0"
-            style={{
-              // Wide EASED feather (same multi-stop trick as the aura /
-              // marquee masks - a 2-stop linear reads as a hard band):
-              // ~820px ramp starting mid-copy, fully gone just past the
-              // window's top edge.
-              WebkitMaskImage:
-                "linear-gradient(to bottom, black 0%, black calc(100vh - 700px), rgba(0,0,0,0.78) calc(100vh - 480px), rgba(0,0,0,0.5) calc(100vh - 290px), rgba(0,0,0,0.22) calc(100vh - 100px), transparent calc(100vh + 120px))",
-              maskImage:
-                "linear-gradient(to bottom, black 0%, black calc(100vh - 700px), rgba(0,0,0,0.78) calc(100vh - 480px), rgba(0,0,0,0.5) calc(100vh - 290px), rgba(0,0,0,0.22) calc(100vh - 100px), transparent calc(100vh + 120px))",
-            }}
-          >
-            <AuthMarqueeBackground columns={marqueeColumns} fixed={false} />
-          </div>
-          {/* Copy scrim - strongest behind the first-viewport headline,
-              feathering out so the tiles stay crisp around the demo. */}
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 top-0 h-[85vh]"
-            style={{
-              background:
-                "linear-gradient(to bottom, color-mix(in srgb, var(--tq-bg) 85%, transparent) 0%, color-mix(in srgb, var(--tq-bg) 55%, transparent) 55%, transparent 100%)",
-            }}
-          />
-        </>
-      )}
-
       <div className="relative z-10 mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
         {/* CSS-driven entrance (`.hero-enter`, per-element stagger via
             animationDelay) instead of Framer Motion: the copy must paint

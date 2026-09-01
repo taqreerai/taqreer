@@ -24,7 +24,7 @@ import { FaqAccordion } from "@/components/marketing/FaqAccordion";
 import { LandingNav } from "@/components/marketing/LandingNav";
 import { SectionHeader } from "@/components/marketing/SectionHeader";
 import { localizedHref } from "@/lib/i18n/navigation";
-import { getLandingTemplates, getLandingMarqueeColumns } from "@/lib/auth/marquee-projects";
+import { getLandingTemplates } from "@/lib/auth/marquee-projects";
 import { SmoothScrollProvider } from "@/components/providers";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { JsonLd } from "@/components/seo/JsonLd";
@@ -125,16 +125,12 @@ export default async function LandingPage({
   // No auth read here: the nav/pricing/grid resolve auth client-side
   // (useIsAuthed, a cookie check — no Supabase client) and the data calls are
   // cached, so this page renders statically (ISR) and stays light.
-  const [projectCount, landingTemplates, dict, tierPrices, marqueeColumns] =
+  const [projectCount, landingTemplates, dict, tierPrices] =
     await Promise.all([
       getProjectCount(),
       getLandingTemplates(),
       getDictionary(lang),
       getDisplayPrices(),
-      // Curated-template wall behind the hero - the same living marquee
-      // the auth pages paint, via the 24h landing cache (the auth 60s
-      // cache would drag this force-static route to 60s regeneration).
-      getLandingMarqueeColumns(),
       ensureFresh(),
     ]);
   // Live config numbers for the pricing cards + the {credits} token in the FAQ
@@ -169,7 +165,7 @@ export default async function LandingPage({
           grows with viewport height on tall screens (.hero-preview-frame,
           globals.css "Hero fold composition") and a 7xl cap would clamp
           it back to laptop size on 4K. The hero centers its own copy. */}
-      <Hero projectCount={projectCount} marqueeColumns={marqueeColumns} />
+      <Hero projectCount={projectCount} />
 
       {/* Centered content column (no frame hairlines — sections stack on the
           dotted + aurora backdrop, matching the dashboard). */}
