@@ -91,9 +91,14 @@ function crestY(x: number, t: number): number {
 // drifts away slowly on leave - that is the "slow return" feel.
 const DOT_SPACING = 16; // px - Stitch grid gap
 const DOT_BASE_R = 1.5; // px - Stitch dotRadius
-const INFLUENCE_R = 100; // px - displacement reach
-const MAX_PUSH = 2; // px - displacement at the pointer
-const NOISE_AMP = 1; // px - perlin wobble amplitude inside the influence
+// The bundle DEFAULTS say push 2px/100px, but the live landing overrides
+// them (dotGridOverrides store, fed by the parent page): the measured
+// displacement curve on stitch.withgoogle.com is ~16px shift at d=16,
+// ~10 at d=32, ~4 at d=48 - which fits maxDisplacement 30 inside
+// influenceRadius 110 with their quartic falloff.
+const INFLUENCE_R = 110; // px - displacement reach (live-measured)
+const MAX_PUSH = 30; // px - displacement at the pointer (live-measured)
+const NOISE_AMP = 2; // px - perlin wobble amplitude inside the influence
 const NOISE_SCALE = 0.02;
 const GLOW_R = 300; // px - glow reach
 const CHASE_SPEED = 0.08; // effect center easing toward the cursor
@@ -192,6 +197,10 @@ export function StitchBackdrop() {
 
     let cssW = 0;
     let cssH = 0;
+    let dCssW = 0; // dot canvas box (inset-0, smaller than the wave's)
+    let dCssH = 0;
+    let dotOffX = 0; // dot-canvas origin relative to the wave canvas
+    let dotOffY = 0;
     let ww = 0; // wave buffer size
     let wh = 0;
     let dpr = 1;
@@ -257,13 +266,22 @@ export function StitchBackdrop() {
       wCanvas.width = ww;
       wCanvas.height = wh;
       dpr = Math.min(window.devicePixelRatio || 1, 2);
-      dCanvas.width = Math.round(cssW * dpr);
-      dCanvas.height = Math.round(cssH * dpr);
+      // The dot canvas is inset-0 while the wave canvas overscans
+      // -inset-12: size and address the dot grid in ITS OWN box (the old
+      // shared cssW/cssH squeezed the grid ~5% and shifted the cursor
+      // target 48px).
+      const drect = dCanvas.getBoundingClientRect();
+      dCssW = drect.width;
+      dCssH = drect.height;
+      dotOffX = drect.left - rect.left;
+      dotOffY = drect.top - rect.top;
+      dCanvas.width = Math.round(dCssW * dpr);
+      dCanvas.height = Math.round(dCssH * dpr);
       dctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      cols = Math.ceil(cssW / DOT_SPACING) + 1;
-      rows = Math.ceil(cssH / DOT_SPACING) + 1;
-      offX = (cssW - (cols - 1) * DOT_SPACING) / 2;
-      offY = (cssH - (rows - 1) * DOT_SPACING) / 2;
+      cols = Math.ceil(dCssW / DOT_SPACING) + 1;
+      rows = Math.ceil(dCssH / DOT_SPACING) + 1;
+      offX = (dCssW - (cols - 1) * DOT_SPACING) / 2;
+      offY = (dCssH - (rows - 1) * DOT_SPACING) / 2;
       palette = buildPalette(
         document.documentElement.classList.contains("light"),
       );
@@ -400,25 +418,28 @@ export function StitchBackdrop() {
     }
 
     function drawDots() {
-      dctx.clearRect(0, 0, cssW, cssH);
+      dctx.clearRect(0, 0, dCssW, dCssH);
       const active = mouse.active && !reduceMotion;
       const now = performance.now();
+      // Cursor in dot-canvas space (mouse.x/y are wave-canvas relative).
+      const mx = mouse.x - dotOffX;
+      const my = mouse.y - dotOffY;
 
       // Chase: the effect center eases toward the cursor (hard-clamped to
       // CHASE_LAG behind it); on leave it drifts off-screen slowly, taking
       // the glow and warp with it - Stitch's slow settle.
       let centerLive = false;
       if (active) {
-        const dx = mouse.x - chase.x;
-        const dy = mouse.y - chase.y;
+        const dx = mx - chase.x;
+        const dy = my - chase.y;
         const dd = Math.sqrt(dx * dx + dy * dy);
         if (dd > CHASE_LAG) {
           const t = (dd - CHASE_LAG) / dd;
           chase.x += dx * t;
           chase.y += dy * t;
         }
-        chase.x += (mouse.x - chase.x) * CHASE_SPEED;
-        chase.y += (mouse.y - chase.y) * CHASE_SPEED;
+        chase.x += (mx - chase.x) * CHASE_SPEED;
+        chase.y += (my - chase.y) * CHASE_SPEED;
         centerLive = true;
       } else {
         chase.x += (-9999 - chase.x) * CHASE_SPEED * 0.5;
