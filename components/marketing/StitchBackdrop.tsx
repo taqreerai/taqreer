@@ -82,7 +82,7 @@ function crestY(x: number, t: number): number {
 }
 
 // ─── Dots (restored §23 finger-in-water, Stitch metrics) ─────────────
-const DOT_SPACING = 22; // px - opened up from Stitch's measured 16 (user direction), dot size unchanged
+const DOT_SPACING = 16; // px - Stitch's measured grid (user direction: match Stitch density)
 const DOT_BASE_R = 1; // 2px dots
 const WARP_RADIUS = 360; // px - the cursor's reach (user direction: far dots should move too)
 const PUSH_AMOUNT = 24; // px - displacement at the pointer (scaled up with the wider reach)
@@ -91,8 +91,8 @@ const EASE_RETURN = 0.03; // slow water-settle back (~2s)
 
 function dotFill(): string {
   return document.documentElement.classList.contains("light")
-    ? "rgba(0,0,0,0.24)"
-    : "rgba(255,255,255,0.32)";
+    ? "rgba(0,0,0,0.18)"
+    : "rgba(255,255,255,0.22)";
 }
 
 export function StitchBackdrop() {
