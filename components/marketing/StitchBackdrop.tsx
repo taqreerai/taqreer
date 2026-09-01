@@ -84,8 +84,8 @@ function crestY(x: number, t: number): number {
 // ─── Dots (restored §23 finger-in-water, Stitch metrics) ─────────────
 const DOT_SPACING = 22; // px - opened up from Stitch's measured 16 (user direction), dot size unchanged
 const DOT_BASE_R = 1; // 2px dots
-const WARP_RADIUS = 190; // px - the cursor's reach
-const PUSH_AMOUNT = 16; // px - displacement at the pointer
+const WARP_RADIUS = 360; // px - the cursor's reach (user direction: far dots should move too)
+const PUSH_AMOUNT = 24; // px - displacement at the pointer (scaled up with the wider reach)
 const EASE_PUSH = 0.3; // quick displace
 const EASE_RETURN = 0.03; // slow water-settle back (~2s)
 
