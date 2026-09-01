@@ -82,99 +82,35 @@ function crestY(x: number, t: number): number {
 }
 
 // ─── Dots (restored §23 finger-in-water, Stitch metrics) ─────────────
-// Parameters extracted from Stitch's own bundle (app-companion
-// assets/index-*.js, defaults object): the cursor effect is NOT a void -
-// it is a soft GLOW (dots brighten toward white within 300px, cubic
-// falloff, intensity fading in on movement and out ~1s after idle) over
-// a tiny liquid push (2px max within 100px, quartic falloff, 1px static
-// perlin wobble). The effect center CHASES the cursor with lag, and
-// drifts away slowly on leave - that is the "slow return" feel.
-const DOT_SPACING = 16; // px - Stitch grid gap
-const DOT_BASE_R = 1.5; // px - Stitch dotRadius
-// The bundle DEFAULTS say push 2px/100px, but the live landing overrides
-// them (dotGridOverrides store, fed by the parent page): the measured
-// displacement curve on stitch.withgoogle.com is ~16px shift at d=16,
-// ~10 at d=32, ~4 at d=48 - which fits maxDisplacement 30 inside
-// influenceRadius 110 with their quartic falloff.
-const INFLUENCE_R = 110; // px - displacement reach (live-measured)
-const MAX_PUSH = 30; // px - displacement at the pointer (live-measured)
-const NOISE_AMP = 2; // px - perlin wobble amplitude inside the influence
-const NOISE_SCALE = 0.02;
-const GLOW_R = 300; // px - glow reach
-const CHASE_SPEED = 0.08; // effect center easing toward the cursor
-const CHASE_LAG = 60; // px - max distance the center may trail
-const IDLE_DELAY = 600; // ms of stillness before the glow starts fading
-const FADE_DURATION = 1000; // ms - glow fade-out length
-const FADE_SMOOTHING = 0.2; // easing on the glow intensity
-const BASE_ALPHA = 0.5;
-const GLOW_ALPHA = 0.8;
-
-// Tiny 2D perlin (port of Stitch's): permutation is deterministic so SSR
-// and every client agree.
-const PERM = new Uint8Array(512);
-{
-  const p = new Uint8Array(256);
-  for (let i = 0; i < 256; i++) p[i] = i;
-  for (let i = 255; i > 0; i--) {
-    const j = ((i * 2654435761) >>> 0) % (i + 1);
-    const t = p[i];
-    p[i] = p[j];
-    p[j] = t;
-  }
-  for (let i = 0; i < 512; i++) PERM[i] = p[i & 255];
-}
-const GRADS = [
-  [1, 1],
-  [-1, 1],
-  [1, -1],
-  [-1, -1],
-  [1, 0],
-  [-1, 0],
-  [0, 1],
-  [0, -1],
-] as const;
-function perlinFade(t: number): number {
-  return t * t * t * (t * (t * 6 - 15) + 10);
-}
-function grad(h: number, x: number, y: number): number {
-  const g = GRADS[h & 7];
-  return g[0] * x + g[1] * y;
-}
-function lerp(a: number, b: number, t: number): number {
-  return a + t * (b - a);
-}
-function perlin2(x: number, y: number): number {
-  const xi = Math.floor(x) & 255;
-  const yi = Math.floor(y) & 255;
-  const xf = x - Math.floor(x);
-  const yf = y - Math.floor(y);
-  const u = perlinFade(xf);
-  const v = perlinFade(yf);
-  const aa = PERM[PERM[xi] + yi];
-  const ab = PERM[PERM[xi] + yi + 1];
-  const ba = PERM[PERM[xi + 1] + yi];
-  const bb = PERM[PERM[xi + 1] + yi + 1];
-  return lerp(
-    lerp(grad(aa, xf, yf), grad(ba, xf - 1, yf), u),
-    lerp(grad(ab, xf, yf - 1), grad(bb, xf - 1, yf - 1), u),
-    v,
-  );
-}
-
-// 16-level base->glow palette (Stitch batches glowing dots into 16
-// alpha/color buckets so the hot path stays at 17 fills per frame).
-function buildPalette(light: boolean): string[] {
-  const base = light ? 140 : 120;
-  const hot = light ? 60 : 255;
-  const out: string[] = [];
-  for (let i = 0; i < 16; i++) {
-    const t = i / 15;
-    const ch = Math.round(lerp(base, hot, t));
-    const a = +lerp(BASE_ALPHA, GLOW_ALPHA, t).toFixed(3);
-    out.push(`rgba(${ch},${ch},${ch},${a})`);
-  }
-  return out;
-}
+// Dot interaction ported from the Framer "Dot_Background" module
+// (framerusercontent.com/modules/AItUZNfSLs1G8nuIbAiR - a three.js grid
+// whose vertex shader offers Pull/Push/Twist/Lens styles), reimplemented
+// on the 2d canvas since the chosen behavior has no 3D component. Owner
+// direction: instead of the module's Lens zoom, the grid SHRINKS to the
+// mouse - dots contract toward the pointer (the module's Pull xy term)
+// and get smaller near it (inverted size term). Same mechanics
+// otherwise: gaussian falloff exp(-(d/(radius*0.4))^2), the effect
+// mouse LERPS toward the real pointer (12/s), and the whole effect
+// fades in/out on hover (10/s).
+// Cell scale matches the module's on-screen look: gridSize 8000 /
+// density 160 = 50 world units per cell, ~56px at its camera distance.
+const DOT_SPACING = 56; // px grid gap
+const DOT_BASE_R = 1.5; // px dot radius (the module's dotSize 3 = diameter)
+const SHRINK_RADIUS = 600; // px - the module's default influence radius
+const PULL = 0.15; // fraction of the dot->mouse vector removed at full falloff
+const SHRINK = 0.6; // dot radius loses up to 60% at the pointer
+const MOUSE_LERP = 12; // per-second easing of the effect mouse
+const ACTIVE_EASE = 10; // per-second fade of the whole interaction
+// Module appearance kept as-is (its defaults are already brand blues).
+const DOT_COLOR = "#4A8CFF";
+const LINE_COLOR = "rgba(42,60,107,0.3)"; // #2A3C6B at lineOpacity .3
+const LINE_WIDTH = 1;
+// 3D parallax tilt of the whole grid, same as the module's group
+// rotation: +-0.15rad toward the pointer's NDC position, eased 5/s,
+// rendered as a CSS perspective transform on the (overscanned) canvas.
+const TILT = 0.15; // rad
+const TILT_EASE = 5; // per-second
+const TILT_PERSPECTIVE = 1000; // px, the module's camera.position.z
 
 export function StitchBackdrop() {
   const waveRef = useRef<HTMLCanvasElement>(null);
@@ -205,7 +141,7 @@ export function StitchBackdrop() {
     let wh = 0;
     let dpr = 1;
 
-    const mouse = { x: -9999, y: -9999, active: false };
+    const mouse = { x: -9999, y: -9999, nx: 0, ny: 0, active: false };
     // Mouse-attracted wave bulge (user direction: the wave should react to
     // the cursor): the crest rises toward the pointer like liquid pulled by
     // a magnet. Both values ease toward their targets each frame so the
@@ -246,15 +182,15 @@ export function StitchBackdrop() {
     let rows = 0;
     let offX = 0;
     let offY = 0;
-    // Chased effect center + glow intensity (Stitch engine state).
-    const chase = { x: -9999, y: -9999 };
-    let lastMoveTime = -1e9;
-    let glowA = 0;
-    let palette = buildPalette(false);
-    const CAP = 8192;
-    const gx = new Float32Array(CAP);
-    const gy = new Float32Array(CAP);
-    const gb = new Uint8Array(CAP);
+    // Framer-module state: lerped effect mouse, hover fade, grid tilt.
+    const fmouse = { x: -9999, y: -9999 };
+    let activeSm = 0;
+    let lastFrameT = 0;
+    let rotX = 0;
+    let rotY = 0;
+    // Displaced grid node positions, rebuilt each frame while interacting.
+    let nodeX = new Float32Array(0);
+    let nodeY = new Float32Array(0);
 
     function layout() {
       const rect = wCanvas.getBoundingClientRect();
@@ -282,9 +218,8 @@ export function StitchBackdrop() {
       rows = Math.ceil(dCssH / DOT_SPACING) + 1;
       offX = (dCssW - (cols - 1) * DOT_SPACING) / 2;
       offY = (dCssH - (rows - 1) * DOT_SPACING) / 2;
-      palette = buildPalette(
-        document.documentElement.classList.contains("light"),
-      );
+      nodeX = new Float32Array(cols * rows);
+      nodeY = new Float32Array(cols * rows);
       dotsAnimating = false;
       dotsDirty = true;
     }
@@ -417,102 +352,104 @@ export function StitchBackdrop() {
       }
     }
 
-    function drawDots() {
+    function drawDots(nowMs: number) {
       dctx.clearRect(0, 0, dCssW, dCssH);
       const active = mouse.active && !reduceMotion;
-      const now = performance.now();
+      const dt = Math.min(0.1, Math.max(0.001, (nowMs - lastFrameT) / 1000));
+      lastFrameT = nowMs;
       // Cursor in dot-canvas space (mouse.x/y are wave-canvas relative).
       const mx = mouse.x - dotOffX;
       const my = mouse.y - dotOffY;
 
-      // Chase: the effect center eases toward the cursor (hard-clamped to
-      // CHASE_LAG behind it); on leave it drifts off-screen slowly, taking
-      // the glow and warp with it - Stitch's slow settle.
-      let centerLive = false;
+      // Hover fade + effect-mouse lerp (the module's currentActive and
+      // u_mouse.lerp, converted from per-frame*delta to our clock).
+      activeSm += ((active ? 1 : 0) - activeSm) * Math.min(1, ACTIVE_EASE * dt);
+      if (activeSm < 0.005) activeSm = 0;
       if (active) {
-        const dx = mx - chase.x;
-        const dy = my - chase.y;
-        const dd = Math.sqrt(dx * dx + dy * dy);
-        if (dd > CHASE_LAG) {
-          const t = (dd - CHASE_LAG) / dd;
-          chase.x += dx * t;
-          chase.y += dy * t;
+        const t = Math.min(1, MOUSE_LERP * dt);
+        if (fmouse.x < -5000) {
+          fmouse.x = mx;
+          fmouse.y = my;
+        } else {
+          fmouse.x += (mx - fmouse.x) * t;
+          fmouse.y += (my - fmouse.y) * t;
         }
-        chase.x += (mx - chase.x) * CHASE_SPEED;
-        chase.y += (my - chase.y) * CHASE_SPEED;
-        centerLive = true;
-      } else {
-        chase.x += (-9999 - chase.x) * CHASE_SPEED * 0.5;
-        chase.y += (-9999 - chase.y) * CHASE_SPEED * 0.5;
-        centerLive = chase.x > -INFLUENCE_R * 2;
       }
 
-      // Glow intensity: full while moving, holds IDLE_DELAY, then fades
-      // out over FADE_DURATION; the whole thing eased for softness.
-      const since = now - lastMoveTime;
-      const k = !active
-        ? 0
-        : since < IDLE_DELAY
-          ? 1
-          : Math.max(0, 1 - (since - IDLE_DELAY) / FADE_DURATION);
-      glowA += (k - glowA) * FADE_SMOOTHING;
-      if (glowA < 0.005) glowA = 0;
+      // 3D parallax tilt (the module's group rotation): rotate the whole
+      // grid toward the pointer's NDC position under perspective.
+      const te = Math.min(1, TILT_EASE * dt);
+      const targetRotX = active ? -mouse.ny * TILT : 0;
+      const targetRotY = active ? mouse.nx * TILT : 0;
+      rotX += (targetRotX - rotX) * te;
+      rotY += (targetRotY - rotY) * te;
+      const tilting = Math.abs(rotX) > 0.0005 || Math.abs(rotY) > 0.0005;
+      dCanvas.style.transform =
+        reduceMotion || (!tilting && !active)
+          ? ""
+          : `perspective(${TILT_PERSPECTIVE}px) rotateX(${rotX}rad) rotateY(${rotY}rad)`;
 
-      const glowR2 = GLOW_R * GLOW_R;
-      const infR2 = INFLUENCE_R * INFLUENCE_R;
-      let nGlow = 0;
-      dctx.fillStyle = palette[0];
-      dctx.beginPath();
+      // Pass 1: displaced node positions (shared by lines AND dots, so
+      // the mesh bends with the shrink exactly like the module's shader).
+      const sigma = SHRINK_RADIUS * 0.4;
+      const inv2s2 = 1 / (sigma * sigma);
       for (let cy = 0; cy < rows; cy++) {
         const baseY = offY + cy * DOT_SPACING;
         for (let cx = 0; cx < cols; cx++) {
+          const i = cy * cols + cx;
           const baseX = offX + cx * DOT_SPACING;
-          const vx = baseX - chase.x;
-          const vy = baseY - chase.y;
-          const d2 = vx * vx + vy * vy;
-          if (d2 < glowR2 && d2 > 0 && nGlow < CAP) {
-            const d = Math.sqrt(d2);
-            let x = baseX;
-            let y = baseY;
-            if (d2 < infR2) {
-              // Quartic falloff: sharp liquid push right at the pointer.
-              const i = 1 - d / INFLUENCE_R;
-              const o = i * i * i * i;
-              const push = (o * MAX_PUSH) / d;
-              x += vx * push;
-              y += vy * push;
-              const nx = perlin2(baseX * NOISE_SCALE, baseY * NOISE_SCALE);
-              const ny = perlin2(baseX * NOISE_SCALE + 100, baseY * NOISE_SCALE);
-              x += nx * o * NOISE_AMP;
-              y += ny * o * NOISE_AMP;
-            }
-            const g = 1 - d / GLOW_R;
-            const bucket = Math.min((g * g * g * glowA * 16) | 0, 15);
-            gx[nGlow] = x;
-            gy[nGlow] = y;
-            gb[nGlow] = bucket;
-            nGlow++;
-          } else {
-            dctx.moveTo(baseX + DOT_BASE_R, baseY);
-            dctx.arc(baseX, baseY, DOT_BASE_R, 0, Math.PI * 2);
+          let x = baseX;
+          let y = baseY;
+          if (activeSm > 0) {
+            const dx = baseX - fmouse.x;
+            const dy = baseY - fmouse.y;
+            const k = Math.exp(-(dx * dx + dy * dy) * inv2s2) * activeSm;
+            x -= dx * PULL * k;
+            y -= dy * PULL * k;
+          }
+          nodeX[i] = x;
+          nodeY[i] = y;
+        }
+      }
+
+      // Pass 2: the connecting line mesh.
+      dctx.strokeStyle = LINE_COLOR;
+      dctx.lineWidth = LINE_WIDTH;
+      dctx.beginPath();
+      for (let cy = 0; cy < rows; cy++) {
+        for (let cx = 0; cx < cols; cx++) {
+          const i = cy * cols + cx;
+          if (cx + 1 < cols) {
+            dctx.moveTo(nodeX[i], nodeY[i]);
+            dctx.lineTo(nodeX[i + 1], nodeY[i + 1]);
+          }
+          if (cy + 1 < rows) {
+            dctx.moveTo(nodeX[i], nodeY[i]);
+            dctx.lineTo(nodeX[i + cols], nodeY[i + cols]);
           }
         }
       }
-      dctx.fill();
-      // Glowing dots batched into the 16 palette buckets (Stitch's trick).
-      for (let b = 0; b < 16; b++) {
-        let anyInBucket = false;
-        dctx.fillStyle = palette[b];
-        dctx.beginPath();
-        for (let i = 0; i < nGlow; i++) {
-          if (gb[i] !== b) continue;
-          dctx.moveTo(gx[i] + DOT_BASE_R, gy[i]);
-          dctx.arc(gx[i], gy[i], DOT_BASE_R, 0, Math.PI * 2);
-          anyInBucket = true;
+      dctx.stroke();
+
+      // Pass 3: dots, shrinking toward the pointer.
+      dctx.fillStyle = DOT_COLOR;
+      dctx.beginPath();
+      for (let cy = 0; cy < rows; cy++) {
+        for (let cx = 0; cx < cols; cx++) {
+          const i = cy * cols + cx;
+          let r = DOT_BASE_R;
+          if (activeSm > 0) {
+            const dx = offX + cx * DOT_SPACING - fmouse.x;
+            const dy = offY + cy * DOT_SPACING - fmouse.y;
+            const k = Math.exp(-(dx * dx + dy * dy) * inv2s2) * activeSm;
+            r = Math.max(0.1, DOT_BASE_R * (1 - SHRINK * k));
+          }
+          dctx.moveTo(nodeX[i] + r, nodeY[i]);
+          dctx.arc(nodeX[i], nodeY[i], r, 0, Math.PI * 2);
         }
-        if (anyInBucket) dctx.fill();
       }
-      dotsAnimating = glowA > 0 || centerLive;
+      dctx.fill();
+      dotsAnimating = activeSm > 0 || tilting;
       dotsDirty = false;
     }
 
@@ -529,14 +466,14 @@ export function StitchBackdrop() {
         wctx.clearRect(0, 0, ww, wh);
         waveCleared = true;
       }
-      if (mouse.active || dotsAnimating || dotsDirty) drawDots();
+      if (mouse.active || dotsAnimating || dotsDirty) drawDots(time);
       raf = requestAnimationFrame(frame);
     }
     function drawStatic() {
       // Reduced motion: no easing loop - the reveal maps directly.
       reveal = revealTarget;
       drawWave(0);
-      drawDots();
+      drawDots(0);
     }
 
     layout();
@@ -556,9 +493,6 @@ export function StitchBackdrop() {
 
     // Theme flips (.light on <html>) recolor the dots on the next draw.
     const mo = new MutationObserver(() => {
-      palette = buildPalette(
-        document.documentElement.classList.contains("light"),
-      );
       dotsDirty = true;
       if (reduceMotion) drawStatic();
     });
@@ -571,7 +505,8 @@ export function StitchBackdrop() {
       const rect = wCanvas.getBoundingClientRect();
       mouse.x = e.clientX - rect.left;
       mouse.y = e.clientY - rect.top;
-      lastMoveTime = performance.now();
+      mouse.nx = (e.clientX / window.innerWidth) * 2 - 1;
+      mouse.ny = -((e.clientY / window.innerHeight) * 2 - 1);
       mouse.active =
         e.clientX >= rect.left &&
         e.clientX <= rect.right &&
@@ -634,7 +569,7 @@ export function StitchBackdrop() {
       <canvas
         ref={dotsRef}
         aria-hidden
-        className="pointer-events-none fixed inset-0 -z-[1] h-full w-full"
+        className="pointer-events-none fixed -inset-32 -z-[1] h-[calc(100%+16rem)] w-[calc(100%+16rem)]"
       />
     </>
   );
