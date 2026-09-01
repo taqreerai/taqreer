@@ -85,9 +85,10 @@ function crestY(x: number, t: number): number {
 const DOT_SPACING = 16; // px - Stitch's measured grid (user direction: match Stitch density)
 const DOT_BASE_R = 1; // 2px dots
 const WARP_RADIUS = 360; // px - the cursor's reach (user direction: far dots should move too)
-const PUSH_AMOUNT = 24; // px - displacement at the pointer (scaled up with the wider reach)
+const PUSH_AMOUNT = 18; // px - subtle physical warp; the fade field does the visual work
+const FADE_SOLID = 0.45; // fraction of the reach that is fully dark under the cursor
 const EASE_PUSH = 0.3; // quick displace
-const EASE_RETURN = 0.03; // slow water-settle back (~2s)
+const EASE_RETURN = 0.012; // slow water-settle back (~5s, user direction: slower)
 
 function dotFill(): string {
   return document.documentElement.classList.contains("light")
@@ -163,6 +164,7 @@ export function StitchBackdrop() {
     let offY = 0;
     let ox = new Float32Array(0);
     let oy = new Float32Array(0);
+    let fade = new Float32Array(0);
     let fill = "rgba(255,255,255,0.22)";
 
     function layout() {
@@ -184,6 +186,7 @@ export function StitchBackdrop() {
       offY = (cssH - (rows - 1) * DOT_SPACING) / 2;
       ox = new Float32Array(cols * rows);
       oy = new Float32Array(cols * rows);
+      fade = new Float32Array(cols * rows);
       fill = dotFill();
       dotsAnimating = false;
       dotsDirty = true;
@@ -328,9 +331,15 @@ export function StitchBackdrop() {
         for (let cx = 0; cx < cols; cx++) {
           const baseX = offX + cx * DOT_SPACING;
           const i = cy * cols + cx;
-          // Target displacement: pushed AWAY from the cursor, 0 when away.
+          // Targets: dots are pushed AWAY from the cursor a little, and
+          // FADE OUT toward it a lot. The fade field is what carves
+          // Stitch's wide dark clearing - it is driven by proximity
+          // directly (not by displacement, which is tiny at range) and
+          // eased with the same fast-in / slow-out pair, so the void
+          // trails the cursor and refills slowly.
           let tx = 0;
           let ty = 0;
+          let tf = 0;
           if (active) {
             const vx = baseX - mouse.x;
             const vy = baseY - mouse.y;
@@ -340,6 +349,9 @@ export function StitchBackdrop() {
               const push = PUSH_AMOUNT * f * f;
               tx = (vx / d) * push;
               ty = (vy / d) * push;
+              // Fully dark inner ~45% of the reach, smooth gradient out.
+              tf = Math.min(1, f / FADE_SOLID);
+              tf *= tf * (3 - 2 * tf); // smoothstep - soft outer edge
             }
           }
           // Asymmetric ease - quick OUT (responsive), slow BACK (settling).
@@ -351,17 +363,23 @@ export function StitchBackdrop() {
           if (nx * nx + ny * ny < 0.0025) {
             nx = 0;
             ny = 0;
-          } else {
-            anyMoved = true;
           }
           ox[i] = nx;
           oy[i] = ny;
-          // Shrink with displacement (the void under the fingertip).
-          const disp = Math.sqrt(nx * nx + ny * ny);
-          const r = DOT_BASE_R * (1 - Math.min(1, disp / PUSH_AMOUNT) * 0.7);
+          const ef = tf > fade[i] ? EASE_PUSH : EASE_RETURN;
+          let nf = fade[i] + (tf - fade[i]) * ef;
+          if (nf < 0.01) nf = 0;
+          fade[i] = nf;
+          if (nx !== 0 || ny !== 0 || nf !== 0) anyMoved = true;
+          if (nf >= 0.99) continue;
+          const r = DOT_BASE_R * (1 - nf * 0.35);
+          if (nf > 0) {
+            dctx.globalAlpha = 1 - nf;
+          }
           dctx.beginPath();
           dctx.arc(baseX + nx, baseY + ny, r, 0, Math.PI * 2);
           dctx.fill();
+          if (nf > 0) dctx.globalAlpha = 1;
         }
       }
       dotsAnimating = anyMoved;
