@@ -96,17 +96,20 @@ function crestY(x: number, t: number): number {
 // gaussian falloff exp(-(d/(radius*0.4))^2), the effect mouse LERPS
 // toward the real pointer (12/s), the whole effect fades in/out on hover
 // (10/s), and the connecting line mesh + 3D parallax tilt are kept.
-const DOT_SPACING = 36; // px grid gap (user direction: tighter than the module's ~56)
-const DOT_BASE_R = 1.5; // px dot radius (the module's dotSize 3 = diameter)
+// Grid metrics + color mirror the app dashboard's .tq-dot-grid texture
+// (globals.css: --tq-dot dots, 0.9px radius, 23px cell) per user
+// direction - one visual language across marketing and app. The dot
+// color is READ from the --tq-dot token at layout time so it cannot
+// drift from the dashboard's.
+const DOT_SPACING = 23; // px grid gap (= .tq-dot-grid background-size)
+const DOT_BASE_R = 0.9; // px dot radius (= .tq-dot-grid gradient stop)
 const SHRINK_RADIUS = 600; // px - the module's default influence radius
 const PULL = 0.15; // fraction of the dot->mouse vector removed at full falloff
 const SHRINK = 0.6; // dot radius loses up to 60% at the pointer
 const MOUSE_LERP = 12; // per-second easing of the effect mouse
 const ACTIVE_EASE = 10; // per-second fade of the whole interaction
-// Module appearance kept as-is (its defaults are already brand-blue
-// adjacent; neither value has a globals.css token).
-const DOT_COLOR = "#4A8CFF";
-const LINE_COLOR = "rgba(42,60,107,0.3)"; // #2A3C6B at lineOpacity .3
+const DOT_FALLBACK = "rgba(236,238,245,0.14)"; // --tq-dot dark value
+const LINE_ALPHA = 0.55; // line mesh = the dot color, further dimmed
 const LINE_WIDTH = 1;
 // 3D parallax tilt of the whole grid, same as the module's group
 // rotation: +-0.15rad toward the pointer's NDC position, eased 5/s,
@@ -190,6 +193,8 @@ export function StitchBackdrop() {
     let rows = 0;
     let offX = 0;
     let offY = 0;
+    // Dot/line paint, read from the dashboard's --tq-dot token in layout.
+    let dotColor = DOT_FALLBACK;
     // Framer-module state: lerped effect mouse, hover fade, grid tilt.
     const fmouse = { x: -9999, y: -9999 };
     let activeSm = 0;
@@ -236,6 +241,10 @@ export function StitchBackdrop() {
       nodeX = new Float32Array(cols * rows);
       nodeY = new Float32Array(cols * rows);
       nodeK = new Float32Array(cols * rows);
+      dotColor =
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--tq-dot")
+          .trim() || DOT_FALLBACK;
       dotsAnimating = false;
       dotsSettled = false;
       dotsDirty = true;
@@ -456,8 +465,10 @@ export function StitchBackdrop() {
         }
       }
 
-      // Pass 2: the connecting line mesh.
-      dctx.strokeStyle = LINE_COLOR;
+      // Pass 2: the connecting line mesh - the dot color further dimmed,
+      // so the mesh stays a whisper under the dashboard-weight dots.
+      dctx.strokeStyle = dotColor;
+      dctx.globalAlpha = LINE_ALPHA;
       dctx.lineWidth = LINE_WIDTH;
       dctx.beginPath();
       for (let cy = 0; cy < rows; cy++) {
@@ -474,9 +485,10 @@ export function StitchBackdrop() {
         }
       }
       dctx.stroke();
+      dctx.globalAlpha = 1;
 
       // Pass 3: dots, shrinking toward the pointer (falloff from pass 1).
-      dctx.fillStyle = DOT_COLOR;
+      dctx.fillStyle = dotColor;
       dctx.beginPath();
       const n = cols * rows;
       for (let i = 0; i < n; i++) {
@@ -616,14 +628,17 @@ export function StitchBackdrop() {
         aria-hidden
         className="tq-stitch-wave-canvas pointer-events-none fixed -inset-12 -z-[1] h-[calc(100%+6rem)] w-[calc(100%+6rem)]"
       />
-      {/* Dots - crisp, warped by the cursor; overscanned -inset-32 so the
-          3D tilt never exposes a corner. Canvas is a REPLACED element, so
-          opposing insets do NOT auto-stretch it - the explicit
-          h-[calc]/w-[calc] pair must match the inset (16rem = 2x32). */}
+      {/* Dots - crisp, warped by the cursor; overscanned PROPORTIONALLY
+          (10% per side) so the 3D tilt never exposes a corner: the
+          perspective pull-in scales with the viewport (~8% of the width
+          at +-0.15rad / 1000px), so a fixed-px overscan leaked edges on
+          big screens. Canvas is a REPLACED element, so opposing insets
+          do NOT auto-stretch it - the explicit 120% pair must match the
+          10% insets. */}
       <canvas
         ref={dotsRef}
         aria-hidden
-        className="pointer-events-none fixed -inset-32 -z-[1] h-[calc(100%+16rem)] w-[calc(100%+16rem)]"
+        className="pointer-events-none fixed -inset-[10%] -z-[1] h-[120%] w-[120%]"
       />
     </>
   );
