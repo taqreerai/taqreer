@@ -145,6 +145,8 @@ export function StitchBackdrop() {
     let waveTop = 0; // canvases are fixed, so it only moves on layout)
     let dCssW = 0; // dot canvas box (it overscans MORE than the wave's)
     let dCssH = 0;
+    let vw2 = 0; // viewport half-extents (for the tilt coverage solve)
+    let vh2 = 0;
     let dotOffX = 0; // dot-canvas origin relative to the wave canvas
     let dotOffY = 0;
     let ww = 0; // wave buffer size
@@ -209,6 +211,22 @@ export function StitchBackdrop() {
     // Per-column crest ys (one entry every 2 buffer px), rebuilt each wave
     // frame and shared by the body path, glow band, and streaks.
     let crestYs = new Float32Array(0);
+    // Pre-rendered layers (rebuilt in layout): the full grid at REST -
+    // per frame we blit this and redraw only the influence region - and
+    // one sprite per wave blob (radial gradients rasterized once instead
+    // of allocated per frame).
+    const staticGrid = document.createElement("canvas");
+    const sctxOrNull = staticGrid.getContext("2d");
+    const blobSprites: HTMLCanvasElement[] = [];
+    // Region drawn dynamically last frame (css px, canvas space), so the
+    // next frame knows what to restore from the static layer.
+    let prevRegion: { x0: number; y0: number; x1: number; y1: number } | null =
+      null;
+    // Content-change tracking: the tilt is transform-only, so canvas
+    // pixels only change when the fade or the effect mouse moved.
+    let lastFx = -1;
+    let lastFy = -1;
+    let lastASm = -1;
 
     function layout() {
       const rect = waveCanvas.getBoundingClientRect();
@@ -222,13 +240,18 @@ export function StitchBackdrop() {
       waveCanvas.width = ww;
       waveCanvas.height = wh;
       crestYs = new Float32Array(Math.floor(ww / 2) + 2);
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      // Capped at 1.5: the dot layer is dim 1px texture - full retina
+      // doubles the backing store + per-frame GPU upload for no visible
+      // gain (at 2560px wide, dpr2 = ~57MB re-uploaded on every change).
+      dpr = Math.min(window.devicePixelRatio || 1, 1.5);
       // Each canvas is addressed in its OWN measured box (they overscan by
       // different amounts); the offsets convert wave-relative mouse coords
       // into the dot canvas's frame.
       const drect = dotsCanvas.getBoundingClientRect();
       dCssW = drect.width;
       dCssH = drect.height;
+      vw2 = window.innerWidth / 2;
+      vh2 = window.innerHeight / 2;
       dotOffX = drect.left - rect.left;
       dotOffY = drect.top - rect.top;
       dotsCanvas.width = Math.round(dCssW * dpr);
@@ -245,9 +268,74 @@ export function StitchBackdrop() {
         getComputedStyle(document.documentElement)
           .getPropertyValue("--tq-dot")
           .trim() || DOT_FALLBACK;
+      paintStaticGrid();
+      buildBlobSprites();
+      prevRegion = null;
+      lastFx = -1;
+      lastFy = -1;
+      lastASm = -1;
       dotsAnimating = false;
       dotsSettled = false;
       dotsDirty = true;
+    }
+
+    // The whole mesh + dots at rest, painted ONCE per layout/theme. Per
+    // frame this is blitted (a GPU-side copy) instead of re-stroking
+    // ~2x cols x rows path segments.
+    function paintStaticGrid() {
+      if (!sctxOrNull) return;
+      staticGrid.width = dotsCanvas.width;
+      staticGrid.height = dotsCanvas.height;
+      const sctx = sctxOrNull;
+      sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      sctx.clearRect(0, 0, dCssW, dCssH);
+      sctx.strokeStyle = dotColor;
+      sctx.globalAlpha = LINE_ALPHA;
+      sctx.lineWidth = LINE_WIDTH;
+      sctx.beginPath();
+      for (let cy = 0; cy < rows; cy++) {
+        const y = offY + cy * DOT_SPACING;
+        sctx.moveTo(offX, y);
+        sctx.lineTo(offX + (cols - 1) * DOT_SPACING, y);
+      }
+      for (let cx = 0; cx < cols; cx++) {
+        const x = offX + cx * DOT_SPACING;
+        sctx.moveTo(x, offY);
+        sctx.lineTo(x, offY + (rows - 1) * DOT_SPACING);
+      }
+      sctx.stroke();
+      sctx.globalAlpha = 1;
+      sctx.fillStyle = dotColor;
+      sctx.beginPath();
+      for (let cy = 0; cy < rows; cy++) {
+        const y = offY + cy * DOT_SPACING;
+        for (let cx = 0; cx < cols; cx++) {
+          const x = offX + cx * DOT_SPACING;
+          sctx.moveTo(x + DOT_BASE_R, y);
+          sctx.arc(x, y, DOT_BASE_R, 0, Math.PI * 2);
+        }
+      }
+      sctx.fill();
+    }
+
+    function buildBlobSprites() {
+      blobSprites.length = 0;
+      for (const b of BLOBS) {
+        const r = Math.max(2, Math.ceil(b.r * ww));
+        const c = document.createElement("canvas");
+        c.width = r * 2;
+        c.height = r * 2;
+        const bctx = c.getContext("2d");
+        if (bctx) {
+          const rg = bctx.createRadialGradient(r, r, 0, r, r, r);
+          const [cr, cg, cb] = b.color;
+          rg.addColorStop(0, `rgba(${cr},${cg},${cb},${b.alpha})`);
+          rg.addColorStop(1, `rgba(${cr},${cg},${cb},0)`);
+          bctx.fillStyle = rg;
+          bctx.fillRect(0, 0, r * 2, r * 2);
+        }
+        blobSprites.push(c);
+      }
     }
 
     function drawWave(tMs: number) {
@@ -339,19 +427,17 @@ export function StitchBackdrop() {
       // Interior blobs: bright bodies (lighter) then dark churning cells
       // (source-over) - the video's turbulence.
       const crestBand = wh * (CREST_DIP - CREST_EDGE);
-      for (const b of BLOBS) {
+      for (let bi = 0; bi < BLOBS.length; bi++) {
+        const b = BLOBS[bi];
+        const sprite = blobSprites[bi];
+        if (!sprite) continue;
         const bx = (b.bx + Math.sin(t * b.sx + b.px) * b.ax) * ww;
         const byRegion =
           crest(b.bx) * wh +
           (b.by + Math.cos(t * b.sy + b.py) * b.ay - 0.5) * crestBand * 2;
         const r = b.r * ww;
-        const rg = wctx.createRadialGradient(bx, byRegion, 0, bx, byRegion, r);
-        const [cr, cg, cb] = b.color;
-        rg.addColorStop(0, `rgba(${cr},${cg},${cb},${b.alpha})`);
-        rg.addColorStop(1, `rgba(${cr},${cg},${cb},0)`);
         wctx.globalCompositeOperation = b.dark ? "source-over" : "lighter";
-        wctx.fillStyle = rg;
-        wctx.fillRect(bx - r, byRegion - r, r * 2, r * 2);
+        wctx.drawImage(sprite, bx - r, byRegion - r, r * 2, r * 2);
       }
       wctx.globalCompositeOperation = "source-over";
       wctx.restore();
@@ -390,7 +476,8 @@ export function StitchBackdrop() {
     }
 
     function drawDots(nowMs: number) {
-      dctx.clearRect(0, 0, dCssW, dCssH);
+      // No blanket clear here: clearing is region-managed in the
+      // content block below (full clear only when dotsDirty).
       const active = mouse.active && !reduceMotion;
       const dt = Math.min(0.1, Math.max(0.001, (nowMs - lastFrameT) / 1000));
       lastFrameT = nowMs;
@@ -430,76 +517,179 @@ export function StitchBackdrop() {
       if (Math.abs(targetRotX - rotX) < 0.0005) rotX = targetRotX;
       if (Math.abs(targetRotY - rotY) < 0.0005) rotY = targetRotY;
       const tilting = rotX !== 0 || rotY !== 0;
+      // Dynamic coverage scale: under the tilt the receding side of the
+      // plane projects SMALLER, and on large screens that pulls the grid
+      // edge into view no matter what fixed overscan is baked in. Solve,
+      // for the CURRENT rotation and the ACTUAL canvas/viewport sizes,
+      // the uniform scale k that keeps the projected far corner beyond
+      // the viewport corner: projected x = k*H*cos * p/(p + k*z), with
+      // z the corner's recession. k=1 at rest; only extreme corner
+      // tilts scale up (a few %, invisible on 0.14-alpha dots).
+      let k = 1;
+      if (tilting) {
+        const Hx = dCssW / 2;
+        const Hy = dCssH / 2;
+        const zBase = Hx * Math.abs(Math.sin(rotY)) + Hy * Math.abs(Math.sin(rotX));
+        const cx = Math.cos(rotY);
+        const cy = Math.cos(rotX);
+        for (let it = 0; it < 3; it++) {
+          const z = k * zBase;
+          const kx = (vw2 * (TILT_PERSPECTIVE + z)) / (Hx * cx * TILT_PERSPECTIVE);
+          const ky = (vh2 * (TILT_PERSPECTIVE + z)) / (Hy * cy * TILT_PERSPECTIVE);
+          k = Math.max(1, kx, ky);
+        }
+        k *= 1.02; // rounding safety
+        if (k < 1.005) k = 1;
+      }
       dotsCanvas.style.transform =
         reduceMotion || (!tilting && !active)
           ? ""
-          : `perspective(${TILT_PERSPECTIVE}px) rotateX(${rotX}rad) rotateY(${rotY}rad)`;
+          : `perspective(${TILT_PERSPECTIVE}px) rotateX(${rotX}rad) rotateY(${rotY}rad)${k > 1 ? ` scale(${k})` : ""}`;
 
-      // Pass 1: displaced node positions + falloff (shared by the line
-      // mesh AND the dot pass, so both stay in lockstep by construction).
-      // Beyond 3 sigma the falloff is invisible (<1e-4) - skip the exp.
-      const sigma = SHRINK_RADIUS * 0.4;
-      const inv2s2 = 1 / (sigma * sigma);
-      const cutoff2 = 9 * sigma * sigma;
-      for (let cy = 0; cy < rows; cy++) {
-        const baseY = offY + cy * DOT_SPACING;
-        for (let cx = 0; cx < cols; cx++) {
-          const i = cy * cols + cx;
-          const baseX = offX + cx * DOT_SPACING;
-          let x = baseX;
-          let y = baseY;
-          let k = 0;
-          if (activeSm > 0) {
-            const dx = baseX - fmouse.x;
-            const dy = baseY - fmouse.y;
-            const d2 = dx * dx + dy * dy;
-            if (d2 < cutoff2) {
-              k = Math.exp(-d2 * inv2s2) * activeSm;
-              x -= dx * PULL * k;
-              y -= dy * PULL * k;
+      // Canvas CONTENT only changes when the fade or the effect mouse
+      // moved - the tilt is transform-only. Skip all raster work when
+      // nothing moved (e.g. easing the tilt after the pointer stopped).
+      const contentChanged =
+        dotsDirty ||
+        activeSm !== lastASm ||
+        fmouse.x !== lastFx ||
+        fmouse.y !== lastFy;
+
+      if (contentChanged) {
+        // Dynamic region: the influence footprint around the effect
+        // mouse. Beyond 2.5 sigma the falloff is invisible (<2e-3 of a
+        // 0.14-alpha dot), so everything outside stays the static blit.
+        const sigma = SHRINK_RADIUS * 0.4;
+        const inv2s2 = 1 / (sigma * sigma);
+        const reach = sigma * 2.5 + DOT_SPACING * 2;
+        const cur =
+          activeSm > 0
+            ? {
+                x0: Math.max(0, fmouse.x - reach),
+                y0: Math.max(0, fmouse.y - reach),
+                x1: Math.min(dCssW, fmouse.x + reach),
+                y1: Math.min(dCssH, fmouse.y + reach),
+              }
+            : null;
+
+        if (dotsDirty) {
+          dctx.clearRect(0, 0, dCssW, dCssH);
+          dctx.drawImage(staticGrid, 0, 0, dCssW, dCssH);
+        } else {
+          // Restore the union of last frame's region and this one from
+          // the static layer, then redraw just the current region.
+          const d0x = Math.min(cur?.x0 ?? Infinity, prevRegion?.x0 ?? Infinity);
+          const d0y = Math.min(cur?.y0 ?? Infinity, prevRegion?.y0 ?? Infinity);
+          const d1x = Math.max(cur?.x1 ?? -Infinity, prevRegion?.x1 ?? -Infinity);
+          const d1y = Math.max(cur?.y1 ?? -Infinity, prevRegion?.y1 ?? -Infinity);
+          if (d1x > d0x && d1y > d0y) {
+            dctx.clearRect(d0x, d0y, d1x - d0x, d1y - d0y);
+            dctx.drawImage(
+              staticGrid,
+              d0x * dpr,
+              d0y * dpr,
+              (d1x - d0x) * dpr,
+              (d1y - d0y) * dpr,
+              d0x,
+              d0y,
+              d1x - d0x,
+              d1y - d0y,
+            );
+          }
+        }
+
+        if (cur) {
+          // Cell range covering the region. Its EDGE nodes sit at (or
+          // beyond) 2.5 sigma, i.e. effectively at rest, so segments
+          // meeting the untouched static grid line up seamlessly.
+          const c0 = Math.max(0, Math.floor((cur.x0 - offX) / DOT_SPACING));
+          const c1 = Math.min(cols - 1, Math.ceil((cur.x1 - offX) / DOT_SPACING));
+          const r0 = Math.max(0, Math.floor((cur.y0 - offY) / DOT_SPACING));
+          const r1 = Math.min(rows - 1, Math.ceil((cur.y1 - offY) / DOT_SPACING));
+
+          dctx.save();
+          dctx.beginPath();
+          dctx.rect(cur.x0, cur.y0, cur.x1 - cur.x0, cur.y1 - cur.y0);
+          dctx.clip();
+          // Clear the static pixels inside the clip - the region is
+          // redrawn from scratch so lines/dots are never double-painted.
+          dctx.clearRect(cur.x0, cur.y0, cur.x1 - cur.x0, cur.y1 - cur.y0);
+
+          // Pass 1: displaced node positions + falloff for the region.
+          for (let cy = r0; cy <= r1; cy++) {
+            const baseY = offY + cy * DOT_SPACING;
+            for (let cx = c0; cx <= c1; cx++) {
+              const i = cy * cols + cx;
+              const baseX = offX + cx * DOT_SPACING;
+              let x = baseX;
+              let y = baseY;
+              const ddx = baseX - fmouse.x;
+              const ddy = baseY - fmouse.y;
+              const kf = Math.exp(-(ddx * ddx + ddy * ddy) * inv2s2) * activeSm;
+              x -= ddx * PULL * kf;
+              y -= ddy * PULL * kf;
+              nodeX[i] = x;
+              nodeY[i] = y;
+              nodeK[i] = kf;
             }
           }
-          nodeX[i] = x;
-          nodeY[i] = y;
-          nodeK[i] = k;
-        }
-      }
 
-      // Pass 2: the connecting line mesh - the dot color further dimmed,
-      // so the mesh stays a whisper under the dashboard-weight dots.
-      dctx.strokeStyle = dotColor;
-      dctx.globalAlpha = LINE_ALPHA;
-      dctx.lineWidth = LINE_WIDTH;
-      dctx.beginPath();
-      for (let cy = 0; cy < rows; cy++) {
-        for (let cx = 0; cx < cols; cx++) {
-          const i = cy * cols + cx;
-          if (cx + 1 < cols) {
-            dctx.moveTo(nodeX[i], nodeY[i]);
-            dctx.lineTo(nodeX[i + 1], nodeY[i + 1]);
+          // Pass 2: the region's line mesh (segments reaching one cell
+          // past the range use rest positions - continuity with static).
+          dctx.strokeStyle = dotColor;
+          dctx.globalAlpha = LINE_ALPHA;
+          dctx.lineWidth = LINE_WIDTH;
+          dctx.beginPath();
+          for (let cy = r0; cy <= r1; cy++) {
+            for (let cx = c0; cx <= c1; cx++) {
+              const i = cy * cols + cx;
+              if (cx + 1 < cols) {
+                dctx.moveTo(nodeX[i], nodeY[i]);
+                if (cx + 1 <= c1) dctx.lineTo(nodeX[i + 1], nodeY[i + 1]);
+                else dctx.lineTo(offX + (cx + 1) * DOT_SPACING, offY + cy * DOT_SPACING);
+              }
+              if (cy + 1 < rows) {
+                dctx.moveTo(nodeX[i], nodeY[i]);
+                if (cy + 1 <= r1) dctx.lineTo(nodeX[i + cols], nodeY[i + cols]);
+                else dctx.lineTo(offX + cx * DOT_SPACING, offY + (cy + 1) * DOT_SPACING);
+              }
+              // segments entering from the rest grid on the low sides
+              if (cx === c0 && cx > 0) {
+                dctx.moveTo(offX + (cx - 1) * DOT_SPACING, offY + cy * DOT_SPACING);
+                dctx.lineTo(nodeX[i], nodeY[i]);
+              }
+              if (cy === r0 && cy > 0) {
+                dctx.moveTo(offX + cx * DOT_SPACING, offY + (cy - 1) * DOT_SPACING);
+                dctx.lineTo(nodeX[i], nodeY[i]);
+              }
+            }
           }
-          if (cy + 1 < rows) {
-            dctx.moveTo(nodeX[i], nodeY[i]);
-            dctx.lineTo(nodeX[i + cols], nodeY[i + cols]);
-          }
-        }
-      }
-      dctx.stroke();
-      dctx.globalAlpha = 1;
+          dctx.stroke();
+          dctx.globalAlpha = 1;
 
-      // Pass 3: dots, shrinking toward the pointer (falloff from pass 1).
-      dctx.fillStyle = dotColor;
-      dctx.beginPath();
-      const n = cols * rows;
-      for (let i = 0; i < n; i++) {
-        const r =
-          nodeK[i] > 0
-            ? Math.max(0.1, DOT_BASE_R * (1 - SHRINK * nodeK[i]))
-            : DOT_BASE_R;
-        dctx.moveTo(nodeX[i] + r, nodeY[i]);
-        dctx.arc(nodeX[i], nodeY[i], r, 0, Math.PI * 2);
+          // Pass 3: the region's dots, shrinking toward the pointer.
+          dctx.fillStyle = dotColor;
+          dctx.beginPath();
+          for (let cy = r0; cy <= r1; cy++) {
+            for (let cx = c0; cx <= c1; cx++) {
+              const i = cy * cols + cx;
+              const r =
+                nodeK[i] > 0
+                  ? Math.max(0.1, DOT_BASE_R * (1 - SHRINK * nodeK[i]))
+                  : DOT_BASE_R;
+              dctx.moveTo(nodeX[i] + r, nodeY[i]);
+              dctx.arc(nodeX[i], nodeY[i], r, 0, Math.PI * 2);
+            }
+          }
+          dctx.fill();
+          dctx.restore();
+        }
+
+        prevRegion = cur;
+        lastFx = fmouse.x;
+        lastFy = fmouse.y;
+        lastASm = activeSm;
       }
-      dctx.fill();
 
       // Converged on a stationary pointer → nothing will change until the
       // next pointermove; frame() skips drawDots while settled.
@@ -628,17 +818,17 @@ export function StitchBackdrop() {
         aria-hidden
         className="tq-stitch-wave-canvas pointer-events-none fixed -inset-12 -z-[1] h-[calc(100%+6rem)] w-[calc(100%+6rem)]"
       />
-      {/* Dots - crisp, warped by the cursor; overscanned PROPORTIONALLY
-          (10% per side) so the 3D tilt never exposes a corner: the
-          perspective pull-in scales with the viewport (~8% of the width
-          at +-0.15rad / 1000px), so a fixed-px overscan leaked edges on
-          big screens. Canvas is a REPLACED element, so opposing insets
-          do NOT auto-stretch it - the explicit 120% pair must match the
-          10% insets. */}
+      {/* Dots - crisp, warped by the cursor. NO tilt overscan is baked
+          in: the 3D tilt's coverage is solved per-frame in drawDots (a
+          dynamic scale() keeps the projected plane over any viewport).
+          The small fixed bleed only hides the shrink-pull gap - an edge
+          dot is dragged at most ~16px toward the pointer (max of
+          0.15*d*exp(-(d/240)^2)), so 32px is 2x that. Canvas is a
+          REPLACED element: the h/w calc pair must match the inset. */}
       <canvas
         ref={dotsRef}
         aria-hidden
-        className="pointer-events-none fixed -inset-[10%] -z-[1] h-[120%] w-[120%]"
+        className="pointer-events-none fixed -inset-8 -z-[1] h-[calc(100%+4rem)] w-[calc(100%+4rem)] will-change-transform"
       />
     </>
   );
