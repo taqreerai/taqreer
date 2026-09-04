@@ -757,6 +757,27 @@ export function StitchBackdrop() {
     });
     ro.observe(waveCanvas);
 
+    // Theme flips (.light on <html>) change the --tq-dot token, which is
+    // BAKED into the static grid raster - re-read and repaint. (CR PR
+    // #199: layout() only runs on resize, so a theme switch alone left
+    // the old color cached.)
+    const mo = new MutationObserver(() => {
+      const next =
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--tq-dot")
+          .trim() || DOT_FALLBACK;
+      if (next === dotColor) return;
+      dotColor = next;
+      paintStaticGrid();
+      dotsDirty = true;
+      if (reduceMotion) drawStatic();
+      else ensureRaf();
+    });
+    mo.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
     const onMove = (e: PointerEvent) => {
       mouse.x = e.clientX - waveLeft;
       mouse.y = e.clientY - waveTop;
@@ -797,6 +818,7 @@ export function StitchBackdrop() {
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
+      mo.disconnect();
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("blur", onLeave);
