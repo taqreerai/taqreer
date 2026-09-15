@@ -1424,6 +1424,10 @@ function PaletteSwatch({
 }
 
 // ───────────────────────────────────────────────────────────────────
+// id of the portalled tooltip that carries a rejected file's reason, wired
+// to the dropzone button's aria-describedby so assistive tech associates them.
+const REJECT_REASON_ID = "tq-content-reject-reason";
+
 // FileDropzone — used twice (content + design ref). Compact mode
 // shrinks min-height for the content card (where it sits below an
 // OR separator below a textarea).
@@ -1500,6 +1504,7 @@ function FileDropzone({
           onDrop(event.dataTransfer.files?.[0]);
         }}
         disabled={disabled}
+        aria-describedby={rejected ? REJECT_REASON_ID : undefined}
         className={`flex w-full rounded-xl border border-dashed transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${axis} ${
           dragging
             ? "border-foreground/40 bg-foreground/[0.04]"
@@ -1623,13 +1628,19 @@ function FileDropzone({
       ) : null}
     </div>
   );
-  // Rejected chip: surface the reason as a portalled tooltip on hover, so
-  // it floats above the card instead of reflowing it.
+  // Rejected chip: surface the reason as a portalled tooltip that floats
+  // above the card (never reflows it). `open` keeps it PERSISTENTLY visible
+  // while the file is rejected — not hover-only, so touch users see it too —
+  // and role="status" + the id wired to the button's aria-describedby make
+  // it available to assistive tech.
   return rejected && rejectedReason ? (
     <Tooltip
       label={rejectedReason}
       placement="top"
       multiline
+      open
+      id={REJECT_REASON_ID}
+      role="status"
       className="block w-full flex-1"
     >
       {chip}

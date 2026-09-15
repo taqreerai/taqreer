@@ -1414,11 +1414,17 @@ function buildSourceTextDirective(
     // SYSTEM_PROMPT_CREATE_HTML + MIMIC_HTML_ADDENDUM (the "reproduce the
     // reference, don't invent" override); the actual reference-matching instruction
     // rides here in the user message.
-    const refClause = hasContentFile
-      ? "Two documents are attached before this text: the FIRST is YOUR CONTENT (the words and facts that go in the deck), the SECOND is the DESIGN reference (a visual layout to imitate, NOT content)."
-      : hasContentText
-        ? "The DESIGN reference (a visual layout to imitate, NOT content) is attached before this text; YOUR CONTENT (the words and facts that go in the deck) is the text below."
-        : "The attached file is BOTH your content and the design layout to follow.";
+    const refClause =
+      hasContentFile && hasContentText
+        ? // Both a content file AND typed text: the schema allows it, so name
+          // BOTH as YOUR CONTENT (the tagged block below is inlined too) and
+          // keep only the design file as the reference.
+          "Two documents are attached before this text: the FIRST is YOUR CONTENT, the SECOND is the DESIGN reference (a visual layout to imitate, NOT content). The tagged text block below is ALSO part of YOUR CONTENT."
+        : hasContentFile
+          ? "Two documents are attached before this text: the FIRST is YOUR CONTENT (the words and facts that go in the deck), the SECOND is the DESIGN reference (a visual layout to imitate, NOT content)."
+          : hasContentText
+            ? "The DESIGN reference (a visual layout to imitate, NOT content) is attached before this text; YOUR CONTENT (the words and facts that go in the deck) is the text below."
+            : "The attached file is BOTH your content and the design layout to follow.";
 
     lines.push(
       `${refClause} Create a deck with the same visual direction as the DESIGN reference, but use the brand variables: colour \`var(--brand-1)\`…\`var(--brand-N)\` and type \`var(--font-heading)\` / \`var(--font-body)\`.`,

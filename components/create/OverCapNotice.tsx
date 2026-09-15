@@ -30,12 +30,7 @@ export function OverCapNotice({
   return (
     <div
       role="status"
-      className="flex items-start gap-2 rounded-xl border p-3 text-[12px] leading-relaxed"
-      style={{
-        background: "var(--tq-status-warn-bg)",
-        borderColor: "var(--tq-status-warn-border)",
-        color: "var(--tq-status-warn-text)",
-      }}
+      className="tq-notice-warn flex items-start gap-2 rounded-xl border p-3 text-[12px] leading-relaxed"
     >
       <span
         className="material-symbols-outlined leading-none"
