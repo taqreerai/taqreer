@@ -35,7 +35,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, useAnimationControls } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import {
   CreditGateDialog,
@@ -44,7 +44,7 @@ import {
 } from "@/components/credits/CreditGateDialog";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
-import { OverCapNotice } from "@/components/create/OverCapNotice";
+import { Tooltip } from "@/components/common/Tooltip";
 import { PillButton } from "@/components/create/PillButton";
 import { WizardStepRail } from "@/components/create/WizardChrome";
 import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
@@ -265,9 +265,14 @@ export default function EnhanceContentPage() {
     ExtractCompletedResponse["result"] | null
   >(null);
   const [error, setError] = useState("");
-  // Tier slide cap — an uploaded deck with more pages than this is
-  // silently clipped at generation (slideCeiling), so we warn up front.
+  // Tier slide cap — an uploaded deck with more pages than this would be
+  // silently clipped at generation (slideCeiling), so we REJECT it up front.
   const slideCap = useSlideCap();
+  // Shake the source card when an over-cap file is rejected.
+  const cardShake = useAnimationControls();
+  // id of the persistent reject tooltip, wired to the dropzone's
+  // aria-describedby so assistive tech associates the reason.
+  const rejectReasonId = "tq-enhance-reject-reason";
   // 402 credit-gate payload from POST /api/projects (billing Phase A).
   const [creditGate, setCreditGate] = useState<CreditGatePayload | null>(null);
   const [quality, setQuality] = useState<Quality>(DEFAULT_QUALITY);
@@ -830,7 +835,23 @@ export default function EnhanceContentPage() {
     }
   };
 
-  const generateDisabled = stage === "idle";
+  // Reject a source deck with more pages than the tier cap: enhance rebuilds
+  // it ~1:1, so it would be silently clipped. Block Generate + step advance,
+  // shake the card, and surface the reason as a persistent tooltip.
+  const overCap =
+    stage === "ready" && !!extracted && (extracted.pageCount ?? 0) > slideCap;
+  const overCapMessage = dict.flows.overCapWarning
+    .replace("{pages}", String(extracted?.pageCount ?? 0))
+    .replace("{cap}", String(slideCap));
+  const generateDisabled = stage === "idle" || overCap;
+  // Shake the source card the moment an over-cap file is rejected.
+  useEffect(() => {
+    if (!overCap) return;
+    cardShake.start({
+      x: [0, -9, 9, -7, 7, -4, 4, 0],
+      transition: { duration: 0.45, ease: "easeInOut" },
+    });
+  }, [overCap, cardShake]);
   const generateLoading = stage === "extracting" || stage === "submitting";
   const generateLabel = dict.flows.generate.create;
   // While preparing files, the button shows the live prep percentage
@@ -882,7 +903,10 @@ export default function EnhanceContentPage() {
               the file area needs much more vertical real estate.
               p-4 + gap-4 deliberately tighter than the create-flow
               cards so the row reads compact, not airy. */}
-          <div className={`surface-card ${step === 0 ? "" : "invisible"} col-start-1 row-start-1 flex min-h-[440px] w-full flex-col gap-4 rounded-2xl p-4 sm:w-[430px]`}>
+          <motion.div
+            animate={cardShake}
+            className={`surface-card ${step === 0 ? "" : "invisible"} col-start-1 row-start-1 flex min-h-[440px] w-full flex-col gap-4 rounded-2xl p-4 sm:w-[430px]`}
+          >
             <input
               ref={fileInputRef}
               type="file"
@@ -909,6 +933,16 @@ export default function EnhanceContentPage() {
                 vertical space inside the card (CARD_MIN_H = 387 px
                 pins the card at /create + /mimic's baseline). */}
             <div className="flex flex-1 flex-col gap-2">
+              <Tooltip
+                label={overCapMessage}
+                placement="top"
+                multiline
+                open={overCap}
+                disabled={!overCap}
+                id={rejectReasonId}
+                role="status"
+                className="block h-full"
+              >
               <div className="relative h-full">
                 <button
                   type="button"
@@ -924,6 +958,7 @@ export default function EnhanceContentPage() {
                     validateAndSetFile(event.dataTransfer.files?.[0]);
                   }}
                   disabled={stage === "extracting" || stage === "submitting"}
+                  aria-describedby={overCap ? rejectReasonId : undefined}
                   className={`flex h-full min-h-[160px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-4 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                     dragging
                       ? "border-foreground/40 bg-foreground/[0.04]"
@@ -935,6 +970,13 @@ export default function EnhanceContentPage() {
                   >
                     {stage === "extracting" ? (
                       <span className="spinner h-5 w-5 rounded-full border-2 border-foreground/20 border-t-white" />
+                    ) : stage === "ready" && overCap ? (
+                      <span
+                        className="material-symbols-outlined text-[var(--tq-status-warn-text)]"
+                        style={{ fontSize: "22px" }}
+                      >
+                        error
+                      </span>
                     ) : stage === "ready" ? (
                       <span
                         className="material-symbols-outlined text-emerald-300"
@@ -972,7 +1014,9 @@ export default function EnhanceContentPage() {
                         {stage === "extracting"
                           ? ` · ${prepStageLabel(prepStage, dict)} ${prepPercent}%`
                           : stage === "ready"
-                            ? dict.flows.enhance.readyToCreate
+                            ? overCap
+                              ? ""
+                              : dict.flows.enhance.readyToCreate
                             : stage === "submitting"
                               ? dict.flows.enhance.creating
                               : ""}
@@ -1037,18 +1081,8 @@ export default function EnhanceContentPage() {
                   </button>
                 ) : null}
               </div>
+              </Tooltip>
             </div>
-
-            {/* Over-cap heads-up: enhance rebuilds the source 1:1, so a
-                source with more pages than the tier cap gets silently
-                clipped at generation. Warn (don't block) with the numbers. */}
-            <OverCapNotice
-              pages={extracted?.pageCount}
-              cap={slideCap}
-              message={dict.flows.overCapWarning
-                .replace("{pages}", String(extracted?.pageCount ?? 0))
-                .replace("{cap}", String(slideCap))}
-            />
 
             {/* Free-text design instructions — optional steering for the
                 model (e.g. "keep the original slide order, modern icons").
@@ -1077,7 +1111,7 @@ export default function EnhanceContentPage() {
               />
             </div>
 
-          </div>
+          </motion.div>
 
           {/* ─── Brand card (الهوية البصرية) ─────────────────
               Replicates /create's consolidated brand card — saved-kit
@@ -1216,7 +1250,7 @@ export default function EnhanceContentPage() {
               <PillButton
                 variant="primary"
                 onClick={() => setStep(1)}
-                disabled={stage === "idle"}
+                disabled={stage === "idle" || overCap}
               >
                 {dict.flows.wizard.next}
               </PillButton>

@@ -2354,15 +2354,6 @@ html.app-shell-scroll body {
   line-height: 1.5;
 }
 
-/* Warn notice strip on the upload flows (OverCapNotice). Reuses the
-   status-warn token triad; layout (flex/padding/radius) stays on the
-   element so the same skin can wrap different shapes. */
-.tq-notice-warn {
-  background: var(--tq-status-warn-bg);
-  border-color: var(--tq-status-warn-border);
-  color: var(--tq-status-warn-text);
-}
-
 /* ─── Dashboard background ───
    Two-layer composition so descendants with `backdrop-filter` (the
    main sidebar, slide-nav sidebar, header, comments panel) can
