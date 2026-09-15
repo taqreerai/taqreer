@@ -18,7 +18,7 @@
 // The portal is mounted only while visible — so SSR and the first client
 // render both produce nothing (no hydration mismatch), matching the original
 // hidden-state DOM. Entrance is animated; hide just unmounts.
-import { useRef, useState, type ReactNode } from "react";
+import { useCallback, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 
@@ -76,33 +76,47 @@ export function Tooltip({
   // left/top placement) so we never need the pill's own size to centre it.
   // Runs whenever the wrapper commits (inline identity re-runs it each render),
   // keeping the position fresh without effects or render-time ref reads.
-  const positionWrapper = (el: HTMLDivElement | null) => {
-    if (!el) return;
-    const place = () => {
-      if (!el.isConnected) return;
-      const r = triggerRef.current?.getBoundingClientRect();
-      if (!r) return;
-      el.style.top = el.style.bottom = el.style.left = el.style.right = "";
-      if (placement === "left") {
-        el.style.right = `${window.innerWidth - r.left + GAP}px`;
-        el.style.top = `${r.top + r.height / 2}px`;
-      } else if (placement === "right") {
-        el.style.left = `${r.right + GAP}px`;
-        el.style.top = `${r.top + r.height / 2}px`;
-      } else if (placement === "top") {
-        el.style.bottom = `${window.innerHeight - r.top + GAP}px`;
-        el.style.left = `${r.left + r.width / 2}px`;
-      } else {
-        el.style.top = `${r.bottom + GAP}px`;
-        el.style.left = `${r.left + r.width / 2}px`;
-      }
-    };
-    // Immediate attempt covers the common case; the rAF re-run covers the
-    // commit where the portal wrapper's ref fires before the trigger ref is
-    // attached (bottom-up ref order), so the trigger rect is available.
-    place();
-    requestAnimationFrame(place);
-  };
+  // useCallback so the ref identity is stable per placement — React attaches
+  // it once (adding the listeners once) and runs the returned cleanup on
+  // detach, instead of add/removing listeners on every render.
+  const positionWrapper = useCallback(
+    (el: HTMLDivElement | null) => {
+      if (!el) return;
+      const place = () => {
+        if (!el.isConnected) return;
+        const r = triggerRef.current?.getBoundingClientRect();
+        if (!r) return;
+        el.style.top = el.style.bottom = el.style.left = el.style.right = "";
+        if (placement === "left") {
+          el.style.right = `${window.innerWidth - r.left + GAP}px`;
+          el.style.top = `${r.top + r.height / 2}px`;
+        } else if (placement === "right") {
+          el.style.left = `${r.right + GAP}px`;
+          el.style.top = `${r.top + r.height / 2}px`;
+        } else if (placement === "top") {
+          el.style.bottom = `${window.innerHeight - r.top + GAP}px`;
+          el.style.left = `${r.left + r.width / 2}px`;
+        } else {
+          el.style.top = `${r.bottom + GAP}px`;
+          el.style.left = `${r.left + r.width / 2}px`;
+        }
+      };
+      // Immediate attempt covers the common case; the rAF re-run covers the
+      // commit where the wrapper's ref fires before the trigger ref is
+      // attached (bottom-up ref order). Scroll (capture, to catch the body
+      // scroll) + resize keep the pill glued to the trigger while shown.
+      place();
+      const raf = requestAnimationFrame(place);
+      window.addEventListener("scroll", place, true);
+      window.addEventListener("resize", place);
+      return () => {
+        cancelAnimationFrame(raf);
+        window.removeEventListener("scroll", place, true);
+        window.removeEventListener("resize", place);
+      };
+    },
+    [placement],
+  );
 
   return (
     <span
