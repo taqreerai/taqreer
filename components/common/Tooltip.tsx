@@ -21,6 +21,7 @@ export function Tooltip({
   placement = "bottom",
   className = "inline-flex",
   disabled = false,
+  multiline = false,
   children,
 }: {
   label: string;
@@ -30,6 +31,10 @@ export function Tooltip({
   className?: string;
   // Suppress the tooltip (e.g. while the trigger's own menu/popover is open).
   disabled?: boolean;
+  // Let a longer message wrap to multiple lines (the pill is nowrap by
+  // default). Sets a max width + normal wrapping so a sentence-length
+  // label reads as a small paragraph instead of one huge line.
+  multiline?: boolean;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
@@ -85,7 +90,17 @@ export function Tooltip({
               {pos && !disabled ? (
                 <motion.div
                   className="sidebar-tooltip pointer-events-none fixed z-[9999]"
-                  style={pos}
+                  style={
+                    multiline
+                      ? {
+                          ...pos,
+                          whiteSpace: "normal",
+                          maxWidth: 280,
+                          textAlign: "start",
+                          lineHeight: 1.5,
+                        }
+                      : pos
+                  }
                   initial={{ opacity: 0, ...center, ...slide }}
                   animate={{ opacity: 1, ...center, ...settled }}
                   exit={{ opacity: 0, ...center, ...slide }}

@@ -560,6 +560,7 @@
     "langEnglish": "English",
     "contentPlaceholder": "Write your presentation content here...",
     "mimicVerbatimNote": "Your content is used as-is, in its original language. The design file sets the look only.",
+    "overCapWarning": "Your file has {pages} pages, but your current plan creates up to {cap} per deck. To include every page, move to a higher plan or split the content into more than one deck.",
     "or": "or",
     "dropTitle": "Drag or click to choose a file",
     "dropSubtitle": "PDF / PPTX / DOCX · up to 100 MB",

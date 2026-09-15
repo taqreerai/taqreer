@@ -44,6 +44,7 @@ import {
 } from "@/components/credits/CreditGateDialog";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
+import { OverCapNotice } from "@/components/create/OverCapNotice";
 import { PillButton } from "@/components/create/PillButton";
 import { WizardStepRail } from "@/components/create/WizardChrome";
 import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
@@ -70,6 +71,7 @@ import {
   type UploadedFontFieldBrief,
 } from "@/lib/brand/upload";
 import { seedFromExtraction } from "@/lib/create/seed-from-extraction";
+import { useSlideCap } from "@/lib/credits/store";
 import { localizedExtractError } from "@/lib/extract/error-codes";
 import { readSource, clearSource } from "@/lib/types/source";
 import { MAX_ENHANCE_INSTRUCTIONS_CHARS } from "@/lib/types/brief-limits";
@@ -263,6 +265,9 @@ export default function EnhanceContentPage() {
     ExtractCompletedResponse["result"] | null
   >(null);
   const [error, setError] = useState("");
+  // Tier slide cap — an uploaded deck with more pages than this is
+  // silently clipped at generation (slideCeiling), so we warn up front.
+  const slideCap = useSlideCap();
   // 402 credit-gate payload from POST /api/projects (billing Phase A).
   const [creditGate, setCreditGate] = useState<CreditGatePayload | null>(null);
   const [quality, setQuality] = useState<Quality>(DEFAULT_QUALITY);
@@ -1033,6 +1038,17 @@ export default function EnhanceContentPage() {
                 ) : null}
               </div>
             </div>
+
+            {/* Over-cap heads-up: enhance rebuilds the source 1:1, so a
+                source with more pages than the tier cap gets silently
+                clipped at generation. Warn (don't block) with the numbers. */}
+            <OverCapNotice
+              pages={extracted?.pageCount}
+              cap={slideCap}
+              message={dict.flows.overCapWarning
+                .replace("{pages}", String(extracted?.pageCount ?? 0))
+                .replace("{cap}", String(slideCap))}
+            />
 
             {/* Free-text design instructions — optional steering for the
                 model (e.g. "keep the original slide order, modern icons").

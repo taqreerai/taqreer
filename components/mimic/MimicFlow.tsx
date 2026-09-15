@@ -28,7 +28,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useAnimationControls } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import {
   CreditGateDialog,
@@ -39,6 +39,7 @@ import { useSlideCap } from "@/lib/credits/store";
 import { displaySlideEstimate } from "@/lib/credits/cost";
 import { localizedExtractError } from "@/lib/extract/error-codes";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
+import { Tooltip } from "@/components/common/Tooltip";
 import { PillButton } from "@/components/create/PillButton";
 import { WizardStepRail } from "@/components/create/WizardChrome";
 import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
@@ -256,6 +257,9 @@ export default function MimicFlow({
   // render-phase clamp also covers a mid-session downgrade lowering the cap.
   const slideCap = useSlideCap();
   if (slideCountValue > slideCap) setSlideCountValue(slideCap);
+  // Shake controls for the content card — fired once when an uploaded
+  // content deck is rejected for exceeding the tier page cap.
+  const contentCardShake = useAnimationControls();
 
   // ─── Brand pickers — always shown. The "mimic branding" toggle was
   //     removed (2026-05-29): the branding card is now permanent, so
@@ -601,9 +605,32 @@ export default function MimicFlow({
 
   // ─── Derived page-level stage ──────────────────────────────────
   const designReady = designStage === "ready" && !!designExtracted;
-  const contentFileReady = contentStage === "ready" && !!contentExtracted;
+  // An uploaded content deck with more pages than the tier cap is
+  // REJECTED (not accepted): it would be silently clipped at generation,
+  // so we block it here, shake the card, and surface the reason as a
+  // tooltip on the chip. Only the CONTENT drives slide count; the design
+  // reference's page count is irrelevant.
+  const contentOverCap =
+    contentStage === "ready" &&
+    !!contentExtracted &&
+    (contentExtracted.pageCount ?? 0) > slideCap;
+  const overCapMessage = dict.flows.overCapWarning
+    .replace("{pages}", String(contentExtracted?.pageCount ?? 0))
+    .replace("{cap}", String(slideCap));
+  const contentFileReady =
+    contentStage === "ready" && !!contentExtracted && !contentOverCap;
   const contentTextReady = contentText.trim().length > 0;
   const contentReady = contentFileReady || contentTextReady;
+  // Shake the content card the moment an uploaded deck is rejected for
+  // exceeding the page cap, so the "not accepted" outcome is unmistakable
+  // (the chip tooltip carries the reason; Generate stays blocked).
+  useEffect(() => {
+    if (!contentOverCap) return;
+    contentCardShake.start({
+      x: [0, -9, 9, -7, 7, -4, 4, 0],
+      transition: { duration: 0.45, ease: "easeInOut" },
+    });
+  }, [contentOverCap, contentCardShake]);
   // Split-button credit estimate: dynamic by the brief content (auto) or the
   // manual count (custom), via the same estimateSlides the server holds on (it
   // keys off the brief text, NOT the reference design's page count), capped at
@@ -882,6 +909,7 @@ export default function MimicFlow({
               ═══════════════════════════════════════════════════════ */}
           <motion.div
             layout
+            animate={contentCardShake}
             transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
             className={`surface-card ${step === 0 ? "" : "invisible"} col-start-1 row-start-1 flex ${CARD_W_CLASS} ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
@@ -977,6 +1005,8 @@ export default function MimicFlow({
                 onOpen={() => contentInputRef.current?.click()}
                 onDrop={(f) => setContentFromInput(f)}
                 onRemove={removeContentFile}
+                rejected={contentOverCap}
+                rejectedReason={overCapMessage}
                 horizontal
               />
             </div>
@@ -1300,10 +1330,11 @@ export default function MimicFlow({
                 variant="primary"
                 onClick={() => setStep((s) => Math.min(2, s + 1))}
                 disabled={
-                  submitting ||
-                  (step === 0 &&
-                    contentText.trim().length === 0 &&
-                    contentFile === null)
+                  // Step 0 can't advance until content is actually usable:
+                  // blocks an empty step, a mid-extraction file, AND a file
+                  // rejected for exceeding the page cap (contentReady is
+                  // false in all three).
+                  submitting || (step === 0 && !contentReady)
                 }
               >
                 {dict.flows.wizard.next}
@@ -1414,6 +1445,12 @@ function FileDropzone({
   // — same affordances (drop / click / extract states), just
   // re-flowed. Implies `compact`; the prop only changes axis.
   horizontal = false,
+  // Rejected: the extracted file was refused (e.g. more pages than the
+  // tier cap). The chip flips to a warn/error look and, when a reason is
+  // given, wraps in a Tooltip so hovering surfaces WHY — kept out of the
+  // card so it never reflows the layout.
+  rejected = false,
+  rejectedReason,
 }: {
   file: File | null;
   stage: FileStage;
@@ -1425,6 +1462,8 @@ function FileDropzone({
   onRemove: () => void;
   compact?: boolean;
   horizontal?: boolean;
+  rejected?: boolean;
+  rejectedReason?: string;
 }) {
   const dict = useDict();
   const disabled = stage === "extracting" || submitting;
@@ -1445,8 +1484,8 @@ function FileDropzone({
     : compact
       ? "h-full min-h-[72px]"
       : "h-full min-h-[140px]";
-  return (
-    <div className="relative flex-1">
+  const chip = (
+    <div className="relative w-full flex-1">
       <button
         type="button"
         onClick={onOpen}
@@ -1478,6 +1517,13 @@ function FileDropzone({
         >
           {stage === "extracting" ? (
             <span className="spinner h-5 w-5 rounded-full border-2 border-foreground/20 border-t-foreground" />
+          ) : stage === "ready" && rejected ? (
+            <span
+              className="material-symbols-outlined text-[var(--tq-status-warn-text)]"
+              style={{ fontSize: horizontal ? "18px" : "22px" }}
+            >
+              error
+            </span>
           ) : stage === "ready" ? (
             <span
               className="material-symbols-outlined text-emerald-300"
@@ -1508,7 +1554,7 @@ function FileDropzone({
             ميجابايت" tagline (still shown in stacked modes since
             they have the vertical real estate). */}
         {file ? (
-          <div className={`min-w-0 ${horizontal ? "flex-1" : "w-full px-2"}`}>
+          <div className={`min-w-0 ${horizontal ? "flex-1 pe-8" : "w-full px-2"}`}>
             <p className="truncate text-sm font-semibold text-foreground">
               {readableFileName(file.name)}
             </p>
@@ -1517,7 +1563,9 @@ function FileDropzone({
               {stage === "extracting"
                 ? ` · ${dict.flows.analyzing}`
                 : stage === "ready"
-                  ? ` · ${dict.flows.ready}`
+                  ? rejected
+                    ? ""
+                    : ` · ${dict.flows.ready}`
                   : submitting
                     ? ` · ${dict.flows.generate.creating}`
                     : ""}
@@ -1561,7 +1609,9 @@ function FileDropzone({
             onRemove();
           }}
           aria-label={dict.flows.removeFile}
-          className="absolute top-2 start-2 flex h-7 w-7 items-center justify-center rounded-md bg-black/35 text-foreground/60 transition-colors hover:bg-foreground/10 hover:text-foreground"
+          className={`absolute z-10 flex h-7 w-7 items-center justify-center rounded-md bg-black/35 text-foreground/60 transition-colors hover:bg-foreground/10 hover:text-foreground ${
+            horizontal ? "end-2 top-1/2 -translate-y-1/2" : "top-2 start-2"
+          }`}
         >
           <span
             className="material-symbols-outlined"
@@ -1572,6 +1622,20 @@ function FileDropzone({
         </button>
       ) : null}
     </div>
+  );
+  // Rejected chip: surface the reason as a portalled tooltip on hover, so
+  // it floats above the card instead of reflowing it.
+  return rejected && rejectedReason ? (
+    <Tooltip
+      label={rejectedReason}
+      placement="top"
+      multiline
+      className="block w-full flex-1"
+    >
+      {chip}
+    </Tooltip>
+  ) : (
+    chip
   );
 }
 

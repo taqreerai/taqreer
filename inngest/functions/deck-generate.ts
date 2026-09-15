@@ -1415,15 +1415,15 @@ function buildSourceTextDirective(
     // reference, don't invent" override); the actual reference-matching instruction
     // rides here in the user message.
     const refClause = hasContentFile
-      ? "Two documents are attached before this text — the FIRST is the content to put in the deck, the SECOND is a design layout to follow."
+      ? "Two documents are attached before this text: the FIRST is YOUR CONTENT (the words and facts that go in the deck), the SECOND is the DESIGN reference (a visual layout to imitate, NOT content)."
       : hasContentText
-        ? "A design layout to follow is attached before this text; the content to put in the deck is the text below."
-        : "The attached file is BOTH the content and a design layout to follow.";
+        ? "The DESIGN reference (a visual layout to imitate, NOT content) is attached before this text; YOUR CONTENT (the words and facts that go in the deck) is the text below."
+        : "The attached file is BOTH your content and the design layout to follow.";
 
     lines.push(
-      `${refClause} Create a deck with the same visual direction as the reference, but use the brand variables: colour \`var(--brand-1)\`…\`var(--brand-N)\` and type \`var(--font-heading)\` / \`var(--font-body)\`.`,
+      `${refClause} Create a deck with the same visual direction as the DESIGN reference, but use the brand variables: colour \`var(--brand-1)\`…\`var(--brand-N)\` and type \`var(--font-heading)\` / \`var(--font-body)\`.`,
       ``,
-      `CONTENT FIDELITY (three hard limits): (1) Never invent — every number, name, claim, and fact on a slide must come from the source; do not add statistics, examples, or detail that isn't there. (2) Never drop real information — every distinct fact in the source must survive somewhere in the deck; you may relocate, compress, or reword it, but not delete it. (3) Use the content VERBATIM in its ORIGINAL LANGUAGE — do NOT translate or transliterate. The reference document may be in a different language; that governs the LOOK only, never the words.`,
+      `CONTENT FIDELITY (hard limits): YOUR CONTENT (identified above) is the ONLY source of words and facts for this deck. (1) Never invent: every number, name, claim, and fact on a slide must come from YOUR CONTENT; do not add statistics, examples, or detail that isn't there. (2) Never drop real information: every distinct fact in YOUR CONTENT must survive somewhere in the deck; you may relocate, compress, or reword it, but not delete it. (3) Use YOUR CONTENT verbatim in its ORIGINAL LANGUAGE; do NOT translate or transliterate. (4) The DESIGN reference is a VISUAL TEMPLATE ONLY: copy its layout, type hierarchy, spacing, shapes, grids, and decorative style, but NEVER copy its words, headings, facts, numbers, labels, captions, or slide content into the deck. Any sentence, statistic, or heading that appears in the DESIGN reference but is NOT in YOUR CONTENT must NOT appear in the output. The DESIGN reference may be in a different language; it governs the LOOK only, never the words.`,
     );
 
     if (hasContentText) {
