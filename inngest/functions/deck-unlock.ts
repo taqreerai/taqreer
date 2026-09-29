@@ -15,6 +15,7 @@
 // image-model call: net-new slides use no background image (consistent with a
 // non-images FRAME deck), so the frost's promise holds without gpt-image cost.
 
+import { toSdkThinking } from "@/lib/anthropic/model-thinking";
 import Anthropic from "@anthropic-ai/sdk";
 import { NonRetriableError } from "inngest";
 import { inngest } from "@/inngest/client";
@@ -220,7 +221,7 @@ export const deckUnlock = inngest.createFunction(
           model: callParams.model,
           // Enough headroom for ~5 authored slides; well under the ceiling.
           max_tokens: Math.min(callParams.maxTokens ?? 64000, 64000),
-          thinking: callParams.thinking,
+          thinking: toSdkThinking(callParams.thinking),
           system: [
             { type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } },
           ],

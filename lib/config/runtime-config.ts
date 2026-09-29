@@ -17,6 +17,7 @@
 
 import { prisma } from "@/lib/prisma";
 import type { AnthropicCallParams } from "@/lib/anthropic/quality-params";
+import { requiresThinking, thinkingOffFor } from "@/lib/anthropic/model-thinking";
 import { topUnlockedPresetLabel } from "@/lib/credits/pricing-tokens";
 
 type Effort = "low" | "medium" | "high" | "xhigh" | "max";
@@ -260,15 +261,18 @@ export function paramsForPreset(
 ): AnthropicCallParams | undefined {
   const p = key ? current().presets.get(key) : undefined;
   if (!p) return undefined;
-  if (p.thinking) {
+  // A thinking-off row on an adaptive-only model (saved before the admin guard
+  // existed) runs at the lowest adaptive setting instead of 400-ing every gen.
+  if (p.thinking || requiresThinking(p.model)) {
+    const effort = p.thinking ? p.effort : "low";
     return {
       model: p.model,
       thinking: { type: "adaptive" },
-      ...(p.effort ? { outputConfig: { effort: p.effort } } : {}),
+      ...(effort ? { outputConfig: { effort } } : {}),
       maxTokens: p.maxTokens,
     };
   }
-  return { model: p.model, thinking: { type: "disabled" }, maxTokens: p.maxTokens };
+  return { model: p.model, thinking: thinkingOffFor(p.model), maxTokens: p.maxTokens };
 }
 
 /** Credit cost for a preset key; falls back to the default preset for unknown keys. */

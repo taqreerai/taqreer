@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { toSdkThinking } from "@/lib/anthropic/model-thinking";
 import { NonRetriableError } from "inngest";
 import { inngest } from "@/inngest/client";
 import { holdCredits, settleHold } from "@/lib/credits/server";
@@ -865,7 +866,7 @@ export const deckRegeneratePartial = inngest.createFunction(
           const message = await client.messages.create({
             model: callParams.model,
             max_tokens: 16000,
-            thinking: callParams.thinking,
+            thinking: toSdkThinking(callParams.thinking),
             system: [
               {
                 type: "text",

@@ -60,10 +60,11 @@
 // with explicit cases below; everything else hits the default.
 
 import { paramsForPreset } from "@/lib/config/runtime-config";
+import type { ThinkingOff } from "@/lib/anthropic/model-thinking";
 
 export type AnthropicCallParams = {
   model: string;
-  thinking: { type: "adaptive" } | { type: "disabled" };
+  thinking: { type: "adaptive" } | ThinkingOff;
   outputConfig?: { effort: "low" | "medium" | "high" | "xhigh" | "max" };
   // Per-model output ceiling. Haiku 4.5 rejects requests above 64k
   // output tokens (API 400: "max_tokens: 128000 > 64000"); Sonnet/Opus

@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { invalidateLocal } from "@/lib/config/runtime-config";
 import { ALL_FLOWS, SYSTEM_SLIDE_CAP } from "@/lib/credits/cost";
 import { listModels } from "@/lib/anthropic/models";
+import { requiresThinking } from "@/lib/anthropic/model-thinking";
 import { revalidatePricingSurfaces } from "@/lib/config/revalidate-surfaces";
 
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
@@ -148,11 +149,11 @@ function validatePresetShape(input: PresetInput) {
       "Effort is required (low/medium/high/xhigh/max) when thinking is on.",
     );
   }
-  // Fable models reject thinking:disabled at the API, so force thinking on.
-  if (/fable/i.test(input.model)) {
+  // Fable + Opus 5.5 have no thinking-off mode at the API, so force thinking on.
+  if (requiresThinking(input.model)) {
     assert(
       input.thinking,
-      "Fable models require thinking on (they reject thinking:disabled).",
+      `${input.model} requires thinking on (it has no thinking-off mode).`,
     );
   }
 }

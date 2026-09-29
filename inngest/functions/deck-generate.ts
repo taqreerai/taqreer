@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { toSdkThinking } from "@/lib/anthropic/model-thinking";
 import { Prisma } from "@prisma/client";
 import { NonRetriableError } from "inngest";
 import { inngest } from "@/inngest/client";
@@ -2434,7 +2435,7 @@ export const deckGenerate = inngest.createFunction(
           thinking:
             callParams.thinking.type === "adaptive"
               ? { ...callParams.thinking, display: "summarized" as const }
-              : callParams.thinking,
+              : toSdkThinking(callParams.thinking),
           // The Gulf wardrobe spec (image-attire guidance) rides as its own
           // cache-controlled block PREPENDED to the frame system for Gulf image
           // gens - a stable static prefix, cached across decks/formats/langs and
