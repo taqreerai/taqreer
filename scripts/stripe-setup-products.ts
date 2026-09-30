@@ -8,6 +8,8 @@
 //     Price's amount is immutable, so if the catalog amount changed we
 //     archive the old Price and create a fresh one carrying the same
 //     lookup_key (Stripe moves the key to the newest active Price).
+//   - A drifted product name or grant metadata at an unchanged amount
+//     (e.g. a top-up re-sized at a held price) is updated in place.
 //
 // Usage:  npx tsx scripts/stripe-setup-products.ts          (sync, test key)
 //         npx tsx scripts/stripe-setup-products.ts --list   (show only)
@@ -53,6 +55,17 @@ async function main() {
     );
     if (found) {
       productIdByKey.set(key, found.id);
+      // Names carry the pack size ("Taqreer 2,000 credits") and show on
+      // Stripe receipts, so a credit re-size must rename the product too.
+      if (found.name !== name) {
+        if (listOnly) {
+          console.log(`product ~ ${key} -> ${found.id} (would rename "${found.name}" -> "${name}")`);
+        } else {
+          await stripe.products.update(found.id, { name });
+          console.log(`product ~ ${key} -> ${found.id} (renamed "${found.name}" -> "${name}")`);
+        }
+        continue;
+      }
       console.log(`product ✓ ${key} -> ${found.id}`);
       continue;
     }
@@ -85,7 +98,28 @@ async function main() {
         ? current.recurring?.interval === spec.interval
         : current.type === "one_time");
     if (matches) {
-      console.log(`  price ✓ ${spec.lookupKey} -> ${current!.id} ($${spec.amount / 100})`);
+      // Same amount but a stale grant (e.g. a top-up re-sized at a held
+      // price): metadata is mutable, so refresh it in place instead of
+      // minting a new Price.
+      const grantMeta = grantToMetadata(spec.grant);
+      const metaStale = Object.entries(grantMeta).some(
+        ([k, v]) => current!.metadata?.[k] !== v,
+      );
+      if (!metaStale) {
+        console.log(`  price ✓ ${spec.lookupKey} -> ${current!.id} ($${spec.amount / 100})`);
+        continue;
+      }
+      if (listOnly) {
+        console.log(`  price ~ ${spec.lookupKey} -> ${current!.id} (would refresh grant metadata)`);
+        continue;
+      }
+      await stripe.prices.update(current!.id, { metadata: grantMeta });
+      if (productId) {
+        await stripe.products.update(productId, {
+          metadata: { taqreerProductKey: spec.productKey, ...grantMeta },
+        });
+      }
+      console.log(`  price ~ ${spec.lookupKey} -> ${current!.id} (refreshed grant metadata)`);
       continue;
     }
     if (listOnly) {

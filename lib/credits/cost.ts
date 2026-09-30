@@ -181,19 +181,22 @@ export function nextTier(plan: KnownPlan): KnownPlan | null {
   return idx >= 0 && idx < TIER_ORDER.length - 1 ? TIER_ORDER[idx + 1] : null;
 }
 
-// Top-up packs (§1, PROPOSED; 4 packs per user direction 2026-06-11 to
-// match the 4 tier cards). Per-credit prices sit WELL ABOVE every
-// tier's subscription rate (after the 2026-07 repricing Plus is the
-// priciest at $0.00225/credit; the cheapest pack here is $0.0094) so
-// topping up can never undercut upgrading - the "can't cheat the
-// top-up system" rule. sourceKey
-// idempotency lives in the ledger; this table is the catalog the
-// pricing UI + Stripe Prices map onto.
+// Top-up packs (§1; 4 packs per user direction 2026-06-11 to match the 4
+// tier cards). 2026-09-30 re-size (owner call): prices HELD, credits scaled
+// to the current tiers (were 500/1,000/3,000/8,000, sized for the old
+// 2,000/5,000/12,000 allotments). Per-credit prices sit ABOVE every tier's
+// subscription rate (Pro is the priciest at $0.0025/credit; the cheapest
+// pack here is Large at ~$0.00268) and fall with pack size, so topping up
+// can never undercut upgrading - the "can't cheat the top-up system" rule.
+// Keep credits in whole thousands. sourceKey idempotency lives in the
+// ledger; this table is the catalog the pricing UI + Stripe Prices map
+// onto, and checkout grants these credits (session metadata), so a credit
+// change ships with the deploy even while the Stripe amount is unchanged.
 export const TOPUP_PACKS = [
-  { key: "mini", credits: 500, priceUsd: 7 },
-  { key: "small", credits: 1_000, priceUsd: 12 },
-  { key: "medium", credits: 3_000, priceUsd: 32 },
-  { key: "large", credits: 8_000, priceUsd: 75 },
+  { key: "mini", credits: 2_000, priceUsd: 7 },
+  { key: "small", credits: 4_000, priceUsd: 12 },
+  { key: "medium", credits: 11_000, priceUsd: 32 },
+  { key: "large", credits: 28_000, priceUsd: 75 },
 ] as const;
 
 /**
