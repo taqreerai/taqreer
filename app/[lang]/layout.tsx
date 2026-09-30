@@ -7,6 +7,7 @@ import { isLocale, dirForLocale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { LocaleProvider } from "@/components/i18n/LocaleProvider";
 import { CookieBanner } from "@/components/legal/CookieBanner";
+import { WhatsAppButton } from "@/components/support/WhatsAppButton";
 import { PostHogProvider } from "@/components/analytics/PostHogProvider";
 import { GoogleAdsTag } from "@/components/analytics/GoogleAdsTag";
 import { JsonLd } from "@/components/seo/JsonLd";
@@ -193,6 +194,7 @@ export default async function RootLayout({
           <PostHogProvider />
           <GoogleAdsTag />
           <CookieBanner />
+          <WhatsAppButton />
         </LocaleProvider>
       </body>
     </html>

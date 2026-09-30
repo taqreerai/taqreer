@@ -2182,6 +2182,45 @@ html.app-shell-scroll body {
   text-wrap: pretty;
 }
 
+/* ─── Floating support button (WhatsApp) ─── */
+/* components/support/WhatsAppButton.tsx. The button is standard flat chrome
+   (solid surface + hairline, flips with the theme, no shadow); WhatsApp's own
+   logo green is the ONE sanctioned exception to the blue-only rule, on the
+   glyph only (owner call 2026-09-30), so the mark stays recognizable.
+   Anchored to the inline-END bottom corner: bottom-right in LTR, bottom-left
+   in RTL, opposite the dashboard sidebar in both. z-index sits below modals,
+   drawers (1061) and the cookie banner (1300). */
+:root {
+  --tq-whatsapp: #25d366;
+}
+.support-fab-anchor {
+  position: fixed;
+  inset-inline-end: 20px;
+  inset-block-end: calc(20px + env(safe-area-inset-bottom, 0px));
+  z-index: 1040;
+}
+.support-fab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 9999px;
+  background: var(--tq-surface);
+  border: 1px solid var(--tq-border-hairline);
+  color: var(--tq-whatsapp);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+  flex-shrink: 0;
+}
+.support-fab:hover {
+  border-color: var(--tq-border-focus);
+  transform: translateY(-1px);
+}
+.support-fab:focus-visible {
+  outline: 2px solid var(--tq-border-focus);
+  outline-offset: 2px;
+}
+
 /* ─── Icon Button ─── */
 .btn-icon {
   color: var(--tq-muted);
