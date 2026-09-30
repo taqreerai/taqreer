@@ -26,14 +26,26 @@
 // transaction_id (the user's id) so Google hard-dedupes to one conversion per
 // user, ever - a double fire can't double-count.
 //
+// GA4 (2026-10-01, for GA + OpenSEO traffic reporting) rides the SAME gtag.js
+// loader: one extra `config` command, no second Google tag on the page, and
+// the same Consent Mode defaults/updates (analytics_storage is already in the
+// denied default and the granted update below). Production builds only, so
+// local dev traffic never reaches GA.
+//
 // Renders the loader script only; mounted once in app/[lang]/layout.tsx next
-// to PostHogProvider. No-ops entirely when NEXT_PUBLIC_GOOGLE_ADS_ID is unset
-// (local dev / preview environments stay tag-free).
+// to PostHogProvider, so it covers every page. No-ops entirely when neither ID
+// is active (local dev / preview environments stay tag-free).
 
 import { useEffect } from "react";
 import Script from "next/script";
 
 const ADS_ID = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID;
+// GA4 measurement ID (public by design). Gated to production builds.
+const GA4_ID =
+  process.env.NODE_ENV === "production" ? "G-M2WRVNP9MC" : undefined;
+// gtag.js is loaded ONCE, keyed on whichever ID is active; every other ID is
+// a `config` command on the same loader.
+const LOADER_ID = ADS_ID ?? GA4_ID;
 
 const CONSENT_COOKIE = "tq_cookie_consent";
 const ACCEPT_EVENT = "taqreer:cookie-consent-accept";
@@ -75,7 +87,8 @@ function ensureConfigured(): void {
     analytics_storage: "denied",
   });
   gtag("js", new Date());
-  gtag("config", ADS_ID);
+  if (ADS_ID) gtag("config", ADS_ID);
+  if (GA4_ID) gtag("config", GA4_ID);
 }
 
 function grantConsent(): void {
@@ -109,7 +122,7 @@ export function GoogleAdsTag() {
   // Seed defaults, then upgrade consent: on mount for returning accepted
   // visitors, live on the banner's Accept event for first-time visitors.
   useEffect(() => {
-    if (!ADS_ID) return;
+    if (!LOADER_ID) return;
     ensureConfigured();
     if (consentAccepted()) grantConsent();
     const onAccept = () => grantConsent();
@@ -117,12 +130,12 @@ export function GoogleAdsTag() {
     return () => window.removeEventListener(ACCEPT_EVENT, onAccept);
   }, []);
 
-  if (!ADS_ID) return null;
+  if (!LOADER_ID) return null;
 
   // The library drains whatever the effect queued, in order, once loaded.
   return (
     <Script
-      src={`https://www.googletagmanager.com/gtag/js?id=${ADS_ID}`}
+      src={`https://www.googletagmanager.com/gtag/js?id=${LOADER_ID}`}
       strategy="afterInteractive"
     />
   );
