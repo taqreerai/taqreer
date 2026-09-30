@@ -2225,17 +2225,8 @@ html.app-shell-scroll body {
   outline: 2px solid var(--tq-border-focus);
   outline-offset: 2px;
 }
-/* Toolbar variant (TopUtilityBar, dashboard + studio): keeps the logo green
-   instead of .icon-hover's muted gray; the hover affordance is the soft
-   overlay the other toolbar buttons show. */
-.icon-hover.tq-support-toolbar,
-.icon-hover.tq-support-toolbar:hover {
-  color: var(--tq-whatsapp);
-}
-.icon-hover.tq-support-toolbar:hover {
-  background: var(--tq-overlay-soft);
-}
-/* The app chrome carries the toolbar icon, so the floating button stands
+/* The app chrome carries a toolbar support icon (.tq-support-toolbar, a
+   plain contact_support glyph styled like its siblings), so the floating button stands
    down wherever it renders: dashboard + studio show the toolbar icon only,
    the public site keeps the floating button. */
 body:has(.tq-support-toolbar) .support-fab-anchor {

@@ -8,8 +8,10 @@
 //   inline-END bottom corner (.support-fab-anchor in globals.css), so it
 //   mirrors with the locale: bottom-right in English, bottom-left in Arabic,
 //   and rides above the cookie banner while that shows.
-// - WhatsAppToolbarButton: an icon in the TopUtilityBar, shared by the
-//   dashboard and the studio. Wherever it renders, the floating button hides
+// - WhatsAppToolbarButton: a `contact_support` icon in the TopUtilityBar,
+//   shared by the dashboard and the studio, styled like its siblings (thin
+//   Material Symbol, muted -> primary on hover; the tooltip names WhatsApp).
+//   Wherever it renders, the floating button hides
 //   (`body:has(.tq-support-toolbar)` in globals.css), so the app shows the
 //   toolbar icon only and the studio canvas stays clear.
 //
@@ -93,7 +95,9 @@ export function WhatsAppToolbarButton({ compact = false }: { compact?: boolean }
         aria-label={label}
         className="tq-support-toolbar icon-hover flex h-9 w-9 items-center justify-center rounded-lg"
       >
-        <WhatsAppGlyph size={20} />
+        <span className="material-symbols-outlined text-[20px]" aria-hidden="true">
+          contact_support
+        </span>
       </a>
     </Tooltip>
   );
