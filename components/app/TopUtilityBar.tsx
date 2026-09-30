@@ -16,6 +16,7 @@ import { HeaderSearch } from "@/components/app/HeaderSearch";
 import { BellDropdown } from "@/components/app/BellDropdown";
 import { LanguageMenu } from "@/components/i18n/LanguageMenu";
 import { ThemeToggle } from "@/components/app/ThemeToggle";
+import { WhatsAppToolbarButton } from "@/components/support/WhatsAppButton";
 import Link from "next/link";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
@@ -150,6 +151,10 @@ export function TopUtilityBar({
           {/* Notifications bell - this instance also boots the
               notification store + owns the live toast stack. */}
           <BellDropdown />
+          {/* WhatsApp support, next to the bell (owner request 2026-09-30).
+              Its presence hides the floating button (globals.css), so the app
+              shows this icon only. Studio phones hide it with Home + Search. */}
+          <WhatsAppToolbarButton compact={!!avatar} />
           {/* Home - studio header only (`avatar` is the studio signal; the
               dashboard already has the sidebar home link). Hidden on phones,
               where the bottom action bar already carries a "back to dashboard"

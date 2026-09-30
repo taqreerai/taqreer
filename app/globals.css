@@ -2189,15 +2189,20 @@ html.app-shell-scroll body {
    glyph only (owner call 2026-09-30), so the mark stays recognizable.
    Anchored to the inline-END bottom corner: bottom-right in LTR, bottom-left
    in RTL, opposite the dashboard sidebar in both. z-index sits below modals,
-   drawers (1061) and the cookie banner (1300). */
+   drawers (1061) and the cookie banner (1300); while the banner shows, it
+   publishes its height as --tq-cookie-banner-h (CookieBanner.tsx) and the
+   button rides just above it, dropping back to 20px once a choice is made. */
 :root {
   --tq-whatsapp: #25d366;
 }
 .support-fab-anchor {
   position: fixed;
   inset-inline-end: 20px;
-  inset-block-end: calc(20px + env(safe-area-inset-bottom, 0px));
+  inset-block-end: calc(
+    var(--tq-cookie-banner-h, 20px) + env(safe-area-inset-bottom, 0px)
+  );
   z-index: 1040;
+  transition: inset-block-end 0.2s ease;
 }
 .support-fab {
   display: flex;
@@ -2219,6 +2224,22 @@ html.app-shell-scroll body {
 .support-fab:focus-visible {
   outline: 2px solid var(--tq-border-focus);
   outline-offset: 2px;
+}
+/* Toolbar variant (TopUtilityBar, dashboard + studio): keeps the logo green
+   instead of .icon-hover's muted gray; the hover affordance is the soft
+   overlay the other toolbar buttons show. */
+.icon-hover.tq-support-toolbar,
+.icon-hover.tq-support-toolbar:hover {
+  color: var(--tq-whatsapp);
+}
+.icon-hover.tq-support-toolbar:hover {
+  background: var(--tq-overlay-soft);
+}
+/* The app chrome carries the toolbar icon, so the floating button stands
+   down wherever it renders: dashboard + studio show the toolbar icon only,
+   the public site keeps the floating button. */
+body:has(.tq-support-toolbar) .support-fab-anchor {
+  display: none;
 }
 
 /* ─── Icon Button ─── */

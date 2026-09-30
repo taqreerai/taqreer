@@ -10,7 +10,7 @@
 // (PostHog, Phase D) gate on `accept`. Bilingual inline copy (it can render on
 // the coming-soon page, outside the dictionary-fed app chrome).
 
-import { useState, useSyncExternalStore } from "react";
+import { useCallback, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
@@ -59,6 +59,24 @@ export function CookieBanner() {
   );
   const [dismissed, setDismissed] = useState(false);
 
+  // Publish the banner's live height as --tq-cookie-banner-h on <html> so the
+  // floating WhatsApp button (.support-fab-anchor) sits just above the card
+  // instead of under it. Ref callback (commit-phase DOM work, not an effect);
+  // its cleanup clears the var when the banner unmounts after a choice.
+  const publishHeight = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return;
+    const root = document.documentElement;
+    const set = () =>
+      root.style.setProperty("--tq-cookie-banner-h", `${el.offsetHeight}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      root.style.removeProperty("--tq-cookie-banner-h");
+    };
+  }, []);
+
   if (decided || dismissed) return null;
   const t = COPY[locale];
 
@@ -75,7 +93,10 @@ export function CookieBanner() {
   }
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[1300] flex justify-center p-3">
+    <div
+      ref={publishHeight}
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-[1300] flex justify-center p-3"
+    >
       <div className="surface-card pointer-events-auto flex w-full max-w-xl flex-wrap items-center justify-between gap-3 rounded-2xl p-4 text-sm">
         <p className="min-w-0 flex-1 text-muted">
           {t.text}{" "}
