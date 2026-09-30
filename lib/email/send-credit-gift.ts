@@ -24,13 +24,16 @@ function getClient(): Resend | null {
 // Brand pre-isolated so it keeps LTR order inside the Arabic copy (Outlook bidi).
 const BR = ltrIsolate("taqreer.ai");
 
-// Latin numerals only (n is a JS number) even inside the Arabic copy.
+// Latin numerals only, even inside the Arabic copy; en-US grouping so large
+// grants read "8,000", not "8000".
+const fmt = (n: number) => n.toLocaleString("en-US");
+
 const COPY = {
   ar: {
     // Subject + title wording approved by Osama 2026-07-07.
     subject: `هدية من ${BR} - رصيد إضافي في حسابك`,
-    preheader: (n: number) => `أضفنا ${n} رصيد إضافي مجاني إلى حسابك.`,
-    credits: (n: number) => `${n} رصيد إضافي مضاف لحسابك`,
+    preheader: (n: number) => `أضفنا ${fmt(n)} رصيد إضافي مجاني إلى حسابك.`,
+    credits: (n: number) => `${fmt(n)} رصيد إضافي مضاف لحسابك`,
     title: `أضفنا رصيدا إضافيا إلى حسابك`,
     sub: `شكرا لكونك من أوائل مستخدمي ${BR}. أضفنا رصيدا مجانيا إضافيا إلى حسابك، وعرضك القادم علينا. الرصيد جاهز في حسابك الآن.`,
     button: "ابدأ الإنشاء",
@@ -40,8 +43,8 @@ const COPY = {
   },
   en: {
     subject: "A little gift from taqreer.ai: free credits added",
-    preheader: (n: number) => `${n} bonus credits were added to your account.`,
-    credits: (n: number) => `${n} bonus credits added`,
+    preheader: (n: number) => `${fmt(n)} bonus credits were added to your account.`,
+    credits: (n: number) => `${fmt(n)} bonus credits added`,
     title: "A little gift from taqreer.ai",
     sub: "Thanks for being one of our earliest users. We just added bonus credits to your account - your next presentation is on us. They're ready whenever you are.",
     button: "Start creating",
