@@ -110,6 +110,12 @@ export async function POST(request: Request) {
               ...grantToMetadata(spec.grant),
             },
           },
+          // Post-payment invoice (proof of payment) so a top-up gets a real
+          // invoice number + PDF, is listed on /invoices, and the receipt
+          // email can link it. Stripe fee: 0.4% of the total, capped at $2
+          // per invoice. It carries no subscription, so the
+          // invoice.payment_succeeded renewal handler ignores it.
+          invoice_creation: { enabled: true },
         }),
     return_url: `${APP_URL}/checkout/return?session_id={CHECKOUT_SESSION_ID}`,
     // Promo codes: YEARLY subscriptions only (user direction 2026-07-07).

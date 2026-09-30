@@ -89,6 +89,7 @@ const RECEIPT_COPY = {
     sub: "شكرًا لك. تمت معالجة دفعتك بنجاح، وهذا إيصالك. نسخة منه متوفرة دائمًا في سجل الفواتير.",
     rows: {
       plan: "الخطة",
+      pack: "الباقة",
       amount: "المبلغ المدفوع",
       date: "التاريخ",
       invoice: "رقم الفاتورة",
@@ -104,6 +105,7 @@ const RECEIPT_COPY = {
     sub: "Thanks. Your payment went through, and here is your receipt. A copy is always available in your billing history.",
     rows: {
       plan: "Plan",
+      pack: "Pack",
       amount: "Amount paid",
       date: "Date",
       invoice: "Invoice",
@@ -116,6 +118,8 @@ const RECEIPT_COPY = {
 
 export async function sendReceipt(
   input: Common & {
+    // "pack" = a one-time top-up (not a plan); labels the first row.
+    itemKind?: "plan" | "pack";
     planLabel: string;
     amount: string;
     dateLabel: string;
@@ -127,7 +131,10 @@ export async function sendReceipt(
   const lang = langOf(input.locale);
   const c = RECEIPT_COPY[lang];
   const rows: { label: string; value: string }[] = [
-    { label: c.rows.plan, value: input.planLabel },
+    {
+      label: input.itemKind === "pack" ? c.rows.pack : c.rows.plan,
+      value: input.planLabel,
+    },
     { label: c.rows.amount, value: input.amount },
     { label: c.rows.date, value: input.dateLabel },
   ];

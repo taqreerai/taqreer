@@ -6,6 +6,7 @@
 
 import type Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
+import { stripe } from "@/lib/billing/stripe";
 import type { KnownPlan } from "@/lib/plan";
 import {
   sendReceipt,
@@ -120,10 +121,12 @@ export async function emailReceiptForTopup(
   const to = await recipient(prismaUserId);
   if (!to) return;
   const creditsStr = credits.toLocaleString("en-US");
+  const invoice = await topupInvoice(session);
   await sendReceipt({
     toEmail: to.email,
     locale: to.locale,
     appOrigin: APP_ORIGIN,
+    itemKind: "pack",
     planLabel:
       to.locale === "ar"
         ? `شحن رصيد - ${creditsStr} رصيد`
@@ -133,10 +136,32 @@ export async function emailReceiptForTopup(
       session.created ?? Math.floor(Date.now() / 1000),
       to.locale,
     ),
-    invoiceNumber: null,
+    invoiceNumber: invoice?.number ?? null,
     periodLabel: null,
-    invoiceUrl: null, // top-ups have no hosted invoice; sender links /invoices
+    // The post-payment invoice (checkout invoice_creation). Without one (a
+    // session from before invoicing was enabled) the sender falls back to
+    // /invoices.
+    invoiceUrl: invoice?.hosted_invoice_url ?? invoice?.invoice_pdf ?? null,
   });
+}
+
+// The top-up's post-payment invoice, when the session created one. Soft-fails
+// to null so a Stripe hiccup still sends the receipt (without the link).
+async function topupInvoice(
+  session: Stripe.Checkout.Session,
+): Promise<Stripe.Invoice | null> {
+  const ref = session.invoice;
+  if (!ref) return null;
+  if (typeof ref !== "string") return ref;
+  try {
+    return await stripe.invoices.retrieve(ref);
+  } catch (err) {
+    console.error(
+      "[billing-email] top-up invoice lookup failed:",
+      err instanceof Error ? err.message : String(err),
+    );
+    return null;
+  }
 }
 
 export async function emailPaymentFailed(

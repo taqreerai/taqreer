@@ -18,7 +18,7 @@ type Invoice = {
   total: number;
   currency: string;
   status: "open" | "paid" | "uncollectible" | "void";
-  pdfUrl: string | null;
+  url: string | null;
 };
 
 export function InvoicesList() {
@@ -94,14 +94,14 @@ export function InvoicesList() {
               <span className="text-sm font-semibold text-foreground tabular-nums" dir="ltr">
                 {money(inv)}
               </span>
-              {inv.pdfUrl ? (
+              {inv.url ? (
                 <a
-                  href={inv.pdfUrl}
+                  href={inv.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="btn-pill px-3 py-1.5 text-xs no-underline"
                 >
-                  {t.invoiceDownload}
+                  {t.invoiceView}
                 </a>
               ) : null}
             </div>

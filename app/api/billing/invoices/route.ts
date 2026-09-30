@@ -1,8 +1,9 @@
 // GET /api/billing/invoices - the caller's invoice history for the
 // /invoices page (embedded billing). We render the table ourselves;
-// each row keeps Stripe's hosted PDF link for the actual receipt
-// document (a download, not a flow - the user never manages anything
-// on Stripe).
+// each row links Stripe's hosted invoice page, which shows the paid state
+// plus both the invoice and the receipt downloads (the raw invoice PDF of a
+// post-payment top-up invoice reads "due" even when paid). A view, not a
+// flow - the user never manages anything on Stripe.
 
 import { NextResponse } from "next/server";
 import { stripe } from "@/lib/billing/stripe";
@@ -36,7 +37,7 @@ export async function GET() {
         total: inv.total,
         currency: inv.currency,
         status: inv.status, // open | paid | uncollectible | void
-        pdfUrl: inv.invoice_pdf ?? null,
+        url: inv.hosted_invoice_url ?? inv.invoice_pdf ?? null,
       })),
   });
 }
