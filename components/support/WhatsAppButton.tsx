@@ -8,16 +8,19 @@
 //   inline-END bottom corner (.support-fab-anchor in globals.css), so it
 //   mirrors with the locale: bottom-right in English, bottom-left in Arabic,
 //   and rides above the cookie banner while that shows.
-// - WhatsAppToolbarButton: a `contact_support` icon in the TopUtilityBar,
-//   shared by the dashboard and the studio, styled like its siblings (thin
-//   Material Symbol, muted -> primary on hover; the tooltip names WhatsApp).
+// - WhatsAppToolbarButton: a brand-blue `contact_support` button in the
+//   TopUtilityBar, shared by the dashboard and the studio. It opens a help
+//   popover whose action contacts us on WhatsApp (2026-10-01).
 //   Wherever it renders, the floating button hides
 //   (`body:has(.tq-support-toolbar)` in globals.css), so the app shows the
 //   toolbar icon only and the studio canvas stays clear.
 //
-// Both open WhatsApp with a greeting in the user's language (editable before
+// Both reach WhatsApp with a greeting in the user's language (editable before
 // sending).
 
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { motion } from "framer-motion";
 import { usePathname } from "next/navigation";
 import { Tooltip } from "@/components/common/Tooltip";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
@@ -80,25 +83,116 @@ export function WhatsAppButton() {
 
 // `compact`: the studio header on phones, where the bar hides secondary icons
 // to keep Export/Share in view (same rule as its Home + Search buttons).
+//
+// Brand-blue help button (2026-10-01). A click opens a small help popover
+// whose action is "Contact us via WhatsApp"; the icon itself never jumps to
+// WhatsApp. Portal'd + fixed like the bell popover so the header's blur and
+// overflow can't clip it; closes on outside click, Escape, or the action.
 export function WhatsAppToolbarButton({ compact = false }: { compact?: boolean }) {
-  const { label, href } = useWhatsAppLink();
+  const t = useDict().components.supportWidget;
+  const { dir } = useLocale();
+  const { href } = useWhatsAppLink();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; start: number } | null>(null);
+  const open = pos !== null;
+
+  const toggle = () => {
+    if (open) return setPos(null);
+    const r = triggerRef.current?.getBoundingClientRect();
+    if (!r) return;
+    // Align the popover's inline-end edge with the trigger's, so it opens
+    // toward the page in both directions.
+    setPos({
+      top: r.bottom + 8,
+      start: dir === "rtl" ? r.left : window.innerWidth - r.right,
+    });
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (e: PointerEvent) => {
+      if (!(e.target instanceof Element)) return;
+      if (triggerRef.current?.contains(e.target)) return;
+      if (e.target.closest("[data-help-popover]")) return;
+      setPos(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPos(null);
+    };
+    const close = () => setPos(null);
+    window.addEventListener("pointerdown", onPointer);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("pointerdown", onPointer);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", close);
+    };
+  }, [open]);
+
   return (
-    <Tooltip
-      label={label}
-      placement="bottom"
-      className={compact ? "hidden md:inline-flex" : "inline-flex"}
-    >
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label={label}
-        className="tq-support-toolbar icon-hover flex h-9 w-9 items-center justify-center rounded-lg"
+    <>
+      <Tooltip
+        label={t.helpLabel}
+        disabled={open}
+        placement="bottom"
+        className={compact ? "hidden md:inline-flex" : "inline-flex"}
       >
-        <span className="material-symbols-outlined text-[20px]" aria-hidden="true">
-          contact_support
-        </span>
-      </a>
-    </Tooltip>
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={toggle}
+          aria-label={t.helpLabel}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          className="tq-support-toolbar support-toolbar-btn flex h-9 w-9 items-center justify-center rounded-lg"
+        >
+          <span className="material-symbols-outlined text-[20px]" aria-hidden="true">
+            contact_support
+          </span>
+        </button>
+      </Tooltip>
+
+      {open && pos
+        ? createPortal(
+            <div
+              dir={dir}
+              data-help-popover
+              role="dialog"
+              aria-label={t.popoverTitle}
+              className="in-slide-popover fixed z-[1100] w-72 rounded-2xl p-4"
+              style={{
+                top: pos.top,
+                [dir === "rtl" ? "left" : "right"]: pos.start,
+              }}
+            >
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                className="flex flex-col gap-3"
+              >
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{t.popoverTitle}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-[var(--tq-text-muted)]">
+                    {t.popoverBody}
+                  </p>
+                </div>
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setPos(null)}
+                  className="support-whatsapp-cta"
+                >
+                  <WhatsAppGlyph size={18} />
+                  {t.whatsappCta}
+                </a>
+              </motion.div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }

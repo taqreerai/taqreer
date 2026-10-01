@@ -2232,6 +2232,38 @@ html.app-shell-scroll body {
 body:has(.tq-support-toolbar) .support-fab-anchor {
   display: none;
 }
+/* Toolbar help trigger (2026-10-01): brand-blue fill so it stands out from
+   the muted sibling icons. Opens the help popover, never WhatsApp directly. */
+.support-toolbar-btn {
+  background: var(--tq-brand-blue);
+  color: #fff;
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+.support-toolbar-btn:hover {
+  filter: brightness(1.12);
+}
+.support-toolbar-btn:focus-visible {
+  outline: 2px solid var(--tq-border-focus);
+  outline-offset: 2px;
+}
+/* The WhatsApp action inside the help popover: WhatsApp green, full width. */
+.support-whatsapp-cta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  border-radius: 9999px;
+  padding: 0.6rem 1rem;
+  background: var(--tq-whatsapp);
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transition: filter 0.15s ease;
+}
+.support-whatsapp-cta:hover {
+  filter: brightness(1.06);
+}
 
 /* ─── Icon Button ─── */
 .btn-icon {
