@@ -21,6 +21,7 @@ import { JsonLd } from "@/components/seo/JsonLd";
 import { breadcrumbSchema, faqPageSchema } from "@/lib/seo/schema";
 import { localeAlternates } from "@/lib/seo/alternates";
 import type { Dictionary } from "@/lib/i18n/dictionaries";
+import { RepeatCta } from "@/components/marketing/RepeatCta";
 
 export type FeatureSpokeContent = {
   meta: { title: string; description: string };
@@ -141,6 +142,8 @@ export function FeatureSpokePage({
         </section>
       ) : null}
 
+      <RepeatCta href={localizedHref("/signup", locale)} label={t.hero.cta} />
+
       {/* Why — 4 points. */}
       <section className="py-16">
         <ScrollReveal direction="up" className="pb-10">
@@ -164,6 +167,8 @@ export function FeatureSpokePage({
         </div>
       </section>
 
+      <RepeatCta href={localizedHref("/signup", locale)} label={t.hero.cta} />
+
       {t.article ? <FeatureArticleSection locale={locale} article={t.article} /> : null}
 
       {/* FAQ. */}
@@ -175,6 +180,8 @@ export function FeatureSpokePage({
           <FaqAccordion items={t.faq} />
         </ScrollReveal>
       </section>
+
+      <RepeatCta href={localizedHref("/signup", locale)} label={t.hero.cta} />
 
       {/* Cross-links to the sibling marketing pages (crawl path between spokes). */}
       <ExploreMoreSection locale={locale} current={spokeKey} dict={dict} />

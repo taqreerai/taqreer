@@ -18,6 +18,7 @@ import { FeatureArticleSection } from "@/components/marketing/FeatureSpokePage";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { breadcrumbSchema, faqPageSchema } from "@/lib/seo/schema";
 import { localeAlternates } from "@/lib/seo/alternates";
+import { RepeatCta } from "@/components/marketing/RepeatCta";
 
 export const dynamic = "force-static";
 
@@ -131,6 +132,8 @@ export default async function ArabicPresentationsPage(props: {
         </div>
       </section>
 
+      <RepeatCta href={localizedHref("/signup", locale)} label={t.hero.cta} />
+
       {/* Why — 4 points. */}
       <section className="py-16">
         <ScrollReveal direction="up" className="pb-10">
@@ -154,6 +157,8 @@ export default async function ArabicPresentationsPage(props: {
         </div>
       </section>
 
+      <RepeatCta href={localizedHref("/signup", locale)} label={t.hero.cta} />
+
       {/* Long-form SEO article (2026-10-01). */}
       <FeatureArticleSection locale={locale} article={t.article} />
 
@@ -166,6 +171,8 @@ export default async function ArabicPresentationsPage(props: {
           <FaqAccordion items={t.faq} />
         </ScrollReveal>
       </section>
+
+      <RepeatCta href={localizedHref("/signup", locale)} label={t.hero.cta} />
 
       {/* Cross-links to the sibling marketing pages (crawl path between spokes). */}
       <ExploreMoreSection locale={locale} current="arabicPresentations" dict={dict} />

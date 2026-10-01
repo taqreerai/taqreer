@@ -25,6 +25,8 @@ import { ScrollReveal } from "@/components/marketing/ScrollReveal";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { breadcrumbSchema, imageGallerySchema } from "@/lib/seo/schema";
 import { localeAlternates } from "@/lib/seo/alternates";
+import { RepeatCta } from "@/components/marketing/RepeatCta";
+import { localizedHref } from "@/lib/i18n/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -120,6 +122,8 @@ export default async function StockImagesPage(props: {
         </ScrollReveal>
       </section>
 
+      <RepeatCta href={localizedHref("/signup", locale)} label={t.cta} />
+
       {/* Searchable, filterable masonry (seeded with the server's first page). */}
       <section className="pb-16">
         <StockImagesClient
@@ -128,6 +132,8 @@ export default async function StockImagesPage(props: {
           seed={seed}
         />
       </section>
+
+      <RepeatCta href={localizedHref("/signup", locale)} label={t.cta} />
 
       {/* Cross-links to the sibling marketing spokes (crawl path). */}
       <ExploreMoreSection locale={locale} current="stockImages" dict={dict} />

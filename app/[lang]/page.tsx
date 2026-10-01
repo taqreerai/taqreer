@@ -38,6 +38,7 @@ import { fillPricingTokens } from "@/lib/credits/pricing-tokens";
 import { getDisplayPrices } from "@/lib/billing/display-prices";
 import { localeAlternates } from "@/lib/seo/alternates";
 import type { Metadata } from "next";
+import { RepeatCta } from "@/components/marketing/RepeatCta";
 
 // Fully static: the landing prerenders to HTML at build (auth resolved
 // client-side, data calls cached), so there's no per-request render or DB hit —
@@ -215,6 +216,8 @@ export default async function LandingPage({
           </ScrollReveal>
         </section>
 
+        <RepeatCta href={localizedHref("/signup", lang)} label={dict.landing.hero.cta} />
+
         {/* BiDi band: asymmetric inline-toggle title; the CTA now lives inside
             the title column under the heading (see BidiSection). */}
         <section className={`${SECTION} ${PX}`}>
@@ -243,6 +246,8 @@ export default async function LandingPage({
           </div>
         </section>
 
+        <RepeatCta href={localizedHref("/signup", lang)} label={dict.landing.hero.cta} />
+
         {/* Pricing */}
         <section id="pricing" className={`${SECTION} ${PX}`}>
           <ScrollReveal direction="up">
@@ -270,6 +275,8 @@ export default async function LandingPage({
             <FaqAccordion items={landingFaq} />
           </ScrollReveal>
         </section>
+
+        <RepeatCta href={localizedHref("/signup", lang)} label={dict.landing.hero.cta} />
 
         {/* Footer - shared with the legal pages (components/marketing/SiteFooter).
             Full-bleed here so it spans the column like the FAQ rows above. */}

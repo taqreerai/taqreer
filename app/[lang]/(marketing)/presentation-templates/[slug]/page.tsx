@@ -132,6 +132,24 @@ export default async function TemplateDetailPage(props: {
       ? other.nameAr ?? other.nameEn
       : other.nameEn ?? other.nameAr) ?? t.fallbackName;
 
+  // Primary CTA row: in the hero, then repeated after the slide strip, the
+  // how-to steps and the related templates (CTAs throughout, 2026-10-01).
+  const ctaRow = (
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            <UseTemplateCta
+              templateId={tpl.id}
+              label={t.useCta}
+              busyLabel={t.useBusy}
+            />
+            <a
+              href={hubHref}
+              className="text-sm font-medium text-muted transition-colors hover:text-[var(--tq-fg)]"
+            >
+              {t.browseAll}
+            </a>
+          </div>
+  );
+
   return (
     <div className="pb-8">
       <JsonLd
@@ -171,19 +189,7 @@ export default async function TemplateDetailPage(props: {
             <p className="mx-auto mb-8 max-w-2xl text-lg leading-relaxed text-muted">
               {displayDescription}
             </p>
-            <div className="flex flex-wrap items-center justify-center gap-4">
-              <UseTemplateCta
-                templateId={tpl.id}
-                label={t.useCta}
-                busyLabel={t.useBusy}
-              />
-              <a
-                href={hubHref}
-                className="text-sm font-medium text-muted transition-colors hover:text-[var(--tq-fg)]"
-              >
-                {t.browseAll}
-              </a>
-            </div>
+            {ctaRow}
           </div>
         </ScrollReveal>
       </section>
@@ -262,6 +268,7 @@ export default async function TemplateDetailPage(props: {
               </ScrollReveal>
             ))}
           </div>
+        <div className="pt-10">{ctaRow}</div>
         </section>
       ) : null}
 
@@ -286,6 +293,7 @@ export default async function TemplateDetailPage(props: {
             </ScrollReveal>
           ))}
         </div>
+        <div className="pt-10">{ctaRow}</div>
       </section>
 
       {/* Related templates — crawlable cross-links between detail pages. */}
@@ -324,6 +332,7 @@ export default async function TemplateDetailPage(props: {
               </ScrollReveal>
             ))}
           </div>
+        <div className="pt-10">{ctaRow}</div>
         </section>
       ) : null}
     </div>

@@ -24,6 +24,8 @@ import {
 } from "@/lib/config/runtime-config";
 import { fillPricingTokens } from "@/lib/credits/pricing-tokens";
 import { getDisplayPrices } from "@/lib/billing/display-prices";
+import { RepeatCta } from "@/components/marketing/RepeatCta";
+import { localizedHref } from "@/lib/i18n/navigation";
 
 export const dynamic = "force-static";
 
@@ -123,6 +125,8 @@ export default async function PricingPage(props: {
         <PricingTiers tierNumbers={tierNumbers} tierPrices={tierPrices} />
       </section>
 
+      <RepeatCta href={localizedHref("/signup", locale)} label={dict.landing.hero.cta} />
+
       {/* How credits work — 4 points. */}
       <section className="py-16">
         <ScrollReveal direction="up" className="pb-10">
@@ -155,6 +159,8 @@ export default async function PricingPage(props: {
           <FaqAccordion items={pricingFaq} />
         </ScrollReveal>
       </section>
+      <RepeatCta href={localizedHref("/signup", locale)} label={dict.landing.hero.cta} />
+
     </div>
   );
 }
