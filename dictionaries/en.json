@@ -173,6 +173,13 @@
       "arabicPresentations": { "title": "Arabic presentations", "body": "Arabic-first design with true right-to-left support." },
       "templates": { "title": "Templates", "body": "Ready-made, editable presentation templates." },
       "stockImages": { "title": "Free stock images", "body": "A free library of AI-generated images to download." },
+      "pdfToPowerpoint": { "title": "PDF to PowerPoint", "body": "Turn a PDF into an editable deck" },
+      "wordToPowerpoint": { "title": "Word to PowerPoint", "body": "Turn a Word document into slides" },
+      "powerpointOnline": { "title": "Online editor", "body": "A full editor in your browser" },
+      "powerpointImages": { "title": "PowerPoint images", "body": "AI images for every slide" },
+      "brandKit": { "title": "Brand kit", "body": "Your colors, fonts, and logo on every deck" },
+      "collaboration": { "title": "Collaboration", "body": "Share, comment, and edit with your team" },
+      "exportFormats": { "title": "Export", "body": "PowerPoint, PDF, and Google Slides" },
       "pricing": { "title": "Pricing", "body": "Simple plans; start free." }
     }
   },
@@ -206,13 +213,13 @@
   },
   "aiPresentations": {
     "meta": {
-      "title": "AI Presentation Maker (Arabic & English) | taqreer.ai",
+      "title": "PowerPoint AI: AI Presentation Maker (Arabic & English) | taqreer.ai",
       "description": "Design a complete presentation with AI, in Arabic and English. Write a brief or upload a file, apply your brand, and get a fully designed deck you can edit and export to PowerPoint."
     },
     "breadcrumb": "AI Presentations",
     "hero": {
       "eyebrow": "Create",
-      "title": "Design presentations with AI",
+      "title": "Make PowerPoint presentations with AI",
       "subtitle": "From an idea or a file to a fully designed deck, in Arabic and English. The AI designs every slide with your brand, and you can still tweak every detail.",
       "cta": "Start free"
     },
@@ -235,17 +242,76 @@
       { "q": "Does it support Arabic?", "a": "Yes. taqreer.ai is Arabic-first with full right-to-left support and Arabic fonts, and it supports English too." },
       { "q": "Can I edit the deck after it is generated?", "a": "Yes. Edit text, colors, and slides and reorder them right in the editor, with autosave." },
       { "q": "Can I export to PowerPoint?", "a": "Yes. Export your deck as editable PPTX for PowerPoint while preserving the Arabic formatting and text direction." }
-    ]
+    ],
+    "article": {
+      "title": "How to make a PowerPoint with AI in taqreer.ai",
+      "intro": "A professional presentation used to take hours of writing, formatting, and picking colors. With taqreer.ai you write your idea or upload a file, and the AI designs a complete PowerPoint deck with slides built for their content, in Arabic and English, which you then edit and export. That is what sets it apart from ready-made templates: every slide is designed fresh around your content.",
+      "sections": [
+        {
+          "heading": "How to create a presentation with AI",
+          "blocks": [
+            {
+              "steps": [
+                "Write your topic or paste your content, or upload a PDF, PowerPoint, or Word file.",
+                "Choose your brand, or leave colors on auto so the AI picks a palette that fits the topic.",
+                "Set the size (16:9 or 9:16) and slide count, and pick a design style and slide numbering if you want them.",
+                "Check the credit cost before you start, then click create and watch the slides appear one by one.",
+                "Adjust anything in the [editor](/powerpoint-online), then export to PowerPoint, PDF, or [other formats](/export)."
+              ]
+            }
+          ]
+        },
+        {
+          "heading": "How to write a brief that gets a better deck",
+          "blocks": [
+            "Deck quality starts with the brief you write. A short brief like \"a deck about marketing\" gets you a generic deck, while a clear brief gets you one that fits your goal. Include:",
+            {
+              "bullets": [
+                "The audience: company management, new clients, or high school students.",
+                "The goal: to persuade, to explain a plan, or to present results.",
+                "The key points and numbers that must appear in the deck.",
+                "The language you want the deck in, Arabic or English."
+              ]
+            }
+          ]
+        },
+        {
+          "heading": "What makes PowerPoint AI in taqreer.ai different?",
+          "blocks": [
+            {
+              "bullets": [
+                "A design for every slide: the AI picks each slide's layout for its content instead of pouring text into one fixed template.",
+                "Built-in review: after generating, the AI checks the slides and improves any with layout, overflow, or readability problems.",
+                "Arabic-first: right-to-left direction that stays correct even in the PowerPoint file. See [Arabic presentations](/arabic-presentations).",
+                "Images that fit: on paid plans the AI can add [generated images](/powerpoint-images) to any deck."
+              ]
+            }
+          ]
+        },
+        {
+          "heading": "A clear credit cost",
+          "blocks": [
+            "Each deck uses credits based on its slide count and the generation quality you choose, and you see the cost before you start. You are never charged more than that: if the deck comes out shorter or you stop the generation, the difference goes back to your balance, and a failed generation costs nothing. The free plan starts with 400 credits at signup, no card needed. See [pricing and plans](/pricing)."
+          ]
+        },
+        {
+          "heading": "Start from an idea or from a file?",
+          "blocks": [
+            "Start from an idea when you want a new deck from scratch. Start from a file when the content is already in a document: try [PDF to PowerPoint](/pdf-to-powerpoint) or [Word to PowerPoint](/word-to-powerpoint). If you have an old deck and only want it to look better, use [Professional PowerPoint design](/redesign)."
+          ]
+        }
+      ]
+    }
   },
   "socialMediaPosts": {
     "meta": {
-      "title": "AI Social Media Post Maker | taqreer.ai",
+      "title": "Social Media Post Design with AI | taqreer.ai",
       "description": "Design social media posts and carousels with AI, in Arabic and English. Pick a platform and size, add your brief and brand, and export as PDF or PNG."
     },
     "breadcrumb": "Social Media Posts",
     "hero": {
       "eyebrow": "Social",
-      "title": "Design social media posts with AI",
+      "title": "Social media post and ad design with AI",
       "subtitle": "Pick a platform and size, add your brief and brand, and taqreer.ai designs an on-brand post or carousel for Instagram, Facebook, X, and LinkedIn, in Arabic and English, ready to export as PDF or PNG.",
       "cta": "Start free"
     },
@@ -268,17 +334,55 @@
       { "q": "Which platforms and sizes are supported?", "a": "Instagram, Facebook, X, and LinkedIn, with square, portrait, story, and landscape sizes at the exact export dimensions." },
       { "q": "Can I design a carousel?", "a": "Yes. Choose Auto or a fixed slide count and taqreer.ai designs a multi-slide carousel with a consistent design." },
       { "q": "Can I export as PDF or PNG?", "a": "Yes. Export your post or carousel as PDF or PNG, in Arabic and English, ready to publish." }
-    ]
+    ],
+    "article": {
+      "title": "Social media post and ad design, ready to edit",
+      "intro": "Brands need consistent posts and ads every week, and designing them from scratch each time eats up hours. In taqreer.ai you write your idea and pick the platform, and the AI designs a single post or a full carousel in your brand, ready to edit and publish.",
+      "sections": [
+        {
+          "heading": "How to design a post or an ad",
+          "blocks": [
+            {
+              "steps": [
+                "Pick the platform: Instagram, Facebook, X, or LinkedIn.",
+                "Pick the size: square (1:1), portrait (4:5), story (9:16), or landscape (16:9), depending on the platform.",
+                "Write the idea for the post or ad, and add your colors, fonts, and logo.",
+                "Click create, then adjust the design in the [editor](/powerpoint-online) and export it as PNG or PDF."
+              ]
+            }
+          ]
+        },
+        {
+          "heading": "A single post or a carousel",
+          "blocks": [
+            "You can design a single post or a carousel of several cards that tell one story, up to 20 cards per carousel. The design keeps the same colors and fonts across every card, so the series looks consistent on your feed."
+          ]
+        },
+        {
+          "heading": "Tips for better posts",
+          "blocks": [
+            {
+              "bullets": [
+                "Save your [brand kit](/brand-kit) so every post comes out the same way without setup each time.",
+                "On paid plans, turn on [generated images](/powerpoint-images) so the AI adds images that fit the post's idea.",
+                "Write the key message and the audience clearly: it helps the AI choose the right headline and design.",
+                "Arabic posts are fully supported with correct right-to-left direction."
+              ]
+            }
+          ]
+        }
+      ]
+    }
   },
   "redesign": {
     "meta": {
-      "title": "AI Presentation Redesign | taqreer.ai",
+      "title": "Professional PowerPoint Design with AI | taqreer.ai",
       "description": "Upload your old presentation and taqreer.ai redesigns it with AI, keeping your content and images, applying your brand, in Arabic and English, ready to edit and export."
     },
     "breadcrumb": "Redesign",
     "hero": {
       "eyebrow": "Enhance",
-      "title": "Redesign your presentation with AI",
+      "title": "Professional PowerPoint design with AI",
       "subtitle": "Upload an existing deck in PDF or PowerPoint, and taqreer.ai redesigns it with your brand while keeping your content and images, in Arabic and English.",
       "cta": "Start free"
     },
@@ -301,17 +405,56 @@
       { "q": "Which file formats are supported?", "a": "taqreer.ai supports uploading decks in PDF and PowerPoint (PPTX)." },
       { "q": "Does it keep my text and images?", "a": "Yes. taqreer.ai extracts the text, images, and fonts from your file and redesigns them in a new deck without losing content." },
       { "q": "Can I export to PowerPoint?", "a": "Yes. Export the redesigned deck as editable PPTX for PowerPoint while preserving the Arabic formatting." }
-    ]
+    ],
+    "article": {
+      "title": "Professional PowerPoint design for your existing deck",
+      "intro": "Have a deck with the content ready but a dated or cluttered design? Instead of hiring a designer or rebuilding every slide yourself, taqreer.ai redesigns your deck with AI: it keeps your text and images and gives every slide a professional design in your brand.",
+      "sections": [
+        {
+          "heading": "How to redesign a PowerPoint deck",
+          "blocks": [
+            {
+              "steps": [
+                "Open the page to enhance an existing deck and upload your PowerPoint or PDF.",
+                "Choose your brand: your colors, fonts, and logo.",
+                "Click create, and the AI redesigns every slide while keeping its content and images.",
+                "Review and adjust the result in the [editor](/powerpoint-online), then export to PowerPoint."
+              ]
+            },
+            "Each page of your file becomes a slide in the new deck, within your plan's slide limit."
+          ]
+        },
+        {
+          "heading": "When do you need a redesign?",
+          "blocks": [
+            {
+              "bullets": [
+                "An old company deck you want to update to your new brand.",
+                "A text-heavy deck that needs a clearer structure before an important meeting.",
+                "A deck put together by several people whose slides ended up in different styles.",
+                "A deck saved as a PDF that you want as an editable file."
+              ]
+            }
+          ]
+        },
+        {
+          "heading": "Redesign or create from scratch?",
+          "blocks": [
+            "A redesign keeps your slide order and content as they are and only changes how they look. If you want the AI to reorganize and summarize the content itself, use [PDF to PowerPoint](/pdf-to-powerpoint) or [PowerPoint AI](/ai-presentations). If you like another deck's style and want it applied to your content, try [Copy a design](/presentation-style)."
+          ]
+        }
+      ]
+    }
   },
   "presentationStyle": {
     "meta": {
-      "title": "Match Any Presentation Style with AI | taqreer.ai",
+      "title": "Copy Any PowerPoint Design with AI | taqreer.ai",
       "description": "Attach a presentation whose style you like, and taqreer.ai applies its visual spirit to your new content with AI. Arabic and English decks, editable and exportable to PowerPoint."
     },
     "breadcrumb": "Presentation Style",
     "hero": {
       "eyebrow": "Mimic",
-      "title": "Design your deck in a style you love",
+      "title": "Copy the design of any PowerPoint",
       "subtitle": "Attach a deck or design you like, and taqreer.ai applies its visual style to your new content in Arabic and English, keeping colors, fonts, and layout consistent.",
       "cta": "Start free"
     },
@@ -334,7 +477,45 @@
       { "q": "What does taqreer.ai take from the reference deck?", "a": "It captures the colors, fonts, layout patterns, and overall visual spirit, and applies them to your new content without copying the original content." },
       { "q": "Does it support Arabic?", "a": "Yes. taqreer.ai is Arabic-first with full right-to-left support and Arabic fonts, and it supports English too." },
       { "q": "Can I export to PowerPoint?", "a": "Yes. Export your deck as editable PPTX for PowerPoint while preserving the Arabic formatting and text direction." }
-    ]
+    ],
+    "article": {
+      "title": "Copy any PowerPoint design and apply it to your content",
+      "intro": "Sometimes you see a deck whose style you love: its colors, slide layouts, and the way it shows numbers, and you want a deck with the same feel for your own content. Instead of imitating it slide by slide by hand, taqreer.ai reads the reference deck's style and designs a new deck for your content in that style.",
+      "sections": [
+        {
+          "heading": "How to copy a deck's design",
+          "blocks": [
+            {
+              "steps": [
+                "Upload the reference deck as a PDF or PowerPoint, or pick a template from the [template gallery](/presentation-templates).",
+                "Add your content: type it in, or upload it as a PDF or PowerPoint file.",
+                "Add your logo and fonts if you want, then click create.",
+                "The AI designs a new deck in the reference's style with your content, which you can adjust in the [editor](/powerpoint-online)."
+              ]
+            }
+          ]
+        },
+        {
+          "heading": "What does it copy, and what doesn't it?",
+          "blocks": [
+            "taqreer.ai carries over the reference deck's visual feel: colors, layout, and slide style. It does not copy the reference's text or content: the content in the new deck is yours. So you get a standout deck in a style you know, without it being a copy of someone else's deck."
+          ]
+        },
+        {
+          "heading": "When should you use it?",
+          "blocks": [
+            {
+              "bullets": [
+                "When your company has a model deck and you want every new deck to follow its style.",
+                "When you like a particular template's design and want it for different content.",
+                "When you want a deck in a specific style instead of the automatic design."
+              ]
+            },
+            "If you only want to improve your current deck's design without changing its content, use [Professional PowerPoint design](/redesign)."
+          ]
+        }
+      ]
+    }
   },
   "arabicPresentations": {
     "meta": {
@@ -385,7 +566,59 @@
       { "q": "What happens to Arabic when exporting to PowerPoint?", "a": "Many tools break Arabic direction on export. taqreer.ai post-processes the PowerPoint file to guarantee correct direction, alignment, and the placement of numbers and punctuation inside Arabic text." },
       { "q": "Do numbers and English words show correctly inside Arabic text?", "a": "Yes. Percentages, dates, and English brand names stay in the correct place inside the Arabic sentence instead of jumping to the wrong side." },
       { "q": "Do Arabic fonts stay intact after export?", "a": "Yes. Arabic fonts are embedded in the PowerPoint file and their letters stay connected in the correct shape, without falling back to a substitute font." }
-    ]
+    ],
+    "article": {
+      "title": "Arabic PowerPoint without text direction problems",
+      "intro": "Anyone who has designed an Arabic deck knows the problem: the text looks fine in the design tool, then it opens in PowerPoint with flipped alignment, English words and numbers scrambled inside sentences, and lines breaking in odd places. taqreer.ai was built Arabic-first, so it handles these problems both in the design and in the exported PowerPoint file.",
+      "sections": [
+        {
+          "heading": "Why does Arabic text break in PowerPoint?",
+          "blocks": [
+            "Arabic runs right to left, while English words and numbers run left to right. When both directions share a line, the PowerPoint file needs the right direction settings for every paragraph and text box. Many English-first tools don't set all of these, so the deck looks fine in the browser and breaks after export."
+          ]
+        },
+        {
+          "heading": "How taqreer.ai keeps Arabic right",
+          "blocks": [
+            {
+              "bullets": [
+                "Correct direction and alignment for every Arabic paragraph in the exported PowerPoint.",
+                "English words and numbers in their correct place inside Arabic sentences.",
+                "Line-width correction so Arabic text does not wrap differently when the file opens in PowerPoint.",
+                "Your own Arabic fonts are embedded in the exported file when you upload them to your [brand kit](/brand-kit).",
+                "Control the direction of each text box in the [editor](/powerpoint-online), for decks that mix Arabic and English."
+              ]
+            }
+          ]
+        },
+        {
+          "heading": "Common mistakes in Arabic presentations",
+          "blocks": [
+            {
+              "bullets": [
+                "Left-aligned Arabic text, which makes a deck look translated rather than designed in Arabic.",
+                "Punctuation at the wrong end of the sentence because of the paragraph direction.",
+                "A font without good Arabic support, so letters appear disconnected or in a fallback font.",
+                "Lists and bullets that start on the left while the text reads from the right."
+              ]
+            },
+            "In taqreer.ai, Arabic slides are designed right to left from the start, so you don't have to fix these mistakes by hand after every deck."
+          ]
+        },
+        {
+          "heading": "Arabic fonts for presentations",
+          "blocks": [
+            "The font is one of the biggest signs of a professional Arabic deck. Pick a font that supports Arabic in all its weights, and use a bold weight for headings and a regular weight for body text. If your brand has its own fonts, upload them once to your brand kit so they are used in every deck and embedded in the PowerPoint file, and the deck shows your font even on a computer that doesn't have it."
+          ]
+        },
+        {
+          "heading": "An Arabic presentation, an English one, or both",
+          "blocks": [
+            "The taqreer.ai interface is in Arabic and English, and you can design a deck in either language whatever your interface language is. Start from an idea with [PowerPoint AI](/ai-presentations), or convert an Arabic file with [PDF to PowerPoint](/pdf-to-powerpoint), then export to [PowerPoint](/export) with clean Arabic."
+          ]
+        }
+      ]
+    }
   },
   "newProjectDialog": {
     "title": "Start a new project",
@@ -434,6 +667,541 @@
       "support": "Support & bug report"
     }
   },
+  "pdfToPowerpoint": {
+    "meta": {
+      "title": "Convert PDF to PowerPoint with AI | taqreer.ai",
+      "description": "Convert a PDF into a designed, editable PowerPoint deck with AI. Upload your file, apply your brand, and export a PPTX with clean Arabic and English."
+    },
+    "breadcrumb": "PDF to PowerPoint",
+    "hero": {
+      "eyebrow": "PDF to PowerPoint",
+      "title": "Convert PDF to PowerPoint with AI",
+      "subtitle": "Upload a PDF and the AI reads its content and turns it into a designed PowerPoint deck in your brand, ready to edit and export as PPTX.",
+      "cta": "Start free"
+    },
+    "preview": {
+      "title": "Start from a PDF",
+      "subtitle": "Upload your file in the Create step, pick your colors, fonts, and logo, and set the slide count and size."
+    },
+    "why": {
+      "title": "Why taqreer.ai for PDF to PowerPoint",
+      "subtitle": "A freshly designed deck, not a frozen copy of your pages.",
+      "points": [
+        { "title": "A new design for every slide", "body": "Instead of copying PDF pages as they are, the AI redesigns your content into clear, consistent slides." },
+        { "title": "Fully editable", "body": "Real text and shapes in PowerPoint, not pictures of your pages, so every detail is easy to change." },
+        { "title": "Arabic done right", "body": "Right-to-left text and alignment stay correct after you export to PowerPoint." },
+        { "title": "Keep an existing deck's content", "body": "Have an old deck saved as a PDF? Redesign it while keeping its text and images." }
+      ]
+    },
+    "faq": [
+      { "q": "How do I convert a PDF to PowerPoint?", "a": "Upload your PDF to taqreer.ai, choose your brand, and the AI designs a PowerPoint deck from its content that you can edit and export as PPTX." },
+      { "q": "Does it copy the PDF pages exactly?", "a": "No. taqreer.ai does not copy pages one to one. It reads the content and designs it again as presentation slides. To keep an existing deck's content and images, use Redesign a deck." },
+      { "q": "Does it work with Arabic PDFs?", "a": "Yes. taqreer.ai is Arabic-first and keeps right-to-left text direction in the deck." },
+      { "q": "Can I edit the deck after converting?", "a": "Yes. Edit any slide in the editor, then export to PowerPoint or PDF." }
+    ],
+    "article": {
+      "title": "How to convert a PDF to PowerPoint with AI",
+      "intro": "A lot of important content lives in PDF files: reports, research, lecture notes, feasibility studies, and old decks. When you need to present it, traditional PDF to PowerPoint converters copy each page as it is, so you often end up with text-heavy slides and messy layouts, and Arabic text can lose its direction. taqreer.ai works differently: the AI reads and understands your file, then designs a new PowerPoint deck with clear, organized slides in your brand.",
+      "sections": [
+        {
+          "heading": "How to convert a PDF to PowerPoint",
+          "blocks": [
+            {
+              "steps": [
+                "Sign in to taqreer.ai and open the page to create a new deck.",
+                "Upload your PDF. The AI reads its content automatically.",
+                "Choose your brand: your colors, fonts, and logo, or pick a [saved brand kit](/brand-kit) to apply it to the whole deck.",
+                "Set the slide size (16:9 for standard decks or 9:16 for vertical) and choose an exact slide count or leave it on auto.",
+                "Click create and watch the slides appear, then adjust any detail in the [editor](/powerpoint-online).",
+                "Export as PPTX to open and edit in PowerPoint, or as PDF to share (PPTX and PDF export are on paid plans)."
+              ]
+            },
+            "With these steps, converting a PDF to PPT becomes one task instead of copying text and formatting every slide by hand."
+          ]
+        },
+        {
+          "heading": "Convert the file or redesign the deck?",
+          "blocks": [
+            "If your PDF is a report, research paper, or long notes, create a new deck from it as in the steps above: the AI summarizes the content and spreads it across slides with clear headings and bullet points.",
+            "If your PDF was a presentation to begin with, such as an old deck saved as a PDF, use [Redesign a deck](/redesign): taqreer.ai keeps each slide's content and images and redesigns it to look clearer and more modern. If your content is in a Word document, try [Word to PowerPoint](/word-to-powerpoint)."
+          ]
+        },
+        {
+          "heading": "Arabic that stays right after export",
+          "blocks": [
+            "One of the most common problems when converting a PDF to PPT is Arabic text losing its direction, or English words and numbers getting scrambled inside sentences. taqreer.ai is Arabic-first, so the exported PowerPoint keeps right-to-left direction, correct alignment, and English words and numbers in their place, and the deck looks in PowerPoint the way you designed it. Learn more about [Arabic presentations in taqreer.ai](/arabic-presentations)."
+          ]
+        },
+        {
+          "heading": "Tips for a better result",
+          "blocks": [
+            {
+              "bullets": [
+                "Pick a slide count that fits your file's length: long files need more slides so each one stays clear.",
+                "Use a saved brand kit so all your decks share the same colors and fonts.",
+                "If a slide isn't right, leave a note on it and ask the AI to redesign just that slide instead of starting over.",
+                "On paid plans, turn on [generated images](/powerpoint-images) when your file is all text, so the AI adds images that fit your slides."
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "wordToPowerpoint": {
+    "meta": {
+      "title": "Word to PowerPoint with AI | taqreer.ai",
+      "description": "Convert a Word document into a designed PowerPoint deck with AI. Upload a DOCX, apply your brand, and get editable slides you can export."
+    },
+    "breadcrumb": "Word to PowerPoint",
+    "hero": {
+      "eyebrow": "Word to PowerPoint",
+      "title": "Convert Word to PowerPoint with AI",
+      "subtitle": "Upload a Word document and the AI turns your text into an organized PowerPoint deck in your brand, in Arabic and English.",
+      "cta": "Start free"
+    },
+    "preview": {
+      "title": "Start from a Word document",
+      "subtitle": "Upload a DOCX in the Create step, then pick your colors, fonts, logo, and slide count."
+    },
+    "why": {
+      "title": "Why taqreer.ai for Word to PowerPoint",
+      "subtitle": "From long pages of text to clear slides.",
+      "points": [
+        { "title": "Organizes your content", "body": "The AI turns long paragraphs into headings, bullet points, and well-structured slides." },
+        { "title": "Designs every slide", "body": "Each slide is designed for its content, not text pasted onto a fixed template." },
+        { "title": "In your brand", "body": "Your colors, fonts, and logo apply across the whole deck." },
+        { "title": "Export to PowerPoint", "body": "Edit in the editor, then export an editable PPTX." }
+      ]
+    },
+    "faq": [
+      { "q": "How do I convert a Word document to PowerPoint?", "a": "Upload your Word document (DOCX) to taqreer.ai, choose your brand, and the AI designs a presentation from its content that you can edit and export." },
+      { "q": "Does it work with Arabic Word documents?", "a": "Yes. taqreer.ai supports Arabic and English documents with correct text direction." },
+      { "q": "Can I choose the number of slides?", "a": "Yes. Set an exact slide count or let the AI decide based on your content, within your plan's limit." },
+      { "q": "Can I edit the deck after converting?", "a": "Yes. Edit any slide in the editor, then export to PowerPoint or PDF." }
+    ],
+    "article": {
+      "title": "How to convert a Word document to PowerPoint with AI",
+      "intro": "Reports, plans, and research are usually written in Word, but presented as slides. Converting Word to PowerPoint by hand means copying paragraphs, cutting them down, and formatting every slide one by one: hours of work before every meeting. In taqreer.ai, the AI reads your whole document, pulls out its key ideas, and spreads them across organized slides designed in your brand.",
+      "sections": [
+        {
+          "heading": "How to convert Word to PowerPoint",
+          "blocks": [
+            {
+              "steps": [
+                "Sign in and open the page to create a new deck.",
+                "Upload your Word document as a DOCX.",
+                "Pick your colors, fonts, and logo, or leave colors on auto so the AI chooses a palette that fits your content.",
+                "Set the slide count and size, then click create.",
+                "Review and adjust the slides in the [editor](/powerpoint-online), then export a PPTX to open in PowerPoint (PPTX export is on paid plans)."
+              ]
+            }
+          ]
+        },
+        {
+          "heading": "What happens to the document's text?",
+          "blocks": [
+            "taqreer.ai does not paste paragraphs as they are. It turns them into headings and short bullet points that work on slides, and picks a design for each slide that fits its content: a comparison, steps, highlighted numbers, or short text. A paragraph that explains three phases might become a steps slide, and a table full of numbers might become a slide that highlights the two that matter most.",
+            "If your content is in a PDF instead of Word, use [PDF to PowerPoint](/pdf-to-powerpoint) the same way."
+          ]
+        },
+        {
+          "heading": "Copying by hand vs converting with AI",
+          "blocks": [
+            "When you convert Word to PowerPoint by hand, you paste text into blank slides, decide yourself what stays and what goes, and design each slide separately. With AI you start from a fully designed deck, and your job is only to review and adjust. Either way the final call is yours: the difference is the starting point, a blank page or a deck that is ready to polish."
+          ]
+        },
+        {
+          "heading": "Examples of documents that become decks",
+          "blocks": [
+            {
+              "bullets": [
+                "A business plan or feasibility study to present to investors or management.",
+                "A monthly or quarterly report that needs a short deck for the meeting.",
+                "Lesson or lecture notes a teacher wants to turn into slides for students.",
+                "A research summary or thesis to present at a defense.",
+                "A quote or project proposal for a client."
+              ]
+            }
+          ]
+        },
+        {
+          "heading": "Tips for a clearer deck",
+          "blocks": [
+            {
+              "bullets": [
+                "Use clear headings in your document: they help the AI split the content into slides.",
+                "Pick a slide count that fits the document's length, or leave it on auto within your plan's limit.",
+                "Save your [brand kit](/brand-kit) once so every deck comes out consistent.",
+                "Arabic documents are fully supported, and text direction stays correct after export. See [Arabic presentations](/arabic-presentations)."
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "powerpointOnline": {
+    "meta": {
+      "title": "PowerPoint Online Editor with AI | taqreer.ai",
+      "description": "Edit presentations online in your browser: change text, images, and layers, ask AI to rework any slide, with autosave and version history."
+    },
+    "breadcrumb": "Online editor",
+    "hero": {
+      "eyebrow": "Editor",
+      "title": "Edit PowerPoint online with AI",
+      "subtitle": "Change every detail of your deck right in the browser: drag, resize, and arrange layers, or ask the AI to redesign any slide.",
+      "cta": "Start free"
+    },
+    "why": {
+      "title": "An editor built for presentations",
+      "subtitle": "Full control, nothing to install.",
+      "points": [
+        { "title": "Direct editing", "body": "Drag, resize, and rotate any element, with snapping and center guides." },
+        { "title": "Layers and groups", "body": "Reorder, lock, or group elements from the layers panel." },
+        { "title": "AI edits", "body": "Leave a note on any slide and the AI redesigns it for you." },
+        { "title": "Autosave and version history", "body": "Your work saves automatically, and you can go back to earlier versions anytime." }
+      ]
+    },
+    "faq": [
+      { "q": "Do I need to install anything?", "a": "No. The editor runs right in your browser." },
+      { "q": "Can I edit images and text?", "a": "Yes. Change text size, color, and direction, and replace images or generate new ones with AI." },
+      { "q": "Does the editor work on mobile?", "a": "Full editing is on desktop. On mobile you can preview your deck and edit it with AI." },
+      { "q": "Can I export to PowerPoint?", "a": "Yes. Export an editable PPTX, or PDF and images, depending on your plan." }
+    ],
+    "article": {
+      "title": "An online PowerPoint editor for every detail of your deck",
+      "intro": "After the AI designs your deck, you usually want your own touches: a new title, a moved image, a different color. The taqreer.ai editor runs right in your browser with nothing to install, and gives you full control over every element on a slide, with the option to ask the AI for bigger changes.",
+      "sections": [
+        {
+          "heading": "What can you edit?",
+          "blocks": [
+            {
+              "bullets": [
+                "Text: size, bold, italic, color, alignment, and right-to-left or left-to-right direction for each text box.",
+                "Elements: drag, resize, and rotate anything, with snapping to edges and guides for the slide center.",
+                "Layers: arrange elements front to back, lock what should not move, and group elements together.",
+                "Images and icons: replace any image with your own upload, regenerate [AI-generated images](/powerpoint-images), and recolor icons or change their opacity.",
+                "Background and shapes: change the slide background color and the color and opacity of shapes, and add new text boxes."
+              ]
+            }
+          ]
+        },
+        {
+          "heading": "Shortcuts that speed up your work",
+          "blocks": [
+            {
+              "bullets": [
+                "Ctrl or Cmd with Z to undo, and with Shift and Z to redo.",
+                "Shift-click to select more than one element, or drag across empty space to select several at once.",
+                "Double-click text to edit it, or a group to step inside it.",
+                "Ctrl or Cmd with G to group elements, and with Shift and G to ungroup.",
+                "Delete to remove the selected elements, and Esc to clear the selection.",
+                "Hold Shift while rotating to snap to fixed angles."
+              ]
+            }
+          ]
+        },
+        {
+          "heading": "Edit PowerPoint with AI",
+          "blocks": [
+            "When you want more than a single tweak, leave a note on the slide such as \"make this a chart\" or \"shorten the text\", and ask the AI to apply it. It redesigns just that slide and leaves the rest of the deck as it is. Teammates can leave notes too when you [collaborate on the deck](/collaboration)."
+          ]
+        },
+        {
+          "heading": "PowerPoint online or desktop software?",
+          "blocks": [
+            "A browser editor runs on any computer with nothing to install or update, your deck is saved to your account so you can pick up from any device, and you share a link instead of sending files. If you need to work in PowerPoint on your computer, export an editable PPTX and continue there."
+          ]
+        },
+        {
+          "heading": "Your work is always saved",
+          "blocks": [
+            "The editor saves every change automatically, and you can save versions of your slides and restore any earlier version from the history. When you are done, export to [PowerPoint, PDF, and Google Slides](/export), depending on your plan.",
+            "Note: full editing is on desktop. On mobile you can preview your deck and ask the AI for changes."
+          ]
+        }
+      ]
+    }
+  },
+  "powerpointImages": {
+    "meta": {
+      "title": "PowerPoint Images with AI | taqreer.ai",
+      "description": "Add images to your PowerPoint with AI: generated images that fit each slide, a free photo library, and your own uploads, in a deck designed in your brand."
+    },
+    "breadcrumb": "PowerPoint images",
+    "hero": {
+      "eyebrow": "Images",
+      "title": "AI images for your PowerPoint",
+      "subtitle": "The AI generates images that fit each slide's content and design, or pick from the photo library or upload your own.",
+      "cta": "Start free"
+    },
+    "preview": {
+      "title": "Turn on images when you create",
+      "subtitle": "Switch on generated images in the Create step, and the AI adds images that fit each slide."
+    },
+    "why": {
+      "title": "Images that fit every slide",
+      "subtitle": "No more hunting for the right picture one by one.",
+      "points": [
+        { "title": "Generated for your content", "body": "Each image is generated for the slide's topic and design style." },
+        { "title": "Replace in a click", "body": "Don't like an image? Regenerate or replace it from the editor." },
+        { "title": "Free photo library", "body": "Browse a library of high-quality photos to use in your decks." },
+        { "title": "Your own images", "body": "Upload your images and save them to your library for any deck." }
+      ]
+    },
+    "faq": [
+      { "q": "How do I add AI images to my deck?", "a": "Turn on generated images when you create a deck, and the AI adds images that fit your slides. You can regenerate any image from the editor." },
+      { "q": "Are AI images on the free plan?", "a": "AI image generation is on paid plans. The free photo library is open to everyone." },
+      { "q": "Can I use my own images?", "a": "Yes. Upload images in the editor or save them to your library." },
+      { "q": "Do images stay when I export?", "a": "Yes. Images stay in your deck when you export to PowerPoint or PDF." }
+    ],
+    "article": {
+      "title": "PowerPoint images that fit every slide",
+      "intro": "Images make a deck clearer and more engaging, but hunting for the right picture for every slide takes a long time, and you often end up with generic stock photos that miss the topic. In taqreer.ai the AI can generate PowerPoint images made for each slide's content and design style, or you can pick from the photo library or upload your own.",
+      "sections": [
+        {
+          "heading": "How to add AI images to your deck",
+          "blocks": [
+            {
+              "steps": [
+                "When you [create a new deck](/ai-presentations), turn on generated images.",
+                "The AI decides which slides need images and generates one for each that fits its topic, up to 12 images per deck.",
+                "Don't like an image? Regenerate or replace it from the [editor](/powerpoint-online)."
+              ]
+            },
+            "AI image generation is on paid plans and uses credits for each image."
+          ]
+        },
+        {
+          "heading": "How does the AI choose the images?",
+          "blocks": [
+            "While designing each slide, the AI decides where the image goes and how big it is within the layout, and writes a description for it from the slide's topic and the deck's style. The image is then generated and appears in its place automatically when it is ready, without reloading the page. So the images match the design instead of being generic pictures pasted on a slide."
+          ]
+        },
+        {
+          "heading": "Where should you use images in a deck?",
+          "blocks": [
+            {
+              "bullets": [
+                "The cover slide: an image that says what the deck is about at first glance.",
+                "Section divider slides.",
+                "Explaining an idea or concept that is hard to describe with text alone.",
+                "Showing a product, a place, or the feel of a project."
+              ]
+            },
+            "Keep number, comparison, and table slides simpler: an image there can pull attention away from the information."
+          ]
+        },
+        {
+          "heading": "A photo library and your own library",
+          "blocks": [
+            "Besides generated images, you can browse the [free photo library](/free-stock-images) and download its images for your decks, or upload your own image to any slide from the editor. All your AI-generated images are kept in your library so you can download them again whenever you need. Images stay in your deck when you export to PowerPoint, PDF, and [other formats](/export)."
+          ]
+        }
+      ]
+    }
+  },
+  "brandKit": {
+    "meta": {
+      "title": "Brand Kit for Presentations | taqreer.ai",
+      "description": "Save your brand kit once: colors, fonts, and logo apply automatically to every deck you design with AI, with your fonts embedded in the PPTX."
+    },
+    "breadcrumb": "Brand kit",
+    "hero": {
+      "eyebrow": "Brand",
+      "title": "A brand kit for every presentation",
+      "subtitle": "Save your colors, fonts, and logo in one brand kit, and every new deck comes out on brand with no setup.",
+      "cta": "Start free"
+    },
+    "preview": {
+      "title": "Start with your brand",
+      "subtitle": "Pick your saved brand kit in the Create step and its colors, fonts, and logo apply to the whole deck."
+    },
+    "why": {
+      "title": "Your brand on every slide",
+      "subtitle": "Consistency without the effort.",
+      "points": [
+        { "title": "Save once", "body": "Your colors, fonts, and logo live in a brand kit you can pick for any new deck." },
+        { "title": "Your own fonts", "body": "Upload your brand fonts, including Arabic fonts, and they are embedded in the exported PowerPoint." },
+        { "title": "A default brand", "body": "Set a default brand kit that applies automatically to every deck you start." },
+        { "title": "Multiple brands", "body": "Create several brand kits for different clients or projects." }
+      ]
+    },
+    "faq": [
+      { "q": "What is a brand kit in taqreer.ai?", "a": "A saved set of your colors, fonts, and logo that applies to your presentations automatically." },
+      { "q": "Can I upload my own Arabic fonts?", "a": "Yes. Upload your font files and they are embedded in the exported PowerPoint, so the deck looks right on any computer." },
+      { "q": "Can I have more than one brand kit?", "a": "Yes. Create several brand kits and pick the right one for each deck." },
+      { "q": "Does taqreer.ai design a brand identity from scratch?", "a": "No. taqreer.ai applies your existing brand to your decks and posts. It does not design new logos or brand identities." }
+    ],
+    "article": {
+      "title": "Your brand on every deck and post",
+      "intro": "Decks from one team in different colors and fonts weaken a brand. In taqreer.ai you save your brand kit once: your colors, fonts, and logo, and it applies automatically to every deck and post you design with AI.",
+      "sections": [
+        {
+          "heading": "How to set up your brand kit",
+          "blocks": [
+            {
+              "steps": [
+                "Open the brand kits page and create a new brand kit.",
+                "Add your brand colors.",
+                "Choose your fonts, or upload your own font files, including Arabic fonts.",
+                "Upload your logo as an SVG, and make the kit your default if you want it applied to every new deck."
+              ]
+            }
+          ]
+        },
+        {
+          "heading": "Why save your brand in taqreer.ai?",
+          "blocks": [
+            {
+              "bullets": [
+                "Full consistency: every [PowerPoint deck](/ai-presentations) and [social media post](/social-media-posts) comes out in the same colors and fonts.",
+                "Your fonts in PowerPoint: fonts you upload are embedded in the exported PowerPoint, so the deck looks as designed even on a computer without the font. See [Export](/export).",
+                "Multiple brands: create a kit per client or project and pick the right one when you create.",
+                "Less time: no need to enter colors, fonts, and logo every time."
+              ]
+            }
+          ]
+        },
+        {
+          "heading": "What taqreer.ai doesn't do",
+          "blocks": [
+            "taqreer.ai applies your existing brand to your decks and posts, but it does not design a new logo or brand identity from scratch. If you don't have set colors yet, leave colors on auto so the AI picks a palette that fits each deck's content."
+          ]
+        }
+      ]
+    }
+  },
+  "collaboration": {
+    "meta": {
+      "title": "Collaborate on Presentations with Your Team | taqreer.ai",
+      "description": "Share decks with your team as view, comment, or edit, and follow comments and changes live."
+    },
+    "breadcrumb": "Collaboration",
+    "hero": {
+      "eyebrow": "Collaboration",
+      "title": "Collaborate on decks with your team",
+      "subtitle": "Invite colleagues and clients to your deck, choose who can view, comment, or edit, and work together in one place.",
+      "cta": "Start free"
+    },
+    "why": {
+      "title": "Teamwork in one place",
+      "subtitle": "Instead of sending files back and forth.",
+      "points": [
+        { "title": "Clear roles", "body": "Share a deck as view, comment, or edit." },
+        { "title": "Comments on slides", "body": "Leave comments on any slide, or ask the AI to apply them." },
+        { "title": "Live presence", "body": "See who is working on which slide right now." },
+        { "title": "Public links", "body": "Share a view-only link with anyone." }
+      ]
+    },
+    "faq": [
+      { "q": "How do I share a deck with my team?", "a": "Open the deck, click Share, invite colleagues by email, and choose each person's role." },
+      { "q": "What do the roles mean?", "a": "View is read-only, comment lets people add notes, and edit lets them change the deck's content and design." },
+      { "q": "Can I remove someone's access?", "a": "Yes. You can revoke anyone's access at any time." },
+      { "q": "Can I share with someone without an account?", "a": "Yes. Share a public view-only link." }
+    ],
+    "article": {
+      "title": "Share presentations and work on them with your team",
+      "intro": "Important decks are rarely made by one person: a manager reviews, a colleague adds their numbers, a client comments on the wording. Emailing files back and forth loses versions and notes. In taqreer.ai everyone works on the same deck, each with the right access.",
+      "sections": [
+        {
+          "heading": "How to share your deck",
+          "blocks": [
+            {
+              "steps": [
+                "Open the deck and click Share.",
+                "Invite colleagues or clients by email.",
+                "Set each person's role: view, comment, or edit.",
+                "Or create a public view-only link for people without an account."
+              ]
+            },
+            "You can remove anyone's access at any time."
+          ]
+        },
+        {
+          "heading": "Comments and AI edits",
+          "blocks": [
+            "Your team leaves comments right on the slides, so every note sits next to what it is about. When a note is a change request, you can ask the AI to apply it, and it redesigns that slide. Learn more about the [editor](/powerpoint-online)."
+          ]
+        },
+        {
+          "heading": "Work together live",
+          "blocks": [
+            {
+              "bullets": [
+                "See who is working on which slide right now.",
+                "New comments and changes show up instantly without reloading the page.",
+                "Get notifications when someone comments or shares a deck with you.",
+                "When you are done, export the deck to [PowerPoint, PDF, or Google Slides](/export)."
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "exportFormats": {
+    "meta": {
+      "title": "Export to PowerPoint, PDF and Google Slides | taqreer.ai",
+      "description": "Export your presentation as an editable PowerPoint, PDF, PNG images, HTML, or Google Slides, with clean Arabic in every format."
+    },
+    "breadcrumb": "Export",
+    "hero": {
+      "eyebrow": "Export",
+      "title": "Export to PowerPoint, PDF, and Google Slides",
+      "subtitle": "One deck, five formats: an editable PowerPoint file, a PDF to share, PNG images, an HTML page, and Google Slides.",
+      "cta": "Start free"
+    },
+    "why": {
+      "title": "A format for every use",
+      "subtitle": "With clean Arabic in each one.",
+      "points": [
+        { "title": "Editable PowerPoint", "body": "Real text and shapes, with correct Arabic direction and your fonts embedded." },
+        { "title": "PDF and images", "body": "A PDF to share and print, and a PNG for every slide." },
+        { "title": "Google Slides", "body": "Open your deck in Google Slides and keep working there." },
+        { "title": "HTML", "body": "A standalone page for your deck in any browser." }
+      ]
+    },
+    "faq": [
+      { "q": "Which formats can I export?", "a": "PowerPoint (PPTX), PDF, PNG images, HTML, and Google Slides, depending on your plan." },
+      { "q": "Does Arabic stay correct after export?", "a": "Yes. taqreer.ai keeps right-to-left text direction and alignment in the exported PowerPoint." },
+      { "q": "Can I edit the file after exporting?", "a": "Yes. The PPTX is fully editable in PowerPoint." },
+      { "q": "What does the free plan include?", "a": "The free plan exports PNG with a watermark. All formats are on paid plans." }
+    ],
+    "article": {
+      "title": "Export formats in taqreer.ai: which one should you pick?",
+      "intro": "You may need the same deck in more than one form: a file to edit in PowerPoint, a PDF to send a client, images to post, a link to share. taqreer.ai exports your deck in five formats and keeps Arabic correct in each one.",
+      "sections": [
+        {
+          "heading": "The formats and when to use each",
+          "blocks": [
+            {
+              "bullets": [
+                "PowerPoint (PPTX): when you want to edit or present the deck in PowerPoint. Text and shapes are real and editable, and fonts you uploaded are embedded in the file.",
+                "PDF: for sharing, printing, and email, one slide per page.",
+                "PNG: a full-resolution image of every slide in a zip file, ready to post on [social media](/social-media-posts).",
+                "HTML: a standalone page that shows the deck in any browser.",
+                "Google Slides: for teams on Google Workspace who want to keep working there."
+              ]
+            }
+          ]
+        },
+        {
+          "heading": "Arabic that stays right in PowerPoint",
+          "blocks": [
+            "When you export to PowerPoint from taqreer.ai, the file sets the direction and alignment of every Arabic paragraph and keeps English words and numbers in place, so the deck opens in PowerPoint the way you designed it. See [Arabic presentations](/arabic-presentations)."
+          ]
+        },
+        {
+          "heading": "Export by plan",
+          "blocks": [
+            "The free plan exports PNG with a watermark. All formats are available without a watermark on paid plans. See [pricing and plans](/pricing)."
+          ]
+        }
+      ]
+    }
+  },
   "landingNav": {
     "home": "Home",
     "features": "Features",
@@ -444,7 +1212,25 @@
     "faq": "FAQ",
     "login": "Log in",
     "signup": "Sign up",
-    "dashboard": "Dashboard"
+    "dashboard": "Dashboard",
+    "featuresMenu": {
+      "label": "Features",
+      "groups": { "create": "Create", "design": "Design", "editShare": "Edit & share" },
+      "items": {
+        "aiPresentations": { "title": "PowerPoint AI", "desc": "From an idea or a file to a designed deck" },
+        "pdfToPowerpoint": { "title": "PDF to PowerPoint", "desc": "Turn a PDF into an editable deck" },
+        "wordToPowerpoint": { "title": "Word to PowerPoint", "desc": "Turn a Word document into slides" },
+        "socialMediaPosts": { "title": "Social media posts", "desc": "On-brand posts and carousels" },
+        "redesign": { "title": "Professional PowerPoint design", "desc": "Redesign an existing deck" },
+        "presentationStyle": { "title": "Copy a design", "desc": "Apply the style of a deck you like" },
+        "arabicPresentations": { "title": "Arabic presentations", "desc": "Arabic that stays right in PowerPoint" },
+        "powerpointImages": { "title": "PowerPoint images", "desc": "AI images for every slide" },
+        "brandKit": { "title": "Brand kit", "desc": "Your colors, fonts, and logo on every deck" },
+        "powerpointOnline": { "title": "Online editor", "desc": "A full editor in your browser" },
+        "collaboration": { "title": "Collaboration", "desc": "Share, comment, and edit with your team" },
+        "exportFormats": { "title": "Export", "desc": "PowerPoint, PDF, and Google Slides" }
+      }
+    }
   },
   "notFound": {
     "messagePrefix": "This page isn't here.\nMaybe you'll find it one day.\nAnd if you do, ",

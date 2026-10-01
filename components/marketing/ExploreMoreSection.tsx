@@ -18,7 +18,14 @@ export type SpokeKey =
   | "presentationStyle"
   | "arabicPresentations"
   | "templates"
-  | "stockImages";
+  | "stockImages"
+  | "pdfToPowerpoint"
+  | "wordToPowerpoint"
+  | "powerpointOnline"
+  | "powerpointImages"
+  | "brandKit"
+  | "collaboration"
+  | "exportFormats";
 
 const SPOKE_PATHS: Record<SpokeKey, string> = {
   aiPresentations: "/ai-presentations",
@@ -28,6 +35,14 @@ const SPOKE_PATHS: Record<SpokeKey, string> = {
   arabicPresentations: "/arabic-presentations",
   templates: "/presentation-templates",
   stockImages: "/free-stock-images",
+  // One-feature-per-page spokes (2026-10-01).
+  pdfToPowerpoint: "/pdf-to-powerpoint",
+  wordToPowerpoint: "/word-to-powerpoint",
+  powerpointOnline: "/powerpoint-online",
+  powerpointImages: "/powerpoint-images",
+  brandKit: "/brand-kit",
+  collaboration: "/collaboration",
+  exportFormats: "/export",
 };
 
 // Each spoke links the 3 siblings that FOLLOW it in SPOKE_PATHS order,

@@ -755,7 +755,9 @@ function FlowBody({
           there instead") so the dashboard chrome now owns the back
           affordance. Title stays centered inside the flow body. */}
       <header className="mb-5 text-center">
-        <h1 className="text-lg font-bold text-foreground">{flow.title}</h1>
+        {/* A <p>, not a heading: this demo is embedded in the landing hero and
+            the feature spokes, which own the page's single <h1> (SEO). */}
+        <p className="text-lg font-bold text-foreground">{flow.title}</p>
         <p className="mt-1 text-[11px] text-[var(--tq-text-muted)]">
           {flow.subtitle}
         </p>

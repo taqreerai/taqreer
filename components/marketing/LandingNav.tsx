@@ -15,6 +15,7 @@ import { localizedHref, stripLocale } from "@/lib/i18n/navigation";
 import { isAppPath } from "@/lib/app-routes";
 import { LanguageMenu } from "@/components/i18n/LanguageMenu";
 import { ThemeLogo } from "@/components/brand/ThemeLogo";
+import { FeaturesMenu, MobileFeaturesList } from "@/components/marketing/FeaturesMenu";
 
 // Auth state is resolved CLIENT-side (useIsAuthed: a cookie-presence check, no
 // Supabase client) so the marketing/legal layouts and the landing need no server
@@ -78,8 +79,9 @@ export function LandingNav() {
   const onLanding = stripped === "/" || stripped === "";
   const home = localizedHref("/", locale);
   const sec = (anchor: string) => (onLanding ? anchor : `${home}${anchor}`);
+  // "Features" is rendered separately as a dropdown (desktop) / expandable
+  // list (mobile) of the one-feature-per-page spokes; see FeaturesMenu.
   const navLinks = [
-    { label: dict.landingNav.features, href: sec("#features") },
     { label: dict.landingNav.whyUs, href: localizedHref("/arabic-presentations", locale) },
     { label: dict.landingNav.pricing, href: localizedHref("/pricing", locale) },
     { label: dict.landingNav.templates, href: localizedHref("/presentation-templates", locale) },
@@ -103,6 +105,7 @@ export function LandingNav() {
           </Link>
 
           <div className="absolute left-1/2 top-1/2 hidden -translate-x-1/2 -translate-y-1/2 items-center gap-8 md:flex">
+            <FeaturesMenu triggerHref={sec("#features")} />
             {navLinks.map((l) => (
               <a
                 key={l.href}
@@ -170,6 +173,7 @@ export function LandingNav() {
             surface so it reads over the hero it overlays. */}
         {menuOpen ? (
           <div className="surface-menu mt-2 flex flex-col gap-1 rounded-2xl p-3 md:hidden">
+            <MobileFeaturesList onNavigate={() => setMenuOpen(false)} />
             {navLinks.map((l) => (
               <a
                 key={l.href}

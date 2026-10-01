@@ -16,6 +16,7 @@ import { FaqAccordion } from "@/components/marketing/FaqAccordion";
 import { SectionHeader } from "@/components/marketing/SectionHeader";
 import { ExploreMoreSection } from "@/components/marketing/ExploreMoreSection";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
+import { FeatureArticleSection } from "@/components/marketing/FeatureSpokePage";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { breadcrumbSchema, faqPageSchema } from "@/lib/seo/schema";
 import { localeAlternates } from "@/lib/seo/alternates";
@@ -134,6 +135,9 @@ export default async function AiPresentationsPage(props: {
           ))}
         </div>
       </section>
+
+      {/* Long-form SEO article (2026-10-01). */}
+      <FeatureArticleSection locale={locale} article={t.article} />
 
       {/* FAQ. */}
       <section className="py-16">
