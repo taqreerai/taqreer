@@ -89,6 +89,8 @@ import {
   type HydratedBrand,
 } from "@/lib/create/hydrate-brand-from-session";
 import type { MimicTemplateSeed } from "@/lib/mimic/template-seed";
+import { LockedFlowBanner } from "@/components/billing/LockedFlowBanner";
+import { SlideCapHint } from "@/components/billing/SlideCapHint";
 
 const POLL_INTERVAL_MS = 2_500;
 const POLL_TIMEOUT_MS = 5 * 60 * 1_000;
@@ -876,6 +878,8 @@ export default function MimicFlow({
         }}
       />
       <div className="mt-[6vh] flex w-full flex-col items-center gap-6 px-4">
+        {/* Upfront plan notice when this flow isn't in the user's plan. */}
+        <LockedFlowBanner flow="mimic" />
         <header className="text-center">
           <h1 className="tq-h1">
             {isTemplate ? dict.flows.mimic.titleTemplate : dict.flows.mimic.title}
@@ -1249,6 +1253,8 @@ export default function MimicFlow({
                   </AnimatePresence>
                 </motion.div>
               </div>
+              {/* Free plan: the slide cap stated up front, not a silent clamp. */}
+              <SlideCapHint className="mt-1.5" />
 
               {/* Design-ref dropzone — wrapped in a flex-1 div with
                   border-t separator so the dropzone reads as its own

@@ -47,6 +47,7 @@ import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import { GoogleSlidesReadyDialog } from "@/components/export/GoogleSlidesReadyDialog";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 import { planLabel } from "@/lib/plan";
+import { PremiumCrown } from "@/components/billing/PremiumCrown";
 
 type ShareRow = {
   id: string;
@@ -1367,13 +1368,7 @@ function ExportRow({
           <div className="text-[11px] text-foreground/45">{sub}</div>
         </div>
         {gated && !running ? (
-          <span
-            className="material-symbols-outlined"
-            style={{ fontSize: 20, color: "var(--tq-premium-gold)" }}
-            aria-hidden
-          >
-            crown
-          </span>
+          <PremiumCrown size={20} />
         ) : (
           <span
             className="material-symbols-outlined text-foreground/40 transition-colors group-hover:text-foreground"

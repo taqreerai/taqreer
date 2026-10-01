@@ -53,6 +53,9 @@ export type CreditData = {
   // Per-run slide ceiling for the user's tier (free = 10; admin = system cap).
   // The create/mimic/datasheet slide steppers cap their max at this value.
   slideCap: number;
+  // Flows the tier can't generate with -> the lowest tier that unlocks each
+  // (absent on a stale cached payload -> treated as nothing locked).
+  lockedFlows?: Partial<Record<string, string>>;
   // Billing interval of the active paid subscription (null = free/none) →
   // drives the plan banner's monthly/yearly pill.
   cadence: "monthly" | "yearly" | null;
@@ -203,6 +206,15 @@ export function useCreditBalance(): CreditData | null {
  */
 export function useSlideCap(): number {
   return useCreditBalance()?.slideCap ?? 10;
+}
+
+/**
+ * The tier that unlocks `flow` when the signed-in user's plan can't generate
+ * with it, else null. Null until /api/credits resolves, so a paying user
+ * never sees a lock flash in.
+ */
+export function useFlowUnlockTier(flow: string): string | null {
+  return useCreditBalance()?.lockedFlows?.[flow] ?? null;
 }
 
 /** Latin-digit thousands formatting (1,234) - brand rule: Latin numerals. */

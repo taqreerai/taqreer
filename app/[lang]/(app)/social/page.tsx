@@ -69,6 +69,9 @@ import {
   type SocialPlatform,
 } from "@/lib/social/platforms";
 import { SocialFormatFields } from "@/components/social/SocialFormatFields";
+import { PremiumCrown } from "@/components/billing/PremiumCrown";
+import { LockedFlowBanner } from "@/components/billing/LockedFlowBanner";
+import { SlideCapHint } from "@/components/billing/SlideCapHint";
 
 const MIN_PALETTE = 2;
 const MAX_PALETTE = 6;
@@ -499,6 +502,8 @@ export default function SocialPage() {
         onClose={() => setProductUpgradeOpen(false)}
       />
       <div className="mt-[6vh] flex w-full flex-col items-center gap-6 px-4">
+        {/* Upfront plan notice when this flow isn't in the user's plan. */}
+        <LockedFlowBanner flow="social" />
         <header className="text-center">
           <h1 className="tq-h1">{dict.flows.social.title}</h1>
           <p className="tq-subhead mt-2">{dict.flows.social.subtitle}</p>
@@ -763,6 +768,8 @@ export default function SocialPage() {
                   </AnimatePresence>
                 </motion.div>
               </div>
+              {/* Free plan: the slide cap stated up front, not a silent clamp. */}
+              <SlideCapHint className="mt-1.5" />
             </div>
 
             {/* Images toggle moved to the CONTENT card 2026-08-03 (same as
@@ -926,13 +933,7 @@ function ProductPhotoRow({
               {dict.flows.social.productPhoto}
               {locked ? (
                 // Gold crown = paid feature (AIImagesPanel's affordance).
-                <span
-                  className="material-symbols-outlined"
-                  style={{ fontSize: 14, color: "var(--tq-premium-gold)" }}
-                  aria-hidden
-                >
-                  crown
-                </span>
+                <PremiumCrown size={14} />
               ) : null}
             </p>
             <p className="mt-0.5 truncate text-[11px] text-foreground/40">

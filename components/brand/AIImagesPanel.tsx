@@ -22,6 +22,7 @@ import { useCreditBalance } from "@/lib/credits/store";
 import { isImagesLocked, IMAGES_GATE_TIER } from "@/lib/images/images-gating";
 import { planLabel } from "@/lib/plan";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
+import { PremiumCrown } from "@/components/billing/PremiumCrown";
 
 export function AIImagesPanel({
   value,
@@ -72,13 +73,7 @@ export function AIImagesPanel({
           {dict.flows.brand.aiImagesTitle}
           {locked ? (
             // Gold crown = paid feature (ExportMenu's affordance).
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 14, color: "var(--tq-premium-gold)" }}
-              aria-hidden
-            >
-              crown
-            </span>
+            <PremiumCrown size={14} />
           ) : null}
         </span>
         <span className="block text-[11px] text-foreground/55">

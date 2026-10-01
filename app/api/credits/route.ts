@@ -144,6 +144,21 @@ export async function GET() {
     // The slide steppers cap their max here so a free user (10) can't pick a
     // count preflight would reject.
     slideCap: dbUser.role === "admin" ? SYSTEM_SLIDE_CAP : getTier(plan).slideCap,
+    // Flows this tier can't generate with, each mapped to the lowest tier that
+    // unlocks it (2026-10-01). The flow pages show an upfront banner + the
+    // dashboard crowns them, instead of a gate only after Generate. Same tier
+    // config the preflight `flow_locked` check enforces; admin = none.
+    lockedFlows:
+      dbUser.role === "admin"
+        ? {}
+        : Object.fromEntries(
+            (["enhance", "mimic", "social", "datasheet"] as const)
+              .filter((flow) => !getTier(plan).flows.includes(flow))
+              .map((flow) => [
+                flow,
+                TIER_ORDER.find((p) => getTier(p).flows.includes(flow)) ?? "plus",
+              ]),
+          ),
     cadence: dbUser.subscriptions[0]?.cadence ?? null,
     presets,
     // The server's default preset key, so the picker can reconcile a stale

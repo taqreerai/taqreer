@@ -8,7 +8,7 @@
 //   inline-END bottom corner (.support-fab-anchor in globals.css), so it
 //   mirrors with the locale: bottom-right in English, bottom-left in Arabic,
 //   and rides above the cookie banner while that shows.
-// - WhatsAppToolbarButton: a brand-blue `contact_support` button in the
+// - WhatsAppToolbarButton: a brand-blue circular "?" button in the
 //   TopUtilityBar, shared by the dashboard and the studio. It opens a help
 //   popover whose action contacts us on WhatsApp (2026-10-01).
 //   Wherever it renders, the floating button hides
@@ -145,10 +145,19 @@ export function WhatsAppToolbarButton({ compact = false }: { compact?: boolean }
           aria-label={t.helpLabel}
           aria-haspopup="dialog"
           aria-expanded={open}
-          className="tq-support-toolbar support-toolbar-btn flex h-9 w-9 items-center justify-center rounded-lg"
+          // Full h-9 hit area like its siblings; the visible mark is a small
+          // blue circle with a white "?", sized to the neighbouring search
+          // glyph (2026-10-01).
+          className="tq-support-toolbar group flex h-9 w-9 items-center justify-center rounded-lg"
         >
-          <span className="material-symbols-outlined text-[20px]" aria-hidden="true">
-            contact_support
+          <span className="support-toolbar-btn flex h-5 w-5 items-center justify-center rounded-full">
+            <span
+              className="material-symbols-outlined text-[13px]"
+              style={{ fontVariationSettings: "'wght' 600" }}
+              aria-hidden="true"
+            >
+              question_mark
+            </span>
           </span>
         </button>
       </Tooltip>

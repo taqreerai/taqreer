@@ -2232,6 +2232,34 @@ html.app-shell-scroll body {
 body:has(.tq-support-toolbar) .support-fab-anchor {
   display: none;
 }
+/* ─── Premium marks (2026-10-01) ───
+   One gold crown for every paid option (PremiumCrown), the upfront banner on
+   flows the plan can't generate with (LockedFlowBanner), and the premium
+   template pill (PremiumBadge). All tint from --tq-premium-gold. */
+.premium-crown {
+  color: var(--tq-premium-gold);
+}
+.premium-banner {
+  background: color-mix(in srgb, var(--tq-premium-gold) 8%, var(--tq-surface));
+  border: 1px solid color-mix(in srgb, var(--tq-premium-gold) 35%, transparent);
+}
+.premium-banner-icon {
+  background: color-mix(in srgb, var(--tq-premium-gold) 16%, transparent);
+}
+.badge-premium {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 9999px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 500;
+  color: #fff;
+  /* Dark glass so it reads over bright template thumbnails in both themes. */
+  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid color-mix(in srgb, var(--tq-premium-gold) 55%, transparent);
+}
+
 /* Toolbar help trigger (2026-10-01): brand-blue fill so it stands out from
    the muted sibling icons. Opens the help popover, never WhatsApp directly. */
 .support-toolbar-btn {
@@ -2239,10 +2267,10 @@ body:has(.tq-support-toolbar) .support-fab-anchor {
   color: #fff;
   transition: filter 0.15s ease, transform 0.15s ease;
 }
-.support-toolbar-btn:hover {
+.tq-support-toolbar:hover .support-toolbar-btn {
   filter: brightness(1.12);
 }
-.support-toolbar-btn:focus-visible {
+.tq-support-toolbar:focus-visible {
   outline: 2px solid var(--tq-border-focus);
   outline-offset: 2px;
 }

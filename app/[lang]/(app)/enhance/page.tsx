@@ -76,6 +76,7 @@ import { localizedExtractError } from "@/lib/extract/error-codes";
 import { readSource, clearSource } from "@/lib/types/source";
 import { MAX_ENHANCE_INSTRUCTIONS_CHARS } from "@/lib/types/brief-limits";
 import { DEFAULT_QUALITY, type Quality } from "@/lib/types/quality";
+import { LockedFlowBanner } from "@/components/billing/LockedFlowBanner";
 import {
   readBrandFromSession,
   fetchDefaultBrandKit,
@@ -874,6 +875,8 @@ export default function EnhanceContentPage() {
         allowReduce={false}
       />
       <div className="mt-[6vh] flex w-full max-w-3xl flex-col items-center gap-6 px-4">
+        {/* Upfront plan notice when this flow isn't in the user's plan. */}
+        <LockedFlowBanner flow="enhance" />
         <header className="text-center">
           <h1 className="tq-h1">{dict.flows.enhance.title}</h1>
           <p className="tq-subhead mt-2">{dict.flows.enhance.subtitle}</p>

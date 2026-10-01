@@ -30,6 +30,7 @@ import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import { GoogleSlidesReadyDialog } from "@/components/export/GoogleSlidesReadyDialog";
 import { FormatIcon } from "@/components/export/FormatIcon";
 import { planLabel } from "@/lib/plan";
+import { PremiumCrown } from "@/components/billing/PremiumCrown";
 
 const MENU_WIDTH = 224;
 const ANCHOR_GAP_PX = 8;
@@ -179,8 +180,7 @@ export function ExportMenu({
         }`}
       >
         <span
-          className={`material-symbols-outlined text-[18px] ${busy ? "animate-spin" : ""}`}
-          style={!busy && anyGated ? { color: "var(--tq-premium-gold)" } : undefined}
+          className={`material-symbols-outlined text-[18px] ${busy ? "animate-spin" : ""} ${!busy && anyGated ? "premium-crown" : ""}`}
           aria-hidden
         >
           {busy ? "progress_activity" : anyGated ? "crown" : "ios_share"}
@@ -265,13 +265,7 @@ export function ExportMenu({
                             {gated ? (
                               // Gold crown = tier-gated affordance (clicking
                               // opens the upgrade modal, same as gated presets).
-                              <span
-                                className="material-symbols-outlined text-[16px]"
-                                style={{ color: "var(--tq-premium-gold)" }}
-                                aria-hidden
-                              >
-                                crown
-                              </span>
+                              <PremiumCrown size={16} />
                             ) : null}
                           </button>
                         </li>

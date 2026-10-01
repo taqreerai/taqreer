@@ -1,26 +1,19 @@
 "use client";
 
-// Small "مميز" (premium) pill — crown glyph + label on the shared
-// .badge-purple token (the same violet chip used for the "احترافي"/Pro
-// plan elsewhere). Used on premium template tiles + the template
-// lightbox header. `` keeps it legible when it sits
-// over a bright thumbnail.
+// Small "مميز" (premium) pill on premium template tiles, the template
+// lightbox header and the public template pages. Gold crown + label on a
+// dark glass pill (.badge-premium) so it reads over bright thumbnails and
+// matches the gold crown used on every other paid option (2026-10-01; was
+// a blue .badge-purple chip with a different glyph).
 
 import { useDict } from "@/components/i18n/LocaleProvider";
+import { PremiumCrown } from "@/components/billing/PremiumCrown";
 
 export function PremiumBadge({ className = "" }: { className?: string }) {
   const dict = useDict();
   return (
-    <span
-      className={`badge-purple inline-flex items-center gap-1 ${className}`}
-    >
-      <span
-        className="material-symbols-outlined"
-        style={{ fontSize: 12 }}
-        aria-hidden
-      >
-        workspace_premium
-      </span>
+    <span className={`badge-premium ${className}`}>
+      <PremiumCrown size={12} />
       {dict.common.premium}
     </span>
   );
