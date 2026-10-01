@@ -7,16 +7,13 @@ import { ContactEmail } from "@/components/marketing/ContactEmail";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { LEGAL_META } from "@/lib/legal/content";
+import { FEATURES, FEATURE_GROUPS } from "@/components/marketing/featureMenu";
 
-// In-page anchors keep their "#…"; route hrefs ("/…") get the locale prefix.
-const FOOTER_LINK_HREFS: Record<string, string> = {
-  features: "#features",
-  pricing: "#pricing",
-  faq: "#faq",
+const LEGAL_LINKS = {
   privacy: "/privacy",
   terms: "/terms",
   refund: "/refund",
-};
+} as const;
 
 // Real social handles (taqreerai). Rendered as brand icons, not text links.
 const SOCIALS: { label: string; href: string; path: string }[] = [
@@ -52,97 +49,114 @@ export async function SiteFooter({
   fullBleed?: boolean;
 }) {
   const dict = await getDictionary(locale);
-  const footer = dict.landing.footer.groups;
-  // Keyed so the social column can render icons instead of text links.
-  const columns = [
-    { key: "contact", group: footer.contact },
-    { key: "links", group: footer.links },
-    { key: "social", group: footer.social },
-    { key: "legal", group: footer.legal },
+  const footer = dict.landing.footer;
+  const groups = footer.groups;
+  const menu = dict.landingNav.featuresMenu;
+  const href = (path: string) => localizedHref(path, locale);
+
+  // Every public page, grouped: the 3 feature groups come from the same
+  // FEATURES list as the navbar dropdown (featureMenu.ts), so a new feature
+  // page shows up in both places. Then resources and legal.
+  const columns: { title: string; links: { label: string; href: string }[] }[] = [
+    ...FEATURE_GROUPS.map((g) => ({
+      title: menu.groups[g],
+      links: FEATURES.filter((f) => f.group === g).map((f) => ({
+        label: menu.items[f.key].title,
+        href: href(f.path),
+      })),
+    })),
+    {
+      title: groups.resources.title,
+      links: [
+        { label: groups.resources.links.templates, href: href("/presentation-templates") },
+        { label: groups.resources.links.stockImages, href: href("/free-stock-images") },
+        { label: groups.resources.links.pricing, href: href("/pricing") },
+        // Absolute to the landing so it also works from every other page.
+        { label: groups.resources.links.faq, href: `${href("/")}#faq` },
+        { label: groups.resources.links.contact, href: href("/contact") },
+      ],
+    },
+    {
+      title: groups.legal.title,
+      links: Object.entries(LEGAL_LINKS).map(([k, path]) => ({
+        label: groups.legal.links[k as keyof typeof LEGAL_LINKS],
+        href: href(path),
+      })),
+    },
   ];
 
   return (
     <footer className={`${fullBleed ? "px-4 sm:px-6 lg:px-0" : PX} pt-20 pb-8`}>
       <div className={fullBleed ? "" : "mx-auto max-w-7xl"}>
-        <div className="mb-12 grid grid-cols-2 gap-8 md:grid-cols-4">
-          {columns.map(({ key, group }) => (
-            <div key={key} className="md:px-8 md:first:pe-0">
-              <h4 className="mb-6 font-medium text-foreground">{group.title}</h4>
-              {key === "social" ? (
-                <div className="flex items-center gap-3">
-                  {SOCIALS.map((s) => (
-                    <a
-                      key={s.label}
-                      href={s.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={s.label}
-                      className="text-foreground transition-opacity hover:opacity-75"
-                    >
-                      <svg
-                        viewBox="0 0 24 24"
-                        className="h-5 w-5"
-                        fill="currentColor"
-                        aria-hidden="true"
-                      >
-                        <path d={s.path} />
-                      </svg>
-                    </a>
-                  ))}
-                </div>
-              ) : key === "contact" ? (
-                <ul className="space-y-3 text-sm">
-                  {/* Block follows the page direction (right-aligned in RTL);
-                      only the LTR content is BiDi-isolated. */}
-                  <li className="text-foreground">
-                    <bdi dir="ltr">{LEGAL_META.address}</bdi>
-                  </li>
-                  <li>
-                    <ContactEmail className="footer-link" />
-                  </li>
-                  <li>
-                    <a
-                      className="btn-gradient inline-flex w-fit rounded-full px-4 py-2 text-xs font-medium"
-                      href={localizedHref("/contact", locale)}
-                    >
-                      {footer.contact.links.form}
-                    </a>
-                  </li>
-                </ul>
-              ) : (
-                <ul className="space-y-3 text-sm">
-                  {Object.entries(group.links).map(([k, label]) => {
-                    const raw = FOOTER_LINK_HREFS[k] ?? "#";
-                    const href = raw.startsWith("/")
-                      ? localizedHref(raw, locale)
-                      : raw;
-                    return (
-                      <li key={label as string}>
-                        <a className="footer-link" href={href}>
-                          {label as string}
-                        </a>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-          ))}
-        </div>
-        <div className="flex flex-col items-center justify-between pt-8 text-sm text-foreground md:flex-row">
-          <div className="mb-4 flex items-center gap-2 md:mb-0">
+        <div className="grid grid-cols-2 gap-x-8 gap-y-10 pb-12 sm:grid-cols-3 lg:grid-cols-7">
+          {/* Brand block: logo, one-line pitch, socials, contact. */}
+          <div className="col-span-2 flex flex-col gap-5 sm:col-span-3 lg:col-span-2 lg:pe-8">
             <ThemeLogo
               width={120}
               height={28}
-              className="h-7 w-auto object-contain"
+              className="h-7 w-auto self-start object-contain"
             />
+            <p className="max-w-sm text-sm leading-relaxed text-muted">
+              {footer.tagline}
+            </p>
+            <div className="flex items-center gap-3">
+              {SOCIALS.map((s) => (
+                <a
+                  key={s.label}
+                  href={s.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={s.label}
+                  className="text-foreground transition-opacity hover:opacity-75"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-5 w-5"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d={s.path} />
+                  </svg>
+                </a>
+              ))}
+            </div>
+            <ul className="space-y-2 text-sm">
+              {/* Block follows the page direction (right-aligned in RTL);
+                  only the LTR content is BiDi-isolated. */}
+              <li>
+                <ContactEmail className="footer-link" />
+              </li>
+              <li className="text-muted">
+                <bdi dir="ltr">{LEGAL_META.address}</bdi>
+              </li>
+            </ul>
           </div>
+
+          {columns.map((col) => (
+            <div key={col.title}>
+              <h4 className="mb-5 text-sm font-medium text-foreground">{col.title}</h4>
+              <ul className="space-y-3 text-sm">
+                {col.links.map((l) => (
+                  <li key={l.href}>
+                    <a className="footer-link" href={l.href}>
+                      {l.label}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-col items-center justify-between gap-4 border-t border-[var(--tq-border-hairline)] pt-8 text-sm text-muted md:flex-row">
           <p>
-            {dict.landing.footer.copyright.replace(
-              "{year}",
-              String(new Date().getFullYear()),
-            )}
+            {footer.copyright.replace("{year}", String(new Date().getFullYear()))}
           </p>
+          <a
+            className="btn-gradient inline-flex w-fit rounded-full px-4 py-2 text-xs font-medium"
+            href={href("/contact")}
+          >
+            {groups.contact.links.form}
+          </a>
         </div>
       </div>
     </footer>
