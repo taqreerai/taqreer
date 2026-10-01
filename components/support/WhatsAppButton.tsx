@@ -152,8 +152,10 @@ export function WhatsAppToolbarButton({ compact = false }: { compact?: boolean }
         >
           <span className="support-toolbar-btn flex h-5 w-5 items-center justify-center rounded-full">
             <span
-              className="material-symbols-outlined text-[13px]"
-              style={{ fontVariationSettings: "'wght' 600" }}
+              // Inline size: the unlayered .material-symbols-outlined rule
+              // beats Tailwind text-[..] utilities on this glyph.
+              className="material-symbols-outlined"
+              style={{ fontSize: 13, lineHeight: 1, fontVariationSettings: "'wght' 600" }}
               aria-hidden="true"
             >
               question_mark
