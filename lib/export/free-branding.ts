@@ -21,10 +21,12 @@ export const WATERMARK_TEXT = "Made with";
 export const WATERMARK_BRAND = "taqreer.ai";
 export const SITE_LABEL = "taqreer.ai";
 
-/** Closing-slide slogan in the deck's language (owner pick 2026-10-02). */
+/** Closing-slide + cover-badge slogan in the deck's language (owner picks
+ *  2026-10-02: English decks get their own line, mirroring the Arabic
+ *  tagline "من الفكرة إلى عرض جاهز"). */
 export const CLOSING_SLOGAN = {
   ar: "عروض تقديمية تتحدث العربية",
-  en: "Presentations that speak Arabic",
+  en: "From idea to deck in minutes",
 } as const;
 
 // /ar/brand: one flat dark surface, one blue accent.

@@ -164,12 +164,27 @@ export default function SignupPage() {
 
   // Step 1 → step 2. Validate the email format only (existence is checked by
   // the real signUp on step 2 submit); advancing reveals the name/password.
-  const handleContinue = (e: React.FormEvent) => {
+  const handleContinue = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     if (!EMAIL_RE.test(email)) {
       setError(t.signup.invalidEmail);
       return;
+    }
+    // Throwaway inboxes are refused up front (2026-10-02). Fail-open on a
+    // network error: the signup-grant guard still withholds free credits.
+    try {
+      const res = await fetch("/api/auth/email-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      if (res.ok && ((await res.json()) as { disposable?: boolean }).disposable) {
+        setError(t.signup.disposableEmail);
+        return;
+      }
+    } catch {
+      /* fail-open */
     }
     setStep(2);
   };

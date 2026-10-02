@@ -2287,6 +2287,65 @@ body:has(.tq-support-toolbar) .support-fab-anchor {
   background: color-mix(in srgb, var(--tq-brand-blue) 14%, transparent);
 }
 
+/* Design pickers (2026-10-02): template / style tiles and colour-template
+   chips on /create's Design step + the studio's deck-colours menu. Same
+   selection language as .quality-option: hairline at rest, brand-blue
+   outline when picked. */
+.pick-tile {
+  border: 1px solid var(--tq-border-hairline);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.pick-tile:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--tq-brand-blue) 55%, transparent);
+}
+.pick-tile.is-active {
+  border-color: var(--tq-brand-blue);
+  box-shadow: 0 0 0 1px var(--tq-brand-blue);
+  background: color-mix(in srgb, var(--tq-brand-blue) 8%, transparent);
+}
+/* Templates | Styles switch on the Design step: full-width, the picked tab
+   filled with the brand blue. */
+.design-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--tq-overlay-soft);
+}
+.design-tab {
+  height: 36px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tq-text-muted);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.design-tab:hover:not(.is-active) {
+  color: var(--tq-text-primary);
+}
+.design-tab.is-active {
+  background: var(--tq-brand-blue);
+  color: #fff;
+}
+/* Scrollable template / style grid inside the fixed-size Design card. */
+.design-scroll {
+  max-height: 176px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px;
+}
+/* The five colour roles of a palette preset as one rounded strip. */
+.palette-strip {
+  display: flex;
+  overflow: hidden;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px var(--tq-border-hairline);
+}
+.palette-strip > span {
+  flex: 1 1 0;
+}
+
 /* Toolbar help trigger (2026-10-01): brand-blue fill so it stands out from
    the muted sibling icons. Opens the help popover, never WhatsApp directly. */
 .support-toolbar-btn {

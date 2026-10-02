@@ -46,12 +46,14 @@ export type PriceSpec = {
 // are fine: the ×12×100 yearly amounts are integer cents
 // (9180/25500/80580). The yearly Stripe Price charges interval=year
 // at ×12.
-const YEARLY_PER_MONTH_USD: Record<"plus" | "pro" | "max", number> = {
-  // 2026-07-28 reprice: Plus $9 and Max $79 (Pro held at $25), uniform 15%
-  // off yearly. 9 * 0.85 = 7.65 and 79 * 0.85 = 67.15 exactly.
-  plus: 7.65,
-  pro: 21.25,
-  max: 67.15,
+export const YEARLY_PER_MONTH_USD: Record<"plus" | "pro" | "max", number> = {
+  // 2026-10-02 (owner direction): yearly is the DEFAULT cadence, so its
+  // per-month figure is a round number, rounded DOWN from the 15%-off base
+  // (7.65 / 21.25 / 67.15): $7 / $21 / $67, billed $84 / $252 / $804 a year.
+  // Savings vs monthly: Plus 22%, Pro 16%, Max 15%.
+  plus: 7,
+  pro: 21,
+  max: 67,
 };
 
 const PAID_PLANS = KNOWN_PLANS.filter(

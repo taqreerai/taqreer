@@ -36,7 +36,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { BrandSnapshotSchema } from "@/lib/template/derive-brand";
-import { uploadFileToAnthropic } from "@/lib/anthropic/files";
+import { mintTemplateDesignFile } from "@/lib/template/mint-design";
 import { isProPlan } from "@/lib/plan";
 
 // Node runtime — the Anthropic SDK + Buffer handling need it; the
@@ -128,20 +128,7 @@ export async function POST(
   // persist one). Failures here are upstream/transient → 502.
   let designAnthropicFileId: string;
   try {
-    // 20s abort so a slow/hanging upstream can't tie up the worker
-    // before the (also-bounded) Anthropic upload. maxDuration is 60s.
-    const pdfRes = await fetch(template.pdfUrl, {
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (!pdfRes.ok) {
-      throw new Error(`PDF download failed (${pdfRes.status})`);
-    }
-    const bytes = Buffer.from(await pdfRes.arrayBuffer());
-    designAnthropicFileId = await uploadFileToAnthropic({
-      bytes,
-      fileName: `template-${templateId}.pdf`,
-      contentType: "application/pdf",
-    });
+    designAnthropicFileId = await mintTemplateDesignFile(templateId, template.pdfUrl);
   } catch (err) {
     console.error("[templates/use] design reference prep failed", {
       templateId,

@@ -101,7 +101,8 @@ export function PricingTiers({
   tierNumbers: TierDisplayNumber[];
   tierPrices: { plan: string; monthly: number; yearly: number }[];
 }) {
-  const [billing, setBilling] = useState<Billing>("monthly");
+  // Yearly is the default cadence (owner direction 2026-10-02).
+  const [billing, setBilling] = useState<Billing>("yearly");
   const [busy, setBusy] = useState<string | null>(null);
   const dict = useDict();
   const { dir, locale } = useLocale();
@@ -224,8 +225,17 @@ function PricingCard({
   const price = priceUnavailable
     ? "-"
     : `$${priceNum.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  // Yearly cards state the real upfront total ("Billed $84 yearly"), so the
+  // per-month figure never reads as the charge (owner direction 2026-10-02).
   const footnote =
-    billing === "yearly" && !tier.isFree ? pricing.billedYearly : copy.footnote;
+    billing === "yearly" && !tier.isFree
+      ? pricing.billedYearly.replace(
+          "{total}",
+          priceUnavailable
+            ? "-"
+            : `$${(priceNum * 12).toLocaleString("en-US", { maximumFractionDigits: 2 })}`,
+        )
+      : copy.footnote;
 
   // Row 0 is the credits line; rows 1..8 are copy.features[0..7]. The enabled
   // booleans live on tier.features (structure), the labels come from copy.

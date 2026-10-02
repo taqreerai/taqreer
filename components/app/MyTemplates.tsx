@@ -73,7 +73,7 @@ export function MyTemplates({
       // spinner), then navigate to the forked flow which reads the
       // cache → no full-screen loader.
       await prepareTemplateUse("template", preview.id);
-      window.location.assign(`/use-template/${preview.id}`);
+      window.location.assign(`/create?template=${encodeURIComponent(preview.id)}`);
     } catch (err) {
       if (isPremiumGate(err)) {
         setPreview(null);

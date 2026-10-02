@@ -92,6 +92,14 @@ const ThemeObject = z.object({
   // leave `var(--accent)` undefined and slides referencing it would
   // render with the browser's fallback (transparent / inherit).
   palette: z.array(HexColor).min(3).max(8),
+  // The deck's ORIGINAL generated palette, recorded (index for index with
+  // `palette`) the first time the studio recolors it (lib/deck/recolor.ts),
+  // so "original colours" can always be restored. Absent = never recolored.
+  basePalette: z.array(HexColor).min(3).max(8).optional(),
+  // { current colour → original colour } for every literal a recolor changed
+  // (6-digit hex both sides), so the next recolor starts from the ORIGINAL
+  // colours instead of stacking (lib/deck/recolor.ts). Capped at 500 there.
+  baseColors: z.record(z.string().regex(/^#[0-9A-F]{6}$/), z.string().regex(/^#[0-9A-F]{6}$/)).optional(),
   // SINGLE brand font (2026-06-04 collapse). The brand UI has emitted one
   // family — Google OR an uploaded set — since 2026-06-02; the schema, the
   // CSS vars, and the prompt now match. Exposed as --font by

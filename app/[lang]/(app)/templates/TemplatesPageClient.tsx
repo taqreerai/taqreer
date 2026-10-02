@@ -99,7 +99,7 @@ export function TemplatesPageClient({
       // busy spinner, then hard-navigate to the forked flow (which
       // reads the cache → no full-screen loader).
       await prepareTemplateUse("template", preview.id);
-      window.location.assign(`/use-template/${preview.id}`);
+      window.location.assign(`/create?template=${encodeURIComponent(preview.id)}`);
     } catch (err) {
       // 402 = premium template, user isn't on Pro → upgrade in place
       // (modal stacks over the lightbox; their journey is preserved).

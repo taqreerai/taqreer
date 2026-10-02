@@ -461,6 +461,11 @@ model Template {
   // regular users' templates stay free. Enforcement is server-side in
   // POST /api/templates/[id]/use (402 for non-owner non-Pro users).
   isPremium       Boolean   @default(false)
+  // Free-plan templates (2026-10-02): the few templates a FREE user may
+  // generate with (the template flow is otherwise Plus+). Curator-set (DB-only
+  // for now). POST /api/projects honours it server-side by re-minting the
+  // design reference itself, never trusting a client-sent file id.
+  isFree          Boolean   @default(false)
   // Admin curation: manual landing/marquee order (0-based). null = not
   // featured (won't appear on the public landing marquee/grid); an int = its
   // slot in the featured ordering. Only the curator account's templates are

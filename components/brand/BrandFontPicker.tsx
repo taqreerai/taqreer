@@ -31,7 +31,11 @@ export function BrandFontPicker({
   onChange,
   sampleText,
   sampleSizeClass = "text-sm",
+  compact = false,
 }: {
+  // One row (2026-10-02, /create Design step): label + the Google combobox
+  // + a small upload button; uploaded families show as chips under it.
+  compact?: boolean;
   value: BrandFontState;
   onChange: (next: BrandFontState) => void;
   // Live-preview copy for the Google combobox sample line.
@@ -69,6 +73,96 @@ export function BrandFontPicker({
       uploaded: value.uploaded.filter((_, i) => i !== index),
     });
 
+  const fileInput = (
+    <input
+      ref={inputRef}
+      type="file"
+      accept=".woff2,.woff,.ttf,.otf"
+      multiple
+      className="hidden"
+      onChange={(event) => {
+        addFiles(event.target.files);
+        event.currentTarget.value = "";
+      }}
+    />
+  );
+  const chips = value.uploaded.map((u, index) => (
+    <span
+      key={`${u.name}-${index}`}
+      onClick={(event) => event.stopPropagation()}
+      className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] text-foreground bg-[var(--tq-surface)] border-[var(--tq-border-hairline)]"
+    >
+      <span className="material-symbols-outlined text-foreground/60" style={{ fontSize: 13 }}>
+        font_download
+      </span>
+      <span className="max-w-[120px] truncate">{u.name}</span>
+      {u.faces.length > 1 ? (
+        <span className="text-[10px] text-foreground/40">
+          {dict.flows.fonts.weights.replace("{count}", String(u.faces.length))}
+        </span>
+      ) : null}
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          removeAt(index);
+        }}
+        aria-label={dict.flows.brand.removeFont.replace("{label}", u.name)}
+        className="flex h-4 w-4 items-center justify-center rounded-full text-foreground/50 transition-colors hover:bg-foreground/10 hover:text-foreground"
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: 12 }}>
+          close
+        </span>
+      </button>
+    </span>
+  ));
+
+  if (compact) {
+    return (
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <span className="shrink-0 text-xs font-semibold text-foreground/70">
+            {dict.flows.fonts.fonts}
+          </span>
+          <div className="min-w-0 flex-1">
+            <GoogleFontSlot
+              selected={value.googleFamily}
+              sampleText={sampleText}
+              sampleSizeClass={sampleSizeClass}
+              onSelect={(family) =>
+                onChange({ ...value, googleFamily: family, uploaded: [] })
+              }
+              hideSample
+              compact
+            />
+          </div>
+          {fileInput}
+          <button
+            type="button"
+            onClick={() => !atCap && inputRef.current?.click()}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              if (!atCap) addFiles(event.dataTransfer.files);
+            }}
+            disabled={atCap}
+            title={`${dict.flows.fonts.uploadFonts} (${dict.flows.fonts.fontFormats.replace("{max}", String(MAX_UPLOADED_FONTS))})`}
+            aria-label={dict.flows.fonts.uploadFonts}
+            className="flex h-[30px] shrink-0 items-center gap-1 rounded-lg border border-dashed border-foreground/20 px-2 text-[11px] font-medium text-foreground/70 transition-colors hover:border-foreground/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 15 }} aria-hidden>
+              upload
+            </span>
+            {dict.flows.fonts.uploadShort}
+          </button>
+        </div>
+        {hasPills ? (
+          <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar">{chips}</div>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
       {/* pb-1 (4px) + the stack's space-y-3 (12px) = a 16px title→selector
@@ -100,17 +194,7 @@ export function BrandFontPicker({
       </div>
 
       <div className="space-y-2">
-          <input
-            ref={inputRef}
-            type="file"
-            accept=".woff2,.woff,.ttf,.otf"
-            multiple
-            className="hidden"
-            onChange={(event) => {
-              addFiles(event.target.files);
-              event.currentTarget.value = "";
-            }}
-          />
+          {fileInput}
           {/* Drop zone — when families are picked, their chips live INSIDE
               here on one horizontally-scrollable row. The leading icon is a
               real upload button (the AT-/keyboard-accessible trigger), so you
@@ -158,42 +242,7 @@ export function BrandFontPicker({
 
             {hasPills ? (
               <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto hide-scrollbar">
-                {value.uploaded.map((u, index) => (
-                  <span
-                    key={`${u.name}-${index}`}
-                    onClick={(event) => event.stopPropagation()}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] text-foreground bg-[var(--tq-surface)] border-[var(--tq-border-hairline)]"
-                  >
-                    <span
-                      className="material-symbols-outlined text-foreground/60"
-                      style={{ fontSize: 13 }}
-                    >
-                      font_download
-                    </span>
-                    <span className="max-w-[120px] truncate">{u.name}</span>
-                    {u.faces.length > 1 ? (
-                      <span className="text-[10px] text-foreground/40">
-                        {dict.flows.fonts.weights.replace("{count}", String(u.faces.length))}
-                      </span>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        removeAt(index);
-                      }}
-                      aria-label={dict.flows.brand.removeFont.replace("{label}", u.name)}
-                      className="flex h-4 w-4 items-center justify-center rounded-full text-foreground/50 transition-colors hover:bg-foreground/10 hover:text-foreground"
-                    >
-                      <span
-                        className="material-symbols-outlined"
-                        style={{ fontSize: 12 }}
-                      >
-                        close
-                      </span>
-                    </button>
-                  </span>
-                ))}
+                {chips}
               </div>
             ) : (
               <>

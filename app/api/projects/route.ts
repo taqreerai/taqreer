@@ -19,6 +19,7 @@ import {
   ensureFresh,
   getActivePresetKeys,
   defaultPresetKey,
+  getTier,
 } from "@/lib/config/runtime-config";
 import { SourceMetaSchema, type SourceMeta } from "@/lib/types/source";
 import {
@@ -32,6 +33,7 @@ import { preflightGenerate } from "@/lib/credits/preflight";
 import type { Flow as CreditFlow, SlideEstimateInput } from "@/lib/credits/cost";
 import { TEASER_LOCKED_COUNT } from "@/lib/credits/cost";
 import { normalizePlan } from "@/lib/plan";
+import { mintTemplateDesignFile } from "@/lib/template/mint-design";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
 import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 import { signupGeoFromHeaders } from "@/lib/api/geo";
@@ -260,6 +262,10 @@ type CreateProjectPayload = {
   // deck-generate, which branches the Claude message shape on
   // source.kind (see buildSourceContentBlocks in deck-generate.ts).
   source?: unknown;
+  // The picked template's id when /create runs a template generation (source
+  // kind "mimic"). Only consulted for FREE-plan templates (Template.isFree):
+  // see the free-template block below.
+  templateId?: unknown;
   // Social flow product photo: a public generated-images/uploads URL
   // (from POST /api/storage/upload-image) the post is designed around.
   // gpt-image receives it as an images.edit input for the boxes Claude
@@ -716,7 +722,7 @@ export async function POST(request: Request) {
 
   const contentLanguage = resolveLanguage(payload.language);
   const contentDirection = directionForLanguage(contentLanguage);
-  const validatedSource = resolveSource(payload.source);
+  let validatedSource = resolveSource(payload.source);
   // AUTHORIZE the enhance source path — same threat as the logo path
   // above. `source.sourcePath` round-trips through the client, and at
   // generation time deck-generate downloads it with SERVICE-ROLE creds
@@ -777,6 +783,49 @@ export async function POST(request: Request) {
   await ensureFresh();
   const quality = resolveQuality(payload.quality);
 
+  // ─── Free-plan templates (2026-10-02) ─────────────────────────────
+  // The template flow ("mimic") is Plus+, except for the few templates the
+  // curator flags Template.isFree. When a user whose tier lacks the flow runs
+  // one, the design reference is RE-MINTED here from the template's own PDF:
+  // the client-sent designAnthropicFileId is discarded, so a locked
+  // template's (or any uploaded) reference can't ride in under a free
+  // template's id. The run is then gated + priced as a "create" run (pricing
+  // doesn't vary by flow; only the tier gate does).
+  let freeTemplateRun = false;
+  if (
+    validatedSource?.kind === "mimic" &&
+    typeof payload.templateId === "string" &&
+    dbUser.role !== "admin" &&
+    !getTier(normalizePlan(dbUser.plan)).flows.includes("mimic")
+  ) {
+    const tpl = await prisma.template.findUnique({
+      where: { id: payload.templateId },
+      select: { id: true, isFree: true, isPremium: true, isPublic: true, ownerId: true, pdfUrl: true },
+    });
+    // Never a premium one, even if a curator flags it free (Pro-only stays Pro).
+    if (
+      tpl?.isFree &&
+      !tpl.isPremium &&
+      tpl.pdfUrl &&
+      (tpl.isPublic || tpl.ownerId === dbUser.id)
+    ) {
+      try {
+        const minted = await mintTemplateDesignFile(tpl.id, tpl.pdfUrl);
+        validatedSource = { ...validatedSource, designAnthropicFileId: minted };
+        freeTemplateRun = true;
+      } catch (err) {
+        console.error("[projects] free template reference prep failed", {
+          templateId: tpl.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return NextResponse.json(
+          { error: "Could not prepare the template's design reference" },
+          { status: 502 },
+        );
+      }
+    }
+  }
+
   // First-deck gift REMOVED (2026-07-21): the deck runs on + is charged for the
   // preset the user picked, from deck 1. No free upgrade to a thinking preset on
   // the first deck (that ran a thinking model at the no-thinking price). Free
@@ -792,7 +841,7 @@ export async function POST(request: Request) {
       ? "social"
       : validatedSource?.kind === "enhance"
         ? "enhance"
-        : validatedSource?.kind === "mimic"
+        : validatedSource?.kind === "mimic" && !freeTemplateRun
           ? "mimic"
           : validatedSource?.kind === "data"
             ? "datasheet"

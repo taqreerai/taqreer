@@ -86,6 +86,9 @@ import {
 } from "@/lib/realtime/token-manager";
 
 import type { ProjectRole } from "@/lib/api/project-access";
+import { DeckColorsPopover } from "@/components/preview/DeckColorsPopover";
+import { presetToPalette, recolorManifest } from "@/lib/deck/recolor";
+import type { PalettePreset } from "@/lib/brand/palette-presets";
 
 // Preserve referential identity for streaming-preview slides whose content is
 // unchanged between status polls. The poll re-fetches the WHOLE preview every
@@ -1126,6 +1129,104 @@ export function DeckView({
     invalidateUndoRef.current = clearUndoFor;
   }, [clearUndoFor]);
 
+  // ─── Deck colours (2026-10-02) ─────────────────────────────────
+  // The colour-template menu previews a preset on the WHOLE deck by recoloring
+  // the in-memory manifest (lib/deck/recolor.ts, no AI). Every preview starts
+  // from the snapshot taken when the menu opened, so clicking through presets
+  // never stacks one recolor on another. Apply re-runs the same transform on
+  // the server (which never trusts client HTML) and persists it; Cancel puts
+  // the snapshot back.
+  const [colorsAnchor, setColorsAnchor] = useState<DOMRect | null>(null);
+  const [colorsPick, setColorsPick] = useState<string | null>(null);
+  const [colorsBusy, setColorsBusy] = useState(false);
+  const [colorsError, setColorsError] = useState(false);
+  const [colorsOriginal, setColorsOriginal] = useState<string[] | null>(null);
+  const colorsBaseRef = useRef<SlideManifest | null>(null);
+  const colorsTargetRef = useRef<string[] | null>(null);
+  const closeColors = useCallback(() => {
+    setColorsAnchor(null);
+    setColorsPick(null);
+    setColorsError(false);
+    colorsBaseRef.current = null;
+    colorsTargetRef.current = null;
+  }, []);
+  const cancelColors = useCallback(() => {
+    const base = colorsBaseRef.current;
+    if (base && colorsTargetRef.current) {
+      setManifest(base);
+      setEditorReloadKey((k) => k + 1);
+    }
+    closeColors();
+  }, [closeColors]);
+  const openColors = useCallback(
+    (rect: DOMRect) => {
+      if (colorsAnchor) {
+        cancelColors();
+        return;
+      }
+      const base = manifestRef.current;
+      if (!base) return;
+      colorsBaseRef.current = base;
+      colorsTargetRef.current = null;
+      setColorsOriginal(base.theme.basePalette ?? null);
+      setColorsPick(null);
+      setColorsError(false);
+      setColorsAnchor(rect);
+    },
+    [colorsAnchor, cancelColors],
+  );
+  const previewColors = useCallback((preset: PalettePreset | "original") => {
+    const base = colorsBaseRef.current;
+    if (!base) return;
+    const target =
+      preset === "original"
+        ? base.theme.basePalette
+        : presetToPalette(base.theme.basePalette ?? base.theme.palette, preset.colors);
+    if (!target) return;
+    colorsTargetRef.current = target;
+    setColorsPick(preset === "original" ? "original" : preset.id);
+    setColorsError(false);
+    setManifest(recolorManifest(base, target));
+    setEditorReloadKey((k) => k + 1);
+  }, []);
+  const applyColors = useCallback(async () => {
+    const base = colorsBaseRef.current;
+    const target = colorsTargetRef.current;
+    if (!base || !target) {
+      closeColors();
+      return;
+    }
+    setColorsBusy(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/recolor`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ palette: target }),
+      });
+      if (!res.ok) throw new Error(`recolor ${res.status}`);
+      const data = (await res.json()) as Pick<SlideManifest, "theme" | "slides">;
+      setManifest((prev) => (prev ? { ...prev, theme: data.theme, slides: data.slides } : prev));
+      setEditorReloadKey((k) => k + 1);
+      // Every slide's html changed under the user: older undo steps no longer
+      // chain from what's live, and Save should checkpoint the whole deck.
+      const keys = data.slides.map((sl) => sl.slideId);
+      clearUndoFor(keys);
+      keys.forEach((k) => markDirtyAndArmIdle(k));
+      setLocalDirty(true);
+      dirtyGenRef.current += 1;
+      closeColors();
+    } catch (err) {
+      console.error("[deck-colors] apply failed:", err);
+      setManifest(base);
+      setEditorReloadKey((k) => k + 1);
+      colorsTargetRef.current = null;
+      setColorsPick(null);
+      setColorsError(true);
+    } finally {
+      setColorsBusy(false);
+    }
+  }, [projectId, closeColors, clearUndoFor, markDirtyAndArmIdle]);
+
   // In-canvas edit committed (blur). Record the { before, after } step for undo,
   // then apply. No version row is created (history is now Save + 10-min
   // checkpoints); the iframe already shows the edit, so no reload. Behind
@@ -2126,23 +2227,26 @@ export function DeckView({
   const [railTransitionReady, setRailTransitionReady] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 1280px)");
+    // The Slides rail (the deck building live) shows by DEFAULT on laptops too
+    // (user direction 2026-10-02); only phones start it collapsed.
+    const slidesMq = window.matchMedia("(max-width: 767px)");
     // The rule reports the setState-in-effect once for this effect; one
     // disable covers both corrections (SSR renders collapsed, this swaps in the
     // real viewport after mount — matchMedia can't run in the initializer).
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLayersCollapsed(mq.matches);
-    setSlidesCollapsed(mq.matches);
+    setSlidesCollapsed(slidesMq.matches);
     // Enable the margin transition one frame after the initial correction so
     // user toggles animate but the load-time collapse/expand snaps.
     const raf = requestAnimationFrame(() => setRailTransitionReady(true));
-    const onChange = (e: MediaQueryListEvent) => {
-      setLayersCollapsed(e.matches);
-      setSlidesCollapsed(e.matches);
-    };
+    const onChange = (e: MediaQueryListEvent) => setLayersCollapsed(e.matches);
+    const onSlidesChange = (e: MediaQueryListEvent) => setSlidesCollapsed(e.matches);
     mq.addEventListener("change", onChange);
+    slidesMq.addEventListener("change", onSlidesChange);
     return () => {
       cancelAnimationFrame(raf);
       mq.removeEventListener("change", onChange);
+      slidesMq.removeEventListener("change", onSlidesChange);
     };
   }, []);
 
@@ -5087,6 +5191,8 @@ export function DeckView({
                   commentMode={commentMode}
                   onToggleCommentMode={handleToggleCommentMode}
                   onAddText={addTextBox}
+                  onOpenColors={openColors}
+                  colorsOpen={colorsAnchor != null}
                   draftCommentCount={
                     comments.filter((c) => !c.forAi).length
                   }
@@ -5693,6 +5799,17 @@ export function DeckView({
           rather than SlidePill because the popover survives canvas-
           hover state changes (closing on mouseleave would be wrong
           — user might leave to click a row). */}
+      <DeckColorsPopover
+        open={colorsAnchor != null}
+        triggerRect={colorsAnchor}
+        activeId={colorsPick}
+        originalPalette={colorsOriginal}
+        busy={colorsBusy}
+        error={colorsError}
+        onPick={previewColors}
+        onApply={() => void applyColors()}
+        onCancel={cancelColors}
+      />
       <HistoryPopover
         open={historyAnchor != null && historySlideKey != null}
         triggerRect={historyAnchor}

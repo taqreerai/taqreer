@@ -1,14 +1,16 @@
-// /use-template/[id] — "use this saved template" → forked Mimic flow.
-// Thin server wrapper; the client driver resolves the template (minting
-// the Anthropic design reference) and renders MimicFlow in template mode.
+// /use-template/[id] — legacy "use this saved template" entry. Since the
+// 2026-10-02 Design-step rework, templates are picked inside /create, so this
+// route just forwards there with the template preselected (old links and
+// bookmarks keep working). /use-template/project/[id] (a project used
+// directly as a template) still renders the forked Mimic flow.
 
-import UseTemplateClient from "@/components/mimic/UseTemplateClient";
+import { redirect } from "next/navigation";
 
 export default async function UseTemplatePage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ lang: string; id: string }>;
 }) {
-  const { id } = await params;
-  return <UseTemplateClient source="template" id={id} />;
+  const { lang, id } = await params;
+  redirect(`/${lang}/create?template=${encodeURIComponent(id)}`);
 }

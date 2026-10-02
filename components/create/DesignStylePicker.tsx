@@ -496,3 +496,47 @@ export function DesignStylePicker({
     </>
   );
 }
+
+/**
+ * Inline style grid for /create's Design step (2026-10-02): Auto + the deck
+ * styles as tiles, no modal. Same previews + labels as the dialog above.
+ */
+export function DesignStyleGrid({
+  value,
+  onChange,
+  disabled = false,
+}: {
+  value: string | null;
+  onChange: (next: string | null) => void;
+  disabled?: boolean;
+}) {
+  const dict = useDict();
+  const t = dict.flows.stylePicker;
+  const tiles: ReadonlyArray<{ key: StyleKey | "auto"; label: string; desc: string; value: string | null }> = [
+    { key: "auto", label: t.auto, desc: t.autoDesc, value: null },
+    ...STYLES.map((s) => ({ key: s.key, label: s.label, desc: t.descs[s.key], value: s.label })),
+  ];
+  return (
+    <div className="design-scroll grid grid-cols-3 gap-2">
+      {tiles.map((tile) => {
+        const active = value === tile.value;
+        return (
+          <button
+            key={tile.key}
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange(tile.value)}
+            title={tile.desc}
+            aria-pressed={active}
+            className={`pick-tile flex flex-col gap-1.5 rounded-lg p-1.5 text-start disabled:cursor-not-allowed disabled:opacity-50 ${
+              active ? "is-active" : ""
+            }`}
+          >
+            <StyleMini k={tile.key} boldSample={t.boldSample} />
+            <span className="truncate text-[11px] font-medium text-foreground/80">{tile.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}

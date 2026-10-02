@@ -35,6 +35,7 @@ import { SegmentedToggle } from "@/components/create/controls";
 import { PlanUsage } from "@/components/app/PlanUsage";
 import { PRICING_TIER_FEATURES } from "@/components/marketing/PricingTiers";
 import { normalizePlan, type KnownPlan } from "@/lib/plan";
+import { YEARLY_PER_MONTH_USD } from "@/lib/billing/prices";
 
 type Cadence = "monthly" | "yearly";
 
@@ -47,13 +48,17 @@ type Summary = {
   cadence: "monthly" | "yearly" | null;
 };
 
-// Pre-hydration fallback for the yearly per-month figure: derived from
-// the bundled TIERS monthly price at the catalog's uniform 15% yearly
-// discount (lib/billing/prices.ts), NOT a second hand-maintained table.
-// The live Stripe price from /api/credits always wins once loaded.
-const YEARLY_DISCOUNT = 0.15;
+// Pre-hydration fallback for the yearly per-month figure: the catalog's
+// own yearly table (lib/billing/prices.ts), NOT a second hand-maintained
+// one. The live Stripe price from /api/credits always wins once loaded.
 const yearlyPerMonthFallback = (tier: "plus" | "pro" | "max"): number =>
-  Math.round(TIERS[tier].priceUsd * (1 - YEARLY_DISCOUNT) * 100) / 100;
+  YEARLY_PER_MONTH_USD[tier];
+// Best catalog saving, for the chip before /api/credits resolves.
+const FALLBACK_DISCOUNT_PCT = Math.max(
+  ...(["plus", "pro", "max"] as const).map((p) =>
+    Math.round((1 - YEARLY_PER_MONTH_USD[p] / TIERS[p].priceUsd) * 100),
+  ),
+);
 
 // "Pro" carries the landing's popular pill here too.
 const POPULAR_TIER: KnownPlan = "pro";
@@ -81,7 +86,12 @@ export function BillingSection({
   const pricing = dict.landing.pricing;
   const credits = useCreditBalance();
   const [summary, setSummary] = useState<Summary | null>(null);
-  const [cadence, setCadence] = useState<Cadence>("monthly");
+  // Default cadence (owner direction 2026-10-02): yearly on the plans page,
+  // MONTHLY in the upgrade modal - that opens on a mid-task gate, where a
+  // small monthly unlock is the easier yes than a year upfront.
+  const [cadence, setCadence] = useState<Cadence>(
+    variant === "modal" ? "monthly" : "yearly",
+  );
   const [busy, setBusy] = useState<string | null>(null);
 
   // Paid purchases go to our EMBEDDED checkout page (stays on
@@ -123,7 +133,7 @@ export function BillingSection({
   // "Save {pct}%" derived from the live Stripe prices (/api/credits);
   // falls back to the catalog's uniform discount until they resolve.
   const discountPct =
-    yearlyDiscountPct(credits?.tierPrices) ?? Math.round(YEARLY_DISCOUNT * 100);
+    yearlyDiscountPct(credits?.tierPrices) ?? FALLBACK_DISCOUNT_PCT;
 
   const currentIdx = TIER_ORDER.indexOf(plan);
   // The renewal date rides on the summary (the billing mirror), so it must
@@ -209,8 +219,14 @@ export function BillingSection({
               : cadence === "yearly"
                 ? (tp?.yearly ?? yearlyPerMonthFallback(tier as "plus" | "pro" | "max"))
                 : (tp?.monthly ?? TIERS[tier].priceUsd);
+            // Yearly cards state the real upfront total ("Billed $84 yearly").
             const footnote =
-              cadence === "yearly" && !isFree ? pricing.billedYearly : copy.footnote;
+              cadence === "yearly" && !isFree
+                ? pricing.billedYearly.replace(
+                    "{total}",
+                    `$${(priceUsd * 12).toLocaleString("en-US", { maximumFractionDigits: 2 })}`,
+                  )
+                : copy.footnote;
             const lookupKey = `tier_${tier}_${cadence}`;
             // Fill the {credits}/{slides} dict tokens from the LIVE per-tier
             // numbers (/api/credits), so the cards track admin Settings. Falls

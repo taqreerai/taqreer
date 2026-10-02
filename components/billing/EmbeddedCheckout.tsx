@@ -35,6 +35,10 @@ export function EmbeddedCheckout({
 }) {
   const { locale } = useLocale();
   const router = useRouter();
+  // Where the checkout opened (analytics only): the upgrade modal passes
+  // onSuccess; the /checkout page (pricing + plans pages) doesn't. A string,
+  // so the memoized session fetch below stays stable across re-renders.
+  const surface = onSuccess ? "modal" : "page";
 
   // The session's client secret, fetched once per price from our
   // auth-gated route (401 means "log in first"). Memoized so the
@@ -44,7 +48,7 @@ export function EmbeddedCheckout({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ lookupKey }),
+      body: JSON.stringify({ lookupKey, surface }),
     });
     if (res.status === 401) {
       router.push(localizedHref("/login", locale));
@@ -54,7 +58,7 @@ export function EmbeddedCheckout({
     const data = (await res.json()) as { clientSecret?: string };
     if (!data.clientSecret) throw new Error("no client secret");
     return data.clientSecret;
-  }, [lookupKey, locale, router]);
+  }, [lookupKey, locale, router, surface]);
 
   // Provider options are init-only and the appearance reads computed
   // CSS tokens from `document`, so build them AFTER mount (client

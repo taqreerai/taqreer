@@ -9,6 +9,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useDict } from "@/components/i18n/LocaleProvider";
+import { useCreditBalance } from "@/lib/credits/store";
+import { LockedLogoSlot } from "@/components/brand/LogoUploadSlot";
 
 // Logo dropzone / preview sizing. flex-1 + min-h lets the zone GROW to
 // absorb any extra height the parent card hands down (e.g. /create's brand
@@ -16,13 +18,17 @@ import { useDict } from "@/components/i18n/LocaleProvider";
 // visual-direction dropzone's 80 px. Where the parent doesn't grow it (the
 // other flows), it just sits at the 80 px floor.
 const ZONE_H = "min-h-20 flex-1";
+// Compact (the /create Design step, 2026-10-02): a shorter fixed zone.
+const ZONE_H_COMPACT = "h-14";
 
 export function LogoRow({
   file,
   previewUrl = null,
   onSelect,
   onRemove,
+  compact = false,
 }: {
+  compact?: boolean;
   file: File | null;
   // Remote logo (signed URL) when hydrated from a saved brand kit.
   previewUrl?: string | null;
@@ -30,6 +36,12 @@ export function LogoRow({
   onRemove: () => void;
 }) {
   const dict = useDict();
+  const zoneH = compact ? ZONE_H_COMPACT : ZONE_H;
+  // Logo upload is a paid feature (2026-10-02): free (non-admin) users get the
+  // crowned locked slot. The server drops a free user's logo regardless
+  // (app/api/projects/route.ts); this keeps the UI from offering it.
+  const credits = useCreditBalance();
+  const logoLocked = !!credits && !credits.isAdmin && credits.plan === "free";
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -62,6 +74,14 @@ export function LogoRow({
     onSelect(dropped);
   };
 
+  if (logoLocked) {
+    return (
+      <div className={compact ? "h-14" : "h-20"}>
+        <LockedLogoSlot compact fillHeight />
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-1 flex-col">
       <input
@@ -78,7 +98,7 @@ export function LogoRow({
 
       {activeUrl ? (
         <div
-          className={`relative flex w-full items-center justify-center rounded-xl border bg-[var(--tq-surface)] border-[var(--tq-border-hairline)] px-3 ${ZONE_H}`}
+          className={`relative flex w-full items-center justify-center rounded-xl border bg-[var(--tq-surface)] border-[var(--tq-border-hairline)] px-3 ${zoneH}`}
         >
           {/* Logo only — no filename label. object-contain keeps the aspect
               ratio; max-h fills the zone, max-w caps very wide marks. */}
@@ -113,7 +133,7 @@ export function LogoRow({
             setDragging(false);
             acceptSvg(event.dataTransfer.files?.[0]);
           }}
-          className={`flex w-full flex-col items-center justify-center gap-1 rounded-xl border border-dashed bg-overlay-soft transition-colors ${ZONE_H} ${
+          className={`flex w-full flex-col items-center justify-center gap-1 rounded-xl border border-dashed bg-overlay-soft transition-colors ${zoneH} ${
             dragging
               ? "border-[var(--tq-violet)]/60 bg-[var(--tq-violet)]/10"
               : "border-foreground/15 hover:border-foreground/30"

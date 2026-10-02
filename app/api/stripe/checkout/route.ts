@@ -26,6 +26,7 @@ import { stripe } from "@/lib/billing/stripe";
 import { specByLookupKey, grantToMetadata } from "@/lib/billing/prices";
 import { getOrCreateStripeCustomer } from "@/lib/billing/customer";
 import { normalizePlan } from "@/lib/plan";
+import { captureServerEvent } from "@/lib/analytics/posthog-server";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
@@ -42,6 +43,7 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => null)) as {
     lookupKey?: string;
+    surface?: unknown;
   } | null;
   const spec = body?.lookupKey ? specByLookupKey(body.lookupKey) : undefined;
   if (!spec) {
@@ -134,6 +136,17 @@ export async function POST(request: Request) {
     // subscription already stores the card for renewals, this just makes it
     // explicit + reusable for top-ups / plan changes.
     saved_payment_method_options: { payment_method_save: "enabled" },
+  });
+
+  // Conversion funnel: a checkout was opened, with the cadence + the surface
+  // (the pricing/plans page defaults to yearly, the upgrade modal to monthly;
+  // 2026-10-02). Pairs with the webhook's purchase_completed (which carries
+  // the cadence) to compare revenue per visitor by default. Best-effort.
+  captureServerEvent(user.id, "checkout_started", {
+    kind: spec.grant.kind,
+    plan: spec.grant.kind === "subscription" ? spec.grant.plan : undefined,
+    cadence: spec.grant.kind === "subscription" ? spec.grant.cadence : undefined,
+    surface: body?.surface === "modal" ? "modal" : "page",
   });
 
   return NextResponse.json({ clientSecret: session.client_secret });

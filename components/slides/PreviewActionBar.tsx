@@ -255,6 +255,8 @@ export function PreviewActionBar({
   draftCommentCount,
   focusedSlideLocked,
   onAddText,
+  onOpenColors,
+  colorsOpen = false,
   onUndo,
   onRedo,
   canUndo = false,
@@ -309,6 +311,10 @@ export function PreviewActionBar({
   // Add a new text box to the focused slide (Edit mode). Inserts at the slide
   // centre + selects it; owners/edit only.
   onAddText?: () => void;
+  // Deck colours (2026-10-02): opens the colour-template menu anchored on
+  // this button (DeckView owns the menu + the live recolor preview).
+  onOpenColors?: (rect: DOMRect) => void;
+  colorsOpen?: boolean;
   // Undo / redo over the focused slide's version log (same stack as ⌘Z / ⌘⇧Z).
   // `canUndo` / `canRedo` grey the buttons at the ends of history.
   onUndo?: () => void;
@@ -783,6 +789,15 @@ export function PreviewActionBar({
                   icon="text_fields"
                   label={dict.editor.toolbar.addText}
                   onClick={onAddText}
+                  disabled={applying || commentMode}
+                />
+              ) : null}
+              {canEdit && onOpenColors && editing ? (
+                <ToolButton
+                  icon="palette"
+                  label={dict.editor.toolbar.deckColors}
+                  onClick={(e) => onOpenColors(e.currentTarget.getBoundingClientRect())}
+                  active={colorsOpen}
                   disabled={applying || commentMode}
                 />
               ) : null}

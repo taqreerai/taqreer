@@ -36,6 +36,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { grantSignupCreditsGuarded } from "@/lib/credits/server";
+import { isDisposableEmail } from "@/lib/auth/disposable-email";
 
 const IP_VELOCITY_LIMIT = 3;
 const IP_VELOCITY_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -150,6 +151,26 @@ export async function maybeGrantSignupCredits(args: {
     return { granted: 0, blocked: "country_blocked" };
   }
 
+  // Disposable inbox (guard 6, 2026-10-02): throwaway domains (mailinator,
+  // temp-mail, ...) are the cheapest way past the alias + device guards, so
+  // they get no grant. A pure input check like the two above. The signup
+  // form already warns about these (POST /api/auth/email-check).
+  if (isDisposableEmail(args.email)) {
+    await prisma.usageEvent.create({
+      data: {
+        userId: args.userId,
+        eventType: "credit.signup.blocked",
+        amount: 0,
+        metadata: {
+          reason: "disposable_email",
+          ...(domain ? { domain } : {}),
+          ...(args.ip ? { ip: args.ip } : {}),
+        },
+      },
+    });
+    return { granted: 0, blocked: "disposable_email" };
+  }
+
   // Capture the narrowed (non-null) device id in a const so it stays
   // `string` inside the guard closure below.
   const deviceId = args.deviceId;
@@ -182,7 +203,8 @@ type BlockReason =
   | "device_dup"
   | "device_missing"
   | "same_person"
-  | "country_blocked";
+  | "country_blocked"
+  | "disposable_email";
 
 /**
  * The cross-account abuse guards, run INSIDE the serialized grant

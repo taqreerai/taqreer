@@ -14,15 +14,58 @@
 // the deck's status (a disabled "generating" editor that flips to the live
 // editor in place, with no route hop / remount on completion).
 
+import type { Metadata } from "next";
 import { cookies } from "next/headers";
+import { isLocale } from "@/lib/i18n/config";
+import { getDictionary } from "@/lib/i18n/dictionaries";
 import { notFound } from "next/navigation";
 import { DeckView } from "@/components/preview/DeckView";
+import { SharedDeckCta } from "@/components/preview/SharedDeckCta";
 import { loadProject } from "@/lib/project/load-project";
 import { resolveProjectAccess } from "@/lib/api/project-access";
 import { prisma } from "@/lib/prisma";
 import { SIDEBAR_COLLAPSED_COOKIE } from "@/lib/ui-cookies";
 
 export const dynamic = "force-dynamic";
+
+// Link previews for PUBLIC decks (2026-10-02): a deck shared "anyone with the
+// link" previews as itself in WhatsApp / X / Slack (deck title + its cover
+// thumbnail) instead of the generic dashboard title, so every share reads as
+// real content that advertises the product. Private decks reveal nothing
+// (layout defaults). Never indexed: /project stays disallowed in robots.txt.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ lang: string; projectId: string }>;
+}): Promise<Metadata> {
+  const { lang, projectId } = await params;
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { title: true, thumbnailUrls: true, publicAccessLevel: true },
+  });
+  if (!project?.publicAccessLevel) return { robots: { index: false } };
+  const dict = await getDictionary(isLocale(lang) ? lang : "ar");
+  const description = dict.meta.sharedDeckDescription;
+  const image = project.thumbnailUrls[0];
+  return {
+    title: `${project.title} | taqreer.ai`,
+    description,
+    robots: { index: false },
+    openGraph: {
+      title: project.title,
+      description,
+      type: "website",
+      siteName: "taqreer.ai",
+      ...(image ? { images: [{ url: image, alt: project.title }] } : {}),
+    },
+    twitter: {
+      card: image ? "summary_large_image" : "summary",
+      title: project.title,
+      description,
+      ...(image ? { images: [image] } : {}),
+    },
+  };
+}
 
 export default async function ProjectPage({
   params,
@@ -61,8 +104,22 @@ export default async function ProjectPage({
   const isCollapsed = cookieStore.get(SIDEBAR_COLLAPSED_COOKIE)?.value === "1";
   const initialMainSidebarWidth = isCollapsed ? 80 : 260;
 
+  // Viewer CTA (2026-10-02): view / comment viewers (not owners, editors or
+  // the admin observer) see "create your own", unless the deck is
+  // white-labelled.
+  const showSharedCta =
+    (access.role === "view" || access.role === "comment") &&
+    access.isAdminObserver !== true &&
+    !(
+      await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { hideBrandingBadge: true },
+      })
+    )?.hideBrandingBadge;
   const deckKey = `${data.initialVersionId ?? "none"}:${data.initialVersionStatus ?? "pending"}:${data.initialManifest ? "1" : "0"}`;
   return (
+    <>
+    {showSharedCta ? <SharedDeckCta anonymous={!access.user?.prismaId} /> : null}
     <DeckView
       key={deckKey}
       projectId={projectId}
@@ -76,5 +133,6 @@ export default async function ProjectPage({
       initialMainSidebarWidth={initialMainSidebarWidth}
       {...data}
     />
+    </>
   );
 }

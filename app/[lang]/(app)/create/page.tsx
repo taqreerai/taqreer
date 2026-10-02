@@ -35,11 +35,27 @@
 // pattern the legacy CardShell used) so the cards read as a
 // labelled cluster, not a wall of inputs.
 //
-// Templates no longer seed /create — "Use this template" routes to the
-// forked Mimic flow (/use-template/[id]). /create only hydrates from a
-// brand kit (sessionStorage or the user's default).
+// Phase 19 (2026-10-02, user direction): step 2 is now ONE "Design" step -
+// templates, design styles, colour templates, font and logo together. A
+// picked TEMPLATE turns the run into a template generation (the Mimic engine
+// reuses the template deck's design with this content; source kind "mimic");
+// a template and a design style are mutually exclusive. The gallery's "Use
+// this template" now lands here with ?template=<id> preselected. Brand kits
+// still hydrate from sessionStorage or the user's default.
 
-import { DesignStylePicker } from "@/components/create/DesignStylePicker";
+import { DesignStyleGrid } from "@/components/create/DesignStylePicker";
+import {
+  TemplatePickerGrid,
+  type PickedTemplate,
+} from "@/components/create/TemplatePickerGrid";
+import { PalettePresetGrid } from "@/components/brand/PalettePresets";
+import { PALETTE_PRESETS, samePalette } from "@/lib/brand/palette-presets";
+import {
+  fetchUse,
+  readCachedUse,
+  writeCachedUse,
+  type MimicTemplateUse,
+} from "@/lib/mimic/template-seed";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
@@ -67,7 +83,6 @@ import {
 } from "@/components/brand/BrandKitDropdown";
 import {
   InlineStepper,
-  SectionLabel,
   SlideSizeFields,
   STYLE_REQUIRES_IMAGES,
   type SlideSize,
@@ -335,6 +350,12 @@ export default function CreatePage() {
     plan: creditsForImages?.plan ?? null,
     isAdmin: creditsForImages?.isAdmin ?? false,
   });
+  // Picked template (Design step, declared here so the style handler below
+  // can clear it): its minted design reference. Null = from scratch.
+  const [template, setTemplate] = useState<{
+    id: string;
+    designAnthropicFileId: string;
+  } | null>(null);
   // Design style (Part B.3) — the chosen create-flow style, or null. Drives the
   // deck-generate DESIGN_STYLE_DIRECTIVES injection (the directive leads the
   // user message). UI-only picker for now; polished modal UX lands later.
@@ -342,6 +363,7 @@ export default function CreatePage() {
   const onDesignStyle = useCallback(
     (style: string | null) => {
       setDesignStyle(style);
+      setTemplate(null);
       // Image-leaning styles auto-enable images mode — overridable: we only
       // flip it ON, never force it off, so the user keeps control (Duotone/
       // Editorial/Minimal/Playful per STYLE_REQUIRES_IMAGES). Unlocked users
@@ -353,6 +375,60 @@ export default function CreatePage() {
     [imagesUnlocked],
   );
   const [persistentText, setPersistentText] = useState<string>("");
+
+  // ─── Template (Design step) ────────────────────────────────────
+  // A picked template: its minted design reference + format. Null = design
+  // from scratch (optionally steered by designStyle). Mutually exclusive with
+  // a design style: picking one clears the other.
+  const [lookTab, setLookTab] = useState<"templates" | "styles">("templates");
+  // The template's colours + font pre-fill the brand rows (the user can still
+  // change them; the deck is recoloured to whatever is set at Generate).
+  const applyTemplateUse = useCallback((use: MimicTemplateUse) => {
+    if (use.brand.palette.length > 0) {
+      setColors(use.brand.palette.slice(0, MAX_PALETTE));
+    }
+    if (use.brand.fontHeading.url) {
+      setBrandFont({
+        mode: "google",
+        googleFamily: use.brand.fontHeading.name,
+        uploaded: [],
+      });
+    }
+    setSlideSize(use.format);
+  }, []);
+  const pickTemplate = useCallback(
+    ({ template: tpl, use }: PickedTemplate) => {
+      setTemplate({ id: tpl.id, designAnthropicFileId: use.designAnthropicFileId });
+      setDesignStyle(null);
+      applyTemplateUse(use);
+    },
+    [applyTemplateUse],
+  );
+  // /create?template=<id> - the gallery's "Use this template" lands here with
+  // the template preselected (the gallery already resolved + cached it).
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("template");
+    if (!id) return;
+    let aborted = false;
+    (async () => {
+      try {
+        let use = readCachedUse("template", id);
+        if (!use) {
+          use = await fetchUse("template", id);
+          writeCachedUse("template", id, use);
+        }
+        if (aborted) return;
+        setTemplate({ id, designAnthropicFileId: use.designAnthropicFileId });
+        setDesignStyle(null);
+        applyTemplateUse(use);
+      } catch {
+        /* gated / gone: the user just starts without it */
+      }
+    })();
+    return () => {
+      aborted = true;
+    };
+  }, [applyTemplateUse]);
 
   // ─── Wizard step (2026-08-30, user direction) ─────────────────
   // The three cards present one at a time: 0 Content, 1 Brand,
@@ -643,7 +719,7 @@ export default function CreatePage() {
       };
 
       const rules = {
-        designStyle,
+        designStyle: template ? null : designStyle,
         fixTypos: false,
         pagination,
         persistent: persistentText.trim()
@@ -659,8 +735,24 @@ export default function CreatePage() {
       // submits omit `source` entirely so the server reverts to the
       // legacy scratch path. Pre-fix the file selection was thrown
       // away on submit (CR critical 2026-05-26).
-      const source =
-        hasFile && contentAnthropicFileId
+      // A picked template = a template generation (Mimic engine): the
+      // template deck is the design reference, the content rides as the
+      // typed text or the uploaded file.
+      const source = template
+        ? hasFile && contentAnthropicFileId
+          ? {
+              kind: "mimic" as const,
+              uglyAnthropicFileId: contentAnthropicFileId,
+              designAnthropicFileId: template.designAnthropicFileId,
+              fonts: [],
+            }
+          : {
+              kind: "mimic" as const,
+              userContent: contentText.trim(),
+              designAnthropicFileId: template.designAnthropicFileId,
+              fonts: [],
+            }
+        : hasFile && contentAnthropicFileId
           ? { kind: "scratch" as const, anthropicFileId: contentAnthropicFileId }
           : null;
 
@@ -694,6 +786,9 @@ export default function CreatePage() {
           quality,
           imagesMode,
           ...(source ? { source } : {}),
+          // Lets the server honour a free-plan template (it re-mints the
+          // design reference itself for those).
+          ...(template ? { templateId: template.id } : {}),
         }),
       });
 
@@ -749,7 +844,7 @@ export default function CreatePage() {
             numerals; completed steps are click-to-jump, forward travel
             goes through Next so gating stays in one place. */}
         <WizardStepRail
-          steps={[t.contentCard, t.brandCard, t.outputCard]}
+          steps={[t.contentCard, t.design.card, t.outputCard]}
           active={step}
           onJump={setStep}
         />
@@ -877,7 +972,10 @@ export default function CreatePage() {
           </div>
 
           {/* ═══════════════════════════════════════════════════════
-              BRANDING CARD (step 2) — palette + one font + logo
+              DESIGN CARD (step 2) — template OR style, colour
+              templates + palette, one font, logo. Same size as the other
+              two cards (user direction 2026-10-02); the template grid
+              scrolls inside it.
               ═══════════════════════════════════════════════════════ */}
           <div
             className={`surface-card ${step === 1 ? "" : "invisible"} col-start-1 row-start-1 flex w-full sm:w-[430px] ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
@@ -901,7 +999,7 @@ export default function CreatePage() {
                   palette
                 </span>
                 <h3 className="text-sm font-semibold text-foreground">
-                  {t.brandCard}
+                  {t.design.card}
                 </h3>
                 {kitOptions.length > 0 ? (
                   <motion.div
@@ -919,9 +1017,51 @@ export default function CreatePage() {
               </div>
             </header>
 
-            {/* Palette row — label on the visual right, swatches +
-                add tile on the visual left as a single horizontal
-                cluster. */}
+            {/* The deck's look: a ready-made template (template
+                generation) OR a design style (from scratch). Both grids stay
+                mounted so the template list isn't refetched per tab flip. */}
+            <div className="flex flex-col gap-2.5">
+              <div role="tablist" aria-label={t.design.card} className="design-tabs">
+                {(["templates", "styles"] as const).map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    role="tab"
+                    aria-selected={lookTab === tab}
+                    onClick={() => setLookTab(tab)}
+                    className={`design-tab ${lookTab === tab ? "is-active" : ""}`}
+                  >
+                    {tab === "templates" ? t.design.tabTemplates : t.design.tabStyles}
+                  </button>
+                ))}
+              </div>
+              <div className={lookTab === "templates" ? "" : "hidden"}>
+                <TemplatePickerGrid
+                  selectedId={template?.id ?? null}
+                  onSelect={pickTemplate}
+                  onClear={() => setTemplate(null)}
+                  disabled={submitting}
+                />
+              </div>
+              <div className={lookTab === "styles" ? "" : "hidden"}>
+                {/* A picked template outranks the style grid: no tile reads
+                    as active (not even Auto) while one is set. */}
+                <DesignStyleGrid
+                  value={template ? "__template__" : designStyle}
+                  onChange={onDesignStyle}
+                  disabled={submitting}
+                />
+              </div>
+              {template ? (
+                <p className="text-[11px] leading-4 text-foreground/55">
+                  {t.design.templateNote}
+                </p>
+              ) : null}
+            </div>
+
+            {/* Colours: Auto / custom swatches on the first row, the
+                one-click colour templates under it. */}
+            <div className="flex flex-col gap-2 border-t border-[var(--tq-border-hairline)] pt-3">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-semibold text-foreground/70">
                 {t.colors}
@@ -976,11 +1116,22 @@ export default function CreatePage() {
                 ) : null}
               </div>
             </div>
+            <PalettePresetGrid
+              activeId={
+                PALETTE_PRESETS.find((p) => samePalette(colors, p.colors))?.id ??
+                null
+              }
+              onPick={(p) => setColors([...p.colors])}
+              disabled={submitting}
+              className="grid grid-cols-6 gap-1.5"
+            />
+            </div>
 
             {/* Single brand font — one Google family (Claude varies
                 weights) OR up to 5 uploaded families (Claude pairs). */}
             <div className="border-t border-[var(--tq-border-hairline)] pt-3">
               <BrandFontPicker
+                compact
                 value={brandFont}
                 onChange={setBrandFont}
                 sampleText={
@@ -989,14 +1140,14 @@ export default function CreatePage() {
               />
             </div>
 
-            {/* Logo — flex-1 so the dropzone grows to absorb the card's
-                leftover height (LogoRow's zone is flex-1 + min-h-20), filling
-                the gap above the save toggle instead of leaving dead space. */}
-            <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-hairline)] pt-3">
+            {/* Logo — compact fixed-height zone (the Design card shares its
+                size with the other two steps). Free plan: crowned lock. */}
+            <div className="flex flex-col gap-2 border-t border-[var(--tq-border-hairline)] pt-3">
               <span className="block text-xs font-semibold text-foreground/70">
                 {t.logo}
               </span>
               <LogoRow
+                compact
                 file={logoFile}
                 previewUrl={loadedLogo?.displayUrl ?? null}
                 onSelect={(f) => {
@@ -1129,22 +1280,6 @@ export default function CreatePage() {
               />
             </div>
 
-            {/* Design-style picker (Part B.3) — inline pills for now;
-                picking an image-leaning style auto-enables the images
-                toggle (now in the CONTENT card — moved 2026-08-03) for
-                unlocked users. Polished modal UX comes later. */}
-            <div className="mt-auto flex flex-col gap-3 border-t border-[var(--tq-border-hairline)] pt-3">
-              <div>
-                <SectionLabel>{t.designStyle}</SectionLabel>
-                <div className="pt-2">
-                  <DesignStylePicker
-                    value={designStyle}
-                    onChange={onDesignStyle}
-                    disabled={submitting}
-                  />
-                </div>
-              </div>
-            </div>
           </div>
 
           </div>

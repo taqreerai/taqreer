@@ -281,7 +281,7 @@ export function LogoUploadSlot(props: Parameters<typeof LogoUploadSlotInner>[0])
   return <LockedLogoSlot compact={props.compact} fillHeight={props.fillHeight} />;
 }
 
-function LockedLogoSlot({ compact = false, fillHeight = false }: { compact?: boolean; fillHeight?: boolean }) {
+export function LockedLogoSlot({ compact = false, fillHeight = false }: { compact?: boolean; fillHeight?: boolean }) {
   const dict = useDict();
   const t = dict.components.premiumGate;
   const [open, setOpen] = useState(false);

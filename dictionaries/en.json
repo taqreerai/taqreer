@@ -72,6 +72,7 @@
     "brandKitDated": "Brand kit · {date}"
   },
   "meta": {
+    "sharedDeckDescription": "A presentation made with taqreer.ai. Create yours in minutes, in Arabic or English.",
     "siteTitle": "taqreer.ai · AI Presentation Maker (Arabic & English)",
     "siteDescription": "taqreer.ai designs presentations and reports with AI, in Arabic and English. Write a brief or upload a file and get a designed deck you can edit and export to PowerPoint.",
     "ogDescription": "Design professional presentations and reports with AI, in Arabic and English.",
@@ -1278,7 +1279,7 @@
       "continue": "Continue",
       "back": "Back",
       "detailsTitle": "A few more details",
-      "invalidEmail": "Enter a valid email address",
+      "invalidEmail": "Enter a valid email address", "disposableEmail": "Please use a permanent email address. Temporary inboxes aren't supported.",
       "pwReqTitle": "Your password needs",
       "pwReqMet": "Password requirements met",
       "pwReqLength": "8 characters",
@@ -1338,6 +1339,7 @@
     }
   },
   "flows": {
+    "design": {"card": "Design", "tabTemplates": "Templates", "tabStyles": "Styles", "colorTemplates": "Color templates", "templatesEmpty": "No ready-made templates yet", "mine": "Mine", "noTemplate": "No template", "noTemplateDesc": "We design the deck from scratch", "lockedTitle": "Templates are on the {tier} plan", "lockedBody": "Build your deck on a ready-made template's design, with your content and colors.", "premiumTitle": "This is a premium template", "premiumBody": "Premium templates are on the {tier} plan and up.", "failed": "Couldn't prepare the template, try again", "templateNote": "We'll reuse this template's design with your content. Colors and font come from the template and you can change them.", "freeBadge": "Free"},
     "wizard": { "next": "Next", "extracting": "Extracting your file..." },
     "stylePicker": { "boldSample": "Deck", "socialBoldSample": "BOLD", "dialogTitle": "Choose a design style", "auto": "Auto", "autoDesc": "We pick what fits your content", "change": "Change", "descs": { "swiss": "Strict grid, calm whitespace", "corporate": "Clear charts and figures", "minimal": "One element, generous space", "editorial": "Magazine-style columns", "bold": "Huge display headlines", "duotone": "Two tones, full-bleed imagery", "playful": "Free shapes, bold color", "brutalist": "Raw borders, stark contrast" }, "socialDescs": { "boldtype": "Giant type, one loud statement", "editorial": "Magazine kicker, big headline, hero", "grainy": "Dreamy gradient auras with grain", "brutalist": "Flat brights, thick borders, shadows", "minimal": "Airy whitespace, one calm idea", "photo": "Full-bleed photo, type on a scrim", "retro": "Risograph two-tone with halftone", "pop3d": "Soft 3D shapes, rounded cards", "swiss": "Strict columns, exact alignment", "corporate": "One hero figure, clean chart" } },
     "contentCard": "Content",
@@ -1534,7 +1536,7 @@
     },
     "fonts": {
       "fonts": "Fonts",
-      "orUpload": "or upload your fonts",
+      "orUpload": "or upload your fonts", "uploadShort": "Upload",
       "uploadFonts": "Upload font families",
       "weights": "{count} weights",
       "maxFonts": "Max {max} fonts",
@@ -1610,9 +1612,9 @@
     "pricing": {
       "monthly": "Monthly",
       "yearly": "Yearly",
-      "discount": "Save {pct}%",
+      "discount": "Save up to {pct}%",
       "billingAria": "Billing cycle",
-      "billedYearly": "Billed yearly",
+      "billedYearly": "Billed {total} yearly",
       "mostPopular": "Most popular",
       "perMonth": "/ month",
       "tiers": [
@@ -1785,7 +1787,10 @@
     "favoritesGrid": { "emptyTitle": "No favorite projects yet", "emptyDesc": "Click the star in any project's options menu to add it to this page.", "goToProjects": "Go to projects" }
   },
   "editor": {
+    "sharedCta": {"title": "Made with taqreer.ai", "body": "Turn your ideas into a designed presentation in minutes.", "cta": "Create your presentation"},
+    "deckColors": {"title":"Deck colors","hint":"Pick a color template to preview it on the whole deck","original":"Original colors","apply":"Apply","cancel":"Cancel","failed":"Couldn't change the colors","photosNote":"Generated photos keep their colors."},
     "toolbar": {
+      "deckColors": "Deck colors",
       "edit": "Edit",
       "ai": "AI",
       "editorMode": "Editor mode",
