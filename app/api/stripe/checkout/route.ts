@@ -121,11 +121,12 @@ export async function POST(request: Request) {
         }),
     return_url: `${APP_URL}/checkout/return?session_id={CHECKOUT_SESSION_ID}`,
     // Promo codes: YEARLY subscriptions only (user direction 2026-07-07).
-    // Base yearly pricing is 15% off monthly; campaign codes top it up to
-    // 25% TOTAL. Codes are created in the Stripe dashboard, not seeded:
-    //   coupon percent_off = 11.76 (0.85 x 0.8824 = 0.7500 of monthly),
-    //   duration = "once" (first year only; renewals bill the 15%-off
-    //   list price), attach a promotion code (the shareable string).
+    // Yearly list prices are $7 / $21 / $67 a month (2026-10-02, 22% / 16% /
+    // 15% off monthly); the campaign coupon is a round 10% off on top
+    // (~30% / 24% / 24% total). Codes are created in the Stripe dashboard,
+    // not seeded: coupon percent_off = 10, duration = "once" (first year
+    // only; renewals bill the yearly list price), attach a promotion code
+    // (the shareable string).
     // Monthly + top-up sessions never show a promo field, so a yearly
     // coupon can't be redeemed against a monthly price.
     allow_promotion_codes:
