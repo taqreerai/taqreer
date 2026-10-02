@@ -26,7 +26,7 @@ import {
   type ThemeType,
 } from "@/lib/schema/slide";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
-import { BrandWatermark } from "@/components/preview/BrandWatermark";
+import { FreeWatermarkLayer, BrandedClosingSlide } from "@/components/preview/FreeBranding";
 import { TeaserLockCanvas } from "@/components/preview/TeaserLockCanvas";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import { SlideEditor } from "@/components/preview/editor/SlideEditor";
@@ -422,6 +422,8 @@ export function DeckView({
   // Declared early so the unlock poll effect + navigateToSlide can read it.
   const [teaserUnlockedState, setTeaserUnlockedState] = useState(teaserUnlocked);
   const [focusedTeaser, setFocusedTeaser] = useState<number | null>(null);
+  // Free-plan branded closing slide (2026-10-02) focused in the hero.
+  const [brandFocused, setBrandFocused] = useState(false);
   const [teaserUnlocking, setTeaserUnlocking] = useState(false);
   const [teaserUpgradeOpen, setTeaserUpgradeOpen] = useState(false);
   // Terminal unlock failure → a bell warning so the owner isn't left guessing
@@ -709,6 +711,8 @@ export function DeckView({
     manifest?.format ?? initialFormat,
   );
   const aspectRatio = `${canvasW} / ${canvasH}`;
+  // Free-plan branding geometry: the deck's native canvas.
+  const brandDims = { width: canvasW, height: canvasH };
   // 3:4 is a social post, not a deck — the generating title says "post".
   const isPostFormat =
     initialIsSocial || (manifest?.format ?? initialFormat) === "3:4";
@@ -2244,8 +2248,9 @@ export function DeckView({
     (next: number | ((prev: number) => number)) => {
       if (localDirtyRef.current) void saveProjectRef.current();
       setCurrentSlideIndex(next);
-      // Focusing a real slide exits the teaser hero.
+      // Focusing a real slide exits the teaser / branded-closing hero.
       setFocusedTeaser(null);
+      setBrandFocused(false);
     },
     [],
   );
@@ -2255,6 +2260,16 @@ export function DeckView({
   const navigateToTeaser = useCallback((lockedIndex: number) => {
     if (localDirtyRef.current) void saveProjectRef.current();
     setFocusedTeaser(lockedIndex);
+    setBrandFocused(false);
+    setCommentMode(false);
+    setStudioMode((m) => (m === "ai" ? "edit" : m));
+  }, []);
+
+  // Open the free-plan branded closing slide in the hero (read-only).
+  const navigateToBrand = useCallback(() => {
+    if (localDirtyRef.current) void saveProjectRef.current();
+    setFocusedTeaser(null);
+    setBrandFocused(true);
     setCommentMode(false);
     setStudioMode((m) => (m === "ai" ? "edit" : m));
   }, []);
@@ -4644,6 +4659,13 @@ export function DeckView({
       });
     }
   }
+  // Free-plan branded closing slide: a system tile after the real slides
+  // (and after any legacy teaser slots). Never in slideJson; read-only; gone
+  // once the owner upgrades.
+  const brandLang: "ar" | "en" = (viewManifest?.language ?? "ar") === "en" ? "en" : "ar";
+  const showBrandSlide = brandingWatermark && !generating && viewSlides.length > 0;
+  if (showBrandSlide) navItems.push({ kind: "brand", index: navItems.length });
+  const brandFocusActive = showBrandSlide && brandFocused;
   // Which locked slot the hero is showing (guarded against a shrunk set, e.g.
   // right after unlock lands).
   const teaserFocusActive =
@@ -4676,7 +4698,8 @@ export function DeckView({
     isFocusedRegenerating ||
     isFocusedLocked ||
     isFocusedDraft ||
-    teaserFocusActive;
+    teaserFocusActive ||
+    brandFocusActive;
 
   // Undo / redo enabled-state for the toolbar buttons — driven by the focused
   // slide's LOCAL stack (the same one ⌘Z / ⌘⇧Z + handleLocalUndo/Redo drive).
@@ -4843,6 +4866,10 @@ export function DeckView({
         onSelect={(idx) => navigateToSlide(idx)}
         currentTeaser={teaserFocusActive ? focusedTeaser : null}
         onTeaserSelect={(lockedIndex) => navigateToTeaser(lockedIndex)}
+        brandActive={brandFocusActive}
+        onBrandSelect={navigateToBrand}
+        brandLang={brandLang}
+        brandDims={brandDims}
         manifest={viewManifest}
         format={viewManifest?.format ?? initialFormat ?? "16:9"}
         title={viewManifest?.title ?? projectTitle}
@@ -5592,15 +5619,36 @@ export function DeckView({
                   fit-rect frame as the comment overlay - parent-document
                   chrome, never inside the iframe <section>, so the layers
                   panel / serialize / bake can't see it. */}
-              {brandingWatermark ? <BrandWatermark /> : null}
+              {brandingWatermark && !brandFocusActive ? (
+                <FreeWatermarkLayer lang={brandLang} dims={brandDims} cover={focusedIndex === 0} />
+              ) : null}
             </div>
           ) : !generating && canComment && !isFocusedRegenerating ? (
             heroCommentOverlay(gridScale)
           ) : null}
           {/* Free-tier watermark, VIEWER mode: the motion.div IS the
               artboard, so pin directly to it. */}
-          {!artboardFit && !generating && brandingWatermark ? (
-            <BrandWatermark />
+          {!artboardFit && !generating && brandingWatermark && !brandFocusActive ? (
+            <FreeWatermarkLayer lang={brandLang} dims={brandDims} cover={focusedIndex === 0} />
+          ) : null}
+          {/* Free-plan branded closing slide focused: covers the artboard rect
+              (edit) or the whole hero (viewer) at z-40, like a teaser slot. */}
+          {brandFocusActive ? (
+            <div
+              className={`absolute z-40 overflow-hidden${artboardFit ? "" : " inset-0"}`}
+              style={
+                artboardFit
+                  ? {
+                      left: artboardFit.offsetX,
+                      top: artboardFit.offsetY,
+                      width: artboardFit.width,
+                      height: artboardFit.height,
+                    }
+                  : undefined
+              }
+            >
+              <BrandedClosingSlide lang={brandLang} dims={brandDims} />
+            </div>
           ) : null}
           {/* Teaser paywall: the focused locked slot. Covers the artboard
               rect (edit mode) or the whole hero (viewer) with a heavily-

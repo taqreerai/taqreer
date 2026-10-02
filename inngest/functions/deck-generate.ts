@@ -1059,6 +1059,7 @@ function buildUserMessage(event: DeckGenerateEvent) {
   // extracted (2026-05-27 simplifier pass) so `buildUserMessage` only
   // expresses the orchestration shape, not the per-block prose.
   lines.push(...buildLogoBlock(event.brief));
+  lines.push(...buildFreeBrandingBlock(event.brief));
 
   return lines.join("\n");
 }
@@ -1085,6 +1086,19 @@ type LogoBrief = {
 // onto the user-message body; empty array when no logo is configured.
 // Lifted out of `buildUserMessage` (2026-05-27 simplifier pass) to
 // keep that function focused on orchestration.
+// Free plan (2026-10-02): the viewer + exports overlay a "Made with
+// taqreer.ai" badge in one bottom corner of every slide (bottom-left on
+// Arabic decks, bottom-right on English ones; lib/export/free-branding).
+// Keep that corner empty so the badge never covers pagination or content.
+function buildFreeBrandingBlock(brief: unknown): string[] {
+  const fb = (brief as { freeBranding?: { corner?: string } } | null)?.freeBranding;
+  if (!fb?.corner) return [];
+  return [
+    ``,
+    `RESERVED CORNER: the system draws a small branding badge in the BOTTOM-${fb.corner.toUpperCase()} corner of every slide (about 360 x 70 px at 1920 x 1080 scale, plus margin; on the COVER it is wider, about 900 x 90 px, because it carries a slogan). Keep that corner EMPTY on every slide: put the slide number / pagination and any footer content elsewhere (another corner or the top), never under the badge.`,
+  ];
+}
+
 function buildLogoBlock(brief: unknown): string[] {
   const logo = (brief as { brand?: { logo?: LogoBrief | null } } | null)
     ?.brand?.logo ?? null;

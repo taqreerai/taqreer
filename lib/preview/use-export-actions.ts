@@ -32,6 +32,7 @@ import {
   rasterizeSvgsForSlides,
 } from "@/lib/export/google-slides";
 import { useDict } from "@/components/i18n/LocaleProvider";
+import { useCreditBalance } from "@/lib/credits/store";
 
 // ─── Shared cross-instance busy store ───────────────────────────────
 
@@ -155,6 +156,12 @@ export function useExportActions({
   });
   const [gslidesUrl, setGslidesUrl] = useState<string | null>(null);
   const dict = useDict();
+  // Free plan (2026-10-02): the exporter's PPTX carries the "Made with
+  // taqreer.ai" badge on every slide + the branded closing slide. Paid
+  // plans and admins export clean. (PPTX is gated while the plan is still
+  // unknown, so null never reaches an export.)
+  const credits = useCreditBalance();
+  const freeBranding = !!credits && !credits.isAdmin && credits.plan === "free";
   // Localized copy for the server's `export_gated` 402 so the toast is
   // never English on an Arabic deck. The UI normally crowns gated formats
   // + opens the upgrade modal before ever calling the route, so this is
@@ -197,6 +204,21 @@ export function useExportActions({
     }
   };
 
+  // Free plan: the server's PNG renders of every slide (watermark + branded
+  // closing slide included), unpacked in slide order as data URLs.
+  const fetchWatermarkedSlideImages = async (): Promise<string[]> => {
+    const response = await fetch(`/api/projects/${projectId}/export/png`, { method: "POST" });
+    if (!response.ok) throw new Error("PNG render failed");
+    const JSZip = (await import("jszip")).default;
+    const zip = await JSZip.loadAsync(await response.blob());
+    const names = Object.keys(zip.files)
+      .filter((n) => /^slide-\d+\.png$/.test(n))
+      .sort();
+    return Promise.all(
+      names.map(async (n) => `data:image/png;base64,${await zip.file(n)!.async("base64")}`),
+    );
+  };
+
   // ── PPTX (client-side, dom-to-pptx + BiDi post-processor) ────────
   // Also the engine under the Google Slides entry below (which uploads
   // the same artifact to Drive instead of downloading it).
@@ -215,7 +237,15 @@ export function useExportActions({
       setState({ status: "running", message: "جار التصدير..." });
       try {
         const fileName = `${baseFileName(manifest.title || projectTitle)}.pptx`;
-        await exportManifestAsPptx(exportManifest, fileName);
+        if (freeBranding) {
+          // Free plan: a present-ready PPTX built from the server's PNG
+          // renders (watermark + branded closing slide baked into the
+          // pictures). The editable PPTX is a paid feature.
+          const imageSlides = await fetchWatermarkedSlideImages();
+          await exportManifestAsPptx(exportManifest, fileName, { imageSlides });
+        } else {
+          await exportManifestAsPptx(exportManifest, fileName);
+        }
         // Conversion-funnel export step, client-side: PPTX is generated in the
         // browser (no server route, unlike pdf/png). Consent-gated like all
         // client capture; distinct_id is the identified user (= Supabase uid),

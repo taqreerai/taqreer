@@ -120,6 +120,10 @@ export function ExportMenu({
   // free user - user direction 2026-07-13): the gold crown on the Export
   // button itself signals the premium upsell before the menu even opens.
   const anyGated = gatedKinds.size > 0;
+  // Free plan (2026-10-02): PPTX exports as present-ready image slides; the
+  // editable PPTX is listed separately as a paid row so the difference is
+  // stated in writing, not discovered after download.
+  const imageOnlyPptx = !!credits && !credits.isAdmin && credits.plan === "free";
 
   // Esc closes. Outside-click dismissal is owned entirely by the scrim below
   // (a viewport layer above the deck <iframe>): a parent-document mousedown
@@ -259,8 +263,17 @@ export function ExportMenu({
                             ) : (
                               <FormatIcon kind={f.kind} size={28} />
                             )}
-                            <span className="flex-1 text-start">
-                              {dict.editor.export[f.kind]}
+                            <span className="flex flex-1 flex-col text-start">
+                              <span>
+                                {f.kind === "pptx" && imageOnlyPptx
+                                  ? dict.editor.export.pptxImages
+                                  : dict.editor.export[f.kind]}
+                              </span>
+                              {f.kind === "pptx" && imageOnlyPptx ? (
+                                <span className="text-[11px] text-foreground/45">
+                                  {dict.editor.export.pptxImagesHint}
+                                </span>
+                              ) : null}
                             </span>
                             {gated ? (
                               // Gold crown = tier-gated affordance (clicking
@@ -268,6 +281,30 @@ export function ExportMenu({
                               <PremiumCrown size={16} />
                             ) : null}
                           </button>
+                          {f.kind === "pptx" && imageOnlyPptx ? (
+                            // The editable PPTX, paid: crown + upsell.
+                            <button
+                              type="button"
+                              role="menuitem"
+                              disabled={busy}
+                              onClick={() => {
+                                setUpgradeOpen(true);
+                                setOpen(false);
+                              }}
+                              className={`dropdown-item export-menu-item ${
+                                busy ? "cursor-not-allowed opacity-40 hover:bg-transparent!" : ""
+                              }`}
+                            >
+                              <FormatIcon kind="pptx" size={28} />
+                              <span className="flex flex-1 flex-col text-start">
+                                <span>{dict.editor.export.pptxEditable}</span>
+                                <span className="text-[11px] text-foreground/45">
+                                  {dict.editor.export.pptxEditableHint}
+                                </span>
+                              </span>
+                              <PremiumCrown size={16} />
+                            </button>
+                          ) : null}
                         </li>
                       );
                     })}

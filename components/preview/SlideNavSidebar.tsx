@@ -28,6 +28,8 @@ import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
 import type { SlideManifest, SlideType } from "@/lib/schema/slide";
 import { dimensionsForFormat, type SlideFormat } from "@/lib/schema/slide";
 import type { PresenceViewer } from "@/lib/realtime/project-channel";
+import { BrandedClosingSlide } from "@/components/preview/FreeBranding";
+import type { BrandLang, SlideDims } from "@/lib/export/free-branding";
 
 // Studio: the Slides nav + Layers panel share this width (so the slide centers
 // symmetrically between them). 280 — the nav's thumbnails size to this width.
@@ -76,6 +78,13 @@ export type NavItem =
       index: number;
       lockedIndex: number;
       gradient: string;
+    }
+  // Free-plan branded closing slide (2026-10-02): a system tile after the
+  // real slides. Never a manifest slide; selection routes through
+  // `onBrandSelect`, and it can't be edited or removed.
+  | {
+      kind: "brand";
+      index: number;
     };
 
 export function SlideNavSidebar({
@@ -124,6 +133,10 @@ export function SlideNavSidebar({
   // a teaser tile routes here instead of onSelect.
   currentTeaser = null,
   onTeaserSelect,
+  brandActive = false,
+  onBrandSelect,
+  brandLang = "ar",
+  brandDims,
   // Teaser paywall (free tier). When `teaserLocked`, the footer shows an accent
   // "Unlock the remaining slides" CTA, wired to the parent's upgrade→unlock
   // flow via `onTeaserUnlock`.
@@ -136,6 +149,10 @@ export function SlideNavSidebar({
   onSelect: (idx: number) => void;
   currentTeaser?: number | null;
   onTeaserSelect?: (lockedIndex: number) => void;
+  brandActive?: boolean;
+  onBrandSelect?: () => void;
+  brandLang?: BrandLang;
+  brandDims?: SlideDims;
   teaserLocked?: boolean;
   onTeaserUnlock?: () => void;
   teaserUnlockBusy?: boolean;
@@ -393,7 +410,9 @@ export function SlideNavSidebar({
           const isActive =
             item.kind === "teaser"
               ? currentTeaser === item.lockedIndex
-              : currentIndex === item.index && currentTeaser == null;
+              : item.kind === "brand"
+                ? brandActive
+                : currentIndex === item.index && currentTeaser == null && !brandActive;
           // Active ring: 2 px neon-magenta (`--tq-magenta-hot` =
           // #F900FF), fully opaque. Brighter + thicker than the
           // previous 1 px brand-purple — the violet was reading too
@@ -413,12 +432,14 @@ export function SlideNavSidebar({
               onClick={() =>
                 item.kind === "teaser"
                   ? onTeaserSelect?.(item.lockedIndex)
-                  : onSelect(item.index)
+                  : item.kind === "brand"
+                    ? onBrandSelect?.()
+                    : onSelect(item.index)
               }
               aria-label={
                 dict.editor.nav.slideAria.replace("{n}", String(item.index + 1)) +
                 (isActive ? dict.editor.nav.slideSelected : "") +
-                (isLocked || isTeaser ? dict.editor.nav.slideLocked : "")
+                (isLocked || isTeaser || item.kind === "brand" ? dict.editor.nav.slideLocked : "")
               }
               aria-current={isActive ? "true" : undefined}
               // Only the active thumbnail carries a visible stroke now
@@ -485,6 +506,14 @@ export function SlideNavSidebar({
                       />
                     ) : null}
                   </div>
+                ) : item.kind === "brand" ? (
+                  // Branded closing slide thumbnail (static, not clickable
+                  // inside - the tile button handles selection).
+                  brandDims ? (
+                    <div className="relative h-full w-full">
+                      <BrandedClosingSlide lang={brandLang} dims={brandDims} interactive={false} />
+                    </div>
+                  ) : null
                 ) : item.kind === "teaser" ? (
                   // Locked teaser tile: a palette gradient (no real content);
                   // the padlock overlay below marks it locked.

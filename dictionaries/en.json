@@ -242,7 +242,7 @@
       { "q": "How do I design a presentation with AI?", "a": "Write your topic or upload a file, choose your brand, and the AI designs a complete deck in minutes that you can edit and export." },
       { "q": "Does it support Arabic?", "a": "Yes. taqreer.ai is Arabic-first with full right-to-left support and Arabic fonts, and it supports English too." },
       { "q": "Can I edit the deck after it is generated?", "a": "Yes. Edit text, colors, and slides and reorder them right in the editor, with autosave." },
-      { "q": "Can I export to PowerPoint?", "a": "Yes. Export your deck as editable PPTX for PowerPoint while preserving the Arabic formatting and text direction." }
+      { "q": "Can I export to PowerPoint?", "a": "Yes. On paid plans you export an editable PPTX for PowerPoint, with the Arabic formatting and text direction preserved. The free plan exports a present-ready PPTX where each slide is an image." }
     ],
     "article": {
       "title": "How to make a PowerPoint with AI in taqreer.ai",
@@ -405,7 +405,7 @@
       { "q": "How do I redesign a presentation with AI?", "a": "Upload your deck in PDF or PowerPoint, choose your brand, and the AI redesigns every slide while keeping your content, in minutes." },
       { "q": "Which file formats are supported?", "a": "taqreer.ai supports uploading decks in PDF and PowerPoint (PPTX)." },
       { "q": "Does it keep my text and images?", "a": "Yes. taqreer.ai extracts the text, images, and fonts from your file and redesigns them in a new deck without losing content." },
-      { "q": "Can I export to PowerPoint?", "a": "Yes. Export the redesigned deck as editable PPTX for PowerPoint while preserving the Arabic formatting." }
+      { "q": "Can I export to PowerPoint?", "a": "Yes. On paid plans you export the redesigned deck as an editable PPTX for PowerPoint, with the Arabic formatting preserved." }
     ],
     "article": {
       "title": "Professional PowerPoint design for your existing deck",
@@ -477,7 +477,7 @@
       { "q": "How do I design a deck in another deck's style?", "a": "Attach the deck whose style you like, write or upload your content, and the AI applies its visual style to new slides in minutes." },
       { "q": "What does taqreer.ai take from the reference deck?", "a": "It captures the colors, fonts, layout patterns, and overall visual spirit, and applies them to your new content without copying the original content." },
       { "q": "Does it support Arabic?", "a": "Yes. taqreer.ai is Arabic-first with full right-to-left support and Arabic fonts, and it supports English too." },
-      { "q": "Can I export to PowerPoint?", "a": "Yes. Export your deck as editable PPTX for PowerPoint while preserving the Arabic formatting and text direction." }
+      { "q": "Can I export to PowerPoint?", "a": "Yes. On paid plans you export an editable PPTX for PowerPoint, with the Arabic formatting and text direction preserved. The free plan exports a present-ready PPTX where each slide is an image." }
     ],
     "article": {
       "title": "Copy any PowerPoint design and apply it to your content",
@@ -714,7 +714,7 @@
                 "Choose your brand: your colors, fonts, and logo, or pick a [saved brand kit](/brand-kit) to apply it to the whole deck.",
                 "Set the slide size (16:9 for standard decks or 9:16 for vertical) and choose an exact slide count or leave it on auto.",
                 "Click create and watch the slides appear, then adjust any detail in the [editor](/powerpoint-online).",
-                "Export as PPTX to open and edit in PowerPoint, or as PDF to share (PPTX and PDF export are on paid plans)."
+                "Export as PPTX to open in PowerPoint, or as PDF to share. An editable PPTX and PDF are on paid plans. The free plan exports a present-ready PPTX where each slide is an image."
               ]
             },
             "With these steps, converting a PDF to PPT becomes one task instead of copying text and formatting every slide by hand."
@@ -772,7 +772,7 @@
         { "title": "Organizes your content", "body": "The AI turns long paragraphs into headings, bullet points, and well-structured slides." },
         { "title": "Designs every slide", "body": "Each slide is designed for its content, not text pasted onto a fixed template." },
         { "title": "In your brand", "body": "Your colors, fonts, and logo apply across the whole deck." },
-        { "title": "Export to PowerPoint", "body": "Edit in the editor, then export an editable PPTX." }
+        { "title": "Export to PowerPoint", "body": "Edit in the editor, then export a PPTX (editable on paid plans)." }
       ]
     },
     "faq": [
@@ -794,7 +794,7 @@
                 "Upload your Word document as a DOCX.",
                 "Pick your colors, fonts, and logo, or leave colors on auto so the AI chooses a palette that fits your content.",
                 "Set the slide count and size, then click create.",
-                "Review and adjust the slides in the [editor](/powerpoint-online), then export a PPTX to open in PowerPoint (PPTX export is on paid plans)."
+                "Review and adjust the slides in the [editor](/powerpoint-online), then export a PPTX to open in PowerPoint (an editable PPTX is on paid plans; the free plan exports each slide as an image)."
               ]
             }
           ]
@@ -868,7 +868,7 @@
       { "q": "Do I need to install anything?", "a": "No. The editor runs right in your browser." },
       { "q": "Can I edit images and text?", "a": "Yes. Change text size, color, and direction, and replace images or generate new ones with AI." },
       { "q": "Does the editor work on mobile?", "a": "Full editing is on desktop. On mobile you can preview your deck and edit it with AI." },
-      { "q": "Can I export to PowerPoint?", "a": "Yes. Export an editable PPTX, or PDF and images, depending on your plan." }
+      { "q": "Can I export to PowerPoint?", "a": "Yes. Export an editable PPTX on paid plans, or a present-ready PPTX and PNG images on the free plan." }
     ],
     "article": {
       "title": "An online PowerPoint editor for every detail of your deck",
@@ -912,7 +912,7 @@
         {
           "heading": "PowerPoint online or desktop software?",
           "blocks": [
-            "A browser editor runs on any computer with nothing to install or update, your deck is saved to your account so you can pick up from any device, and you share a link instead of sending files. If you need to work in PowerPoint on your computer, export an editable PPTX and continue there."
+            "A browser editor runs on any computer with nothing to install or update, your deck is saved to your account so you can pick up from any device, and you share a link instead of sending files. If you need to work in PowerPoint on your computer, export an editable PPTX (on paid plans) and continue there."
           ]
         },
         {
@@ -1167,8 +1167,8 @@
     "faq": [
       { "q": "Which formats can I export?", "a": "PowerPoint (PPTX), PDF, PNG images, HTML, and Google Slides, depending on your plan." },
       { "q": "Does Arabic stay correct after export?", "a": "Yes. taqreer.ai keeps right-to-left text direction and alignment in the exported PowerPoint." },
-      { "q": "Can I edit the file after exporting?", "a": "Yes. The PPTX is fully editable in PowerPoint." },
-      { "q": "What does the free plan include?", "a": "The free plan exports PNG with a watermark. All formats are on paid plans." }
+      { "q": "Can I edit the file after exporting?", "a": "Yes, on paid plans the PPTX is fully editable in PowerPoint. On the free plan it is present-ready, with each slide as an image." },
+      { "q": "What does the free plan include?", "a": "The free plan exports PNG and a present-ready PPTX (each slide an image), both with a watermark. Editable PPTX, PDF and Google Slides are on paid plans, without a watermark." }
     ],
     "article": {
       "title": "Export formats in taqreer.ai: which one should you pick?",
@@ -1197,7 +1197,7 @@
         {
           "heading": "Export by plan",
           "blocks": [
-            "The free plan exports PNG with a watermark. All formats are available without a watermark on paid plans. See [pricing and plans](/pricing)."
+            "The free plan exports PNG and a present-ready PPTX where each slide is an image, both with a watermark. Editable PPTX, PDF and Google Slides are on paid plans, without a watermark. See [pricing and plans](/pricing)."
           ]
         }
       ]
@@ -1620,7 +1620,7 @@
           "name": "Free",
           "description": "To try it out and make simple decks fast.",
           "credits": "{credits} credits (signup gift)",
-          "features": ["{model}", "Up to {slides} slides per deck", "PNG export only", "Watermarked exports", "Latest GPT images", "All export formats", "No watermark", "All creation methods", "Custom brand identity"],
+          "features": ["{model}", "Up to {slides} slides per deck", "PNG + PPTX as image slides", "Watermarked exports", "Latest GPT images", "Editable PPTX + all formats", "No watermark", "All creation methods + AI edits", "Custom brand identity"],
           "footnote": "Upgrade anytime",
           "cta": "Start free"
         },
@@ -1628,7 +1628,7 @@
           "name": "Plus",
           "description": "To create decks regularly with every creation method.",
           "credits": "{credits} credits / month",
-          "features": ["{model}", "Up to {slides} slides per deck", "All export formats", "No watermark", "All creation methods", "Latest GPT images", "Custom brand identity", "Premium templates", "Processing priority"],
+          "features": ["{model}", "Up to {slides} slides per deck", "Editable PPTX + all formats", "No watermark", "All creation methods + AI edits", "Latest GPT images", "Custom brand identity", "Premium templates", "Processing priority"],
           "footnote": "Upgrade or downgrade anytime",
           "cta": "Start now"
         },
@@ -1636,7 +1636,7 @@
           "name": "Pro",
           "description": "For pros who want top quality and premium templates.",
           "credits": "{credits} credits / month",
-          "features": ["{model}", "Up to {slides} slides per deck", "All export formats", "No watermark", "All creation methods", "Latest GPT images", "Custom brand identity", "Premium templates", "Processing priority"],
+          "features": ["{model}", "Up to {slides} slides per deck", "Editable PPTX + all formats", "No watermark", "All creation methods + AI edits", "Latest GPT images", "Custom brand identity", "Premium templates", "Processing priority"],
           "footnote": "Upgrade or downgrade anytime",
           "cta": "Start now"
         },
@@ -1644,7 +1644,7 @@
           "name": "Max",
           "description": "For heavy use, with maximum capacity and priority.",
           "credits": "{credits} credits / month",
-          "features": ["{model}", "Up to {slides} slides per deck", "All export formats", "No watermark", "All creation methods", "Latest GPT images", "Custom brand identity", "Premium templates", "Processing priority"],
+          "features": ["{model}", "Up to {slides} slides per deck", "Editable PPTX + all formats", "No watermark", "All creation methods + AI edits", "Latest GPT images", "Custom brand identity", "Premium templates", "Processing priority"],
           "footnote": "You can downgrade anytime",
           "cta": "Start now"
         }
@@ -1657,7 +1657,7 @@
       { "q": "Does it fully support Arabic?", "a": "Yes. taqreer.ai is Arabic-first: correct RTL direction, elegant Arabic fonts, and bidirectional formatting that handles English words and numbers inside Arabic text accurately." },
       { "q": "How does the credit system work?", "a": "Each deck uses credits based on its slide count and the model used. You get monthly credits with your plan, plus {credits} free credits at signup to try the platform." },
       { "q": "Can I edit the deck after creating it?", "a": "Absolutely. The editor lets you edit text, colors, and slides and reorder them, with autosave and checkpoints you can revert to anytime." },
-      { "q": "Can I export the deck to PowerPoint?", "a": "Yes. You can export your decks as editable PPTX for PowerPoint while preserving the Arabic formatting and text direction." },
+      { "q": "Can I export the deck to PowerPoint?", "a": "Yes. On paid plans you export your decks as an editable PPTX for PowerPoint, with the Arabic formatting and text direction preserved. The free plan exports a present-ready PPTX where each slide is an image." },
       { "q": "Can I apply my own brand identity?", "a": "Yes. Upload your logo, colors, and fonts in the brand identity section, and taqreer.ai applies them automatically so your decks stay on-brand." },
       { "q": "Can I cancel my subscription anytime?", "a": "Yes. You can upgrade, downgrade, or cancel anytime from your account settings, with no long-term commitment." }
     ],
@@ -1762,12 +1762,12 @@
   },
   "checkout": { "title": "Upgrade your plan", "topupTitle": "Add credits", "subtitle": "Downgrade or cancel at any time.", "back": "Back to billing", "loading": "Loading secure checkout…", "emailLabel": "Email", "payCta": "Pay {amount}", "subscribeCta": "Subscribe - {amount} / month", "subscribeCtaYearly": "Subscribe - {amount} / year", "perYear": "/ year", "processingPay": "Processing…", "payFailed": "Payment failed. Check your card details and try again.", "promoLabel": "Promo code", "promoPlaceholder": "Enter code", "promoApply": "Apply", "promoApplying": "Applying…", "promoInvalid": "This code is not valid.", "promoRemove": "Remove", "promoApplied": "Code {code} applied", "error": "Could not start checkout. Please try again.", "returnProcessing": "Confirming your payment…", "returnSuccess": "Payment complete", "returnCloseBody": "Your credits were added. Close this tab and continue where you left off.", "closeTab": "Close this tab", "returnSuccessBody": "Your credits have been added. They may take a few seconds to appear.", "returnFailed": "Payment was not completed", "returnFailedBody": "No charge was made. You can try again from billing.", "toBilling": "Go to billing", "toDashboard": "Go to dashboard" },
   "components": {
-    "premiumGate": {"lockedFlowTitle":"This feature is on the {tier} plan","lockedFlowBody":"You can look around and prepare your content here. Generating needs the {tier} plan or higher.","upgrade":"Upgrade","slideCapHint":"Up to {count} slides on the Free plan","lockedCardHint":"Needs the {tier} plan"},
+    "premiumGate": {"lockedFlowTitle":"This feature is on the {tier} plan","lockedFlowBody":"You can look around and prepare your content here. Generating needs the {tier} plan or higher.","upgrade":"Upgrade","slideCapHint":"Up to {count} slides on the Free plan","lockedCardHint":"Needs the {tier} plan","logoLockedTitle":"Your logo on Plus","logoLockedBody":"Free decks carry the taqreer.ai mark"},
     "supportWidget": { "whatsappLabel": "Chat with us on WhatsApp", "whatsappGreeting": "Hi, I need help with taqreer.ai", "helpLabel": "Help", "popoverTitle": "Need help?", "popoverBody": "Message our team on WhatsApp and we'll get back to you.", "whatsappCta": "Contact us via WhatsApp" },
     "desktopEditHint": { "title": "Full editing is on desktop", "body": "On a computer you can edit everything directly: text, elements, and colors. On mobile you can preview and edit with AI.", "gotIt": "Got it", "close": "Close" },
     "upgradeModal": { "title": "Upgrade your plan", "requiresTier": "This model requires the {tier} plan", "checkoutTitle": "Complete your subscription", "back": "Back to plans", "successTitle": "Payment successful!", "successBody": "Payment received - your plan and credits will update within moments.", "done": "Close" },
     "planUsage": { "plan": "{plan} plan", "free": "Free", "plus": "Plus", "pro": "Pro", "max": "Max", "creditUsage": "Credit usage this cycle", "remainingPercent": "{percentage}% left", "creditsLeft": "{count} / {limit} credits left", "upgrade": "Upgrade plan", "renewalDate": "Renews: {date}", "noRenewal": "No renewal date" },
-    "creditGate": { "chooseTier": "Choose a plan to upgrade.", "subscribeCta": "Subscribe to a plan", "subscribeHint": "Top-up packs are available to subscribers - pick a plan to get monthly credits.", "insufficientTitle": "Not enough credits", "insufficientBody": "This deck needs {needed} credits - you have {have}.", "reduceCta": "Generate {slides} slides instead", "reduceHint": "fits your balance - {credits} credits", "topupCta": "Top up {credits} credits", "topupHint": "packs never expire with the monthly reset", "flowLockedTitle": "This flow needs a higher plan", "flowLockedBody": "Enhance, Mimic and Datasheet are available from the {tier} plan.", "presetLockedTitle": "This model needs a higher plan", "presetLockedBody": "Pick an unlocked model, or upgrade to use this one.", "capTitle": "This file is larger than your plan's limit", "capBody": "Your plan generates up to {cap} slides per deck. Upgrade for more.", "exportLockedTitle": "Exporting needs a higher plan", "exportLockedBody": "This export format is available from the {tier} plan.", "imagesLockedTitle": "Generated images need a plan", "imagesLockedBody": "AI photo generation for your slides is available from the {tier} plan.", "watermarkTitle": "Upgrade and remove all watermarks", "watermarkBody": "The Designed by taqreer.ai badge disappears from all your decks and exports on any paid plan.", "teaserUnlockCta": "Unlock slides", "teaserUnlocking": "Unlocking your slides", "teaserUnlockTitle": "Unlock the rest of your slides", "teaserUnlockBody": "The last {count} slides are ready to design. Subscribe to unlock them, crafted on our best model.", "seePlans": "See plans", "notNow": "Not now", "cancel": "Cancel" },
+    "creditGate": { "chooseTier": "Choose a plan to upgrade.", "subscribeCta": "Subscribe to a plan", "subscribeHint": "Top-up packs are available to subscribers - pick a plan to get monthly credits.", "insufficientTitle": "Not enough credits", "insufficientBody": "This deck needs {needed} credits - you have {have}.", "reduceCta": "Generate {slides} slides instead", "reduceHint": "fits your balance - {credits} credits", "topupCta": "Top up {credits} credits", "topupHint": "packs never expire with the monthly reset", "flowLockedTitle": "This flow needs a higher plan", "flowLockedBody": "Enhance, Mimic and Datasheet are available from the {tier} plan.", "presetLockedTitle": "This model needs a higher plan", "presetLockedBody": "Pick an unlocked model, or upgrade to use this one.", "capTitle": "This file is larger than your plan's limit", "capBody": "Your plan generates up to {cap} slides per deck. Upgrade for more.", "exportLockedTitle": "Exporting needs a higher plan", "exportLockedBody": "This export format is available from the {tier} plan.", "imagesLockedTitle": "Generated images need a plan", "imagesLockedBody": "AI photo generation for your slides is available from the {tier} plan.", "aiEditLockedTitle": "AI edits are a paid feature", "aiEditLockedBody": "Asking the AI to change or redesign slides after generation is available on the {tier} plan and above. You can still edit every slide by hand.", "watermarkTitle": "Upgrade and remove all watermarks", "watermarkBody": "The Designed by taqreer.ai badge disappears from all your decks and exports on any paid plan.", "teaserUnlockCta": "Unlock slides", "teaserUnlocking": "Unlocking your slides", "teaserUnlockTitle": "Unlock the rest of your slides", "teaserUnlockBody": "The last {count} slides are ready to design. Subscribe to unlock them, crafted on our best model.", "seePlans": "See plans", "notNow": "Not now", "cancel": "Cancel" },
     "billing": { "title": "Billing", "tabPlans": "Plans", "tabBilling": "Billing", "tabInvoices": "Invoices", "tabUsage": "Usage", "subscriptionTitle": "Subscription", "cancelSub": "Cancel subscription", "resumeSub": "Resume subscription", "cancelConfirmTitle": "Cancel your subscription?", "cancelConfirmBody": "Your plan stays active until {date}. You can keep using your credits until then.", "keepSub": "Keep my plan", "confirmCancel": "Cancel subscription", "noSubscription": "No active subscription. Upgrade from the Plans tab.", "paymentMethodsTitle": "Payment methods", "addCard": "Add card", "saveCard": "Save card", "savingCard": "Saving…", "noCards": "No saved cards yet.", "defaultBadge": "Default", "setDefault": "Set as default", "removeCard": "Remove", "expires": "Expires {date}", "removeDefaultBlocked": "This card pays your subscription. Set another card as default first.", "cardError": "Could not save the card. Please try again.", "noInvoices": "No invoices yet.", "invoiceView": "View", "loadFailed": "Could not load invoices - refresh to retry.", "statusPaid": "Paid", "statusOpen": "Open", "statusVoid": "Void", "statusUncollectible": "Uncollectible", "planTitle": "Plan", "currentPlan": "Current plan", "renews": "Renews {date}", "renewsYearly": "Renews {date}", "endsOn": "Plan ends {date}", "noRenewal": "No active subscription", "manage": "Manage subscription", "changePlan": "Change plan", "perMonth": "/mo", "creditsMo": "credits / mo", "creditsOnce": "credits (signup)", "current": "Current", "upgrade": "Upgrade", "downgrade": "Downgrade", "downgradeFree": "Downgrade to Free", "packsTitle": "Top-up packs", "topupSubscribersOnly": "Top-up packs are available on paid plans. Pick a plan first.", "packsHint": "Stack on your balance, survive monthly resets, expire after {months} months", "buy": "Buy", "pastDue": "Your last payment failed. Update your payment method to keep your plan.", "pastDueCta": "Update payment method", "monthly": "Monthly", "yearly": "Yearly", "yearlyHint": "billed yearly", "monthlyHint": "billed monthly", "cancelScheduledFree": "Cancel via Manage subscription", "loading": "Loading…" },
     "usage": { "title": "Usage", "summarySpent": "Spent", "summaryAdded": "Added", "filters": { "label": "Date range", "thisMonth": "This month", "last30": "Last 30 days", "allTime": "All time", "custom": "Custom", "from": "From", "to": "To" }, "events": { "create": "Created a presentation", "enhance": "Enhanced a presentation", "mimic": "Mimicked a design", "datasheet": "Generated from data", "regen": "Regenerated slides", "signup": "Welcome credits", "subscription": "Plan credits added", "reset": "Monthly renewal", "topup": "Top-up pack", "expired": "Top-up expired", "generation": "Presentation generated" }, "types": { "spent": "Spent", "added": "Added", "expired": "Expired" }, "slidesSuffix": "{count} slides", "loading": "Loading…", "empty": "No usage in this period yet.", "loadFailed": "Could not load usage - refresh to retry.", "loadMore": "Load more" },
     "calendar": { "clear": "Clear", "today": "Today", "pick": "Pick a date", "prevMonth": "Previous month", "nextMonth": "Next month" },
@@ -1858,6 +1858,10 @@
       "gslidesReadyTitle": "Your deck is ready in Google Slides",
       "gslidesReadyBody": "We uploaded the presentation to your Google Drive and converted it to a Google Slides deck.",
       "gslidesOpen": "Open in Google Slides",
+      "pptxImages": "PPTX (image slides)",
+      "pptxImagesHint": "Present-ready. Editable PPTX is on Plus",
+      "pptxEditable": "Editable PPTX",
+      "pptxEditableHint": "Edit text and layout in PowerPoint",
       "png": "PNG",
       "export": "Export",
       "exportPresentation": "Export presentation"

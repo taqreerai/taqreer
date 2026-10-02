@@ -1236,6 +1236,9 @@ function ExportTabBody({
     isAdmin: credits?.isAdmin ?? false,
   };
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  // Free plan: PPTX is image slides; the editable PPTX is a paid row
+  // (mirror of ExportMenu, 2026-10-02).
+  const imageOnlyPptx = !!credits && !credits.isAdmin && credits.plan === "free";
   const rowProps = (kind: "pptx" | "pdf" | "png" | "gslides") => {
     const gated = isExportGated(kind, effectiveFormat, gateUser);
     const run = {
@@ -1268,11 +1271,22 @@ function ExportTabBody({
         {isCarousel ? null : (
           <ExportRow
             kind="pptx"
-            label="PowerPoint"
-            sub={dict.dialogs.share.fmtPptx}
+            label={imageOnlyPptx ? dict.editor.export.pptxImages : "PowerPoint"}
+            sub={imageOnlyPptx ? dict.editor.export.pptxImagesHint : dict.dialogs.share.fmtPptx}
             {...rowProps("pptx")}
           />
         )}
+        {!isCarousel && imageOnlyPptx ? (
+          <ExportRow
+            kind="pptx"
+            label={dict.editor.export.pptxEditable}
+            sub={dict.editor.export.pptxEditableHint}
+            gated
+            running={false}
+            disabled={actions.busy}
+            onClick={() => setUpgradeOpen(true)}
+          />
+        ) : null}
         {isCarousel ? null : (
           <ExportRow
             kind="gslides"

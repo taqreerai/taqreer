@@ -142,7 +142,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     priceUsd: 0,
     monthlyAllotment: 0,
     signupGrant: 400,
-    slideCap: 5,
+    slideCap: 8,
     presets: ["sonnet-fast"],
     flows: ["create"],
   },

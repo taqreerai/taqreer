@@ -402,7 +402,15 @@ function splitMixedScriptFlexChildren(root: HTMLElement): void {
 export async function exportManifestAsPptx(
   manifest: SlideManifest,
   fileName: string,
-  opts?: { skipDownload?: boolean }
+  opts?: {
+    skipDownload?: boolean;
+    // Free plan (2026-10-02): a PRESENT-READY deck. One full-slide picture per
+    // entry (the server's PNG renders, which already carry the "Made with
+    // taqreer.ai" watermark + the branded closing slide). Nothing in the file
+    // is editable text, so the watermark can't be edited out. Paid plans omit
+    // this and get the fully editable deck.
+    imageSlides?: string[];
+  }
 ): Promise<{ stats: BiDiPostprocessStats; slideCount: number; blob?: Blob }> {
   // Slide canvas dimensions from the manifest's format (16:9 → 1920×1080;
   // 9:16 → 1080×1920). Used for the offscreen render container, each
@@ -434,32 +442,45 @@ export async function exportManifestAsPptx(
 
   const root = createRoot(container);
 
+  const imageSlides = opts?.imageSlides ?? null;
+
   try {
-    root.render(
-      createElement(
-        "div",
-        { dir: manifest.direction },
-        manifest.slides.map((slide) =>
+    const slideEls = imageSlides
+      ? imageSlides.map((src, i) =>
           createElement(
             "div",
             {
-              key: slide.slideId,
+              key: `img-${i}`,
               className: "hx-slide",
-              style: { width: canvasW, height: canvasH, marginBottom: 20 },
+              style: { width: canvasW, height: canvasH, marginBottom: 20, position: "relative" as const },
             },
-            createElement(SlideRenderer, {
-              slide,
-              theme: manifest.theme,
-              direction: manifest.direction,
-              language: manifest.language,
-              width: canvasW,
-              height: canvasH,
-              scale: 1,
-            })
-          )
+            createElement("img", {
+              src,
+              alt: "",
+              style: { position: "absolute" as const, left: 0, top: 0, width: canvasW, height: canvasH },
+            }),
+          ),
         )
-      )
+      : manifest.slides.map((slide) =>
+      createElement(
+        "div",
+        {
+          key: slide.slideId,
+          className: "hx-slide",
+          style: { width: canvasW, height: canvasH, marginBottom: 20, position: "relative" as const },
+        },
+        createElement(SlideRenderer, {
+          slide,
+          theme: manifest.theme,
+          direction: manifest.direction,
+          language: manifest.language,
+          width: canvasW,
+          height: canvasH,
+          scale: 1,
+        }),
+      ),
     );
+    root.render(createElement("div", { dir: manifest.direction }, slideEls));
 
     // SlideRenderer sanitises slide HTML inside `useEffect` (client-only,
     // fail-closed). The first commit renders empty containers; useEffect
@@ -661,7 +682,8 @@ export async function exportManifestAsPptx(
       // Google fonts carry a CSS `url`; uploaded brand fonts carry signed
       // `fontFaces` (one font file per uploaded weight). Embed both — the
       // server route host-pins each (fonts.googleapis.com / Supabase storage).
-      const fontTargets = [manifest.theme.font]
+      // Image-only (free) decks carry no text, so there is nothing to embed.
+      const fontTargets = (imageSlides ? [] : [manifest.theme.font])
         .filter(
           (f) =>
             f && f.name && (f.url || (f.fontFaces && f.fontFaces.length > 0)),
@@ -719,7 +741,9 @@ export async function exportManifestAsPptx(
     // opaque parts → JPEG, transparent stay PNG, long edge capped at 1920px.
     // Best-effort — a failure ships the uncompressed (but valid) blob.
     let finalBlob = fixedBlob;
-    try {
+    // Image-slide (free) decks skip recompression: the 2x (3840px) slide
+    // renders stay lossless PNG so text is crisp on 4K screens.
+    if (!imageSlides) try {
       const mediaStats = {
         scanned: 0,
         recompressed: 0,

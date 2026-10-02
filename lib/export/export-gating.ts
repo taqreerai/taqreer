@@ -76,5 +76,12 @@ export function isExportGated(
 ): boolean {
   if (user.isAdmin) return false;
   if (user.plan !== null && normalizePlan(user.plan) !== "free") return false;
-  return kind !== "png" || (format ?? "16:9") === "3:4";
+  if ((format ?? "16:9") === "3:4") return true;
+  if (kind === "png") return false;
+  // Free plan (2026-10-02): PPTX is open to signed-in free users; the deck
+  // carries the "Made with taqreer.ai" watermark + branded closing slide
+  // (lib/export/free-branding). An unknown plan (signed-out public-link
+  // viewer) stays PNG-only, so nobody can pull an unbranded PPTX of a
+  // shared deck. PDF and Google Slides stay paid.
+  return !(kind === "pptx" && user.plan !== null);
 }

@@ -41,7 +41,7 @@ export async function POST(
         orderBy: { createdAt: "desc" },
         take: 1,
       },
-      user: { select: { role: true } },
+      user: { select: { role: true, plan: true } },
     },
   });
 
@@ -87,6 +87,7 @@ export async function POST(
     const gate = await regenCreditGate({
       ownerId: project.userId,
       ownerRole: project.user?.role ?? "user",
+      ownerPlan: project.user?.plan ?? null,
       cost: carriedHold,
     });
     if (gate) return NextResponse.json(gate, { status: 402 });

@@ -77,7 +77,7 @@ export const SEED_PRESETS: readonly PresetConfig[] = [
 // gets the Sonnet entry model only; Plus adds opus-fast; Pro adds opus-balanced;
 // Max additionally unlocks fable-low (the Max-exclusive Professional tier).
 export const SEED_TIERS: readonly TierConfigRow[] = [
-  { plan: "free", priceUsd: 0,   monthlyAllotment: 0,     signupGrant: 400, slideCap: 5,  unlockedPresetKeys: ["sonnet-fast"], flows: ["create"], sortOrder: 0 },
+  { plan: "free", priceUsd: 0,   monthlyAllotment: 0,     signupGrant: 400, slideCap: 8,  unlockedPresetKeys: ["sonnet-fast"], flows: ["create"], sortOrder: 0 },
   { plan: "plus", priceUsd: 9,   monthlyAllotment: 4000,  signupGrant: 0,   slideCap: 30, unlockedPresetKeys: ["sonnet-fast", "opus-fast"], flows: ["create", "enhance", "mimic", "datasheet", "social"], sortOrder: 1 },
   { plan: "pro",  priceUsd: 25,  monthlyAllotment: 10000, signupGrant: 0,   slideCap: 60, unlockedPresetKeys: ["sonnet-fast", "opus-fast", "opus-balanced"], flows: ["create", "enhance", "mimic", "datasheet", "social"], sortOrder: 2 },
   { plan: "max",  priceUsd: 79,  monthlyAllotment: 35000, signupGrant: 0,   slideCap: 75, unlockedPresetKeys: ["sonnet-fast", "opus-fast", "opus-balanced", "fable-low"], flows: ["create", "enhance", "mimic", "datasheet", "social"], sortOrder: 3 },

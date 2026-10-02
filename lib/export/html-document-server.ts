@@ -28,6 +28,7 @@ import { dimensionsForFormat } from "@/lib/schema/slide";
 import { sanitizeSlideHtmlServer } from "@/lib/export/sanitize-server";
 import { themeToCssVars, cssFontFamilyName } from "@/lib/export/theme-css-vars";
 import { googleFontLinkTags } from "@/lib/editor/font-search";
+import { CAIRO_CSS_URL, closingSlideHtml, watermarkHtml as freeWatermarkHtml } from "@/lib/export/free-branding";
 
 export type HtmlDocumentServerOptions = {
   // When true, emit `@page { size: <canvas-dims>; margin: 0 }` +
@@ -56,7 +57,7 @@ export function buildHtmlDocumentServer(
   const { width: canvasW, height: canvasH } = dimensionsForFormat(
     manifest.format,
   );
-  const fontLinks = [manifest.theme.font.url]
+  const fontLinks = [manifest.theme.font.url, options.watermark ? CAIRO_CSS_URL : null]
     .filter(
       (url, i, arr): url is string =>
         typeof url === "string" && arr.indexOf(url) === i,
@@ -108,22 +109,29 @@ export function buildHtmlDocumentServer(
     .map(([k, v]) => `    ${k}: ${escapeCssValue(v)};`)
     .join("\n");
 
-  // Trusted literal (never user content), appended after the sanitized
-  // slide HTML inside each .hx-slide. Same visual treatment as the
-  // studio's .tq-watermark pill, at canvas scale.
-  const watermarkHtml = options.watermark
-    ? `<div class="hx-watermark">Designed by taqreer.ai</div>`
+  // Free-plan branding (2026-10-02): the "Made with taqreer.ai" badge on
+  // every slide + the branded closing slide appended after the deck. Trusted
+  // markup from lib/export/free-branding (never user content), emitted
+  // OUTSIDE the sanitized slide HTML, identical to the studio's rendering.
+  const brandLang = manifest.language === "en" ? "en" : "ar";
+  const brandDims = { width: canvasW, height: canvasH };
+  // Slide 1 (the cover) gets the larger badge with the slogan.
+  const watermarkFor = (i: number) =>
+    options.watermark ? freeWatermarkHtml(brandLang, brandDims, { cover: i === 0 }) : "";
+  const closingSlide = options.watermark
+    ? `<div class="hx-slide" data-slide-id="tq-branded-closing">${closingSlideHtml(brandLang, brandDims)}</div>`
     : "";
 
   const slides = manifest.slides
     .map(
-      (s) =>
+      (s, i) =>
         `<div class="hx-slide" dir="${manifest.direction}" lang="${
           manifest.language
         }" data-slide-id="${escapeAttr(s.slideId)}">\n${sanitizeSlideHtmlServer(
           s.html,
-        )}\n${watermarkHtml}</div>`,
+        )}\n${watermarkFor(i)}</div>`,
     )
+    .concat(closingSlide ? [closingSlide] : [])
     .join("\n\n");
 
   // Pagination rules — emitted only when the caller asks for them.
@@ -175,30 +183,6 @@ ${cssVars}
     background: var(--brand-bg);
     position: relative;
     overflow: hidden;
-  }${
-    options.watermark
-      ? `
-  /* Free-tier branding pill - white bg, black text, 80% opacity (mirror
-     of the studio's .tq-watermark, scaled up for the 1920px canvas).
-     inset-inline-end follows the slide's dir attribute. */
-  .hx-watermark {
-    position: absolute;
-    inset-inline-end: 32px;
-    bottom: 32px;
-    z-index: 2147483647;
-    padding: 8px 18px;
-    border-radius: 9999px;
-    background: #fff;
-    border: 2px solid rgba(0, 0, 0, 0.10);
-    color: #000;
-    font-family: system-ui, sans-serif;
-    font-size: 20px;
-    font-weight: 500;
-    letter-spacing: 0.01em;
-    white-space: nowrap;
-    opacity: 0.8;
-  }`
-      : ""
   }${pageBreakCss}
 </style>
 </head>

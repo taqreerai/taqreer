@@ -689,11 +689,17 @@ export async function POST(request: Request) {
   // Storage so pipelining saves a round trip. `svgMarkup` enables
   // the inline-per-slide path (Claude overrides `fill` for per-slide
   // contrast); `signedUrl` is the fallback to <img src=...>.
-  const [logoSignedUrl, logoRead] = logoPath
-    ? await Promise.all([signBrandAssetUrl(logoPath), readLogo(logoPath)])
+  // Logo upload is a paid feature (2026-10-02): a Free (non-admin) user's
+  // logo is ignored server-side whatever the client sends (e.g. one carried
+  // over from a saved brand kit); the deck shows Taqreer's watermark instead.
+  const logoAllowed =
+    dbUser.role === "admin" || normalizePlan(dbUser.plan) !== "free";
+  const effectiveLogoPath = logoAllowed ? logoPath : null;
+  const [logoSignedUrl, logoRead] = effectiveLogoPath
+    ? await Promise.all([signBrandAssetUrl(effectiveLogoPath), readLogo(effectiveLogoPath)])
     : [null, LOGO_READ_NONE];
   const claudeBrand = buildClaudeBrand(
-    payload.brand,
+    logoAllowed || !payload.brand ? payload.brand : { ...payload.brand, logo: null },
     font,
     uploadedFonts,
     logoSignedUrl,
@@ -873,7 +879,14 @@ export async function POST(request: Request) {
   // fill when the source is an images deck). Admins are never gated.
   // `plannedTotal` is what the model designs toward so the visible slides read
   // as an unfinished first act.
+  // Teaser OFF for new decks (2026-10-02): free decks are now a complete
+  // 8-slide deck + a system-appended branded closing slide, with the
+  // "Made with taqreer.ai" watermark as the upgrade push. Existing teaser
+  // decks keep their stored brief.teaser, so their locked slots + unlock
+  // still work. Flip TEASER_FOR_NEW_DECKS to restore the old behaviour.
+  const TEASER_FOR_NEW_DECKS = false;
   const isTeaser =
+    TEASER_FOR_NEW_DECKS &&
     creditFlow === "create" &&
     dbUser.role !== "admin" &&
     normalizePlan(dbUser.plan) === "free";
@@ -906,6 +919,11 @@ export async function POST(request: Request) {
     // the matching directive after the Brief JSON). The stream's slide-cap
     // abort at holdSlides stays the hard enforcement either way.
     slideCountMode: preflight.exact ? "exact" : "ceiling",
+    // Free plan: the badge corner the generator must keep clear
+    // (deck-generate buildFreeBrandingBlock). Absent for paid / admin.
+    ...(logoAllowed
+      ? {}
+      : { freeBranding: { corner: contentLanguage === "en" ? "right" : "left" } }),
     // Teaser paywall: when present, deck-generate declares `plannedTotal`
     // slides to the model (so it designs a full arc) but still aborts the
     // stream at slideCount/holdSlides, leaving the visible slides a

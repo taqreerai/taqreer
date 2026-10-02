@@ -170,10 +170,14 @@ export async function POST(
   // Free-tier branding: watermark PNG exports of decks whose OWNER is on
   // the free plan (admins exempt). Opt-in flag - the bake + thumbnail
   // pipelines share this builder and must stay watermark-free.
-  const html = buildHtmlDocumentServer(manifest, {
-    watermark:
-      !isPaidPlan(project.user.plan) && project.user.role !== "admin",
-  });
+  const freeBranding =
+    !isPaidPlan(project.user.plan) && project.user.role !== "admin";
+  const html = buildHtmlDocumentServer(manifest, { watermark: freeBranding });
+  // Free plan: the branded closing slide (tq-branded-closing) is captured as
+  // the last PNG, after the deck's own slides.
+  const captureIds = manifest.slides
+    .map((s) => s.slideId)
+    .concat(freeBranding ? ["tq-branded-closing"] : []);
 
   // Puppeteer + Chrome. Args identical to the thumbnail pipeline so
   // the runtime contract is single-sourced. Container deployments
@@ -200,7 +204,9 @@ export async function POST(
     await page.setViewport({
       width: canvasW,
       height: canvasH + 1,
-      deviceScaleFactor: 1,
+      // 2x (3840 x 2160 for 16:9, 2026-10-02): sharp on 4K screens and in the
+      // free image-slide PPTX built from these PNGs. Clip coords stay in CSS px.
+      deviceScaleFactor: 2,
     });
     await page.setContent(html, {
       waitUntil: ["domcontentloaded", "networkidle0"],
@@ -221,8 +227,8 @@ export async function POST(
     // in a settled scroll state. At 5-25 slides the linear cost is
     // 1-5s; we'd only refactor to a worker pool if decks regularly
     // exceeded 30 slides.
-    for (let i = 0; i < manifest.slides.length; i++) {
-      const slide = manifest.slides[i];
+    for (let i = 0; i < captureIds.length; i++) {
+      const slide = { slideId: captureIds[i] };
       // Scroll the target slide into view BEFORE measuring/shooting
       // so Chrome paints it inside the single-slide viewport.
       //

@@ -13,6 +13,8 @@ import { motion, useAnimationControls, useReducedMotion } from "framer-motion";
 import { SegmentedToggle } from "@/components/create/controls";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
+import { PremiumCrown } from "@/components/billing/PremiumCrown";
+import { useCreditBalance } from "@/lib/credits/store";
 import {
   isCreditGatePayload,
   type CreditGatePayload,
@@ -446,6 +448,10 @@ export function PreviewActionBar({
   const effectiveMode: StudioMode = canEdit ? studioMode : "edit";
   // The AI slot shows a slide-regen button only when DeckView wires one.
   const showSlideRegen = canEdit && !!onRegenSlide;
+  // AI edits after generation are a paid feature (2026-10-02). The server
+  // refuses them for a Free owner too (regenCreditGate -> ai_edit_locked).
+  const creditData = useCreditBalance();
+  const aiEditLocked = !!creditData && !creditData.isAdmin && creditData.plan === "free";
 
   // Measure the active mode content (pre-paint) so the slot animates to its
   // pixel width. Re-measures when the mode or the AI button set changes.
@@ -589,10 +595,33 @@ export function PreviewActionBar({
                 // Icon-only on phones (labels hidden) so the toggle stops being
                 // the pill's widest element and AI mode fits with Home visible.
                 { value: "edit", label: <span className="max-md:hidden">{dict.editor.toolbar.edit}</span>, icon: "edit" },
-                { value: "ai", label: <span className="max-md:hidden">{dict.editor.toolbar.ai}</span>, icon: "auto_awesome" },
+                {
+                  value: "ai",
+                  label: (
+                    <span className="flex items-center gap-1">
+                      <span className="max-md:hidden">{dict.editor.toolbar.ai}</span>
+                      {aiEditLocked ? <PremiumCrown size={13} /> : null}
+                    </span>
+                  ),
+                  icon: "auto_awesome",
+                },
               ]}
               value={studioMode}
-              onChange={onSetStudioMode}
+              onChange={(next) => {
+                // Free plan: AI edits are paid (2026-10-02); the tab upsells
+                // instead of switching mode. Manual editing stays open.
+                if (next === "ai" && aiEditLocked) {
+                  onCreditGate?.({
+                    error: "ai_edit_locked",
+                    balance: 0,
+                    slideCap: null,
+                    minFlowTier: "plus",
+                    options: null,
+                  });
+                  return;
+                }
+                onSetStudioMode(next);
+              }}
               ariaLabel={dict.editor.toolbar.editorMode}
               size="comfortable"
             />

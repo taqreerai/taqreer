@@ -38,6 +38,10 @@ import { CompactUploadZone } from "@/components/brand/CompactUploadZone";
 import { useDict } from "@/components/i18n/LocaleProvider";
 import { isPolychromeSvg } from "@/lib/brand/svg-polychrome";
 import { decodeSvgBytes } from "@/lib/brand/svg-decode";
+import { useCreditBalance } from "@/lib/credits/store";
+import { UpgradeModal } from "@/components/billing/UpgradeModal";
+import { PremiumCrown } from "@/components/billing/PremiumCrown";
+import { barsIconSvg } from "@/lib/export/free-branding";
 
 // Outer heights pinned to CompactUploadZone's two modes:
 //   • default → 100 px (matches CompactUploadZone's stacked default)
@@ -50,7 +54,7 @@ import { decodeSvgBytes } from "@/lib/brand/svg-decode";
 const SLOT_HEIGHT_DEFAULT_PX = 100;
 const SLOT_HEIGHT_COMPACT_PX = 72;
 
-export function LogoUploadSlot({
+function LogoUploadSlotInner({
   file,
   onSelect,
   onRemove,
@@ -263,5 +267,46 @@ export function LogoUploadSlot({
         </span>
       </button>
     </div>
+  );
+}
+
+// Logo upload is a paid feature (2026-10-02). Free (non-admin) users see
+// Taqreer's mark locked in the slot with a crown; clicking opens the plans.
+// The server ignores a free user's logo too (app/api/projects/route.ts), and
+// their decks carry the "Made with taqreer.ai" watermark instead.
+export function LogoUploadSlot(props: Parameters<typeof LogoUploadSlotInner>[0]) {
+  const credits = useCreditBalance();
+  const locked = !!credits && !credits.isAdmin && credits.plan === "free";
+  if (!locked) return <LogoUploadSlotInner {...props} />;
+  return <LockedLogoSlot compact={props.compact} fillHeight={props.fillHeight} />;
+}
+
+function LockedLogoSlot({ compact = false, fillHeight = false }: { compact?: boolean; fillHeight?: boolean }) {
+  const dict = useDict();
+  const t = dict.components.premiumGate;
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex w-full items-center gap-3 rounded-xl border border-dashed border-[var(--tq-border-hairline)] px-3 text-start transition-colors hover:bg-foreground/5"
+        style={fillHeight ? { height: "100%" } : { height: compact ? SLOT_HEIGHT_COMPACT_PX : SLOT_HEIGHT_DEFAULT_PX }}
+      >
+        <span
+          className="shrink-0"
+          aria-hidden
+          dangerouslySetInnerHTML={{ __html: barsIconSvg(compact ? 32 : 40) }}
+        />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+            {t.logoLockedTitle}
+            <PremiumCrown size={14} />
+          </span>
+          <span className="truncate text-[11px] text-foreground/50">{t.logoLockedBody}</span>
+        </span>
+      </button>
+      <UpgradeModal open={open} onClose={() => setOpen(false)} requiredTier="plus" />
+    </>
   );
 }

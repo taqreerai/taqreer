@@ -15,6 +15,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getBalance } from "@/lib/credits/server";
+import { normalizePlan } from "@/lib/plan";
 
 /**
  * Convert `unknown` to `Prisma.InputJsonValue` via a JSON round-trip.
@@ -175,10 +176,10 @@ export type RegenTx = Prisma.TransactionClient;
 // off the /api/projects 402. A regen has no reduce-slides offer, so those option
 // fields stay null/empty and only `topupGap` (needs − have) is populated.
 export type CreditGate402 = {
-  error: "insufficient_credits";
+  error: "insufficient_credits" | "ai_edit_locked";
   balance: number;
   slideCap: null;
-  minFlowTier: null;
+  minFlowTier: string | null;
   options: {
     reducedSlides: null;
     reducedCredits: null;
@@ -205,9 +206,21 @@ export type CreditGate402 = {
 export async function regenCreditGate(args: {
   ownerId: string;
   ownerRole: string;
+  // The deck owner's plan: AI edits after generation are a paid feature
+  // (2026-10-02), so a Free owner's regen is refused before any cost check.
+  ownerPlan: string | null | undefined;
   cost: number;
 }): Promise<CreditGate402 | null> {
   if (args.ownerRole === "admin") return null;
+  if (normalizePlan(args.ownerPlan) === "free") {
+    return {
+      error: "ai_edit_locked",
+      balance: 0,
+      slideCap: null,
+      minFlowTier: "plus",
+      options: { reducedSlides: null, reducedCredits: null, cheaperPresets: [], topupGap: 0 },
+    };
+  }
   if (args.cost <= 0) return null;
   const balance = await getBalance(args.ownerId);
   if (args.cost <= balance.total) return null;

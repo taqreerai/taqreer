@@ -1395,6 +1395,13 @@ html.app-shell-scroll body {
 .tq-watermark:hover {
   opacity: 1;
 }
+/* 2026-10-02 free-plan watermark (FreeBranding.tsx): the layer ignores
+   pointer events so editing is unobstructed; only the badge itself is
+   clickable (opens the upgrade modal). */
+.tq-free-wm [data-tq-badge] {
+  pointer-events: auto;
+  cursor: pointer;
+}
 
 /* ─── Teaser paywall locked slide ────────────────────────────────────
    Free-tier conversion: the last N slides of a free deck are WITHHELD (never

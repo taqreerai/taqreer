@@ -22,6 +22,7 @@ export type CreditGatePayload = {
     | "flow_locked"
     | "preset_locked"
     | "images_locked"
+    | "ai_edit_locked"
     | "slide_cap_exceeded";
   balance: number;
   slideCap: number | null;
@@ -43,6 +44,7 @@ export function isCreditGatePayload(data: unknown): data is CreditGatePayload {
     error === "flow_locked" ||
     error === "preset_locked" ||
     error === "images_locked" ||
+    error === "ai_edit_locked" ||
     error === "slide_cap_exceeded"
   );
 }
@@ -101,6 +103,15 @@ export function CreditGateDialog({
       gateContext = {
         title: t.presetLockedTitle,
         body: `${t.presetLockedBody} ${cta}`.trim(),
+      };
+    } else if (gate.error === "ai_edit_locked") {
+      // AI edits after generation are a paid feature (2026-10-02).
+      gateContext = {
+        title: t.aiEditLockedTitle,
+        body: `${t.aiEditLockedBody.replace(
+          "{tier}",
+          planLabel(dict.components.planUsage, gate.minFlowTier ?? "plus"),
+        )} ${cta}`.trim(),
       };
     } else if (gate.error === "images_locked") {
       gateContext = {

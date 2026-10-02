@@ -179,7 +179,7 @@ export async function POST(
     select: {
       id: true,
       userId: true,
-      user: { select: { role: true } },
+      user: { select: { role: true, plan: true } },
       presentation: { select: { id: true, currentVersionId: true } },
     },
   });
@@ -233,6 +233,7 @@ export async function POST(
     const gate = await regenCreditGate({
       ownerId: project.userId,
       ownerRole: project.user?.role ?? "user",
+      ownerPlan: project.user?.plan ?? null,
       cost: regenCost(
         originalQuality,
         gateSlideCount,
