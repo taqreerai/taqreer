@@ -43,8 +43,13 @@ export const brandAnalyze = inngest.createFunction(
           "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
-          model: "claude-opus-4-5",
+          // Sonnet 5.5 (2026-10-02, was Opus 4.5): a short colour/font
+          // extraction from one image doesn't need Opus.
+          model: "claude-sonnet-5-5",
           max_tokens: 1024,
+          // Sonnet 5.5's thinking-off setting (it rejects "disabled"): a
+          // one-shot JSON extraction needs no reasoning budget.
+          thinking: { type: "between_tools" },
           system: `Extract brand colors and typography from images. Return ONLY JSON: { "palette": { "primary": "#HEX", "secondary": "#HEX", "background": "#HEX", "text": "#HEX", "muted": "#HEX" }, "typography": { "headingFont": "name or null", "bodyFont": "name or null" } }`,
           messages: [{
             role: "user",
@@ -58,7 +63,11 @@ export const brandAnalyze = inngest.createFunction(
 
       if (!response.ok) throw new Error(`Claude API error: ${response.status}`);
       const data = await response.json();
-      const content = data.content[0]?.text;
+      // First TEXT block: thinking-capable models can lead with a
+      // (possibly empty) thinking block.
+      const content = (data.content as { type: string; text?: string }[] | undefined)?.find(
+        (b) => b.type === "text",
+      )?.text;
       if (!content) throw new Error("No content from Claude");
       const parsed = JSON.parse(content.replace(/```json|```/g, "").trim());
       const result = BrandKitSchema.safeParse(parsed);

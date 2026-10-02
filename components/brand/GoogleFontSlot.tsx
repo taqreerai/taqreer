@@ -18,6 +18,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { GOOGLE_FONTS } from "@/lib/brand/fonts";
+import { previewCss2Url } from "@/lib/editor/font-search";
+
+// One shared stylesheet that loads every listed family's default weight, so
+// each row can render in its own typeface (2026-10-02: the rows set
+// font-family but nothing ever loaded the fonts, so all of them fell back
+// to the UI font and looked identical). Same approach as the editor's
+// FontControl; loaded once, the first time the list opens.
+const PREVIEW_LINK_ID = "tq-brand-font-preview";
 import { useDict } from "@/components/i18n/LocaleProvider";
 
 export function GoogleFontSlot({
@@ -69,6 +77,15 @@ export function GoogleFontSlot({
     };
     document.addEventListener("mousedown", onDocMouseDown);
     return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || document.getElementById(PREVIEW_LINK_ID)) return;
+    const link = document.createElement("link");
+    link.id = PREVIEW_LINK_ID;
+    link.rel = "stylesheet";
+    link.href = previewCss2Url(GOOGLE_FONTS.map((font) => font.family));
+    document.head.appendChild(link);
   }, [open]);
 
   const filtered = query.trim()
@@ -182,20 +199,28 @@ export function GoogleFontSlot({
                   }
                 >
                   <span className="flex items-center gap-2">
-                    <span>{font.family}</span>
+                    {/* The name in its own typeface, so the list itself is
+                        the preview. */}
+                    <span style={{ fontFamily: `"${font.family}", system-ui, sans-serif` }}>
+                      {font.family}
+                    </span>
                     <span
                       className={`text-[10px] ${isActive ? "text-foreground/80" : "text-foreground/40"}`}
                     >
                       {font.arabic ? dict.flows.brand.scriptArabicLatin : dict.flows.brand.scriptLatin}
                     </span>
                   </span>
+                  {/* Sample glyphs in the family: Arabic letters for fonts
+                      that carry Arabic (what the user is choosing for),
+                      "Aa" for Latin-only ones. */}
                   <span
                     className="text-base"
+                    dir={font.arabic ? "rtl" : "ltr"}
                     style={{
                       fontFamily: `"${font.family}", system-ui, sans-serif`,
                     }}
                   >
-                    Aa
+                    {font.arabic ? "أبجد" : "Aa"}
                   </span>
                 </button>
               );

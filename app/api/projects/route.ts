@@ -322,9 +322,9 @@ type BriefFontSlot =
 // the old "Arial" default produced Arial decks). Literals (not an import of
 // lib/brand/fonts' googleFontUrl) to keep this server route off the client
 // font module; mirrors DEFAULT_GOOGLE_FAMILY there.
-const DEFAULT_FONT_NAME = "Noto Sans Arabic";
+const DEFAULT_FONT_NAME = "Cairo";
 const DEFAULT_FONT_URL =
-  "https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@100;200;300;400;500;600;700;800;900&display=swap";
+  "https://fonts.googleapis.com/css2?family=Cairo:wght@100;200;300;400;500;600;700;800;900&display=swap";
 
 function readBriefFont(slot: BriefFontSlot): {
   name: string;
@@ -617,7 +617,7 @@ export async function POST(request: Request) {
   }
 
   // Slim brand for Claude: drop base64 `previewDataUrl` (saves ~3000
-  // input tokens). Falls back to Noto Sans Arabic (name + css2 URL) when
+  // input tokens). Falls back to Cairo (name + css2 URL) when
   // no font configured, so a no-font deck still loads a real Arabic-and-
   // Latin webfont instead of rendering in a system font.
   const incomingFonts = payload.brand?.fonts as

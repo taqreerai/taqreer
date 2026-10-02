@@ -74,7 +74,7 @@ export type AnthropicCallParams = {
 
 // Active preset model ids live in the DB now (lib/config/runtime-config.ts) +
 // the seed. This single constant backs only the legacy/cold fallback below.
-const FALLBACK_OPUS = "claude-opus-4-8";
+const FALLBACK_OPUS = "claude-opus-5-5";
 
 // Fallback = the canonical default (opus-balanced: Opus 4.8 + adaptive +
 // effort:low), matching the prior `default` branch. Used when the key is null,

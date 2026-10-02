@@ -47,6 +47,7 @@ import { fillPricingTokens } from "@/lib/credits/pricing-tokens";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import { SlideCapUpsellDialog } from "./SlideCapUpsellDialog";
 import type { KnownPlan } from "@/lib/plan";
+import { PremiumCrown } from "@/components/billing/PremiumCrown";
 
 // Pre-hydration fallback = the bundled snapshot (matches the seed). Once
 // /api/credits resolves, the picker uses the DB-driven `credits.presets` so an
@@ -284,7 +285,7 @@ export function GenerateSplitButton({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 4 }}
             transition={{ type: "spring", bounce: 0.25, duration: 0.25 }}
-            className=" absolute start-0 bottom-full z-30 mb-2 w-[26rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border bg-[var(--tq-surface)] border-[var(--tq-border-hairline)]"
+            className=" absolute start-0 bottom-full z-30 mb-2 w-[28rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border bg-[var(--tq-surface)] border-[var(--tq-border-hairline)]"
           >
             <div className="flex items-center justify-between px-4 py-2.5 text-[11px] text-foreground/40">
               <span>{dict.flows.generate.generationQuality}</span>
@@ -299,6 +300,7 @@ export function GenerateSplitButton({
                 </span>
               ) : null}
             </div>
+            <div className="flex flex-col gap-1.5 px-2 pb-2">
             {presets.map((preset, presetRank) => {
               // Ladder rank drives the design-quality name (see designLevel).
               const level = designLevel(presetRank);
@@ -366,10 +368,10 @@ export function GenerateSplitButton({
                     }
                     onQualityChange(preset.key);
                   }}
-                  className={`flex w-full items-center gap-3 px-4 py-3 text-start transition-colors ${
-                    active
-                      ? "bg-foreground/[0.06] text-foreground"
-                      : "text-foreground/70 hover:bg-foreground/[0.04] hover:text-foreground"
+                  // Each level is a card; the selected one gets the brand-blue
+                  // outline + check (2026-10-01 quality-menu redesign).
+                  className={`quality-option flex w-full items-center gap-3 rounded-xl px-3 py-3 text-start ${
+                    active ? "is-active text-foreground" : "text-foreground/75 hover:text-foreground"
                   }`}
                 >
                   {/* Check + title/description column. The DESIGN-LEVEL
@@ -378,12 +380,13 @@ export function GenerateSplitButton({
                       without them the model label alone would read
                       "Opus 4.8" three times). */}
                   <span
-                    className="material-symbols-outlined shrink-0 leading-none"
+                    className="material-symbols-outlined shrink-0 leading-none text-[var(--tq-brand-blue)]"
                     style={{ fontSize: 18, opacity: active ? 1 : 0 }}
                   >
                     check
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="flex min-w-0 items-center gap-2">
                     <span className="truncate text-sm font-medium">
                       {level === "pro"
                         ? dict.flows.generate.proDesign
@@ -393,15 +396,23 @@ export function GenerateSplitButton({
                             ? dict.flows.generate.standardDesign
                             : dict.flows.generate.draftDesign}
                     </span>
+                    {/* The middle rung is the suggested default. */}
+                    {level === "standard" ? (
+                      <span className="quality-recommended shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold leading-none">
+                        {dict.flows.generate.recommended}
+                      </span>
+                    ) : null}
+                    </span>
                     <span className="truncate text-xs text-foreground/45">
                       {rowDesc}
                     </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-2.5">
                     {gated && gateTier ? (
-                      // Gated-tier pill - brand-blue, doubles as the upsell
-                      // affordance (click opens UpgradeModal).
-                      <span className="rounded-full bg-[var(--tq-purple)] px-2.5 py-1 text-[10px] font-semibold leading-none text-white">
+                      // Gated tier: gold crown + plan name, the same premium
+                      // mark as every other paid option (click upsells).
+                      <span className="badge-premium">
+                        <PremiumCrown size={12} />
                         {planLabel(dict.components.planUsage, gateTier)}
                       </span>
                     ) : null}
@@ -410,23 +421,30 @@ export function GenerateSplitButton({
                         shown number IS the held number. Shown for everyone
                         (it replaced the design chip as the row's key fact);
                         amber when the balance doesn't cover it. */}
-                    <span
-                      className={`min-w-16 text-end text-xs font-medium tabular-nums ${
-                        affordable
-                          ? "text-foreground/70"
-                          : "text-[var(--tq-status-warn-text)]"
-                      }`}
-                      dir="ltr"
-                    >
-                      {(slideCountUpTo
-                        ? dict.flows.generate.creditsEstimateUpTo
-                        : dict.flows.generate.creditsEstimate
-                      ).replace("{credits}", formatCredits(cost))}
+                    {/* Neutral colour: gold now means "premium", so the
+                        cost no longer turns amber when unaffordable; a
+                        muted line says so instead. */}
+                    <span className="flex min-w-16 flex-col items-end gap-0.5">
+                      <span
+                        className="text-end text-xs font-medium tabular-nums text-foreground/70"
+                        dir="ltr"
+                      >
+                        {(slideCountUpTo
+                          ? dict.flows.generate.creditsEstimateUpTo
+                          : dict.flows.generate.creditsEstimate
+                        ).replace("{credits}", formatCredits(cost))}
+                      </span>
+                      {!affordable ? (
+                        <span className="text-[10px] text-foreground/40">
+                          {dict.flows.generate.notEnoughCredits}
+                        </span>
+                      ) : null}
                     </span>
                   </span>
                 </button>
               );
             })}
+            </div>
           </motion.div>
         ) : null}
       </AnimatePresence>

@@ -103,6 +103,7 @@ import {
 } from "@/lib/images/slide-images";
 import { appendGenChat } from "@/lib/deck/genchat-store";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
+import { stripTextDashes } from "@/lib/deck/strip-dashes";
 
 const SETCONTENT_TIMEOUT_MS = 60_000;
 // A slide whose frozen render differs from its flow render by more than this
@@ -422,7 +423,11 @@ export const deckFreezeBake = inngest.createFunction(
             const Anthropic = (await import("@anthropic-ai/sdk")).default;
             const client = new Anthropic({ apiKey });
             const stream = client.messages.stream({
-              model: "claude-opus-4-8",
+              // Opus 5.5 (2026-10-02, was Opus 4.8): newer and 20% cheaper
+              // per token ($4/$20 vs $5/$25). Thinking is always on for
+              // this model (adaptive below) and effort is set explicitly,
+              // since Opus 5.5 defaults to medium rather than high.
+              model: "claude-opus-5-5",
               max_tokens: VISION_MAX_TOKENS,
               // summarized: the stream carries a user-readable reasoning
               // summary - relayed live into the GenChat feed below.
@@ -523,7 +528,8 @@ export const deckFreezeBake = inngest.createFunction(
                 if (!target) continue;
                 const slide = bySlideId.get(target.slideId);
                 if (!slide) continue;
-                const decl = parseFrameSlide(sec.html);
+                // The reviewer's rewrite gets the same dash cleanup.
+                const decl = parseFrameSlide(stripTextDashes(sec.html));
                 let html = assembleFramedSlide(decl, ctx, revises, dims);
                 // Re-wrap with the deck's scoped CSS: reuse the stored
                 // slide's own style content minus the frame armor

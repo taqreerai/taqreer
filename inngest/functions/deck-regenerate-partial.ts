@@ -48,6 +48,7 @@ import { recordSlidePartialRegen } from "@/lib/db/slide-versioning";
 import { appendGenChatEntries } from "@/lib/deck/genchat-store";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 import { fanOutNotification } from "@/lib/notifications/server";
+import { stripTextDashes } from "@/lib/deck/strip-dashes";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -927,7 +928,8 @@ export const deckRegeneratePartial = inngest.createFunction(
                 return "";
               },
             );
-            const decl = parseFrameSlide(noStyles);
+            // House style: no em/en dashes (lib/deck/strip-dashes.ts).
+            const decl = parseFrameSlide(stripTextDashes(noStyles));
             let assembled = assembleFramedSlide(
               decl,
               frameCtx!,

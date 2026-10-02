@@ -61,6 +61,7 @@ import {
 } from "@/lib/images/slide-images";
 import { genImageIdentityHash } from "@/lib/images/store";
 import { isAllowedProductRefUrl } from "@/lib/images/product-ref";
+import { stripTextDashes } from "@/lib/deck/strip-dashes";
 import {
   uploadFileToAnthropic,
   deleteFileFromAnthropic,
@@ -510,7 +511,7 @@ function readBriefThemeFont(brief: unknown): ThemeType["font"] {
   }
   const uploaded = fonts?.uploaded?.find((f) => f?.name)?.name;
   if (uploaded) return { name: uploaded };
-  return { name: "Noto Sans Arabic", url: googleFontUrl("Noto Sans Arabic") };
+  return { name: "Cairo", url: googleFontUrl("Cairo") };
 }
 
 // Build the create-HTML deck theme SERVER-SIDE (the model authors only section
@@ -2233,7 +2234,14 @@ export const deckGenerate = inngest.createFunction(
         // product-marked box at assembly below.
         const productImageUrl = readProductImageUrl(data);
 
-        const ingestSlide = (parsed: ParsedSlide) => {
+        const ingestSlide = (rawParsed: ParsedSlide) => {
+          // House style: no em/en dashes. Strip them in code before the slide
+          // is framed, streamed or reviewed, so the Opus review never spends a
+          // whole-slide rewrite on a dash (lib/deck/strip-dashes.ts).
+          const parsed: ParsedSlide = {
+            ...rawParsed,
+            html: stripTextDashes(rawParsed.html),
+          };
           // ── FRAME self-correction (data-revises) ── thinking mode re-emits
           // improved slides; the frame prompt's revision contract marks them
           // with data-revises="N" and this swaps the corrected slide IN PLACE
@@ -2469,6 +2477,56 @@ export const deckGenerate = inngest.createFunction(
             : undefined,
         );
 
+        // Usage telemetry for runs we stop ourselves (slide cap / cancel,
+        // 2026-10-02). A stream aborted mid-flight never reaches
+        // finalMessage(), so its usage was never recorded - every free deck
+        // (capped at the tier's slide limit) logged 0 tokens. message_start
+        // carries the real input + cache counts; output is only reported in
+        // the final message_delta, so for an aborted run we count the tokens
+        // of the text it actually streamed (recordAbortedUsage below).
+        let startUsage: {
+          input_tokens?: number | null;
+          cache_read_input_tokens?: number | null;
+          cache_creation_input_tokens?: number | null;
+        } | null = null;
+        stream.on("streamEvent", (event) => {
+          if (event.type === "message_start") startUsage = event.message.usage;
+        });
+        const recordAbortedUsage = async (reason: "capped" | "cancelled") => {
+          let outputTokens: number;
+          let outputSource: "count_tokens" | "char_estimate";
+          try {
+            // Exact token count of the streamed text, on the same model. The
+            // few framing tokens count_tokens adds are noise at deck size.
+            const counted = await client.messages.countTokens({
+              model: callParams.model,
+              messages: [{ role: "user", content: rawBuffer || " " }],
+            });
+            outputTokens = counted.input_tokens;
+            outputSource = "count_tokens";
+          } catch {
+            // Mixed Arabic/HTML runs ~3 chars per token; good enough as a
+            // fallback for cost tracking (never billing).
+            outputTokens = Math.ceil(rawBuffer.length / 3);
+            outputSource = "char_estimate";
+          }
+          usage.attempts += 1;
+          usage.inputTokens += startUsage?.input_tokens ?? 0;
+          usage.cacheReadTokens += startUsage?.cache_read_input_tokens ?? 0;
+          usage.cacheCreationTokens += startUsage?.cache_creation_input_tokens ?? 0;
+          usage.outputTokens += outputTokens;
+          logger.info("claude_usage", {
+            label: "create-html",
+            reason,
+            input: startUsage?.input_tokens ?? null,
+            output: outputTokens,
+            outputSource,
+            cache_read: startUsage?.cache_read_input_tokens ?? null,
+            cache_write: startUsage?.cache_creation_input_tokens ?? null,
+            slides: slides.length,
+          });
+        };
+
         stream.on("thinking", (_delta, snapshot) => {
           // display:"summarized" makes this snapshot the USER-READABLE
           // reasoning summary - feed it to the GenChat entry live. (The
@@ -2605,6 +2663,7 @@ export const deckGenerate = inngest.createFunction(
             // settle (charge == hold). The ingestSlide guard drops any
             // section flush() surfaces beyond the ceiling.
             for (const parsed of splitter.flush()) ingestSlide(parsed);
+            await recordAbortedUsage("capped");
             logger.info("deck_generate_capped_to_budget", {
               jobId,
               kept: slides.length,
@@ -2626,6 +2685,7 @@ export const deckGenerate = inngest.createFunction(
               });
               return { cancelled: true } as const;
             }
+            await recordAbortedUsage("cancelled");
             logger.info("deck_generate_cancelled_keep_partial", {
               jobId,
               kept: slides.length,

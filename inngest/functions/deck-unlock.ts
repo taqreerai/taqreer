@@ -43,6 +43,7 @@ import {
   parseFrameSlide,
 } from "@/lib/deck/frame";
 import { allocateNextVersionInTx, retryOnP2002 } from "@/lib/api/regen-helpers";
+import { stripTextDashes } from "@/lib/deck/strip-dashes";
 import {
   collectSeedableGenImages,
   neutralizeGenImages,
@@ -265,7 +266,8 @@ export const deckUnlock = inngest.createFunction(
           return "";
         },
       );
-      const decl = parseFrameSlide(noStyles);
+      // House style: no em/en dashes (lib/deck/strip-dashes.ts).
+      const decl = parseFrameSlide(stripTextDashes(noStyles));
       const assembled = assembleFramedSlide(decl, frameCtx, slideIndex, dims);
       const html = buildSlideHtml(
         assembled,

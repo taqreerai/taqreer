@@ -2260,6 +2260,26 @@ body:has(.tq-support-toolbar) .support-fab-anchor {
   border: 1px solid color-mix(in srgb, var(--tq-premium-gold) 55%, transparent);
 }
 
+/* Generation-quality menu (2026-10-01): each level is a card; the selected
+   one carries the brand-blue outline. The middle rung wears a small
+   "Recommended" chip in the accent. */
+.quality-option {
+  border: 1px solid transparent;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.quality-option:hover {
+  background: var(--tq-overlay-soft);
+}
+.quality-option.is-active {
+  border-color: var(--tq-brand-blue);
+  background: color-mix(in srgb, var(--tq-brand-blue) 8%, transparent);
+}
+.quality-recommended {
+  line-height: 1;
+  color: var(--tq-brand-blue);
+  background: color-mix(in srgb, var(--tq-brand-blue) 14%, transparent);
+}
+
 /* Toolbar help trigger (2026-10-01): brand-blue fill so it stands out from
    the muted sibling icons. Opens the help popover, never WhatsApp directly. */
 .support-toolbar-btn {

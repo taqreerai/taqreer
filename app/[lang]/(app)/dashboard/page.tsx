@@ -181,7 +181,7 @@ export default async function DashboardPage({
           name:
             typeof fontHeading.name === "string"
               ? fontHeading.name
-              : "Noto Sans Arabic",
+              : "Cairo",
           url: typeof fontHeading.url === "string" ? fontHeading.url : undefined,
         },
         format: typeof brand.format === "string" ? brand.format : "16:9",

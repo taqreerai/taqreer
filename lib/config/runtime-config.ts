@@ -66,10 +66,10 @@ export type TierConfigRow = {
 // Fable keeps its 960/72 study price. Fable requires thinking on (the API
 // rejects thinking:disabled for Fable). Sonnet maxTokens 64000; Opus/Fable 128000.
 export const SEED_PRESETS: readonly PresetConfig[] = [
-  { key: "sonnet-fast",   label: "Sonnet 5", model: "claude-sonnet-5", thinking: false, effort: null,     maxTokens: 64000,  baseCredits: 160, perSlideCredits: 27, secsPerSlide: 6,  baseOverheadSecs: 20, active: true,  sortOrder: 0 },
-  { key: "opus-fast",     label: "Opus 4.8", model: "claude-opus-4-8", thinking: false, effort: null,     maxTokens: 128000, baseCredits: 460, perSlideCredits: 34, secsPerSlide: 8,  baseOverheadSecs: 25, active: true,  sortOrder: 1 },
+  { key: "sonnet-fast",   label: "Sonnet 5.5", model: "claude-sonnet-5-5", thinking: false, effort: null,     maxTokens: 64000,  baseCredits: 160, perSlideCredits: 27, secsPerSlide: 6,  baseOverheadSecs: 20, active: true,  sortOrder: 0 },
+  { key: "opus-fast",     label: "Opus 5.5", model: "claude-opus-5-5", thinking: false, effort: null,     maxTokens: 128000, baseCredits: 460, perSlideCredits: 34, secsPerSlide: 8,  baseOverheadSecs: 25, active: true,  sortOrder: 1 },
   { key: "opus-balanced", label: "Opus 4.8", model: "claude-opus-4-8", thinking: true,  effort: "low",    maxTokens: 128000, baseCredits: 660, perSlideCredits: 42, secsPerSlide: 25, baseOverheadSecs: 60, active: true,  sortOrder: 2 },
-  { key: "fable-low",     label: "Fable 5",  model: "claude-fable-5",  thinking: true,  effort: "low",    maxTokens: 128000, baseCredits: 960, perSlideCredits: 72, secsPerSlide: 20, baseOverheadSecs: 45, active: true,  sortOrder: 3 },
+  { key: "fable-low",     label: "Fable 5.1",  model: "claude-fable-5-1",  thinking: true,  effort: "low",    maxTokens: 128000, baseCredits: 960, perSlideCredits: 72, secsPerSlide: 20, baseOverheadSecs: 45, active: true,  sortOrder: 3 },
   { key: "opus-medium",   label: "Opus 4.8", model: "claude-opus-4-8", thinking: true,  effort: "medium", maxTokens: 128000, baseCredits: 660, perSlideCredits: 42, secsPerSlide: 25, baseOverheadSecs: 60, active: false, sortOrder: 4 },
 ];
 
