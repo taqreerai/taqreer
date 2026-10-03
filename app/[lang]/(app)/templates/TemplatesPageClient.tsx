@@ -37,7 +37,8 @@ import {
   prepareTemplateUse,
   isPremiumGate,
 } from "@/lib/mimic/template-seed";
-import { UpgradeModal } from "@/components/billing/UpgradeModal";
+import { TemplateUpgradeModal, type TemplateGate } from "@/components/app/TemplateUpgradeModal";
+import { useTemplateLock } from "@/lib/templates/use-template-lock";
 import type { SlideFormat } from "@/lib/schema/slide";
 import type { TemplateForBrowse } from "./types";
 
@@ -83,7 +84,10 @@ export function TemplatesPageClient({
   const [useBusy, setUseBusy] = useState(false);
   // Premium-template gate (402): open the upgrade modal in place over the
   // lightbox instead of navigating away, so the user keeps their context.
-  const [gateOpen, setGateOpen] = useState(false);
+  // Template gate (2026-10-02): the plan's template flow or the premium
+  // tier, checked BEFORE preparing the template (lib/templates/use-template-lock).
+  const [gate, setGate] = useState<TemplateGate>(null);
+  const { lockFor, isPremiumLock } = useTemplateLock();
   // Multi-select to delete (own templates only, 2026-06-12).
   const router = useRouter();
   const sel = useMultiSelect();
@@ -93,6 +97,11 @@ export function TemplatesPageClient({
 
   const handleUseTemplate = async () => {
     if (!preview || useBusy) return;
+    const tier = lockFor(preview);
+    if (tier) {
+      setGate({ tier, premium: isPremiumLock(preview) });
+      return;
+    }
     setUseBusy(true);
     try {
       // Prepare the Mimic reference while the lightbox CTA shows its
@@ -104,7 +113,7 @@ export function TemplatesPageClient({
       // 402 = premium template, user isn't on Pro → upgrade in place
       // (modal stacks over the lightbox; their journey is preserved).
       if (isPremiumGate(err)) {
-        setGateOpen(true);
+        setGate({ tier: "pro", premium: true });
         setUseBusy(false);
         return;
       }
@@ -345,11 +354,7 @@ export function TemplatesPageClient({
         onUseTemplate={preview ? handleUseTemplate : undefined}
         useBusy={useBusy}
       />
-      <UpgradeModal
-        open={gateOpen}
-        requiredTier="pro"
-        onClose={() => setGateOpen(false)}
-      />
+      <TemplateUpgradeModal gate={gate} onClose={() => setGate(null)} />
     </>
   );
 }

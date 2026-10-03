@@ -145,6 +145,7 @@ export default async function DashboardPage({
         isPublic: true,
         reviewStatus: true,
         isPremium: true,
+        isFree: true,
       },
     }),
   ]);
@@ -166,6 +167,7 @@ export default async function DashboardPage({
       isPublic: t.isPublic,
       reviewStatus: t.reviewStatus,
       isPremium: t.isPremium,
+      isFree: t.isFree,
       thumbnailUrls: t.thumbnailUrls,
       // Drives the auto-refresh hook so a saved template's PNGs appear without
       // a manual reload once Inngest finishes rendering.

@@ -25,6 +25,7 @@ import { TemplateActionsMenu } from "@/components/app/TemplateActionsMenu";
 import { TemplateDeleteConfirmDialog } from "@/components/app/TemplateDeleteConfirmDialog";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
 import { PremiumBadge } from "@/components/app/PremiumBadge";
+import { useTemplateLock } from "@/lib/templates/use-template-lock";
 import { ScrubCounter } from "@/components/app/ScrubCounter";
 import { prepareTemplateUse } from "@/lib/mimic/template-seed";
 import { useSlideScrub } from "@/lib/hooks/useSlideScrub";
@@ -61,6 +62,9 @@ export type TemplateTileData = {
   // Premium templates show the "مميز" badge. Optional so callers that
   // don't carry it compile; the use-gate itself is enforced server-side.
   isPremium?: boolean;
+  // Curator free-plan template (Template.isFree): the one kind a free plan
+  // may generate with. Drives the lock crown / "free" badge below.
+  isFree?: boolean;
 };
 
 export function TemplateTile({
@@ -136,7 +140,14 @@ export function TemplateTile({
     }
   };
 
-  const { brand, isMine, id, thumbnailUrls, isPremium } = template;
+  const { brand, isMine, id, thumbnailUrls, isPremium, isFree } = template;
+  // Plan gate shown up front (2026-10-02): every template this viewer's plan
+  // can't generate with wears the same gold "premium" badge as premium
+  // templates (owner direction: free users must see at a glance which ones
+  // are paid); the free-plan ones get a "free" badge instead.
+  const { lockFor, flowLocked } = useTemplateLock();
+  const showPremium = !!isPremium || lockFor(template) != null;
+  const freeBadge = flowLocked && !!isFree;
   // Admins manage every tile (delete any user's template); owners manage
   // their own. Drives whether the 3-dots trigger + menu render at all.
   const canManage = isMine || viewerIsAdmin;
@@ -289,8 +300,12 @@ export function TemplateTile({
       ) : null}
 
       {/* Premium marker — top-start corner. */}
-      {isPremium ? (
+      {showPremium ? (
         <PremiumBadge className="pointer-events-none absolute top-2 start-2 z-10" />
+      ) : freeBadge ? (
+        <span className="pointer-events-none absolute top-2 start-2 z-10 rounded-full bg-[var(--tq-brand-blue)] px-2 py-0.5 text-[11px] font-semibold text-white">
+          {dict.flows.design.freeBadge}
+        </span>
       ) : null}
 
       {/* "Under review" chip — only on the owner's own template while its

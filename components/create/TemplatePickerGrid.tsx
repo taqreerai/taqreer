@@ -18,10 +18,10 @@
 
 import { useEffect, useState } from "react";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
-import { UpgradeModal } from "@/components/billing/UpgradeModal";
-import { PremiumCrown } from "@/components/billing/PremiumCrown";
-import { useCreditBalance, useFlowUnlockTier } from "@/lib/credits/store";
-import { isProPlan, normalizePlan, planLabel, type KnownPlan } from "@/lib/plan";
+import { TemplateUpgradeModal, type TemplateGate } from "@/components/app/TemplateUpgradeModal";
+import { useTemplateLock } from "@/lib/templates/use-template-lock";
+import { PremiumBadge } from "@/components/app/PremiumBadge";
+import type { KnownPlan } from "@/lib/plan";
 import {
   fetchUse,
   isPremiumGate,
@@ -47,12 +47,11 @@ export function TemplatePickerGrid({
   const dict = useDict();
   const { locale } = useLocale();
   const t = dict.flows.design;
-  const credits = useCreditBalance();
-  const flowTier = useFlowUnlockTier("mimic");
+  const { lockFor, isPremiumLock, flowLocked } = useTemplateLock();
   const [templates, setTemplates] = useState<PickerTemplate[] | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [error, setError] = useState(false);
-  const [gate, setGate] = useState<{ tier: KnownPlan; title: string; body: string } | null>(null);
+  const [gate, setGate] = useState<TemplateGate>(null);
 
   useEffect(() => {
     let aborted = false;
@@ -71,29 +70,13 @@ export function TemplatePickerGrid({
     };
   }, []);
 
-  const premiumLocked = (tpl: PickerTemplate) =>
-    tpl.isPremium && !tpl.isMine && !credits?.isAdmin && !isProPlan(credits?.plan);
-  const lockFor = (tpl: PickerTemplate): KnownPlan | null =>
-    flowTier && !tpl.isFree
-      ? normalizePlan(flowTier)
-      : premiumLocked(tpl)
-        ? "pro"
-        : null;
-
-  const openGate = (tier: KnownPlan, premium: boolean) => {
-    const label = planLabel(dict.components.planUsage, tier);
-    setGate({
-      tier,
-      title: (premium ? t.premiumTitle : t.lockedTitle).replace("{tier}", label),
-      body: (premium ? t.premiumBody : t.lockedBody).replace("{tier}", label),
-    });
-  };
+  const openGate = (tier: KnownPlan, premium: boolean) => setGate({ tier, premium });
 
   const pick = async (tpl: PickerTemplate) => {
     if (loadingId) return;
     const tier = lockFor(tpl);
     if (tier) {
-      openGate(tier, tier === "pro" && premiumLocked(tpl));
+      openGate(tier, isPremiumLock(tpl));
       return;
     }
     if (selectedId === tpl.id) {
@@ -147,11 +130,9 @@ export function TemplatePickerGrid({
             </span>
           ) : null}
           {locked ? (
-            <span className="absolute end-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/65">
-              <PremiumCrown size={12} />
-            </span>
+            <PremiumBadge className="pointer-events-none absolute end-1 top-1 scale-90" />
           ) : null}
-          {flowTier && tpl.isFree ? (
+          {flowLocked && tpl.isFree ? (
             <span className="absolute end-1 top-1 rounded-full bg-[var(--tq-brand-blue)] px-1.5 py-0.5 text-[9px] font-semibold text-white">
               {t.freeBadge}
             </span>
@@ -205,12 +186,7 @@ export function TemplatePickerGrid({
         </span>
       ) : null}
 
-      <UpgradeModal
-        open={gate != null}
-        requiredTier={gate?.tier ?? null}
-        gateContext={gate ? { title: gate.title, body: gate.body } : null}
-        onClose={() => setGate(null)}
-      />
+      <TemplateUpgradeModal gate={gate} onClose={() => setGate(null)} />
     </div>
   );
 }

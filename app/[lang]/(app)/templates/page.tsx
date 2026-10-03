@@ -60,6 +60,7 @@ export default async function TemplatesPage({
     // Moderation state — drives the owner's menu label + "under review" chip.
     reviewStatus: true,
     isPremium: true,
+    isFree: true,
     createdAt: true,
   } as const;
 
@@ -107,6 +108,7 @@ function narrow(
     isPublic: boolean;
     reviewStatus: "PRIVATE" | "PENDING" | "APPROVED";
     isPremium: boolean;
+    isFree: boolean;
   },
   isMine: boolean,
 ): TemplateForBrowse {
@@ -119,6 +121,7 @@ function narrow(
     isPublic: row.isPublic,
     reviewStatus: row.reviewStatus,
     isPremium: row.isPremium,
+    isFree: row.isFree,
     // Pending = row exists but the Inngest showcase-render hasn't
     // produced the 4 PNGs yet. Drives auto-refresh on the client.
     thumbnailsPending: row.thumbnailUrls.length === 0,
