@@ -8,11 +8,12 @@
 // Both are PARENT-DOCUMENT chrome (never inside the editor iframe's
 // <section>, never in slideJson): no layer row, can't be selected, edited or
 // deleted, and they vanish when the deck owner upgrades (load-project
-// `brandingWatermark`). Clicking the badge or the closing slide upsells.
+// `brandingWatermark`). Clicking the badge or the closing slide opens the
+// small upsell popover (WatermarkUpsellPopover).
 
 import { useEffect, useRef, useState } from "react";
 import { useDict } from "@/components/i18n/LocaleProvider";
-import { UpgradeModal } from "@/components/billing/UpgradeModal";
+import { WatermarkUpsellPopover } from "@/components/billing/WatermarkUpsellPopover";
 import {
   CAIRO_CSS_URL,
   closingSlideHtml,
@@ -75,21 +76,13 @@ function ScaledSlideHtml({
   );
 }
 
-function useUpgrade() {
+// Clicking the badge or the closing slide opens the small upsell popover next
+// to it (WatermarkUpsellPopover), not the full plans modal.
+function useUpsell() {
   const dict = useDict();
-  const [open, setOpen] = useState(false);
-  const modal = (
-    <UpgradeModal
-      open={open}
-      requiredTier="plus"
-      gateContext={{
-        title: dict.components.creditGate.watermarkTitle,
-        body: dict.components.creditGate.watermarkBody,
-      }}
-      onClose={() => setOpen(false)}
-    />
-  );
-  return { openUpgrade: () => setOpen(true), modal, title: dict.components.creditGate.watermarkTitle };
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
+  const popover = <WatermarkUpsellPopover anchor={anchor} onClose={() => setAnchor(null)} />;
+  return { open: setAnchor, popover, title: dict.components.creditGate.watermarkTitle };
 }
 
 /**
@@ -107,19 +100,35 @@ export function FreeWatermarkLayer({
   cover?: boolean;
 }) {
   useCairo();
-  const { openUpgrade, modal, title } = useUpgrade();
+  const { open, popover, title } = useUpsell();
+  const layerRef = useRef<HTMLDivElement>(null);
+  // Hit-test the badge by POSITION in a capture-phase listener (2026-10-03):
+  // in the editor, overlays painted after this layer (selection / drag
+  // surfaces) can swallow a plain click even though the badge is visible, so
+  // a click inside the badge's rect is claimed here before anything else.
+  useEffect(() => {
+    const onDown = (e: PointerEvent) => {
+      const badge = layerRef.current?.querySelector<HTMLElement>("[data-tq-badge]");
+      if (!badge) return;
+      const r = badge.getBoundingClientRect();
+      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
+      e.preventDefault();
+      e.stopPropagation();
+      open(r);
+    };
+    window.addEventListener("pointerdown", onDown, true);
+    return () => window.removeEventListener("pointerdown", onDown, true);
+  }, [open]);
   return (
     <>
       <div
+        ref={layerRef}
         className="tq-free-wm pointer-events-none absolute inset-0 z-30"
         title={title}
-        onClick={(e) => {
-          if ((e.target as HTMLElement).closest("[data-tq-badge]")) openUpgrade();
-        }}
       >
         <ScaledSlideHtml html={watermarkHtml(lang, dims, { cover })} dims={dims} />
       </div>
-      {modal}
+      {popover}
     </>
   );
 }
@@ -135,17 +144,25 @@ export function BrandedClosingSlide({
   interactive?: boolean;
 }) {
   useCairo();
-  const { openUpgrade, modal, title } = useUpgrade();
+  const { open, popover, title } = useUpsell();
   return (
     <>
       <div
         className={`absolute inset-0 ${interactive ? "cursor-pointer" : ""}`}
         title={interactive ? title : undefined}
-        onClick={interactive ? openUpgrade : undefined}
+        onClick={
+          interactive
+            ? (e) => {
+                // Anchor on the click point so the popover opens where the
+                // user looked, not on the whole slide's edge.
+                open(new DOMRect(e.clientX, e.clientY, 0, 0));
+              }
+            : undefined
+        }
       >
         <ScaledSlideHtml html={closingSlideHtml(lang, dims)} dims={dims} />
       </div>
-      {interactive ? modal : null}
+      {interactive ? popover : null}
     </>
   );
 }

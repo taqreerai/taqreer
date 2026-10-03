@@ -1402,6 +1402,21 @@ html.app-shell-scroll body {
   pointer-events: auto;
   cursor: pointer;
 }
+.tq-free-wm [data-tq-badge]:hover {
+  filter: brightness(1.15);
+}
+/* Watermark upsell popover (WatermarkUpsellPopover): the one brand-blue CTA. */
+.wm-upsell-cta {
+  background: var(--tq-brand-blue);
+  color: #fff;
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+.wm-upsell-cta:hover {
+  filter: brightness(1.1);
+}
+.wm-upsell-cta:active {
+  transform: scale(0.98);
+}
 
 /* ─── Teaser paywall locked slide ────────────────────────────────────
    Free-tier conversion: the last N slides of a free deck are WITHHELD (never
