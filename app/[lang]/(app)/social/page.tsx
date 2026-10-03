@@ -71,7 +71,6 @@ import {
 import { SocialFormatFields } from "@/components/social/SocialFormatFields";
 import { PremiumCrown } from "@/components/billing/PremiumCrown";
 import { LockedFlowBanner } from "@/components/billing/LockedFlowBanner";
-import { SlideCapHint } from "@/components/billing/SlideCapHint";
 
 const MIN_PALETTE = 2;
 const MAX_PALETTE = 6;
@@ -768,8 +767,6 @@ export default function SocialPage() {
                   </AnimatePresence>
                 </motion.div>
               </div>
-              {/* Free plan: the slide cap stated up front, not a silent clamp. */}
-              <SlideCapHint className="mt-1.5" />
             </div>
 
             {/* Images toggle moved to the CONTENT card 2026-08-03 (same as

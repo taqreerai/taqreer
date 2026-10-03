@@ -1,30 +1,19 @@
 "use client";
 
-// Phase 17.C — Single-shot Mimic flow (3-card redesign 2026-05-25).
+// Phase 17.C - "Your own template" (internal name: mimic), a 3-step wizard.
 //
-// Layout (RTL — DOM-first appears visual-right):
-//   1. CONTENT card (visual right): textarea XOR file dropzone +
-//      the slide-size (ratio) picker. The logo moved to the branding
-//      card (2026-06-01); the ratio moved here from the branding card
-//      so the branding card matches the other flows' height.
-//   2. BRANDING card (visual middle): a 1:1 replica of /create's
-//      consolidated brand card — saved-kit dropdown in the header,
-//      palette swatches (compact ColorPickerPopover), a single
-//      BrandFontPicker (one family, Claude varies weights), the logo
-//      row (logo + position), and a save-as-default toggle. Always
-//      shown — the old "mimic branding" toggle was removed (2026-05-29)
-//      so users always supply their own brand (pre-filled from the
-//      chosen template / default brand kit when available).
-//   3. WHAT TO MIMIC card (visual left): drop-zone for the design
-//      reference file. Wrapped in `.canvas-gradient-border` with
-//      `data-active="true"` so it carries the animated mesh halo
-//      (visual cue: "this is the file whose design we're copying").
+//   1. CONTENT + REFERENCE card: the content (textarea XOR file) and the
+//      design-reference file, each in its OWN framed panel with a title,
+//      a one-line hint and its own icon, so the two uploads read as two
+//      separate inputs ("one is for my content, the other for the look").
+//   2. BRAND card: a 1:1 replica of /create's brand card (saved-kit
+//      dropdown, palette, BrandFontPicker, logo, save-as-default).
+//   3. SETTINGS card: slide size + slide count, the AI-images toggle and
+//      the optional design instructions, then Generate.
 //
-// Card sizing:
-//   • Each card uses a fixed width (CARD_W_CLASS, 360 px) to match
-//     /enhance's card width; the row is always 3 × that width.
-//   • Row uses `justify-center` to keep the trio centered and
-//     `items-stretch` to equalize the three cards to the tallest.
+// All cards share one grid cell at a fixed width (CARD_W_CLASS), so each
+// takes the tallest card's height; one flex-1 element per card absorbs the
+// spare height (content textarea / logo zone / instructions textarea).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -90,7 +79,6 @@ import {
 } from "@/lib/create/hydrate-brand-from-session";
 import type { MimicTemplateSeed } from "@/lib/mimic/template-seed";
 import { LockedFlowBanner } from "@/components/billing/LockedFlowBanner";
-import { SlideCapHint } from "@/components/billing/SlideCapHint";
 
 const POLL_INTERVAL_MS = 2_500;
 const POLL_TIMEOUT_MS = 5 * 60 * 1_000;
@@ -384,8 +372,8 @@ export default function MimicFlow({
   };
 
   // ─── Submit-level state ────────────────────────────────────────
-  // Wizard step (2026-08-30, user direction, mirrors /create): 0 Content,
-  // 1 Brand, 2 Reference + Generate. Cards stay MOUNTED (single-cell
+  // Wizard step: 0 Content + design reference, 1 Brand, 2 Slide size +
+  // count, AI images, instructions + Generate. Cards stay MOUNTED (single-cell
   // grid, `invisible` when inactive) so heights stay constant and both
   // extraction pipelines keep their live DOM across steps. Template mode
   // (/use-template) walks the same steps with the reference preset.
@@ -893,23 +881,26 @@ export default function MimicFlow({
 
         <WizardStepRail
           steps={[
-            dict.flows.contentCard,
+            dict.flows.mimic.stepFiles,
             dict.flows.brandCard,
-            dict.flows.mimic.whatToMimic,
+            dict.flows.mimic.stepSettings,
           ]}
           active={step}
           onJump={setStep}
         />
 
-        {/* Wizard column (was a wrapping 3-across row until 2026-08-30):
-            all three cards share ONE grid cell; inactive cards are
-            `invisible` (not display:none) so the stack keeps the tallest
-            card's height at every step and both file pipelines keep
-            their live DOM. */}
+        {/* Wizard column (3 steps): 1 content + design reference, each in
+            its own framed panel so the two uploads read as two separate
+            things; 2 brand; 3 slide size + count, AI images, instructions
+            and Generate. All cards share ONE grid cell, so every card takes
+            the tallest card's height (the inactive ones are `invisible`, not
+            display:none, which also keeps both file pipelines' live DOM);
+            each card has one flex-1 element that absorbs the spare height,
+            so no card shows dead space. */}
         <div className="flex w-full flex-col items-center gap-4">
           <div className="grid w-full justify-items-center">
           {/* ═══════════════════════════════════════════════════════
-              CONTENT CARD (DOM 1st, visual right)
+              STEP 1: CONTENT + DESIGN REFERENCE
               ═══════════════════════════════════════════════════════ */}
           <motion.div
             layout
@@ -924,120 +915,127 @@ export default function MimicFlow({
               className="hidden"
               onChange={(event) => setContentFromInput(event.target.files?.[0])}
             />
-
-            <CardHeader icon="subject" title={dict.flows.contentCard} />
-
-            {/* Verbatim promise: the content is used as-is in its own
-                language; the design file governs only the look. Sets the
-                expectation that mimic never translates or reflows the
-                content into the reference's structure (owner direction
-                2026-07-11). */}
-            <p className="text-muted -mt-1 mb-1 text-[11px] leading-snug">
-              {dict.flows.mimicVerbatimNote}
-            </p>
-
-            {/* Textarea — primary content input. Disabled while a
-                file is picked; the two are mutually exclusive.
-                Direction follows the same rule /create uses (default
-                RTL since the Arabic-first product expects Arabic by
-                default, flip to LTR for English). /create binds this
-                to its explicit LanguagePills pick; /mimic has no
-                picker, so we drive it from the live `detectString
-                Language(contentText)` heuristic — typing Arabic keeps
-                it RTL, typing English flips to LTR, empty / weak
-                signal falls back to RTL. Same `.input-dark` class as
-                /create so the field reads as part of the same family
-                across flows. */}
-            <textarea
-              value={contentText}
-              onChange={(event) => {
-                const next = event.target.value;
-                setContentText(next);
-                if (next.length > 0 && contentFile) removeContentFile();
-              }}
-              placeholder={dict.flows.contentPlaceholder}
-              rows={2}
-              dir={detectStringLanguage(contentText) === "en" ? "ltr" : "rtl"}
-              // Mirrors the server's content.text 400 cap in
-              // /api/projects (brief-limits.ts).
-              maxLength={MAX_CONTENT_TEXT_CHARS}
-              disabled={submitting || !!contentFile}
-              // flex-1 grows the textarea into whatever vertical space
-              // is left over once the dropzone area and bottom row
-              // claim their natural heights. With CARD_MIN_H = 387 px
-              // pinning the card, the leftover (≈100 px in empty
-              // state) becomes usable typing area instead of dead
-              // whitespace below the textarea.
-              className="input-dark min-h-[60px] flex-1 resize-none leading-6 disabled:cursor-not-allowed disabled:opacity-50"
+            <input
+              ref={designInputRef}
+              type="file"
+              accept=".pdf,.pptx,.ppt,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-powerpoint"
+              className="hidden"
+              onChange={(event) => setDesignFromInput(event.target.files?.[0])}
             />
 
-            {/* File dropzone — always rendered. Conditionally dimmed
-                (not hidden) when the textarea has content so the
-                card height stays constant. Unmounting the dropzone
-                shrank the card on text entry, which triggered the
-                `layout` motion on the flanking cards and produced a
-                sympathetic re-layout animation on every keystroke
-                that crossed the empty/non-empty boundary. Dimming +
-                pointer-events:none keeps the silhouette stable while
-                still communicating "locked" — the textarea is the
-                active input now. `aria-hidden` keeps the dropzone
-                out of the assistive-tech tab order when locked. */}
-            <div
-              className={`flex flex-col gap-3 transition-opacity duration-200 ${
-                contentTextReady ? "opacity-40" : ""
-              }`}
-              // `inert` (not just aria-hidden) when the textarea is in use:
-              // removes the dropzone's focusable controls from the tab order
-              // AND blocks pointer events AND hides it from AT — aria-hidden
-              // alone left the inner button keyboard-focusable. Gate on the
-              // SAME trimmed predicate generation uses (contentTextReady), so
-              // whitespace-only input doesn't lock a dropzone that submit
-              // still treats as empty.
-              inert={contentTextReady}
-            >
-              <div className="flex items-center gap-2 text-[11px] text-foreground/40">
-                <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
-                <span>{dict.flows.or}</span>
-                <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
+            <CardHeader icon="upload_file" title={dict.flows.mimic.stepFiles} />
+
+            {/* ── Panel 1, your content: text XOR file. Framed (like panel
+                2) so the two uploads read as two separate inputs; flex-1 +
+                the textarea's flex-1 absorb the card's spare height. ── */}
+            <section className="flex flex-1 flex-col gap-2 rounded-xl border border-[var(--tq-border-hairline)] p-3">
+              <UploadSectionTitle
+                icon="article"
+                title={dict.flows.mimic.contentTitle}
+                hint={dict.flows.mimic.contentHint}
+              />
+              {/* Textarea direction follows the live detectStringLanguage
+                  heuristic (/mimic has no language picker): Arabic or a
+                  weak signal keeps RTL, English flips to LTR. */}
+              <textarea
+                value={contentText}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setContentText(next);
+                  if (next.length > 0 && contentFile) removeContentFile();
+                }}
+                placeholder={dict.flows.contentPlaceholder}
+                rows={3}
+                dir={detectStringLanguage(contentText) === "en" ? "ltr" : "rtl"}
+                // Mirrors the server's content.text 400 cap in
+                // /api/projects (brief-limits.ts).
+                maxLength={MAX_CONTENT_TEXT_CHARS}
+                disabled={submitting || !!contentFile}
+                className="input-dark min-h-[84px] flex-1 resize-none leading-6 disabled:cursor-not-allowed disabled:opacity-50"
+              />
+              {/* Dimmed + `inert` (not unmounted) while the textarea is in
+                  use, so the card height stays constant and the dropzone
+                  leaves the tab order. Gated on the same trimmed predicate
+                  generation uses (contentTextReady). */}
+              <div
+                className={`flex flex-col gap-2 transition-opacity duration-200 ${
+                  contentTextReady ? "opacity-40" : ""
+                }`}
+                inert={contentTextReady}
+              >
+                <div className="flex items-center gap-2 text-[11px] text-foreground/40">
+                  <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
+                  <span>{dict.flows.or}</span>
+                  <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
+                </div>
+                <FileDropzone
+                  file={contentFile}
+                  stage={contentStage}
+                  submitting={submitting}
+                  dragging={contentDragging}
+                  setDragging={setContentDragging}
+                  onOpen={() => contentInputRef.current?.click()}
+                  onDrop={(f) => setContentFromInput(f)}
+                  onRemove={removeContentFile}
+                  rejected={contentOverCap}
+                  rejectedReason={overCapMessage}
+                  emptyIcon="article"
+                  emptyTitle={dict.flows.mimic.contentDrop}
+                  horizontal
+                />
               </div>
-              <FileDropzone
-                file={contentFile}
-                stage={contentStage}
-                submitting={submitting}
-                dragging={contentDragging}
-                setDragging={setContentDragging}
-                onOpen={() => contentInputRef.current?.click()}
-                onDrop={(f) => setContentFromInput(f)}
-                onRemove={removeContentFile}
-                rejected={contentOverCap}
-                rejectedReason={overCapMessage}
-                horizontal
-              />
-            </div>
+            </section>
 
-            {/* Slide size (ratio) — lives in the content card so the
-                branding card matches the other flows' height. */}
-            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
-              <SlideSizeFields
-                slideSize={slideSize}
-                onSlideSize={setSlideSize}
+            {/* ── Panel 2, design reference: the deck whose look we copy ── */}
+            <section className="flex flex-col gap-2 rounded-xl border border-[var(--tq-border-hairline)] p-3">
+              <UploadSectionTitle
+                icon="auto_awesome"
+                title={dict.flows.mimic.referenceTitle}
+                hint={dict.flows.mimic.referenceHint}
               />
-            </div>
+              {isTemplate ? (
+                // Template mode: the reference is the chosen template
+                // (locked, no upload). Same row shape as the dropzone's
+                // ready state, non-interactive.
+                <div className="flex min-h-[44px] w-full items-center gap-3 rounded-xl border border-dashed border-foreground/20 bg-overlay-soft p-2.5 text-start">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--tq-surface)]">
+                    <span
+                      className="material-symbols-outlined text-emerald-300"
+                      style={{ fontSize: 18 }}
+                    >
+                      check_circle
+                    </span>
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-foreground">
+                      {templateSeed!.title?.trim() || dict.flows.mimic.templateReady}
+                    </p>
+                    <p className="mt-0.5 truncate text-xs text-foreground/60">
+                      {dict.flows.mimic.templateSelected}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <FileDropzone
+                  file={designFile}
+                  stage={designStage}
+                  submitting={submitting}
+                  dragging={designDragging}
+                  setDragging={setDesignDragging}
+                  onOpen={() => designInputRef.current?.click()}
+                  onDrop={(f) => setDesignFromInput(f)}
+                  onRemove={removeDesignFile}
+                  emptyIcon="auto_awesome"
+                  emptyTitle={dict.flows.mimic.referenceDrop}
+                  horizontal
+                />
+              )}
+            </section>
 
-            {/* Generate-images toggle — inside the content card, same as
-                /create and /social (owner direction 2026-08-03). Plus+
-                gated inside the panel itself. */}
-            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
-              <AIImagesPanel
-                value={imagesMode}
-                onChange={setImagesMode}
-                disabled={submitting}
-              />
-            </div>
           </motion.div>
 
           {/* ═══════════════════════════════════════════════════════
-              BRANDING CARD (DOM 2nd, visual middle — always shown)
+              STEP 2: BRAND IDENTITY
               ═══════════════════════════════════════════════════════ */}
           <motion.div
             layout
@@ -1150,9 +1148,8 @@ export default function MimicFlow({
                     />
                   </div>
 
-                  {/* Save brand kit — the logo section's flex-1 pushes this
-                      to the bottom, so no mt-auto (it would eat the slack
-                      and stop the logo zone from growing). */}
+                  {/* Save brand kit: closes the brand group (the logo
+                      section's flex-1 absorbs any spare height). */}
                   <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-hairline)] pt-2">
                     <span className="text-xs font-semibold text-foreground/70">
                       {dict.flows.saveAsDefault}
@@ -1163,149 +1160,83 @@ export default function MimicFlow({
                       onChange={setSaveBrandKit}
                     />
                   </div>
+
                 </div>
           </motion.div>
 
           {/* ═══════════════════════════════════════════════════════
-              WHAT TO MIMIC CARD (DOM 3rd, visual left)
-              Animated gradient halo around the design-reference drop.
+              STEP 3: SLIDE SIZE + COUNT, AI IMAGES, INSTRUCTIONS
               ═══════════════════════════════════════════════════════ */}
           <motion.div
             layout
             transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
-            className={`${step === 2 ? "" : "invisible"} col-start-1 row-start-1 ${CARD_W_CLASS} ${CARD_MIN_H_CLASS}`}
+            className={`surface-card ${step === 2 ? "" : "invisible"} col-start-1 row-start-1 flex ${CARD_W_CLASS} ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
-            <div
-              className="canvas-gradient-border gradient-ring-2xl surface-card flex h-full w-full flex-col gap-4 rounded-2xl p-4"
-              data-active="true"
-            >
-              <input
-                ref={designInputRef}
-                type="file"
-                accept=".pdf,.pptx,.ppt,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-powerpoint"
-                className="hidden"
-                onChange={(event) =>
-                  setDesignFromInput(event.target.files?.[0])
-                }
-              />
-
-              <CardHeader icon="auto_awesome" title={dict.flows.mimic.whatToMimic} />
-
-              {/* Slide count — unified with /create's animated layout
-                  (2026-05-26, user direction "use the one at create
-                  on mimic, same animation and layout"):
-                    • Label pinned to the right edge (DOM-first in
-                      RTL via justify-between).
-                    • Controls cluster on the left: SegmentedToggle
-                      + AnimatePresence-wrapped InlineStepper.
-                    • `layout` on the controls container FLIPs the
-                      SegmentedToggle's position when the stepper
-                      mounts/unmounts so the toggle slides smoothly
-                      to make room — no pop-in.
-                    • Inner motion.div animates width + opacity +
-                      marginInlineStart with a spring (stiffness 500,
-                      damping 35) matching the SegmentedToggle's
-                      indicator spring. */}
-              <div className="flex min-h-[24px] items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-foreground/70">
-                  {dict.flows.slideCount}
-                </span>
-                <motion.div
-                  layout
-                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                  className="flex items-center gap-1.5"
-                >
-                  <SegmentedToggle
-                    options={slideCountOptions}
-                    value={slideCountMode}
-                    onChange={setSlideCountMode}
-                    ariaLabel={dict.flows.slideCount}
-                  />
-                  <AnimatePresence initial={false}>
-                    {slideCountMode === "custom" ? (
-                      <motion.div
-                        key="slide-count-stepper"
-                        // Fixed width (66 px = stepper natural size:
-                        // 20 + 24 + 20 + 2 px border) avoids the
-                        // framer-motion `auto`-to-numeric jump that
-                        // shows up as a 1-frame snap at the end of
-                        // the spring. marginInlineStart absorbs the
-                        // parent gap-1.5 on exit so the toggle
-                        // doesn't pop 6 px at unmount.
-                        initial={{ width: 0, opacity: 0, marginInlineStart: -6 }}
-                        animate={{ width: 66, opacity: 1, marginInlineStart: 0 }}
-                        exit={{ width: 0, opacity: 0, marginInlineStart: -6 }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 500,
-                          damping: 35,
-                        }}
-                        style={{ overflow: "hidden" }}
-                      >
-                        <InlineStepper
-                          value={slideCountValue}
-                          onChange={setSlideCountValue}
-                          min={1}
-                          max={slideCap}
-                        />
-                      </motion.div>
-                    ) : null}
-                  </AnimatePresence>
-                </motion.div>
-              </div>
-              {/* Free plan: the slide cap stated up front, not a silent clamp. */}
-              <SlideCapHint className="mt-1.5" />
-
-              {/* Design-ref dropzone — wrapped in a flex-1 div with
-                  border-t separator so the dropzone reads as its own
-                  section (matches /create's section-separator
-                  rhythm). The dropzone itself is `compact` + h-full
-                  so it claims whatever vertical space is left after
-                  the header + toggle + slide-count rows. */}
-              <div className="flex flex-1 flex-col border-t border-[var(--tq-border-hairline)] pt-3">
-                {isTemplate ? (
-                  // Template mode — the design reference is the chosen
-                  // template (locked, no upload). Reuses the dropzone's
-                  // "ready" visual vocabulary, non-interactive.
-                  <div className="flex h-full min-h-[140px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-foreground/20 bg-overlay-soft p-4 text-center">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--tq-surface)]">
-                      <span
-                        className="material-symbols-outlined text-emerald-300"
-                        style={{ fontSize: "22px" }}
-                      >
-                        check_circle
-                      </span>
+            <CardHeader icon="tune" title={dict.flows.mimic.stepSettings} />
+              {/* ── Output: slide size + slide count ── */}
+              <div className="flex flex-col gap-3">
+                <SlideSizeFields
+                  slideSize={slideSize}
+                  onSlideSize={setSlideSize}
+                />
+                {/* Slide count: same animated layout as /create (toggle +
+                    spring-in stepper; the fixed 66 px width avoids the
+                    framer-motion auto-to-numeric snap). */}
+                <div>
+                  <div className="flex min-h-[24px] items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-foreground/70">
+                      {dict.flows.slideCount}
                     </span>
-                    <p className="truncate px-2 text-sm font-semibold text-foreground">
-                      {templateSeed!.title?.trim() || dict.flows.mimic.templateReady}
-                    </p>
-                    <p className="text-xs text-foreground/60">
-                      {dict.flows.mimic.templateSelected}
-                    </p>
+                    <motion.div
+                      layout
+                      transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                      className="flex items-center gap-1.5"
+                    >
+                      <SegmentedToggle
+                        options={slideCountOptions}
+                        value={slideCountMode}
+                        onChange={setSlideCountMode}
+                        ariaLabel={dict.flows.slideCount}
+                      />
+                      <AnimatePresence initial={false}>
+                        {slideCountMode === "custom" ? (
+                          <motion.div
+                            key="slide-count-stepper"
+                            initial={{ width: 0, opacity: 0, marginInlineStart: -6 }}
+                            animate={{ width: 66, opacity: 1, marginInlineStart: 0 }}
+                            exit={{ width: 0, opacity: 0, marginInlineStart: -6 }}
+                            transition={{
+                              type: "spring",
+                              stiffness: 500,
+                              damping: 35,
+                            }}
+                            style={{ overflow: "hidden" }}
+                          >
+                            <InlineStepper
+                              value={slideCountValue}
+                              onChange={setSlideCountValue}
+                              min={1}
+                              max={slideCap}
+                            />
+                          </motion.div>
+                        ) : null}
+                      </AnimatePresence>
+                    </motion.div>
                   </div>
-                ) : (
-                  <FileDropzone
-                    file={designFile}
-                    stage={designStage}
-                    submitting={submitting}
-                    dragging={designDragging}
-                    setDragging={setDesignDragging}
-                    onOpen={() => designInputRef.current?.click()}
-                    onDrop={(f) => setDesignFromInput(f)}
-                    onRemove={removeDesignFile}
-                    compact
-                  />
-                )}
+                </div>
               </div>
-
-              {/* Free-text design instructions — optional steering for the
-                  model, mirrors /enhance's field. Fixed-height textarea
-                  BELOW the dropzone: the dropzone section's flex-1 absorbs
-                  the delta so the card keeps its min-h outer height (user
-                  direction 2026-08-30 — the field must not change the card
-                  height). The placeholder carries concrete examples so
-                  users discover they can steer the design at all. */}
+              {/* Generate-images toggle (Plus+ gated inside the panel). */}
               <div className="border-t border-[var(--tq-border-hairline)] pt-3">
+                <AIImagesPanel
+                  value={imagesMode}
+                  onChange={setImagesMode}
+                  disabled={submitting}
+                />
+              </div>
+              {/* Optional free-text design instructions forwarded to the
+                  model (payload.enhance.instructions). The placeholder
+                  carries concrete examples so users discover it. */}
+              <div className="flex flex-1 flex-col border-t border-[var(--tq-border-hairline)] pt-3">
                 <label
                   htmlFor="mimic-instructions"
                   className="mb-2 block text-xs font-semibold text-foreground/70"
@@ -1320,27 +1251,25 @@ export default function MimicFlow({
                   maxLength={MAX_ENHANCE_INSTRUCTIONS_CHARS}
                   rows={2}
                   disabled={submitting}
-                  className="input-dark w-full resize-none text-sm leading-6 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="input-dark min-h-[72px] w-full flex-1 resize-none text-sm leading-6 disabled:cursor-not-allowed disabled:opacity-50"
                 />
               </div>
-            </div>
           </motion.div>
           </div>
 
-          {/* Next only (`.btn-gradient` CTA); back-travel via the rail.
-              Step 1 gates on content present (text or picked file -
-              extraction may continue across steps). */}
+          {/* Next on steps 1-2 (back-travel via the rail). Step 1 needs
+              usable content (blocks empty, mid-extraction and over-cap
+              files) and a picked reference; the reference may keep
+              extracting, Generate on step 3 waits for it. */}
           {step < 2 && (
             <div className="flex w-full justify-end sm:w-[430px]">
               <PillButton
                 variant="primary"
                 onClick={() => setStep((s) => Math.min(2, s + 1))}
                 disabled={
-                  // Step 0 can't advance until content is actually usable:
-                  // blocks an empty step, a mid-extraction file, AND a file
-                  // rejected for exceeding the page cap (contentReady is
-                  // false in all three).
-                  submitting || (step === 0 && !contentReady)
+                  submitting ||
+                  (step === 0 &&
+                    (!contentReady || (!isTemplate && designStage === "idle")))
                 }
               >
                 {dict.flows.wizard.next}
@@ -1430,6 +1359,36 @@ function PaletteSwatch({
 }
 
 // ───────────────────────────────────────────────────────────────────
+// UploadSectionTitle: icon + title + one-line hint above each of step 1's
+// two upload boxes, so the user sees at a glance which file goes where.
+// ───────────────────────────────────────────────────────────────────
+function UploadSectionTitle({
+  icon,
+  title,
+  hint,
+}: {
+  icon: string;
+  title: string;
+  hint: string;
+}) {
+  return (
+    <div>
+      <p className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+        <span
+          className="material-symbols-outlined text-[var(--tq-brand-blue)]"
+          style={{ fontSize: 16 }}
+          aria-hidden
+        >
+          {icon}
+        </span>
+        {title}
+      </p>
+      <p className="text-muted mt-1 text-[11px] leading-snug">{hint}</p>
+    </div>
+  );
+}
+
+// ───────────────────────────────────────────────────────────────────
 // id of the portalled tooltip that carries a rejected file's reason, wired
 // to the dropzone button's aria-describedby so assistive tech associates them.
 const REJECT_REASON_ID = "tq-content-reject-reason";
@@ -1461,6 +1420,11 @@ function FileDropzone({
   // card so it never reflows the layout.
   rejected = false,
   rejectedReason,
+  // Empty-state glyph + title. /mimic's step 1 shows two dropzones on one
+  // card, so each names its own file (content vs design reference) and
+  // carries a distinct icon instead of the shared cloud_upload.
+  emptyIcon = "cloud_upload",
+  emptyTitle,
 }: {
   file: File | null;
   stage: FileStage;
@@ -1474,6 +1438,8 @@ function FileDropzone({
   horizontal?: boolean;
   rejected?: boolean;
   rejectedReason?: string;
+  emptyIcon?: string;
+  emptyTitle?: string;
 }) {
   const dict = useDict();
   const disabled = stage === "extracting" || submitting;
@@ -1554,7 +1520,7 @@ function FileDropzone({
               className="material-symbols-outlined text-foreground/80"
               style={{ fontSize: horizontal ? "18px" : "22px" }}
             >
-              cloud_upload
+              {emptyIcon}
             </span>
           )}
         </span>
@@ -1585,9 +1551,10 @@ function FileDropzone({
         ) : (
           <div className={`min-w-0 ${horizontal ? "flex-1" : ""}`}>
             <p className="truncate text-sm font-semibold text-foreground">
-              {horizontal
-                ? dict.flows.mimic.dragOrClick
-                : dict.flows.mimic.dragDrop}
+              {emptyTitle ??
+                (horizontal
+                  ? dict.flows.mimic.dragOrClick
+                  : dict.flows.mimic.dragDrop)}
             </p>
             {/* Muted second line — compatible-file hint + size cap.
                 Shown in BOTH horizontal and stacked empty states now
