@@ -29,10 +29,20 @@ export async function renderDeckPdf(manifest: SlideManifest): Promise<Buffer> {
     // `printPageBreaks: true` emits @page + per-slide page-break-after,
     // so page.pdf() paginates one slide per page at canvas dimensions
     // (same recipe as the /export/pdf route).
+    // "load" + Puppeteer's own request tracking, NOT setContent's
+    // `networkidle2` lifecycle wait (2026-10-03): on the prod box that wait
+    // intermittently never resolved even with ZERO requests pending (traced:
+    // all 5 font/image requests finished in <260ms, still a 30s timeout), which
+    // failed template-render for whole templates (pdfUrl stayed null). "load"
+    // covers the document's images; waitForNetworkIdle then catches stragglers
+    // (bounded, best-effort); fonts.ready below covers webfonts.
     await page.setContent(
       buildHtmlDocumentServer(manifest, { printPageBreaks: true }),
-      { waitUntil: ["domcontentloaded", "networkidle2"], timeout: 30_000 },
+      { waitUntil: "load", timeout: 30_000 },
     );
+    await page
+      .waitForNetworkIdle({ idleTime: 500, timeout: 10_000 })
+      .catch(() => undefined);
     await page.evaluate(() => {
       const docFonts = (
         document as Document & { fonts?: { ready?: Promise<unknown> } }
