@@ -172,6 +172,14 @@ const ENHANCE_HTML_ADDENDUM = `ENHANCE MODE — this is a REDESIGN of an EXISTIN
 // the moment the cover closes (ingestSlide), so the injected var(--brand-*)
 // values the slides reference ARE Claude's colors. Not used for enhance /
 // mimic — those preserve the SOURCE deck's identity instead.
+// Reference-palette addendum (2026-10-03): mimic ("Your own template") with
+// the "template colours" option sends NO brand colours, so Claude reads the
+// palette off the DESIGN reference itself (works for PDF and PPTX alike) and
+// rides it on the cover as `data-deck-palette`; the same cover-close adoption
+// as auto-palette makes it theme.palette, so the studio recolor tool has the
+// real base palette to work from.
+const REFERENCE_PALETTE_ADDENDUM = `PALETTE: use the DESIGN reference's OWN colours. Read its 3-6 defining colours from the reference (dominant brand hue first, then its secondary and accent hues, then its background and text tones), emit them on the COVER <section> as data-deck-palette="#RRGGBB,#RRGGBB,..." (they become var(--brand-1)...var(--brand-N), the first is var(--primary)), and reference only the injected variables in your CSS. Match the reference's colours as closely as you can; introduce no new hues.`;
+
 const AUTO_PALETTE_ADDENDUM = `PALETTE — choose a 3-6 color hex palette that matches the deck's content and mood, emit it on the COVER <section> as data-deck-palette="#RRGGBB,#RRGGBB,…" (dominant hue first — it becomes var(--primary)/var(--brand-1), then --secondary, --accent, --brand-4…), and reference only the injected variables in your CSS.`;
 
 // Valid `data-role` values (mirror SlideSchema.role). Used to coerce the
@@ -2107,6 +2115,10 @@ export const deckGenerate = inngest.createFunction(
           !briefHasBrandColors(data.brief) &&
           htmlSourceKind !== "mimic" &&
           data.type !== "enhance";
+        // Mimic with no brand colours = the "template colours" option: take
+        // the palette from the DESIGN reference (REFERENCE_PALETTE_ADDENDUM).
+        const paletteReference =
+          !briefHasBrandColors(data.brief) && htmlSourceKind === "mimic";
         const htmlSystem = [
           // The FRAME base (context/frame-architecture-2026-07-10.md) is the
           // ONLY generation contract since the 2026-07-10 cutover. It embeds
@@ -2126,6 +2138,7 @@ export const deckGenerate = inngest.createFunction(
                 : "deck",
           }),
           paletteAuto ? AUTO_PALETTE_ADDENDUM : null,
+          paletteReference ? REFERENCE_PALETTE_ADDENDUM : null,
           // Mimic with images on recreates the reference's imagery (its box
           // contract matches the frame's tier-3 in-well slots).
           isImagesMode(data) && htmlSourceKind === "mimic"
@@ -2364,7 +2377,7 @@ export const deckGenerate = inngest.createFunction(
           // live preview recolors from the first slide on, and assembleManifest
           // (which reads the same `theme`) inherits it. Invalid/missing →
           // keep the server default (today's near-black/white fallback).
-          if (paletteAuto && parsed.role === "cover") {
+          if ((paletteAuto || paletteReference) && parsed.role === "cover") {
             const chosen = parseDeckPalette(parsed.html);
             if (chosen) {
               theme.palette = chosen;

@@ -256,6 +256,14 @@ export default function MimicFlow({
   //     the user always supplies their palette + fonts (pre-filled
   //     from the chosen template / default brand kit when available).
   const [colors, setColors] = useState<string[]>(DEFAULT_PALETTE);
+  // Where the deck's colours come from (2026-10-03). "reference" (default)
+  // keeps the uploaded design's OWN colours: the brief then carries no brand
+  // colours and deck-generate has Claude read the palette off the reference
+  // (REFERENCE_PALETTE_ADDENDUM). "custom" uses the swatches below. Picking
+  // a saved brand kit switches to "custom".
+  const [colorSource, setColorSource] = useState<"reference" | "custom">(
+    "reference",
+  );
   // Single brand font — one Google family (Claude varies weights) OR up
   // to 5 uploaded families (Claude pairs). Replaces the old heading +
   // body two-slot UI; mirrors /create's BrandFontPicker model.
@@ -365,10 +373,12 @@ export default function MimicFlow({
   // Apply a picked saved kit (overwrites colours / font / logo).
   const handlePickKit = (id: string) => {
     const raw = kitRawRef.current.get(id);
-    if (raw)
-      applyBrand(
-        mapKitToHydrated(raw as Parameters<typeof mapKitToHydrated>[0]),
-      );
+    if (!raw) return;
+    const hydrated = mapKitToHydrated(
+      raw as Parameters<typeof mapKitToHydrated>[0],
+    );
+    applyBrand(hydrated);
+    if (hydrated.colors.length > 0) setColorSource("custom");
   };
 
   // ─── Submit-level state ────────────────────────────────────────
@@ -714,7 +724,9 @@ export default function MimicFlow({
         logoUploaded?.storageUrl ?? loadedLogo?.storageUrl ?? null;
 
       const brand = {
-        colors,
+        // Template colours: no brand colours, the generator reads them off
+        // the design reference.
+        colors: colorSource === "reference" ? [] : colors,
         paletteMode: "manual" as const,
         paletteScreenshotUrl: null,
         fonts: {
@@ -1075,39 +1087,58 @@ export default function MimicFlow({
                     </div>
                   </header>
 
-                  {/* Palette row — label on the visual right,
-                      swatches + add tile on the visual left as a
-                      single horizontal cluster (matches /create). */}
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold text-foreground/70">
-                      {dict.flows.colors}
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      {colors.map((color, index) => (
-                        <PaletteSwatch
-                          key={index}
-                          value={color}
-                          index={index}
-                          removable={colors.length > MIN_PALETTE}
-                          onChange={(next) => updateColor(index, next)}
-                          onRemove={() => removeColor(index)}
-                        />
-                      ))}
-                      {colors.length < MAX_PALETTE ? (
-                        <button
-                          type="button"
-                          onClick={addColor}
-                          aria-label={dict.flows.addColor}
-                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-foreground/20 text-foreground/60 transition-colors hover:border-foreground/40 hover:text-foreground"
-                        >
-                          <span
-                            className="material-symbols-outlined"
-                            style={{ fontSize: 14 }}
-                          >
-                            add
-                          </span>
-                        </button>
-                      ) : null}
+                  {/* Colours: the design reference's own colours (default)
+                      or custom swatches. The second line keeps a fixed
+                      height so switching never shifts the card. */}
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-foreground/70">
+                        {dict.flows.colors}
+                      </span>
+                      <SegmentedToggle
+                        options={[
+                          { value: "reference", label: dict.flows.mimic.colorsReference },
+                          { value: "custom", label: dict.flows.mimic.colorsCustom },
+                        ]}
+                        value={colorSource}
+                        onChange={setColorSource}
+                        ariaLabel={dict.flows.colors}
+                      />
+                    </div>
+                    <div className="flex min-h-[28px] items-center justify-end">
+                      {colorSource === "reference" ? (
+                        <p className="text-muted w-full text-[11px] leading-snug">
+                          {dict.flows.mimic.colorsReferenceHint}
+                        </p>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          {colors.map((color, index) => (
+                            <PaletteSwatch
+                              key={index}
+                              value={color}
+                              index={index}
+                              removable={colors.length > MIN_PALETTE}
+                              onChange={(next) => updateColor(index, next)}
+                              onRemove={() => removeColor(index)}
+                            />
+                          ))}
+                          {colors.length < MAX_PALETTE ? (
+                            <button
+                              type="button"
+                              onClick={addColor}
+                              aria-label={dict.flows.addColor}
+                              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-foreground/20 text-foreground/60 transition-colors hover:border-foreground/40 hover:text-foreground"
+                            >
+                              <span
+                                className="material-symbols-outlined"
+                                style={{ fontSize: 14 }}
+                              >
+                                add
+                              </span>
+                            </button>
+                          ) : null}
+                        </div>
+                      )}
                     </div>
                   </div>
 
