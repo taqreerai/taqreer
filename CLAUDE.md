@@ -84,3 +84,32 @@ dev server (stale in-memory client). One-off ops run via `tsx scripts/*.ts`.
   after any schema change.
 - macOS `ssh taqreer` REQUIRES `IPQoS none` in `~/.ssh/config` (the network drops
   DSCP-marked packets).
+
+---
+
+## Cloud sessions (claude.ai/code)
+
+A cloud session gets a clean clone of `taqreerai/taqreer` and NOTHING from the owner's
+machine: no `.env.local`, no docker DB, no Inngest, no `ssh taqreer`, no local MCPs
+(OpenSEO, browser), no auto-memory. Current state + pending work:
+**[docs/HANDOFF.md](docs/HANDOFF.md)**, read it first.
+
+- **What works here:** code edits, `npm run lint`, `npx tsc --noEmit -p .`, `npm run build`.
+  Setup: `npm ci` (postinstall applies the dom-to-pptx patch) then `npx prisma generate`
+  (needs no env; `prisma.config.ts` has a localhost fallback URL).
+- **What does NOT work:** running the app, generating decks, uploads, logged-in pages,
+  prod DB / logs, deploying. Never ask for or store prod secrets (Stripe live key,
+  Supabase service role) in the cloud environment.
+- **Branch:** commit to `dev` and `git push origin dev`. If the environment forces its
+  own branch, open a PR into `dev`. Never push to `main` (`deploy.sh` owns it).
+- **Commits:** `git -c user.name="Osama" -c user.email="dsignerarts@gmail.com" commit`,
+  message ending `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. All GitHub
+  activity is as `taqreerai`, never `ultimehdi`.
+- **Deploy is local-only:** the owner pulls `dev`, tests on localhost, then runs
+  `./deploy.sh` from the desktop. Nothing reaches taqreer.ai from a cloud session. Say
+  clearly in the final message what still needs a local test.
+- **Never flag `deck_freeze_pixelgate_failed`** (or other `deck_freeze_*`) warnings: by
+  design, not a bug.
+- **Be token-frugal:** the owner is on a capped credit budget. Read files by range
+  (MimicFlow.tsx, deck-generate.ts and create/page.tsx are 1,500-3,000+ lines), keep
+  tasks scoped, don't re-read what you just edited.
