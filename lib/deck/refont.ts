@@ -67,7 +67,23 @@ export function refontManifest(manifest: SlideManifest, family: string): SlideMa
       ...manifest.theme,
       // A Google family replaces any uploaded brand font faces.
       font: { name: family, url: googleFontUrl(family) },
+      originalFont: manifest.theme.originalFont ?? manifest.theme.font,
     },
     slides: manifest.slides.map((s) => ({ ...s, html: refontText(s.html, family) })),
+  };
+}
+
+/**
+ * Undo back to the deck's ORIGINAL font (theme.originalFont), e.g. an uploaded
+ * brand font with its signed faces. Uses only server-stored data. Null when
+ * the deck never changed font.
+ */
+export function restoreOriginalFont(manifest: SlideManifest): SlideManifest | null {
+  const original = manifest.theme.originalFont;
+  if (!original) return null;
+  return {
+    ...manifest,
+    theme: { ...manifest.theme, font: original },
+    slides: manifest.slides.map((s) => ({ ...s, html: refontText(s.html, original.name) })),
   };
 }

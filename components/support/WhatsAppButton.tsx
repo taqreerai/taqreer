@@ -88,23 +88,33 @@ export function WhatsAppButton() {
 // whose action is "Contact us via WhatsApp"; the icon itself never jumps to
 // WhatsApp. Portal'd + fixed like the bell popover so the header's blur and
 // overflow can't clip it; closes on outside click, Escape, or the action.
+// Help popover width (was w-72); also used to place it inside the viewport.
+const POPOVER_WIDTH_PX = 288;
+
 export function WhatsAppToolbarButton({ compact = false }: { compact?: boolean }) {
   const t = useDict().components.supportWidget;
   const { dir } = useLocale();
   const { href } = useWhatsAppLink();
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const [pos, setPos] = useState<{ top: number; start: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const open = pos !== null;
 
   const toggle = () => {
     if (open) return setPos(null);
     const r = triggerRef.current?.getBoundingClientRect();
     if (!r) return;
-    // Align the popover's inline-end edge with the trigger's, so it opens
-    // toward the page in both directions.
+    // Hang the popover from the icon by SCREEN position, not text direction
+    // (2026-10-03): the corner nearest the icon lines up with the icon's edge
+    // and the popover opens toward the side with more room, clamped inside
+    // the viewport. Direction-based anchoring pushed it off-screen when the
+    // icon sat near the right edge (the studio header in Arabic).
+    const width = POPOVER_WIDTH_PX;
+    const margin = 12;
+    const opensLeftward = r.left + r.width / 2 > window.innerWidth / 2;
+    const rawLeft = opensLeftward ? r.right - width : r.left;
     setPos({
       top: r.bottom + 8,
-      start: dir === "rtl" ? r.left : window.innerWidth - r.right,
+      left: Math.max(margin, Math.min(rawLeft, window.innerWidth - width - margin)),
     });
   };
 
@@ -171,11 +181,8 @@ export function WhatsAppToolbarButton({ compact = false }: { compact?: boolean }
               data-help-popover
               role="dialog"
               aria-label={t.popoverTitle}
-              className="in-slide-popover fixed z-[1100] w-72 rounded-2xl p-4"
-              style={{
-                top: pos.top,
-                [dir === "rtl" ? "left" : "right"]: pos.start,
-              }}
+              className="in-slide-popover fixed z-[1100] rounded-2xl p-4"
+              style={{ top: pos.top, left: pos.left, width: POPOVER_WIDTH_PX }}
             >
               <motion.div
                 initial={{ opacity: 0, y: -6 }}

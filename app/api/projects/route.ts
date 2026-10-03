@@ -328,9 +328,9 @@ type BriefFontSlot =
 // the old "Arial" default produced Arial decks). Literals (not an import of
 // lib/brand/fonts' googleFontUrl) to keep this server route off the client
 // font module; mirrors DEFAULT_GOOGLE_FAMILY there.
-const DEFAULT_FONT_NAME = "Cairo";
+const DEFAULT_FONT_NAME = "Noto Sans Arabic";
 const DEFAULT_FONT_URL =
-  "https://fonts.googleapis.com/css2?family=Cairo:wght@100;200;300;400;500;600;700;800;900&display=swap";
+  "https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@100;200;300;400;500;600;700;800;900&display=swap";
 
 function readBriefFont(slot: BriefFontSlot): {
   name: string;

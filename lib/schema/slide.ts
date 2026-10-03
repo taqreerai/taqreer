@@ -106,6 +106,10 @@ const ThemeObject = z.object({
   // `themeToCssVars` (which also keeps --font-heading/--font-body as aliases
   // so slide HTML authored before this collapse still resolves its font).
   font: FontDefinition,
+  // The deck's ORIGINAL font, recorded the first time the studio changes it
+  // (lib/deck/refont.ts), so undo can restore it, including an uploaded brand
+  // font (its signed faces). Server-written only; absent = never changed.
+  originalFont: FontDefinition.optional(),
   // Background + text colors for the chrome. Claude picks these.
   background: HexColor,
   text: HexColor,

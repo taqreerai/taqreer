@@ -1,6 +1,8 @@
 // POST /api/projects/[id]/font
 //
 // Body: { family: string }  (a Google Fonts catalog family)
+//    or { restoreOriginal: true } (undo back to the deck's original font,
+//        e.g. an uploaded brand font; uses only server-stored theme data)
 //
 // Changes the whole finished deck's font in place (lib/deck/refont.ts): the
 // theme font plus every literal family in the slides' font-family
@@ -17,7 +19,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
 import { SlideManifestSchema } from "@/lib/schema/slide";
-import { refontManifest } from "@/lib/deck/refont";
+import { refontManifest, restoreOriginalFont } from "@/lib/deck/refont";
 import { canonicalFamily } from "@/lib/editor/font-search";
 
 export async function POST(
@@ -30,12 +32,16 @@ export async function POST(
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
 
-  const body = (await request.json().catch(() => ({}))) as { family?: unknown };
+  const body = (await request.json().catch(() => ({}))) as {
+    family?: unknown;
+    restoreOriginal?: unknown;
+  };
+  const restoreOriginal = body.restoreOriginal === true;
   const family =
-    typeof body.family === "string" && body.family.length <= 80
+    !restoreOriginal && typeof body.family === "string" && body.family.length <= 80
       ? canonicalFamily(body.family)
       : null;
-  if (!family) {
+  if (!restoreOriginal && !family) {
     return NextResponse.json({ error: "Unknown font family" }, { status: 400 });
   }
 
@@ -60,7 +66,13 @@ export async function POST(
   if (!parsed.success) {
     return NextResponse.json({ error: "Deck data is invalid" }, { status: 500 });
   }
-  const next = SlideManifestSchema.safeParse(refontManifest(parsed.data, family));
+  const changed = restoreOriginal
+    ? restoreOriginalFont(parsed.data)
+    : refontManifest(parsed.data, family as string);
+  if (!changed) {
+    return NextResponse.json({ error: "Nothing to restore" }, { status: 409 });
+  }
+  const next = SlideManifestSchema.safeParse(changed);
   if (!next.success) {
     console.error("[font] result failed validation", next.error.issues.slice(0, 3));
     return NextResponse.json({ error: "Failed to change the font" }, { status: 500 });

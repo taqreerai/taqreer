@@ -317,7 +317,22 @@ const UNDO_DEPTH = 100; // cap the per-slide local undo stack (bounds memory)
 const CHECKPOINT_IDLE_MS = 10 * 60 * 1000; // idle-autosave a history checkpoint
 // One undo step = the slide HTML BEFORE the edit and AFTER it. Storing both lets
 // undo/redo apply a known snapshot instead of re-reading the (mutable) live manifest.
-type UndoEntry = { before: string; after: string };
+// `seq` orders slide edits against deck-wide colour/font changes (DeckOp), so
+// one Undo button undoes whichever happened last.
+type UndoEntry = { before: string; after: string; seq?: number };
+// Deck-wide change (2026-10-03): undone/redone by re-running the inverse
+// operation on the server, not by restoring HTML snapshots, so slide edits
+// made after it survive. Colours are exact (recolor is computed from the
+// original palette); font undo targets the previous family, or the deck's
+// stored original font when that was an uploaded one.
+type DeckOp =
+  | { kind: "colors"; seq: number; before: string[]; after: string[] }
+  | {
+      kind: "font";
+      seq: number;
+      before: { name: string; uploaded: boolean };
+      after: string;
+    };
 
 // Hero canvas layout constants. Kept here (rather than inline) so the
 // width-clamp and the symmetric height-clamp we pass to the side
@@ -820,6 +835,17 @@ export function DeckView({
     Record<string, { past: UndoEntry[]; future: UndoEntry[] }>
   >({});
   const undoStacksRef = useRef(undoStacks);
+  // Monotonic order of undoable actions across slide edits and deck-wide ops.
+  const undoSeqRef = useRef(0);
+  const [deckHistory, setDeckHistory] = useState<{ past: DeckOp[]; future: DeckOp[] }>({
+    past: [],
+    future: [],
+  });
+  const deckHistoryRef = useRef(deckHistory);
+  useEffect(() => {
+    deckHistoryRef.current = deckHistory;
+  }, [deckHistory]);
+  const [deckOpBusy, setDeckOpBusy] = useState(false);
   useEffect(() => {
     undoStacksRef.current = undoStacks;
   }, [undoStacks]);
@@ -1098,7 +1124,7 @@ export function DeckView({
         return {
           ...prev,
           [slideKey]: {
-            past: [...cur.past, { before, after }].slice(-UNDO_DEPTH),
+            past: [...cur.past, { before, after, seq: ++undoSeqRef.current }].slice(-UNDO_DEPTH),
             future: [],
           },
         };
@@ -1130,6 +1156,56 @@ export function DeckView({
   useEffect(() => {
     invalidateUndoRef.current = clearUndoFor;
   }, [clearUndoFor]);
+
+  // ─── Deck-wide undo/redo (2026-10-03) ───
+  // A new deck-wide change truncates the deck redo branch.
+  const recordDeckOp = useCallback((op: DeckOp) => {
+    setDeckHistory((h) => ({ past: [...h.past, op].slice(-UNDO_DEPTH), future: [] }));
+  }, []);
+  // Run one deck op in a direction on the server and adopt the result like an
+  // apply (live manifest swap, editor reload, slide stacks cleared, deck dirty).
+  const runDeckOp = useCallback(
+    async (op: DeckOp, direction: "undo" | "redo"): Promise<boolean> => {
+      let url: string;
+      let body: unknown;
+      if (op.kind === "colors") {
+        url = `/api/projects/${projectId}/recolor`;
+        body = { palette: direction === "undo" ? op.before : op.after };
+      } else {
+        url = `/api/projects/${projectId}/font`;
+        body =
+          direction === "redo"
+            ? { family: op.after }
+            : op.before.uploaded
+              ? { restoreOriginal: true }
+              : { family: op.before.name };
+      }
+      setDeckOpBusy(true);
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(`${op.kind} ${direction} ${res.status}`);
+        const data = (await res.json()) as Pick<SlideManifest, "theme" | "slides">;
+        setManifest((prev) => (prev ? { ...prev, theme: data.theme, slides: data.slides } : prev));
+        setEditorReloadKey((k) => k + 1);
+        const keys = data.slides.map((sl) => sl.slideId);
+        clearUndoFor(keys);
+        keys.forEach((k) => markDirtyAndArmIdle(k));
+        setLocalDirty(true);
+        dirtyGenRef.current += 1;
+        return true;
+      } catch (err) {
+        console.error("[deck-undo] failed:", err);
+        return false;
+      } finally {
+        setDeckOpBusy(false);
+      }
+    },
+    [projectId, clearUndoFor, markDirtyAndArmIdle],
+  );
 
   // ─── Deck colours (2026-10-02) ─────────────────────────────────
   // The colour-template menu previews a preset on the WHOLE deck by recoloring
@@ -1209,6 +1285,12 @@ export function DeckView({
       const data = (await res.json()) as Pick<SlideManifest, "theme" | "slides">;
       setManifest((prev) => (prev ? { ...prev, theme: data.theme, slides: data.slides } : prev));
       setEditorReloadKey((k) => k + 1);
+      recordDeckOp({
+        kind: "colors",
+        seq: ++undoSeqRef.current,
+        before: [...base.theme.palette],
+        after: [...target],
+      });
       // Every slide's html changed under the user: older undo steps no longer
       // chain from what's live, and Save should checkpoint the whole deck.
       const keys = data.slides.map((sl) => sl.slideId);
@@ -1227,7 +1309,7 @@ export function DeckView({
     } finally {
       setColorsBusy(false);
     }
-  }, [projectId, closeColors, clearUndoFor, markDirtyAndArmIdle]);
+  }, [projectId, closeColors, clearUndoFor, markDirtyAndArmIdle, recordDeckOp]);
 
   // ─── Deck font (2026-10-03) ────────────────────────────────────
   // Same pattern as the colours menu: pick = refont the snapshot taken at open
@@ -1294,6 +1376,15 @@ export function DeckView({
       const data = (await res.json()) as Pick<SlideManifest, "theme" | "slides">;
       setManifest((prev) => (prev ? { ...prev, theme: data.theme, slides: data.slides } : prev));
       setEditorReloadKey((k) => k + 1);
+      recordDeckOp({
+        kind: "font",
+        seq: ++undoSeqRef.current,
+        before: {
+          name: base.theme.font.name,
+          uploaded: (base.theme.font.fontFaces?.length ?? 0) > 0,
+        },
+        after: fontPick,
+      });
       const keys = data.slides.map((sl) => sl.slideId);
       clearUndoFor(keys);
       keys.forEach((k) => markDirtyAndArmIdle(k));
@@ -1309,7 +1400,7 @@ export function DeckView({
     } finally {
       setFontBusy(false);
     }
-  }, [projectId, fontPick, closeFont, clearUndoFor, markDirtyAndArmIdle]);
+  }, [projectId, fontPick, closeFont, clearUndoFor, markDirtyAndArmIdle, recordDeckOp]);
 
   // In-canvas edit committed (blur). Record the { before, after } step for undo,
   // then apply. No version row is created (history is now Save + 10-min
@@ -1466,8 +1557,22 @@ export function DeckView({
   // write clears the stack via clearUndo — see A2).
   const handleLocalUndo = useCallback(() => {
     const slideKey = focusedSlideKeyFromRefs();
+    const stack = slideKey ? undoStacksRef.current[slideKey] : undefined;
+    // Deck-wide change newer than this slide's last edit: undo that instead.
+    const deckTop = deckHistoryRef.current.past.at(-1);
+    const slideTopSeq = stack?.past.at(-1)?.seq ?? -1;
+    if (deckTop && deckTop.seq > slideTopSeq) {
+      if (deckOpBusy) return;
+      void runDeckOp(deckTop, "undo").then((ok) => {
+        if (!ok) return;
+        setDeckHistory((h) => ({
+          past: h.past.slice(0, -1),
+          future: [...h.future, deckTop].slice(-UNDO_DEPTH),
+        }));
+      });
+      return;
+    }
     if (!slideKey) return;
-    const stack = undoStacksRef.current[slideKey];
     if (!stack || stack.past.length === 0) return;
     const entry = stack.past[stack.past.length - 1]!;
     setUndoStacks((prev) => {
@@ -1482,12 +1587,25 @@ export function DeckView({
       };
     });
     applyRestoredLocally(slideKey, entry.before);
-  }, [focusedSlideKeyFromRefs, applyRestoredLocally]);
+  }, [focusedSlideKeyFromRefs, applyRestoredLocally, deckOpBusy, runDeckOp]);
   // Redo = move the last `future` step back to `past` and apply its `after`.
   const handleLocalRedo = useCallback(() => {
     const slideKey = focusedSlideKeyFromRefs();
+    const stack = slideKey ? undoStacksRef.current[slideKey] : undefined;
+    const deckNext = deckHistoryRef.current.future.at(-1);
+    const slideNextSeq = stack?.future.at(-1)?.seq ?? -1;
+    if (deckNext && deckNext.seq > slideNextSeq) {
+      if (deckOpBusy) return;
+      void runDeckOp(deckNext, "redo").then((ok) => {
+        if (!ok) return;
+        setDeckHistory((h) => ({
+          past: [...h.past, deckNext].slice(-UNDO_DEPTH),
+          future: h.future.slice(0, -1),
+        }));
+      });
+      return;
+    }
     if (!slideKey) return;
-    const stack = undoStacksRef.current[slideKey];
     if (!stack || stack.future.length === 0) return;
     const entry = stack.future[stack.future.length - 1]!;
     setUndoStacks((prev) => {
@@ -1502,7 +1620,7 @@ export function DeckView({
       };
     });
     applyRestoredLocally(slideKey, entry.after);
-  }, [focusedSlideKeyFromRefs, applyRestoredLocally]);
+  }, [focusedSlideKeyFromRefs, applyRestoredLocally, deckOpBusy, runDeckOp]);
 
   // On unmount/navigation (e.g. clicking Home): clear the idle timer, flush pending
   // edits into a checkpoint, and best-effort pin the saved version via a keepalive
@@ -4894,9 +5012,13 @@ export function DeckView({
   const focusedSlideKey = focusedSlide?.slideId;
   const focusedStack = focusedSlideKey ? undoStacks[focusedSlideKey] : undefined;
   const canUndo =
-    !editingDisabled && (focusedStack?.past.length ?? 0) > 0;
+    !editingDisabled &&
+    !deckOpBusy &&
+    ((focusedStack?.past.length ?? 0) > 0 || deckHistory.past.length > 0);
   const canRedo =
-    !editingDisabled && (focusedStack?.future.length ?? 0) > 0;
+    !editingDisabled &&
+    !deckOpBusy &&
+    ((focusedStack?.future.length ?? 0) > 0 || deckHistory.future.length > 0);
 
   const heroWidthCss = `min(calc((100dvh - ${HERO_VERTICAL_PADDING_PX}px) * ${canvasW} / ${canvasH}), 100%, ${CANVAS_MAX_WIDTH}px)`;
 

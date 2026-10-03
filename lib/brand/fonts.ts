@@ -180,9 +180,10 @@ export type BrandFontState = {
 // the server's system-font default. Mirrors DEFAULT_FONT_NAME/_URL in
 // app/api/projects/route.ts (kept literal there — that route deliberately
 // doesn't import this client module).
-// Cairo (2026-10-02, was Noto Sans Arabic): the product's own typeface and
-// the owner's pick for the default brand font.
-export const DEFAULT_GOOGLE_FAMILY = "Cairo";
+// Noto Sans Arabic (2026-10-03, owner direction; Cairo was the default from
+// 2026-10-02): the neutral multilingual default whose Arabic and Latin
+// designs match in mixed text.
+export const DEFAULT_GOOGLE_FAMILY = "Noto Sans Arabic";
 
 export function emptyBrandFont(): BrandFontState {
   return { mode: "google", googleFamily: DEFAULT_GOOGLE_FAMILY, uploaded: [] };

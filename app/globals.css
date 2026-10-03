@@ -2350,6 +2350,13 @@ body:has(.tq-support-toolbar) .support-fab-anchor {
   overscroll-behavior: contain;
   padding: 2px;
 }
+/* Studio deck-font menu: the "check your text after changing the font" note,
+   a soft brand-blue callout so it reads as guidance, not an error. */
+.deck-font-note {
+  background: color-mix(in srgb, var(--tq-brand-blue) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tq-brand-blue) 25%, transparent);
+  text-align: start;
+}
 /* The five colour roles of a palette preset as one rounded strip. */
 .palette-strip {
   display: flex;
