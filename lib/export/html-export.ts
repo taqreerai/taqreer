@@ -52,6 +52,47 @@ function stripArabicLetterSpacing(root: HTMLElement): void {
   }
 }
 
+// SVG `pathLength` (2026-10-04): Claude draws donut / ring charts as stacked
+// <circle>s with pathLength="100" so stroke-dasharray reads as percentages
+// ("36 64" = a 36% arc). Browsers honour pathLength; PowerPoint's SVG renderer
+// ignores it and reads the dashes as raw user units, so on an r=150 ring
+// (~942 units round) every arc repeats ~9 times and the donut exports as a
+// striped starburst. Rescale the dash values to the shape's REAL length
+// (getTotalLength ignores pathLength) and drop the attribute, so the exported
+// SVG means the same thing without it. Offscreen DOM only.
+function normalizeSvgPathLength(root: HTMLElement): void {
+  const shapes = root.querySelectorAll<SVGGeometryElement>("svg [pathLength]");
+  for (const el of Array.from(shapes)) {
+    const declared = parseFloat(el.getAttribute("pathLength") ?? "");
+    if (typeof el.getTotalLength !== "function" || !(declared > 0)) continue;
+    let real = 0;
+    try {
+      real = el.getTotalLength();
+    } catch {
+      continue;
+    }
+    if (!(real > 0)) continue;
+    const k = real / declared;
+    const cs = window.getComputedStyle(el);
+    const dashes = cs.strokeDasharray;
+    if (dashes && dashes !== "none") {
+      const scaled = dashes
+        .split(/[\s,]+/)
+        .filter(Boolean)
+        .map((v) => String(parseFloat(v) * k))
+        .join(" ");
+      el.setAttribute("stroke-dasharray", scaled);
+      el.style.strokeDasharray = scaled;
+    }
+    const offset = parseFloat(cs.strokeDashoffset);
+    if (Number.isFinite(offset) && offset !== 0) {
+      el.setAttribute("stroke-dashoffset", String(offset * k));
+      el.style.strokeDashoffset = String(offset * k);
+    }
+    el.removeAttribute("pathLength");
+  }
+}
+
 // Big titles carry a generous line-height for single-line breathing room
 // (often ≥ 1.5, and the Arabic-typography rule asks for it), but on a TWO-line
 // heading that ratio becomes a huge gap between the lines: dom-to-pptx converts
@@ -609,6 +650,7 @@ export async function exportManifestAsPptx(
     await Promise.all(slideNodes.map((s) => inlineSvgImages(s)));
 
     for (const slideNode of slideNodes) {
+      normalizeSvgPathLength(slideNode);
       splitMixedScriptFlexChildren(slideNode);
       stripArabicLetterSpacing(slideNode);
       insertScriptTransitionSpaces(slideNode);
