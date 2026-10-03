@@ -257,6 +257,8 @@ export function PreviewActionBar({
   onAddText,
   onOpenColors,
   colorsOpen = false,
+  onOpenFont,
+  fontOpen = false,
   onUndo,
   onRedo,
   canUndo = false,
@@ -315,6 +317,9 @@ export function PreviewActionBar({
   // this button (DeckView owns the menu + the live recolor preview).
   onOpenColors?: (rect: DOMRect) => void;
   colorsOpen?: boolean;
+  // Deck font (2026-10-03): opens the deck-wide font menu on this button.
+  onOpenFont?: (rect: DOMRect) => void;
+  fontOpen?: boolean;
   // Undo / redo over the focused slide's version log (same stack as ⌘Z / ⌘⇧Z).
   // `canUndo` / `canRedo` grey the buttons at the ends of history.
   onUndo?: () => void;
@@ -798,6 +803,15 @@ export function PreviewActionBar({
                   label={dict.editor.toolbar.deckColors}
                   onClick={(e) => onOpenColors(e.currentTarget.getBoundingClientRect())}
                   active={colorsOpen}
+                  disabled={applying || commentMode}
+                />
+              ) : null}
+              {canEdit && onOpenFont && editing ? (
+                <ToolButton
+                  icon="font_download"
+                  label={dict.editor.toolbar.deckFont}
+                  onClick={(e) => onOpenFont(e.currentTarget.getBoundingClientRect())}
+                  active={fontOpen}
                   disabled={applying || commentMode}
                 />
               ) : null}

@@ -52,7 +52,7 @@ import {
   resolveUploadedFontFamilies,
   type UploadedFontFieldBrief,
 } from "@/lib/brand/upload";
-import { DEFAULT_QUALITY, type Quality } from "@/lib/types/quality";
+import { useDefaultQuality } from "@/lib/credits/use-default-quality";
 import { MAX_CONTENT_TEXT_CHARS } from "@/lib/types/brief-limits";
 import {
   readBrandFromSession,
@@ -297,7 +297,7 @@ export default function SocialPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [creditGate, setCreditGate] = useState<CreditGatePayload | null>(null);
-  const [quality, setQuality] = useState<Quality>(DEFAULT_QUALITY);
+  const [quality, setQuality] = useDefaultQuality();
 
   // Split-button credit estimate. Custom = the exact pick; Auto = the model
   // decides, so the display is the held CEILING rendered as "up to" (same

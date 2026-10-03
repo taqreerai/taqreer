@@ -87,6 +87,8 @@ import {
 
 import type { ProjectRole } from "@/lib/api/project-access";
 import { DeckColorsPopover } from "@/components/preview/DeckColorsPopover";
+import { DeckFontPopover } from "@/components/preview/DeckFontPopover";
+import { refontManifest } from "@/lib/deck/refont";
 import { presetToPalette, recolorManifest } from "@/lib/deck/recolor";
 import type { PalettePreset } from "@/lib/brand/palette-presets";
 
@@ -1226,6 +1228,88 @@ export function DeckView({
       setColorsBusy(false);
     }
   }, [projectId, closeColors, clearUndoFor, markDirtyAndArmIdle]);
+
+  // ─── Deck font (2026-10-03) ────────────────────────────────────
+  // Same pattern as the colours menu: pick = refont the snapshot taken at open
+  // (lib/deck/refont.ts, no AI), Apply = the server re-runs it and persists,
+  // Cancel = restore the snapshot.
+  const [fontAnchor, setFontAnchor] = useState<DOMRect | null>(null);
+  const [fontPick, setFontPick] = useState<string | null>(null);
+  const [fontBusy, setFontBusy] = useState(false);
+  const [fontError, setFontError] = useState(false);
+  const [fontHadUpload, setFontHadUpload] = useState(false);
+  const fontBaseRef = useRef<SlideManifest | null>(null);
+  const closeFont = useCallback(() => {
+    setFontAnchor(null);
+    setFontPick(null);
+    setFontError(false);
+    fontBaseRef.current = null;
+  }, []);
+  const cancelFont = useCallback(() => {
+    const base = fontBaseRef.current;
+    if (base) {
+      setManifest(base);
+      setEditorReloadKey((k) => k + 1);
+    }
+    closeFont();
+  }, [closeFont]);
+  const openFont = useCallback(
+    (rect: DOMRect) => {
+      if (fontAnchor) {
+        cancelFont();
+        return;
+      }
+      const base = manifestRef.current;
+      if (!base) return;
+      fontBaseRef.current = base;
+      setFontHadUpload((base.theme.font.fontFaces?.length ?? 0) > 0);
+      setFontPick(base.theme.font.name);
+      setFontError(false);
+      setFontAnchor(rect);
+    },
+    [fontAnchor, cancelFont],
+  );
+  const previewFont = useCallback((family: string) => {
+    const base = fontBaseRef.current;
+    if (!base) return;
+    setFontPick(family);
+    setFontError(false);
+    setManifest(refontManifest(base, family));
+    setEditorReloadKey((k) => k + 1);
+  }, []);
+  const applyFont = useCallback(async () => {
+    const base = fontBaseRef.current;
+    if (!base || !fontPick || fontPick === base.theme.font.name) {
+      closeFont();
+      return;
+    }
+    setFontBusy(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/font`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ family: fontPick }),
+      });
+      if (!res.ok) throw new Error(`font ${res.status}`);
+      const data = (await res.json()) as Pick<SlideManifest, "theme" | "slides">;
+      setManifest((prev) => (prev ? { ...prev, theme: data.theme, slides: data.slides } : prev));
+      setEditorReloadKey((k) => k + 1);
+      const keys = data.slides.map((sl) => sl.slideId);
+      clearUndoFor(keys);
+      keys.forEach((k) => markDirtyAndArmIdle(k));
+      setLocalDirty(true);
+      dirtyGenRef.current += 1;
+      closeFont();
+    } catch (err) {
+      console.error("[deck-font] apply failed:", err);
+      setManifest(base);
+      setEditorReloadKey((k) => k + 1);
+      setFontPick(base.theme.font.name);
+      setFontError(true);
+    } finally {
+      setFontBusy(false);
+    }
+  }, [projectId, fontPick, closeFont, clearUndoFor, markDirtyAndArmIdle]);
 
   // In-canvas edit committed (blur). Record the { before, after } step for undo,
   // then apply. No version row is created (history is now Save + 10-min
@@ -5193,6 +5277,8 @@ export function DeckView({
                   onAddText={addTextBox}
                   onOpenColors={openColors}
                   colorsOpen={colorsAnchor != null}
+                  onOpenFont={openFont}
+                  fontOpen={fontAnchor != null}
                   draftCommentCount={
                     comments.filter((c) => !c.forAi).length
                   }
@@ -5799,6 +5885,18 @@ export function DeckView({
           rather than SlidePill because the popover survives canvas-
           hover state changes (closing on mouseleave would be wrong
           — user might leave to click a row). */}
+      <DeckFontPopover
+        open={fontAnchor != null}
+        triggerRect={fontAnchor}
+        family={fontPick}
+        deckLanguage={brandLang}
+        hadUploadedFont={fontHadUpload}
+        busy={fontBusy}
+        error={fontError}
+        onPick={previewFont}
+        onApply={() => void applyFont()}
+        onCancel={cancelFont}
+      />
       <DeckColorsPopover
         open={colorsAnchor != null}
         triggerRect={colorsAnchor}

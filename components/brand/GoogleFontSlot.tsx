@@ -46,6 +46,9 @@ export function GoogleFontSlot({
   // mode (30 px tall, text-xs). Used by /create for consistent
   // input sizing across the branding card.
   compact = false,
+  // Open the result list ABOVE the input (studio font menu, which sits near
+  // the bottom of the screen).
+  dropUp = false,
 }: {
   // `label` was previously passed but never rendered — combobox doesn't
   // own its own heading. Card-level <h3> sits above the slot in the
@@ -57,6 +60,7 @@ export function GoogleFontSlot({
   alignStart?: boolean;
   hideSample?: boolean;
   compact?: boolean;
+  dropUp?: boolean;
 }) {
   const dict = useDict();
   const [open, setOpen] = useState(false);
@@ -148,7 +152,7 @@ export function GoogleFontSlot({
       </div>
       {open ? (
         <div
-          className="absolute left-0 right-0 z-30 mt-1 overflow-y-auto rounded-xl border p-1 bg-[var(--tq-surface)] border-[var(--tq-border-hairline)]"
+          className={`absolute left-0 right-0 z-30 ${dropUp ? "bottom-full mb-1" : "mt-1"} overflow-y-auto rounded-xl border p-1 bg-[var(--tq-surface)] border-[var(--tq-border-hairline)]`}
           // `top: 100%` would stack on the sample line; anchor at the
           // input's actual height — 44 px regular, 30 px compact — so
           // the menu sits directly under the field in both modes.
@@ -162,7 +166,7 @@ export function GoogleFontSlot({
           // blur token — all via the
           // --tq-surface / --tq-border-hairline tokens.
           style={{
-            top: compact ? 30 : 44,
+            top: dropUp ? undefined : compact ? 30 : 44,
             maxHeight: 240,
           }}
         >

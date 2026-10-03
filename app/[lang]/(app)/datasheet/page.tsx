@@ -90,7 +90,7 @@ import {
   resolveUploadedFontFamilies,
   type UploadedFontFieldBrief,
 } from "@/lib/brand/upload";
-import { DEFAULT_QUALITY, type Quality } from "@/lib/types/quality";
+import { useDefaultQuality } from "@/lib/credits/use-default-quality";
 import {
   readBrandFromSession,
   fetchDefaultBrandKit,
@@ -327,7 +327,7 @@ export default function DatasheetPage() {
   const [error, setError] = useState("");
   // 402 credit-gate payload from POST /api/projects (billing Phase A).
   const [creditGate, setCreditGate] = useState<CreditGatePayload | null>(null);
-  const [quality, setQuality] = useState<Quality>(DEFAULT_QUALITY);
+  const [quality, setQuality] = useDefaultQuality();
 
   // ─── Derived flags ─────────────────────────────────────────────
   // File is REQUIRED here (unlike /create where text OR file

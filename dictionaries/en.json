@@ -1788,9 +1788,11 @@
     "favoritesGrid": { "emptyTitle": "No favorite projects yet", "emptyDesc": "Click the star in any project's options menu to add it to this page.", "goToProjects": "Go to projects" }
   },
   "editor": {
+    "deckFont": {"title": "Deck font", "hint": "Pick a font to preview it on the whole deck", "uploadedNote": "This font will replace your uploaded brand font in this deck.", "failed": "Couldn't change the font"},
     "sharedCta": {"title": "Made with taqreer.ai", "body": "Turn your ideas into a designed presentation in minutes.", "cta": "Create your presentation"},
     "deckColors": {"title":"Deck colors","hint":"Pick a color template to preview it on the whole deck","original":"Original colors","apply":"Apply","cancel":"Cancel","failed":"Couldn't change the colors","photosNote":"Generated photos keep their colors."},
     "toolbar": {
+      "deckFont": "Deck font",
       "deckColors": "Deck colors",
       "edit": "Edit",
       "ai": "AI",

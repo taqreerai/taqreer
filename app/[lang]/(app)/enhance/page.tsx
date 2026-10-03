@@ -75,7 +75,7 @@ import { useSlideCap } from "@/lib/credits/store";
 import { localizedExtractError } from "@/lib/extract/error-codes";
 import { readSource, clearSource } from "@/lib/types/source";
 import { MAX_ENHANCE_INSTRUCTIONS_CHARS } from "@/lib/types/brief-limits";
-import { DEFAULT_QUALITY, type Quality } from "@/lib/types/quality";
+import { useDefaultQuality } from "@/lib/credits/use-default-quality";
 import { LockedFlowBanner } from "@/components/billing/LockedFlowBanner";
 import {
   readBrandFromSession,
@@ -276,7 +276,7 @@ export default function EnhanceContentPage() {
   const rejectReasonId = "tq-enhance-reject-reason";
   // 402 credit-gate payload from POST /api/projects (billing Phase A).
   const [creditGate, setCreditGate] = useState<CreditGatePayload | null>(null);
-  const [quality, setQuality] = useState<Quality>(DEFAULT_QUALITY);
+  const [quality, setQuality] = useDefaultQuality();
   // Optional free-text design instructions forwarded to the model
   // (payload.enhance.instructions — the route clamps + whitelists).
   const [instructions, setInstructions] = useState("");
