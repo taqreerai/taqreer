@@ -16,6 +16,7 @@
 // A locked click opens the UpgradeModal instead of resolving. Every template
 // shows (the locked ones too, crowned) in one scrolling grid.
 
+import { PickerExpandButton, PickerExpandModal } from "@/components/create/PickerExpandModal";
 import { useEffect, useState } from "react";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { TemplateUpgradeModal, type TemplateGate } from "@/components/app/TemplateUpgradeModal";
@@ -47,6 +48,7 @@ export function TemplatePickerGrid({
   const dict = useDict();
   const { locale } = useLocale();
   const t = dict.flows.design;
+  const [expanded, setExpanded] = useState(false);
   const { lockFor, isPremiumLock, flowLocked } = useTemplateLock();
   const [templates, setTemplates] = useState<PickerTemplate[] | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
@@ -100,7 +102,7 @@ export function TemplatePickerGrid({
     }
   };
 
-  const tile = (tpl: PickerTemplate) => {
+  const tile = (tpl: PickerTemplate, big = false) => {
     const locked = lockFor(tpl) != null;
     const active = selectedId === tpl.id;
     const name = (locale === "en" ? tpl.name.en : tpl.name.ar) ?? undefined;
@@ -109,7 +111,10 @@ export function TemplatePickerGrid({
         key={tpl.id}
         type="button"
         disabled={disabled || (loadingId != null && loadingId !== tpl.id)}
-        onClick={() => void pick(tpl)}
+        onClick={() => {
+          if (big) setExpanded(false);
+          void pick(tpl);
+        }}
         title={name}
         aria-pressed={active}
         className={`pick-tile relative overflow-hidden rounded-lg p-1 disabled:cursor-not-allowed ${
@@ -143,6 +148,11 @@ export function TemplatePickerGrid({
             </span>
           ) : null}
         </div>
+        {big && name ? (
+          <span className="mt-1.5 block truncate px-0.5 text-start text-xs font-medium text-foreground/80">
+            {name}
+          </span>
+        ) : null}
       </button>
     );
   };
@@ -151,7 +161,10 @@ export function TemplatePickerGrid({
     <button
       type="button"
       disabled={disabled}
-      onClick={() => selectedId && onClear()}
+      onClick={() => {
+        setExpanded(false);
+        if (selectedId) onClear();
+      }}
       title={t.noTemplateDesc}
       aria-pressed={selectedId === null}
       className={`pick-tile rounded-lg p-1 ${selectedId === null ? "is-active" : ""}`}
@@ -178,8 +191,21 @@ export function TemplatePickerGrid({
           ? Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="animate-pulse rounded-lg bg-[var(--tq-overlay-soft)]" style={{ aspectRatio: "16/10" }} />
             ))
-          : list.map(tile)}
+          : list.map((tpl) => tile(tpl))}
       </div>
+      {list.length > 5 ? (
+        <PickerExpandButton onClick={() => setExpanded(true)} disabled={disabled} />
+      ) : null}
+      <PickerExpandModal
+        open={expanded}
+        title={t.allTemplates}
+        onClose={() => setExpanded(false)}
+      >
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+          {noneTile}
+          {list.map((tpl) => tile(tpl, true))}
+        </div>
+      </PickerExpandModal>
       {error || (templates && list.length === 0) ? (
         <span className={`text-[11px] ${error ? "text-red-400" : "text-foreground/50"}`}>
           {error ? t.failed : t.templatesEmpty}

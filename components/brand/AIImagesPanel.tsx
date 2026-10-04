@@ -56,46 +56,44 @@ export function AIImagesPanel({
   };
 
   return (
-    <div
-      className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${
-        value
-          ? "border-[var(--tq-violet)]/50 bg-[var(--tq-violet)]/15"
-          : "border-[var(--tq-violet)]/25 bg-[var(--tq-violet)]/8"
-      }`}
-    >
-      <span
-        className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[var(--tq-violet)]/25 text-[var(--tq-violet)]"
-        aria-hidden
-      >
-        <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
-          image
-        </span>
-      </span>
+    // Row layout (2026-10-04 redesign): matches the settings card's other
+    // rows (label on the reading edge, Toggle on the far edge, hairline
+    // separators owned by the parent) instead of a tinted feature box.
+    <div className="flex items-start justify-between gap-3">
       <div className="min-w-0 flex-1">
-        <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+        <span className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-foreground/70">
+          <span
+            className={`material-symbols-outlined transition-colors ${
+              value ? "text-[var(--tq-violet)]" : "text-foreground/45"
+            }`}
+            style={{ fontSize: 15 }}
+            aria-hidden
+          >
+            image
+          </span>
           {dict.flows.brand.aiImagesTitle}
           {locked ? (
             // Gold crown = paid feature (ExportMenu's affordance).
-            <PremiumCrown size={14} />
+            <PremiumCrown size={13} />
+          ) : null}
+          {freeTrialPerk ? (
+            <span className="whitespace-nowrap rounded-full bg-[var(--tq-violet)]/15 px-1.5 py-px text-[10px] font-semibold text-[var(--tq-violet)]">
+              {dict.flows.brand.aiImagesFreeHint}
+            </span>
           ) : null}
         </span>
-        <span className="block text-[11px] text-foreground/55">
+        <span className="mt-1 block text-[11px] leading-4 text-foreground/50">
           {dict.flows.brand.aiImagesDesc}
         </span>
-        {freeTrialPerk ? (
-          // Own line under the description, never wrapped: beside the title it
-          // squeezed the title onto two lines in the narrow settings card.
-          <span className="mt-1.5 inline-block whitespace-nowrap rounded-full bg-[var(--tq-violet)]/20 px-2 py-0.5 text-[10px] font-semibold text-[var(--tq-violet)]">
-            {dict.flows.brand.aiImagesFreeHint}
-          </span>
-        ) : null}
       </div>
-      <Toggle
-        ariaLabel={dict.flows.brand.aiImagesTitle}
-        value={value}
-        onChange={handleChange}
-        disabled={disabled}
-      />
+      <div className="shrink-0 pt-0.5">
+        <Toggle
+          ariaLabel={dict.flows.brand.aiImagesTitle}
+          value={value}
+          onChange={handleChange}
+          disabled={disabled}
+        />
+      </div>
       <UpgradeModal
         open={upgradeOpen}
         gateContext={{
