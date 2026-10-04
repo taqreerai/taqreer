@@ -15,17 +15,19 @@
 //
 // Extracted from /create/brand/page.tsx (2026-05-25) for /enhance
 // reuse. Per the "reuse > extend > fork > build new" rule.
+//
+// Searches the full bundled Google Fonts catalog (2026-10-04; was a curated
+// 16-family list), Arabic-capable families first, same search as the
+// editor's FontControl.
 
-import { useEffect, useRef, useState } from "react";
-import { GOOGLE_FONTS } from "@/lib/brand/fonts";
-import { previewCss2Url } from "@/lib/editor/font-search";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { previewCss2Url, searchGoogleFonts } from "@/lib/editor/font-search";
 
-// One shared stylesheet that loads every listed family's default weight, so
-// each row can render in its own typeface (2026-10-02: the rows set
-// font-family but nothing ever loaded the fonts, so all of them fell back
-// to the UI font and looked identical). Same approach as the editor's
-// FontControl; loaded once, the first time the list opens.
+// One shared stylesheet that loads the default weight of the families
+// currently listed, so each row renders in its own typeface. Re-pointed at
+// the visible results as the query changes (same approach as FontControl).
 const PREVIEW_LINK_ID = "tq-brand-font-preview";
+const RESULT_LIMIT = 60;
 import { useDict } from "@/components/i18n/LocaleProvider";
 
 export function GoogleFontSlot({
@@ -83,20 +85,26 @@ export function GoogleFontSlot({
     return () => document.removeEventListener("mousedown", onDocMouseDown);
   }, [open]);
 
-  useEffect(() => {
-    if (!open || document.getElementById(PREVIEW_LINK_ID)) return;
-    const link = document.createElement("link");
-    link.id = PREVIEW_LINK_ID;
-    link.rel = "stylesheet";
-    link.href = previewCss2Url(GOOGLE_FONTS.map((font) => font.family));
-    document.head.appendChild(link);
-  }, [open]);
+  const filtered = useMemo(
+    () =>
+      searchGoogleFonts(query, { limit: RESULT_LIMIT }).map((e) => ({
+        family: e.f,
+        arabic: e.a === 1,
+      })),
+    [query],
+  );
 
-  const filtered = query.trim()
-    ? GOOGLE_FONTS.filter((font) =>
-        font.family.toLowerCase().includes(query.trim().toLowerCase()),
-      )
-    : GOOGLE_FONTS;
+  useEffect(() => {
+    if (!open || filtered.length === 0) return;
+    let link = document.getElementById(PREVIEW_LINK_ID) as HTMLLinkElement | null;
+    if (!link) {
+      link = document.createElement("link");
+      link.id = PREVIEW_LINK_ID;
+      link.rel = "stylesheet";
+      document.head.appendChild(link);
+    }
+    link.href = previewCss2Url(filtered.map((font) => font.family));
+  }, [open, filtered]);
 
   const inputValue = open ? query : selected ?? "";
   const showPlaceholder = !inputValue;

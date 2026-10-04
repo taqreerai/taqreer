@@ -10,34 +10,14 @@
 // grew its own logo + font cards. Per the "reuse > extend > fork >
 // build new" rule.
 
+import { GOOGLE_FONTS_CATALOG } from "@/lib/editor/google-fonts-catalog";
+
 // ─── Google-Fonts catalog ─────────────────────────────────────────
 //
-// `arabic` flags whether the family actually carries Arabic glyphs.
-// Latin-only families paired with the Arabic sample text produce
-// tofu (.notdef) glyphs in the preview, so the slot components swap
-// to a Latin sample when this flag is false.
-//
-// Curated, not exhaustive — Cairo/Tajawal/etc. are the only
-// production-ready Arabic webfonts. Latin entries are the ones we
-// recommend pairing with them.
-export const GOOGLE_FONTS: { family: string; arabic: boolean }[] = [
-  { family: "Cairo", arabic: true },
-  { family: "Tajawal", arabic: true },
-  { family: "Almarai", arabic: true },
-  { family: "Noto Sans Arabic", arabic: true },
-  { family: "Amiri", arabic: true },
-  { family: "Reem Kufi", arabic: true },
-  { family: "Markazi Text", arabic: true },
-  { family: "IBM Plex Sans Arabic", arabic: true },
-  { family: "Inter", arabic: false },
-  { family: "Poppins", arabic: false },
-  { family: "Roboto", arabic: false },
-  { family: "Open Sans", arabic: false },
-  { family: "Lato", arabic: false },
-  { family: "Montserrat", arabic: false },
-  { family: "Space Grotesk", arabic: false },
-  { family: "DM Sans", arabic: false },
-];
+// The pickers search the full bundled catalog (lib/editor/google-fonts-catalog,
+// ~1,900 families, `a` = carries Arabic glyphs). Latin-only families paired
+// with Arabic sample text produce tofu (.notdef) glyphs in the preview, so the
+// slot components swap to a Latin sample for them (isLatinOnlyGoogleFont).
 
 // The full static weight ladder we request for EVERY family. Google's css2
 // endpoint silently drops weights a family doesn't carry (Almarai → 300/400/
@@ -74,8 +54,8 @@ export function expandWeightAxis<T extends string | null | undefined>(url: T): T
 // Used by the font slot components to pick the right sample text.
 export function isLatinOnlyGoogleFont(family: string | null | undefined): boolean {
   if (!family) return false;
-  const entry = GOOGLE_FONTS.find((f) => f.family === family);
-  return entry !== undefined && entry.arabic === false;
+  const entry = GOOGLE_FONTS_CATALOG.find((f) => f.f === family);
+  return entry !== undefined && entry.a === 0;
 }
 
 // ─── Sample text ──────────────────────────────────────────────────
