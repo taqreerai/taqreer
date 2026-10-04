@@ -58,7 +58,7 @@ export function CompareSlideTabs({
           aria-labelledby={`${baseId}-tab-${i}`}
           hidden={active !== i}
         >
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             {(["taqreer", "gamma"] as const).map((tool) => (
               <figure
                 key={tool}
@@ -86,7 +86,7 @@ export function CompareSlideTabs({
                   alt={alt[tool].replace("{title}", pair.title)}
                   width={1280}
                   height={720}
-                  sizes="(min-width: 640px) 50vw, 100vw"
+                  sizes="(min-width: 1024px) 50vw, 100vw"
                   className="h-auto w-full rounded-[10px] border border-[var(--tq-border-hairline)]"
                 />
               </figure>
