@@ -93,6 +93,61 @@ function normalizeSvgPathLength(root: HTMLElement): void {
   }
 }
 
+// Donut slices as ARCS (2026-10-04). Even with real-unit dashes, the export
+// misplaces each slice: the dash LENGTH survives but stroke-dashoffset (the
+// slice's start position) does not, so the rings came out rotated with gaps.
+// A <circle> whose dash pattern draws ONE arc per revolution is rewritten as
+// an explicit <path> arc from its start angle to its end angle, with no dashes
+// at all, which every renderer draws the same. SVG geometry: a circle's stroke
+// starts at 3 o'clock (cx + r, cy) and runs clockwise; a dashoffset `o` moves
+// the dash start to arc length -o. Repeating dash patterns (decorative dashed
+// rings) and full circles are left alone. Runs after normalizeSvgPathLength,
+// so dash values are already in user units. Offscreen DOM only.
+const SVG_NS = "http://www.w3.org/2000/svg";
+function donutCirclesToArcs(root: HTMLElement): void {
+  const circles = root.querySelectorAll<SVGCircleElement>("svg circle");
+  for (const c of Array.from(circles)) {
+    const cs = window.getComputedStyle(c);
+    if (!cs.strokeDasharray || cs.strokeDasharray === "none") continue;
+    const dashes = cs.strokeDasharray
+      .split(/[\s,]+/)
+      .filter(Boolean)
+      .map((v) => parseFloat(v));
+    if (dashes.length < 1 || dashes.length > 2 || dashes.some((v) => !Number.isFinite(v))) continue;
+    const cx = c.cx.baseVal.value;
+    const cy = c.cy.baseVal.value;
+    const r = c.r.baseVal.value;
+    if (!(r > 0)) continue;
+    const circumference = 2 * Math.PI * r;
+    const dash = dashes[0];
+    const period = dashes.length === 2 ? dashes[0] + dashes[1] : dashes[0] * 2;
+    // One arc per revolution only; a full ring or an empty dash stays as is.
+    if (period < circumference * 0.98) continue;
+    if (!(dash > 0) || dash >= circumference * 0.999) continue;
+    const offset = parseFloat(cs.strokeDashoffset) || 0;
+    const a0 = -offset / r;
+    const a1 = a0 + dash / r;
+    const x0 = cx + r * Math.cos(a0);
+    const y0 = cy + r * Math.sin(a0);
+    const x1 = cx + r * Math.cos(a1);
+    const y1 = cy + r * Math.sin(a1);
+    const largeArc = dash / r > Math.PI ? 1 : 0;
+    const path = document.createElementNS(SVG_NS, "path");
+    for (const attr of Array.from(c.attributes)) {
+      if (["cx", "cy", "r", "pathLength", "stroke-dasharray", "stroke-dashoffset"].includes(attr.name)) continue;
+      path.setAttribute(attr.name, attr.value);
+    }
+    path.setAttribute(
+      "d",
+      `M ${x0.toFixed(3)} ${y0.toFixed(3)} A ${r} ${r} 0 ${largeArc} 1 ${x1.toFixed(3)} ${y1.toFixed(3)}`,
+    );
+    path.style.strokeDasharray = "";
+    path.style.strokeDashoffset = "";
+    path.setAttribute("fill", "none");
+    c.replaceWith(path);
+  }
+}
+
 // Big titles carry a generous line-height for single-line breathing room
 // (often ≥ 1.5, and the Arabic-typography rule asks for it), but on a TWO-line
 // heading that ratio becomes a huge gap between the lines: dom-to-pptx converts
@@ -651,6 +706,7 @@ export async function exportManifestAsPptx(
 
     for (const slideNode of slideNodes) {
       normalizeSvgPathLength(slideNode);
+      donutCirclesToArcs(slideNode);
       splitMixedScriptFlexChildren(slideNode);
       stripArabicLetterSpacing(slideNode);
       insertScriptTransitionSpaces(slideNode);
