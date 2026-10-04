@@ -309,6 +309,16 @@ export function ExportMenu({
                       );
                     })}
                   </ul>
+                  {imageOnlyPptx ? (
+                    // Free plan: nudge toward sharing a link, whose viewers
+                    // see the slides without the watermark (project page).
+                    <p className="flex items-start gap-1.5 border-t border-foreground/[0.08] px-3 pb-1 pt-2.5 text-[11px] leading-relaxed text-foreground/55">
+                      <span className="material-symbols-outlined text-[14px] leading-[18px] text-[var(--tq-violet)]" aria-hidden>
+                        link
+                      </span>
+                      {dict.editor.export.shareLinkTip}
+                    </p>
+                  ) : null}
                 </motion.div>
               ) : null}
               </AnimatePresence>

@@ -132,6 +132,10 @@ export default async function ProjectPage({
       currentUserImage={profile?.image ?? null}
       initialMainSidebarWidth={initialMainSidebarWidth}
       {...data}
+      // Shared-link viewers see the deck WITHOUT the free watermark: the
+      // SharedDeckCta card carries the brand there, and a clean link is the
+      // reason free users share links instead of files (owner, 2026-10-04).
+      brandingWatermark={data.brandingWatermark && !showSharedCta}
     />
     </>
   );

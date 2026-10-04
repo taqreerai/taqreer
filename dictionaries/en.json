@@ -2052,7 +2052,7 @@
       "pptxImages": "PPTX (image slides)",
       "pptxImagesHint": "Present-ready. Editable PPTX is on Plus",
       "pptxEditable": "Editable PPTX",
-      "pptxEditableHint": "Edit text and layout in PowerPoint",
+      "pptxEditableHint": "Edit text and layout in PowerPoint", "shareLinkTip": "Tip: share a link instead. People you share it with see the slides without the watermark.",
       "png": "PNG",
       "export": "Export",
       "exportPresentation": "Export presentation"
