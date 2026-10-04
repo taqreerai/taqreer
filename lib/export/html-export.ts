@@ -835,10 +835,30 @@ export async function exportManifestAsPptx(
       slideFormat
     );
 
+    // Free (image-slide) decks: quiet, invisible-on-screen credits (owner
+    // direction 2026-10-04) - the file's Company property and a speaker note
+    // on the last slide. Best-effort: a failure ships the deck without them.
+    let creditedBlob: Blob = fixedBlob;
+    if (imageSlides) {
+      try {
+        creditedBlob = await addFreeFileCredits(
+          fixedBlob,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          JSZip as any,
+          slideNodes.length,
+          manifest.language === "en" ? "en" : "ar",
+        );
+      } catch (err) {
+        if (typeof console !== "undefined") {
+          console.warn("[html-export] free file credits skipped:", err);
+        }
+      }
+    }
+
     // Recompress embedded media (dom-to-pptx rasterises every image to PNG):
     // opaque parts → JPEG, transparent stay PNG, long edge capped at 1920px.
     // Best-effort — a failure ships the uncompressed (but valid) blob.
-    let finalBlob = fixedBlob;
+    let finalBlob = creditedBlob;
     // Image-slide (free) decks skip recompression: the 2x (3840px) slide
     // renders stay lossless PNG so text is crisp on 4K screens.
     if (!imageSlides) try {
@@ -877,3 +897,46 @@ export async function exportManifestAsPptx(
     container.remove();
   }
 }
+
+// ─── Free-plan file credits ─────────────────────────────────────────
+// The Company document property (File > Info in PowerPoint) and a speaker
+// note on the LAST slide. Neither shows on screen while presenting. pptxgenjs
+// writes an empty notes slide for every slide, so the note goes into the
+// existing body placeholder's first run.
+const FREE_NOTE = {
+  ar: "صُمم هذا العرض باستخدام taqreer (taqreer.ai)",
+  en: "Designed with taqreer (taqreer.ai)",
+} as const;
+
+async function addFreeFileCredits(
+  blob: Blob,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  JSZip: any,
+  slideCount: number,
+  lang: "ar" | "en",
+): Promise<Blob> {
+  const zip = await JSZip.loadAsync(blob);
+  const appPath = "docProps/app.xml";
+  const app = await zip.file(appPath)?.async("string");
+  if (app) {
+    zip.file(
+      appPath,
+      app.replace(/<Company>[^<]*<\/Company>/, "<Company>taqreer</Company>"),
+    );
+  }
+  const notesPath = `ppt/notesSlides/notesSlide${slideCount}.xml`;
+  const notes = await zip.file(notesPath)?.async("string");
+  if (notes) {
+    const rtl = lang === "ar";
+    zip.file(
+      notesPath,
+      notes.replace(
+        /(<p:ph type="body" idx="1"\/>[\s\S]*?<a:p>)(<a:r><a:rPr lang="en-US" dirty="0"\/>)<a:t>([^<]*)<\/a:t>/,
+        (_m: string, head: string, _run: string, existing: string) =>
+          `${head.replace(/<a:p>$/, rtl ? '<a:p><a:pPr rtl="1" algn="r"/>' : "<a:p>")}<a:r><a:rPr lang="${rtl ? "ar-SA" : "en-US"}" dirty="0"/><a:t>${existing ? `${existing} ` : ""}${FREE_NOTE[lang]}</a:t>`,
+      ),
+    );
+  }
+  return zip.generateAsync({ type: "blob" });
+}
+
