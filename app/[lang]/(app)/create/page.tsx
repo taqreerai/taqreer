@@ -1136,7 +1136,7 @@ export default function CreatePage() {
               }
               onPick={(p) => setColors([...p.colors])}
               disabled={submitting}
-              className="grid grid-cols-6 gap-1.5"
+              className="palette-scroll grid grid-cols-6 gap-1.5"
             />
             </div>
 

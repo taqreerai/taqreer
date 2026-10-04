@@ -2392,6 +2392,15 @@ body:has(.tq-support-toolbar) .support-fab-anchor {
 .palette-strip > span {
   flex: 1 1 0;
 }
+/* /create palette grid: 48 presets in a fixed-size Design card, so the grid
+   scrolls inside it. 72px shows two full rows plus half of the third, which
+   tells the user there is more to scroll. */
+.palette-scroll {
+  max-height: 72px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px;
+}
 
 /* Toolbar help trigger (2026-10-01): brand-blue fill so it stands out from
    the muted sibling icons. Opens the help popover, never WhatsApp directly. */
