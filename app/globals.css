@@ -2343,6 +2343,31 @@ body:has(.tq-support-toolbar) .support-fab-anchor {
   background: var(--tq-brand-blue);
   color: #fff;
 }
+/* Comparison pages ("A vs B"): the same segmented tabs with one column per
+   tab, the winning side's soft blue frame, and the round "vs" badge. */
+.design-tabs.compare-tabs {
+  grid-template-columns: repeat(var(--tab-count, 4), minmax(0, 1fr));
+}
+.compare-pick {
+  background: color-mix(in srgb, var(--tq-brand-blue) 6%, var(--tq-surface));
+  border: 1px solid color-mix(in srgb, var(--tq-brand-blue) 35%, transparent);
+}
+.compare-pick-cell {
+  background: color-mix(in srgb, var(--tq-brand-blue) 6%, var(--tq-surface));
+}
+.compare-vs {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  background: var(--tq-overlay-soft);
+  border: 1px solid var(--tq-border-hairline);
+  color: var(--tq-text-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
 /* Scrollable template / style grid inside the fixed-size Design card. */
 .design-scroll {
   max-height: 176px;

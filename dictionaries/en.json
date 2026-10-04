@@ -680,13 +680,36 @@
       "eyebrow": "Gamma AI vs taqreer.ai",
       "title": "Gamma in Arabic: same idea, a very different design",
       "subtitle": "Gamma is one of the best-known AI presentation tools. We asked it and taqreer.ai for a deck on the same idea: a launch plan for a specialty coffee shop in Riyadh. These are the slides exactly as both tools exported them, opened in PowerPoint, with no edits.",
-      "cta": "Try taqreer.ai free"
+      "cta": "Try taqreer.ai free",
+      "vs": "vs"
+    },
+    "verdict": {
+      "title": "Which one is right for you?",
+      "subtitle": "The two tools aim at different jobs. Here is the short answer before the details.",
+      "taqreer": {
+        "title": "Pick taqreer.ai if you want",
+        "points": [
+          "A polished Arabic or English deck on the first try",
+          "Consistent colors drawn from your topic",
+          "Titles that mix Arabic and English without breaking",
+          "A PowerPoint file that keeps text direction intact"
+        ]
+      },
+      "gamma": {
+        "title": "Pick Gamma if you want",
+        "points": [
+          "Documents or webpages you publish directly",
+          "Embedded outside content in what you publish",
+          "Analytics on who viewed what you shared"
+        ]
+      }
     },
     "compare": {
       "title": "Gamma AI and taqreer.ai slides side by side",
       "subtitle": "Screenshots of the PowerPoint files each tool exported, unedited.",
       "taqreer": "taqreer.ai",
       "gamma": "Gamma",
+      "notice": "What to notice:",
       "alt": {
         "taqreer": "{title} slide from taqreer.ai",
         "gamma": "{title} slide from Gamma AI"
