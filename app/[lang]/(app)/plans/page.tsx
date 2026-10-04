@@ -7,6 +7,7 @@
 
 import { BillingSection } from "@/components/billing/BillingSection";
 import { BillingTabs } from "@/components/billing/BillingTabs";
+import { InviteCard } from "@/components/billing/InviteCard";
 import { useDict } from "@/components/i18n/LocaleProvider";
 
 export default function PlansPage() {
@@ -16,6 +17,7 @@ export default function PlansPage() {
       <div className="mx-auto flex w-full max-w-6xl flex-col">
         <h1 className="tq-h1 mb-6">{dict.components.billing.title}</h1>
         <BillingTabs />
+        <InviteCard />
         <BillingSection />
       </div>
     </div>

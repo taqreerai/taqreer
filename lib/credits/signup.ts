@@ -36,6 +36,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { grantSignupCreditsGuarded } from "@/lib/credits/server";
+import { applyReferralAtSignup } from "@/lib/referral";
 import { isDisposableEmail } from "@/lib/auth/disposable-email";
 
 const IP_VELOCITY_LIMIT = 3;
@@ -104,6 +105,10 @@ export async function maybeGrantSignupCredits(args: {
   name?: string | null;
   // Audit-trail extras for the grant event metadata.
   geo?: { country: string | null; city: string | null };
+  // Raw `tq_ref` invite-code cookie (lib/referral-code.ts). Applied only
+  // AFTER this signup grant lands, so a farming-blocked account gets no
+  // invite bonus either (lib/referral.ts).
+  referralCode?: string | null;
 }): Promise<{
   granted: number;
   blocked: BlockReason | null;
@@ -194,6 +199,9 @@ export async function maybeGrantSignupCredits(args: {
     },
     guard: (tx) => runSignupGuards(tx, args, normalized, domain, selfName, deviceId),
   });
+  if (result.granted > 0 && args.referralCode) {
+    await applyReferralAtSignup({ userId: args.userId, rawCode: args.referralCode });
+  }
   return { granted: result.granted, blocked: result.blocked };
 }
 

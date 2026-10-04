@@ -20,6 +20,7 @@
 //   charge.refunded                 → (logged; manual refund handling
 //                                      lands with the admin panel)
 
+import { rewardInviterOnFirstPayment } from "@/lib/referral";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { prisma } from "@/lib/prisma";
@@ -164,6 +165,15 @@ export async function POST(request: Request) {
             prismaUserId,
             session.subscription as string | null,
             grant.plan,
+          );
+          // Invite-a-colleague: the buyer's first paid subscription rewards
+          // whoever invited them (idempotent, capped; lib/referral.ts). Never
+          // fails the webhook.
+          await rewardInviterOnFirstPayment(prismaUserId).catch((err) =>
+            console.error(
+              "[stripe] referral reward failed:",
+              err instanceof Error ? err.message : String(err),
+            ),
           );
           // Purchase/upgrade activation - tell the user (renewals are
           // covered by invoice.payment_succeeded's "credited" path;

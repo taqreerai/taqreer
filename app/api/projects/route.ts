@@ -35,6 +35,7 @@ import { TEASER_LOCKED_COUNT } from "@/lib/credits/cost";
 import { normalizePlan } from "@/lib/plan";
 import { mintTemplateDesignFile } from "@/lib/template/mint-design";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
+import { REFERRAL_COOKIE } from "@/lib/referral-code";
 import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 import { signupGeoFromHeaders } from "@/lib/api/geo";
 import { deviceIdFromCookies } from "@/lib/device-cookie";
@@ -595,6 +596,7 @@ export async function POST(request: Request) {
       name: dbUser.name,
       ip: geo.ip,
       deviceId: deviceIdFromCookies(await cookies()),
+      referralCode: (await cookies()).get(REFERRAL_COOKIE)?.value ?? null,
       geo,
     }).catch((err) => {
       // A grant hiccup must never fail project creation - the next

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
+import { REFERRAL_COOKIE } from "@/lib/referral-code";
 import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 import { signupGeoFromHeaders } from "@/lib/api/geo";
 import { deviceIdFromCookies } from "@/lib/device-cookie";
@@ -102,6 +103,7 @@ export async function POST(request: Request) {
         name: profile.name,
         ip: geo.ip,
         deviceId: deviceIdFromCookies(await cookies()),
+      referralCode: (await cookies()).get(REFERRAL_COOKIE)?.value ?? null,
         geo,
       }).catch((err) => {
         console.error(

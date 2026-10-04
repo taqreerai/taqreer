@@ -32,6 +32,15 @@ model User {
   signupIp       String?
   signupCountry  String? // ISO 3166-1 alpha-2
   signupCity     String? // decoded cf-ipcity (needs the CF visitor-location Managed Transform)
+  // Invite-a-colleague (2026-10-04). referralCode: this user's own invite
+  // code (minted lazily by /api/referral). referredById: who invited this
+  // user (set once, at the signup grant). referralRewardedAt: when the
+  // inviter got their reward for THIS user's first payment (idempotency).
+  referralCode       String?   @unique
+  referredById       String?
+  referredBy         User?     @relation("Referrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals          User[]    @relation("Referrals")
+  referralRewardedAt DateTime?
   projects       Project[]
   templates      Template[]
   brandKits      BrandKit[]
@@ -51,6 +60,8 @@ model User {
   notificationsActed Notification[] @relation("ActorNotifications")
   flattenEvents      FlattenEvent[]
   exportEvents       ExportEvent[]
+
+  @@index([referredById, referralRewardedAt])
 }
 
 model Project {

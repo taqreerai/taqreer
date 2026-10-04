@@ -6,6 +6,7 @@ import {
   isValidDeviceId,
 } from "@/lib/device-cookie";
 import { locales, defaultLocale, isLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
+import { REFERRAL_COOKIE, REFERRAL_COOKIE_MAX_AGE, parseReferralCode } from "@/lib/referral-code";
 import { localeFromPathname, stripLocale } from "@/lib/i18n/navigation";
 
 // Logical (locale-agnostic) route prefixes. The pathname is locale-prefixed at
@@ -110,7 +111,20 @@ export async function proxy(request: NextRequest) {
   const deviceId = isValidDeviceId(existingDeviceId)
     ? existingDeviceId
     : crypto.randomUUID();
+  // Invite link (?ref=CODE): remember the code until signup completes
+  // (lib/referral.ts applies it at the signup grant). Rides the same
+  // every-return wrapper as the device cookie.
+  const referralCode = parseReferralCode(searchParams.get("ref"));
   const withDeviceCookie = (res: NextResponse) => {
+    if (referralCode) {
+      res.cookies.set(REFERRAL_COOKIE, referralCode, {
+        path: "/",
+        maxAge: REFERRAL_COOKIE_MAX_AGE,
+        httpOnly: true,
+        secure: true,
+        sameSite: "lax",
+      });
+    }
     if (deviceId !== existingDeviceId) {
       res.cookies.set(DEVICE_COOKIE, deviceId, {
         path: "/",
