@@ -1,5 +1,9 @@
-// Free-plan branding (2026-10-02): the "Made with taqreer.ai" watermark on
-// every slide + a system-appended branded closing slide. One definition shared
+// Free-plan branding (2026-10-02; reworked 2026-10-04, owner direction): a
+// barely visible "Designed with taqreer" mark on every slide EXCEPT the cover,
+// and no branded closing slide (BRANDED_CLOSING_SLIDE = false). No ".ai" and
+// no "Made with" inside the deck: users who wrote their own content must not
+// look like they handed in AI-written work. The closing-slide helpers below
+// stay so the slide can be switched back on with the flag. One definition shared
 // by the studio (components/preview/FreeBranding.tsx), the server PNG export
 // (html-document-server) and the in-browser PPTX export (free-branding-canvas),
 // so all three draw the same thing.
@@ -17,8 +21,13 @@ import {
   WORDMARK_VIEWBOX,
 } from "@/lib/export/brand-marks";
 
-export const WATERMARK_TEXT = "Made with";
-export const WATERMARK_BRAND = "taqreer.ai";
+export const WATERMARK_TEXT = "Designed with";
+export const WATERMARK_BRAND = "taqreer";
+/** The appended branded closing slide (studio, PNG + PPTX export). Off since
+ *  2026-10-04: users deleted it or skipped exporting because of it. */
+export const BRANDED_CLOSING_SLIDE = false;
+/** Watermark opacity: present but barely visible (owner, 2026-10-04). */
+export const WATERMARK_OPACITY = 0.38;
 export const SITE_LABEL = "taqreer.ai";
 
 /** Closing-slide + cover-badge slogan in the deck's language (owner picks
@@ -93,11 +102,14 @@ export function watermarkHtml(
   dims: SlideDims,
   opts: { cover?: boolean } = {},
 ): string {
-  // The cover (slide 1) carries a larger badge with the slogan (2026-10-02):
-  // the one slide nobody deletes, so the brand message survives even when the
-  // closing slide is removed from a downloaded deck.
+  // No mark on the cover (2026-10-04): the slide people care most about.
+  if (opts.cover) return "";
+  // Smaller than the 2026-10-02 badge (x0.8), no drop shadow, and the whole
+  // badge at WATERMARK_OPACITY: readable up close, invisible from the back
+  // of a classroom. The soft dark pill keeps it legible on light AND dark
+  // slides alike.
   const base = watermarkGeometry(dims);
-  const k = opts.cover ? 1.3 : 1;
+  const k = 0.8;
   const g = {
     height: Math.round(base.height * k),
     margin: base.margin,
@@ -107,10 +119,7 @@ export function watermarkHtml(
     fontSize: Math.round(base.fontSize * k),
   };
   const side = watermarkSide(lang);
-  const slogan = opts.cover
-    ? `<span style="opacity:0.45;font-weight:400">·</span><span dir="${lang === "ar" ? "rtl" : "ltr"}" style="font-weight:600;opacity:0.9">${esc(CLOSING_SLOGAN[lang])}</span>`
-    : "";
-  return `<div data-tq-badge dir="ltr" style="position:absolute;${side}:${g.margin}px;bottom:${g.margin}px;height:${g.height}px;display:flex;align-items:center;gap:${g.gap}px;padding:0 ${g.padX}px 0 ${Math.round(g.padX * 0.55)}px;border-radius:${g.height}px;background:rgba(10,10,10,0.9);border:${Math.max(1, Math.round(g.height * 0.03))}px solid rgba(255,255,255,0.22);box-shadow:0 ${Math.round(g.height * 0.12)}px ${Math.round(g.height * 0.45)}px rgba(0,0,0,0.35);font-family:'Cairo',sans-serif;font-size:${g.fontSize}px;line-height:1;white-space:nowrap;color:${BRAND.text};z-index:2147483646">${barsIconSvg(g.icon)}<span style="font-weight:600;opacity:0.85">${esc(WATERMARK_TEXT)}</span><span style="font-weight:800;margin-inline-start:-${Math.round(g.gap * 0.6)}px">${esc(WATERMARK_BRAND)}</span>${slogan}</div>`;
+  return `<div data-tq-badge dir="ltr" style="position:absolute;${side}:${g.margin}px;bottom:${g.margin}px;height:${g.height}px;display:flex;align-items:center;gap:${g.gap}px;padding:0 ${g.padX}px 0 ${Math.round(g.padX * 0.55)}px;border-radius:${g.height}px;background:rgba(10,10,10,0.6);opacity:${WATERMARK_OPACITY};font-family:'Cairo',sans-serif;font-size:${g.fontSize}px;line-height:1;white-space:nowrap;color:${BRAND.text};z-index:2147483646">${barsIconSvg(g.icon)}<span style="font-weight:600">${esc(WATERMARK_TEXT)}</span><span style="font-weight:800;margin-inline-start:-${Math.round(g.gap * 0.6)}px">${esc(WATERMARK_BRAND)}</span></div>`;
 }
 
 /** Closing-slide geometry in slide pixels. */

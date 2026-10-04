@@ -27,6 +27,7 @@ import {
 } from "@/lib/schema/slide";
 import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import { FreeWatermarkLayer, BrandedClosingSlide } from "@/components/preview/FreeBranding";
+import { BRANDED_CLOSING_SLIDE } from "@/lib/export/free-branding";
 import { TeaserLockCanvas } from "@/components/preview/TeaserLockCanvas";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import { SlideEditor } from "@/components/preview/editor/SlideEditor";
@@ -4969,7 +4970,8 @@ export function DeckView({
   // (and after any legacy teaser slots). Never in slideJson; read-only; gone
   // once the owner upgrades.
   const brandLang: "ar" | "en" = (viewManifest?.language ?? "ar") === "en" ? "en" : "ar";
-  const showBrandSlide = brandingWatermark && !generating && viewSlides.length > 0;
+  const showBrandSlide =
+    BRANDED_CLOSING_SLIDE && brandingWatermark && !generating && viewSlides.length > 0;
   if (showBrandSlide) navItems.push({ kind: "brand", index: navItems.length });
   const brandFocusActive = showBrandSlide && brandFocused;
   // Which locked slot the hero is showing (guarded against a shrunk set, e.g.

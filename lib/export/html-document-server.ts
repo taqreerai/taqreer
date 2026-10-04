@@ -28,7 +28,7 @@ import { dimensionsForFormat } from "@/lib/schema/slide";
 import { sanitizeSlideHtmlServer } from "@/lib/export/sanitize-server";
 import { themeToCssVars, cssFontFamilyName } from "@/lib/export/theme-css-vars";
 import { googleFontLinkTags } from "@/lib/editor/font-search";
-import { CAIRO_CSS_URL, closingSlideHtml, watermarkHtml as freeWatermarkHtml } from "@/lib/export/free-branding";
+import { BRANDED_CLOSING_SLIDE, CAIRO_CSS_URL, closingSlideHtml, watermarkHtml as freeWatermarkHtml } from "@/lib/export/free-branding";
 
 export type HtmlDocumentServerOptions = {
   // When true, emit `@page { size: <canvas-dims>; margin: 0 }` +
@@ -115,10 +115,10 @@ export function buildHtmlDocumentServer(
   // OUTSIDE the sanitized slide HTML, identical to the studio's rendering.
   const brandLang = manifest.language === "en" ? "en" : "ar";
   const brandDims = { width: canvasW, height: canvasH };
-  // Slide 1 (the cover) gets the larger badge with the slogan.
+  // Slide 1 (the cover) gets no badge (watermarkHtml returns "").
   const watermarkFor = (i: number) =>
     options.watermark ? freeWatermarkHtml(brandLang, brandDims, { cover: i === 0 }) : "";
-  const closingSlide = options.watermark
+  const closingSlide = options.watermark && BRANDED_CLOSING_SLIDE
     ? `<div class="hx-slide" data-slide-id="tq-branded-closing">${closingSlideHtml(brandLang, brandDims)}</div>`
     : "";
 

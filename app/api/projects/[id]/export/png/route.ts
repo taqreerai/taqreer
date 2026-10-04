@@ -16,6 +16,7 @@
 // cover 5-25 slides at canvas-native res; longer decks would benefit
 // from the async path planned for step 15.5 + concurrency.
 
+import { BRANDED_CLOSING_SLIDE } from "@/lib/export/free-branding";
 import { NextResponse } from "next/server";
 import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 import JSZip from "jszip";
@@ -177,7 +178,7 @@ export async function POST(
   // the last PNG, after the deck's own slides.
   const captureIds = manifest.slides
     .map((s) => s.slideId)
-    .concat(freeBranding ? ["tq-branded-closing"] : []);
+    .concat(freeBranding && BRANDED_CLOSING_SLIDE ? ["tq-branded-closing"] : []);
 
   // Puppeteer + Chrome. Args identical to the thumbnail pipeline so
   // the runtime contract is single-sourced. Container deployments
