@@ -144,6 +144,15 @@ const DEFAULT_PALETTE = ["#000000", "#FFFFFF"];
 // keep their fixed-width 360 px cards (fewer of them per row).
 const CARD_MIN_H_CLASS = "min-h-[440px]";
 
+// Steps 1-2 share one grid cell and the inactive card stays `invisible` (keeps
+// its height) so the frame doesn't jump between them. Step 3 is much shorter
+// and must hug its content (user direction 2026-10-04: no dead space), so on
+// step 3 the other two cards leave layout entirely.
+function stackedCardVisibility(card: 0 | 1, step: number): string {
+  if (step === card) return "flex";
+  return step === 2 ? "hidden" : "invisible flex";
+}
+
 // SLIDE_COUNT_OPTIONS + LANGUAGE_OPTIONS are built inside the component so their
 // labels can come from the active-locale dictionary.
 
@@ -860,14 +869,15 @@ export default function CreatePage() {
               (col/row-start-1) and the inactive ones are `invisible`
               (visibility, not display) - they keep participating in
               layout, so the stack's height is the TALLEST card at
-              every step and the frame never jumps between steps
-              (user direction 2026-08-30). */}
+              steps 1-2 and the frame never jumps between them
+              (user direction 2026-08-30). Step 3 hugs its content
+              (stackedCardVisibility, 2026-10-04). */}
           <div className="grid w-full justify-items-center">
           {/* ═══════════════════════════════════════════════════════
               CONTENT CARD (step 1)
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`surface-card ${step === 0 ? "" : "invisible"} col-start-1 row-start-1 flex w-full sm:w-[430px] ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card ${stackedCardVisibility(0, step)} col-start-1 row-start-1 w-full sm:w-[430px] ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <CardHeader icon="subject" title={t.contentCard} />
 
@@ -978,7 +988,7 @@ export default function CreatePage() {
               scrolls inside it.
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`surface-card ${step === 1 ? "" : "invisible"} col-start-1 row-start-1 flex w-full sm:w-[430px] ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card ${stackedCardVisibility(1, step)} col-start-1 row-start-1 w-full sm:w-[430px] ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             {/* Mirrors CardHeader exactly (icon + title + pb-4 hairline) so
                 the separator and title sit at the same heights as the other
@@ -1180,7 +1190,7 @@ export default function CreatePage() {
               EXPORT SETTINGS CARD (step 3)
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`surface-card ${step === 2 ? "" : "invisible"} col-start-1 row-start-1 flex w-full sm:w-[430px] ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card ${step === 2 ? "" : "invisible"} col-start-1 row-start-1 flex w-full sm:w-[430px] flex-col gap-4 rounded-2xl p-4`}
           >
             <CardHeader icon="settings" title={t.outputCard} />
 
