@@ -6,9 +6,16 @@ machine. Update it when a task lands or a new one starts.
 
 ## State
 
-- **Live (taqreer.ai)** = commit `96a191f` (donut export fix), deployed 2026-10-04.
-- **On `dev`, NOT deployed:** the Gamma comparison page `/gamma-arabic` (see below).
-  It goes live on the owner's next `./deploy.sh` from the desktop.
+- **Live (taqreer.ai)** = commit `12136ed`, deployed 2026-10-04. Nothing waiting on `dev`.
+- Shipped in that deploy: `/gamma-arabic` in an "A vs B" layout (face-off hero,
+  "pick X if" cards, tabbed screenshot pairs that stack below 1024px, comparison grid);
+  /create "No template" now reads "تلقائي / Automatic"; /create step 3 card hugs its
+  content (`stackedCardVisibility`); the brand/deck font dropdown (`GoogleFontSlot`)
+  searches the full ~1,900-family Google Fonts catalog, Arabic-capable first.
+- Owner to check: PowerPoint export with a newly selectable Arabic font (e.g. Alexandria);
+  request indexing for `/ar/gamma-arabic` + `/en/gamma-arabic` in Search Console.
+- The owner works on Windows (Git Bash), not macOS, and is not a developer: give plain
+  steps. Cloud branches reach dev via `git pull --no-edit origin <branch>` on the desktop.
 
 ## Recently shipped (live)
 
@@ -82,6 +89,19 @@ copy in `dict.gammaArabic`, screenshots in `public/compare/*.webp`):
    stuffing. Claims about competitors must be verifiable.
 
 ## Pending work (owner decides order)
+
+0. **Education push (decided 2026-10-04).** Research in
+   `docs/seo-research-education-2026-10-04.md`: per-subject pages do NOT pay off (all 25
+   subjects ~600/mo combined). Plan: (a) owner generates 5 lesson decks (math gr8,
+   science gr7, chemistry gr10, physics gr10, Arabic gr8; prompts with per-subject
+   writing guides were given in chat) and saves them as templates; (b) one
+   "ready-made presentations" page (عرض بوربوينت جاهز 720, بوربوينت جاهز 720, عرض تقديمي
+   جاهز 480, عروض بوربوينت جاهزة 210, all KD 0-1, SA) showing those templates; (c) a
+   teachers' lesson-prep page (تحضير الدروس 260/mo, CPC $2.53); (d) teacher outreach to
+   Gulf university e-learning / teacher resource pages; (e) proposed referral program:
+   +400 credits to the invitee, 2,000 to the inviter when the invitee PAYS, capped;
+   25% recurring 12 months for approved teacher ambassadors via Rewardful/Tolt. Amounts
+   not yet confirmed by the owner. Referral needs a schema change: PR + security review.
 
 1. **More SEO pages.** The OpenSEO MCP is NOT available in the cloud: use these numbers
    (Saudi Arabia, monthly searches) and don't invent new ones.
