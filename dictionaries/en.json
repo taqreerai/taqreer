@@ -286,7 +286,7 @@
                 "A design for every slide: the AI picks each slide's layout for its content instead of pouring text into one fixed template.",
                 "Built-in review: after generating, the AI checks the slides and improves any with layout, overflow, or readability problems.",
                 "Arabic-first: right-to-left direction that stays correct even in the PowerPoint file. See [Arabic presentations](/arabic-presentations).",
-                "Images that fit: on paid plans the AI can add [generated images](/powerpoint-images) to any deck."
+                "Images that fit: the AI can add [generated images](/powerpoint-images) to any deck, free on your trial."
               ]
             }
           ]
@@ -1126,7 +1126,7 @@
     },
     "faq": [
       { "q": "How do I add AI images to my deck?", "a": "Turn on generated images when you create a deck, and the AI adds images that fit your slides. You can regenerate any image from the editor." },
-      { "q": "Are AI images on the free plan?", "a": "AI image generation is on paid plans. The free photo library is open to everyone." },
+      { "q": "Are AI images on the free plan?", "a": "Yes. On the free plan, generated images are free on your trial and do not use your credits. On paid plans, each image uses credits from your monthly balance. The free photo library is open to everyone." },
       { "q": "Can I use my own images?", "a": "Yes. Upload images in the editor or save them to your library." },
       { "q": "Do images stay when I export?", "a": "Yes. Images stay in your deck when you export to PowerPoint or PDF." }
     ],
@@ -1654,7 +1654,8 @@
       "savedKit": "Saved brand kit",
       "savedKits": "Saved brand kits",
       "aiImagesTitle": "Smart photos for your content",
-      "aiImagesDesc": "AI photos generated to fit each slide"
+      "aiImagesDesc": "AI photos generated to fit each slide",
+      "aiImagesFreeHint": "Free on your trial"
     },
     "output": {
       "slideSize": "Slide size",

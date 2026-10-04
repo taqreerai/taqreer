@@ -24,6 +24,7 @@ import { NextResponse } from "next/server";
 import { rateLimited } from "@/lib/api/rate-limit";
 import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
+import { isPaidPlan } from "@/lib/plan";
 import { resolveProjectAccess } from "@/lib/api/project-access";
 import { genImageIdentityHash } from "@/lib/images/store";
 import { scanGenImages, type GenImageAspect } from "@/lib/images/slide-images";
@@ -109,6 +110,32 @@ export async function POST(
   const latestVersionId = presentation?.versions[0]?.id;
   if (!presentation || !latestVersionId) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  }
+
+  // Free accounts get generated images on their trial deck at 0 credits
+  // (lib/images/images-gating, 2026-10-04) but not unlimited free re-rolls:
+  // regen is uncharged for everyone, so on the free plan it is limited to
+  // RETRYING a box whose image failed. Re-prompting a working image needs a
+  // paid plan. Admins are exempt.
+  const regenUser = access.user.prismaId
+    ? await prisma.user.findUnique({
+        where: { id: access.user.prismaId },
+        select: { plan: true, role: true },
+      })
+    : null;
+  if (!regenUser || (regenUser.role !== "admin" && !isPaidPlan(regenUser.plan))) {
+    const row = await prisma.generatedImage.findUnique({
+      where: {
+        presentationVersionId_genid: {
+          presentationVersionId: latestVersionId,
+          genid,
+        },
+      },
+      select: { status: true },
+    });
+    if (row?.status !== "failed") {
+      return NextResponse.json({ error: "images_regen_locked" }, { status: 402 });
+    }
   }
 
   // Product-photo reference: derived from the STORED slide HTML, never from

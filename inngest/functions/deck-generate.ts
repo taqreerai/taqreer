@@ -1,3 +1,4 @@
+import { imageCreditsForPlan } from "@/lib/images/images-gating";
 import Anthropic from "@anthropic-ai/sdk";
 import { toSdkThinking } from "@/lib/anthropic/model-thinking";
 import { Prisma } from "@prisma/client";
@@ -3254,11 +3255,21 @@ export const deckGenerate = inngest.createFunction(
             MAX_GENERATED_IMAGES,
           )
         : 0;
+      // Free plan: images are free (trial perk, lib/images/images-gating),
+      // matching the hold preflight took for this job.
+      const owner =
+        imageBoxes > 0
+          ? await prisma.project.findUnique({
+              where: { id: data.projectId },
+              select: { user: { select: { plan: true } } },
+            })
+          : null;
+      const perImage = imageCreditsForPlan(owner?.user.plan, getImageCredits());
       const result = await settleHold({
         jobKey: jobId,
         chargeAmount:
           generationCost(pricedPreset, manifest.slides.length, creditCostFor) +
-          imageBoxes * getImageCredits(),
+          imageBoxes * perImage,
         metadata: {
           status: stoppedEarly ? "cancelled_keep_partial" : "succeeded",
           produced: manifest.slides.length,

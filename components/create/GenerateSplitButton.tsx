@@ -21,6 +21,7 @@
 // (per "reuse existing components" rule). Both call sites pass
 // their own `onGenerate`, `quality`, `disabled`, `loading`.
 
+import { imageCreditsForPlan } from "@/lib/images/images-gating";
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -330,7 +331,14 @@ export function GenerateSplitButton({
                 slides * preset.perSlideCredits +
                 // Same surcharge the server holds (preset-independent);
                 // live DB rate once /api/credits resolves, constant before.
-                imagesSurcharge(slides, imagesMode, credits?.imageCredits);
+                // Free plan: 0 per image (trial perk), same rule as the hold.
+                imagesSurcharge(
+                  slides,
+                  imagesMode,
+                  credits
+                    ? imageCreditsForPlan(credits.plan, credits.imageCredits)
+                    : undefined,
+                );
               // "Up to" (auto) ceiling: mirror preflight's probe-down so the
               // shown maximum equals what the server will actually HOLD for
               // this preset - a low balance lowers the ceiling instead of

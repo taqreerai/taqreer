@@ -66,6 +66,7 @@ import {
 } from "@/components/credits/CreditGateDialog";
 import { useSlideCap, useCreditBalance } from "@/lib/credits/store";
 import { isImagesLocked } from "@/lib/images/images-gating";
+import { isPaidPlan } from "@/lib/plan";
 import { displaySlideEstimate } from "@/lib/credits/cost";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { localizedExtractError } from "@/lib/extract/error-codes";
@@ -352,17 +353,25 @@ export default function CreatePage() {
   // Plus+ gate (2026-08, lib/images/images-gating.ts): free users can't
   // enable it, and paying users choose it deliberately. On → deck-generate
   // uses the photography-led system prompt + reserves generated-image boxes.
-  const [imagesMode, setImagesMode] = useState<boolean>(false);
-  // Whether generated images are unlocked for this user (Plus+/admin). Also
-  // gates the design-style auto-enable below — a locked user picking an
-  // image-leaning style keeps images OFF (owner decision 2026-08-03) instead
-  // of silently arming a 402 at generate time. The panel's own toggle gate
-  // (AIImagesPanel) covers the direct path.
+  // Whether generated images are unlocked for this user (all plans since
+  // 2026-10-04, see lib/images/images-gating). Also gates the design-style
+  // auto-enable below. The panel's own toggle gate (AIImagesPanel) covers the
+  // direct path.
   const creditsForImages = useCreditBalance();
   const imagesUnlocked = !isImagesLocked({
     plan: creditsForImages?.plan ?? null,
     isAdmin: creditsForImages?.isAdmin ?? false,
   });
+  // Images default ON for free accounts (their images cost 0 credits, owner
+  // decision 2026-10-04: the first deck shows the product at its best) and
+  // OFF for paid plans. Derived until the user touches the toggle, so the
+  // default follows /api/credits once it resolves without a mount effect.
+  const [imagesChoice, setImagesMode] = useState<boolean | null>(null);
+  const imagesMode =
+    imagesChoice ??
+    (creditsForImages !== null &&
+      !creditsForImages.isAdmin &&
+      !isPaidPlan(creditsForImages.plan));
   // Picked template (Design step, declared here so the style handler below
   // can clear it): its minted design reference. Null = from scratch.
   const [template, setTemplate] = useState<{

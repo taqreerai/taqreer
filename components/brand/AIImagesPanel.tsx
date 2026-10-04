@@ -6,8 +6,8 @@
 // the Toggle on the far edge. The violet wash + border make it read as a
 // feature, not a row of fine print.
 //
-// Tier-gated to Plus+ (2026-08: imageCredits is priced below cost, so free
-// images decks lost money). The gate lives IN this component so all three
+// Open to every plan since 2026-10-04 (free accounts pay 0 credits per image
+// and see a "free on your trial" pill). The gate lives IN this component so all three
 // flows inherit it with zero per-flow wiring: a locked user sees a gold crown
 // and their enable click opens the UpgradeModal instead of flipping the
 // toggle — the Toggle stays controlled by the parent value, so nothing
@@ -20,7 +20,7 @@ import { Toggle } from "@/components/create/controls";
 import { useDict } from "@/components/i18n/LocaleProvider";
 import { useCreditBalance } from "@/lib/credits/store";
 import { isImagesLocked, IMAGES_GATE_TIER } from "@/lib/images/images-gating";
-import { planLabel } from "@/lib/plan";
+import { isPaidPlan, planLabel } from "@/lib/plan";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import { PremiumCrown } from "@/components/billing/PremiumCrown";
 
@@ -43,6 +43,9 @@ export function AIImagesPanel({
     isAdmin: credits?.isAdmin ?? false,
   });
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  // Free accounts: images cost them 0 credits (lib/images/images-gating).
+  const freeTrialPerk =
+    credits !== null && !credits.isAdmin && !isPaidPlan(credits.plan);
 
   const handleChange = (next: boolean) => {
     if (locked && next) {
@@ -74,6 +77,11 @@ export function AIImagesPanel({
           {locked ? (
             // Gold crown = paid feature (ExportMenu's affordance).
             <PremiumCrown size={14} />
+          ) : null}
+          {freeTrialPerk ? (
+            <span className="rounded-full bg-[var(--tq-violet)]/20 px-2 py-0.5 text-[10px] font-semibold text-[var(--tq-violet)]">
+              {dict.flows.brand.aiImagesFreeHint}
+            </span>
           ) : null}
         </span>
         <span className="block text-[11px] text-foreground/55">

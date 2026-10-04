@@ -2,9 +2,14 @@
 //   • AIImagesPanel (the toggle's lock + UpgradeModal trigger, all 3 flows)
 //   • the create page's design-style auto-enable back door
 //   • preflightGenerate (the server 402 `images_locked` gate)
-// Same shape as lib/export/export-gating.ts, and the same tier: generated
-// images are a paid feature (imageCredits is priced below cost — free decks
-// generating images lost money on every image, 2026-08 decision).
+// Same shape as lib/export/export-gating.ts.
+//
+// 2026-10-04 (owner decision): generated images are UNLOCKED for every plan.
+// Free accounts get them at 0 credits per image (imageCreditsForPlan), so a
+// free 8-slide deck still fits the 400 signup grant. That is self-limiting:
+// free accounts can't buy top-ups, so the free images end with the grant.
+// Paid plans pay the DB per-image rate as before. The lock + UpgradeModal
+// plumbing stays so the gate can be restored by editing isImagesLocked.
 
 import { type KnownPlan, isPaidPlan } from "@/lib/plan";
 
@@ -23,6 +28,20 @@ export function isImagesLocked(user: {
   plan: string | null;
   isAdmin: boolean;
 }): boolean {
-  if (user.isAdmin) return false;
-  return !isPaidPlan(user.plan);
+  void user;
+  return false;
+}
+
+/**
+ * Credits charged per generated image for a plan: 0 on free (the trial perk
+ * above), the given rate on paid plans. Used by the client estimate, the
+ * preflight hold and the deck-generate settle so shown == held == charged.
+ * `perImage` undefined (client before /api/credits resolves) passes through
+ * so imagesSurcharge falls back to its bundled constant.
+ */
+export function imageCreditsForPlan<T extends number | undefined>(
+  plan: string | null | undefined,
+  perImage: T,
+): T | 0 {
+  return isPaidPlan(plan) ? perImage : 0;
 }

@@ -19,8 +19,9 @@
 //      the primary offers.
 // Only after all four pass may the caller place the hold.
 
+import { imageCreditsForPlan, isImagesLocked } from "@/lib/images/images-gating";
 import type { Quality } from "@/lib/types/quality";
-import { normalizePlan, isPaidPlan } from "@/lib/plan";
+import { normalizePlan } from "@/lib/plan";
 import {
   type Flow,
   type SlideEstimateInput,
@@ -154,7 +155,8 @@ export async function preflightGenerate(args: {
   const balance = await getBalance(args.userId, now);
   const estimate = estimateSlides(args.slideInput);
   const imagesMode = args.imagesMode === true;
-  const imageCredits = getImageCredits();
+  // Free plan: images cost 0 credits (trial perk, lib/images/images-gating).
+  const imageCredits = imageCreditsForPlan(plan, getImageCredits());
   // Slide cost + image surcharge for a preset at a slide count - the
   // shape every offer below must price with so shown == held.
   const costWithImages = (preset: Quality, slides: number): number =>
@@ -202,11 +204,10 @@ export async function preflightGenerate(args: {
   ) {
     return { ok: false, plan, balance, reason: "preset_locked", quotes };
   }
-  // Generated images are Plus+ (lib/images/images-gating.ts, 2026-08:
-  // imageCredits is priced below cost, so free images decks lose money).
-  // Explicit admin check (not resolvedTier): this isn't a tier-config field.
-  // The client toggle is locked for free users; this catches direct POSTs.
-  if (imagesMode && !args.isAdmin && !isPaidPlan(plan)) {
+  // Generated-images gate (lib/images/images-gating.ts). Open to every plan
+  // since 2026-10-04 (free pays 0 per image); kept wired to isImagesLocked so
+  // restoring the gate is a one-line change there.
+  if (imagesMode && isImagesLocked({ plan, isAdmin: args.isAdmin === true })) {
     return { ok: false, plan, balance, reason: "images_locked", quotes };
   }
   // An EXACT size above the cap blocks BEFORE generating (enhance is a
