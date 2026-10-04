@@ -124,16 +124,13 @@ export async function POST(
       })
     : null;
   if (!regenUser || (regenUser.role !== "admin" && !isPaidPlan(regenUser.plan))) {
-    const row = await prisma.generatedImage.findUnique({
-      where: {
-        presentationVersionId_genid: {
-          presentationVersionId: latestVersionId,
-          genid,
-        },
-      },
-      select: { status: true },
+    // Atomic claim (check + flip in one statement) so parallel requests can't
+    // all pass while the row still reads "failed".
+    const claimed = await prisma.generatedImage.updateMany({
+      where: { presentationVersionId: latestVersionId, genid, status: "failed" },
+      data: { status: "generating" },
     });
-    if (row?.status !== "failed") {
+    if (claimed.count !== 1) {
       return NextResponse.json({ error: "images_regen_locked" }, { status: 402 });
     }
   }
