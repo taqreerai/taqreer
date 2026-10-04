@@ -1653,8 +1653,8 @@
       "scriptLatin": "Latin",
       "savedKit": "Saved brand kit",
       "savedKits": "Saved brand kits",
-      "aiImagesTitle": "Generate images",
-      "aiImagesDesc": "Generate AI photos for the deck"
+      "aiImagesTitle": "Smart photos for your content",
+      "aiImagesDesc": "AI photos generated to fit each slide"
     },
     "output": {
       "slideSize": "Slide size",

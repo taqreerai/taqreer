@@ -963,18 +963,6 @@ export default function CreatePage() {
               />
             </div>
 
-            {/* Generate-images toggle — moved INTO the content card
-                (owner direction 2026-08-03: next to where the content is
-                typed, so it can't be missed). Plus+ gated inside the
-                panel itself; free users get the crown + UpgradeModal. */}
-            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
-              <AIImagesPanel
-                value={imagesMode}
-                onChange={setImagesMode}
-                disabled={submitting}
-              />
-            </div>
-
             {/* Persistent footer element — text input only (position
                 picker removed 2026-06-02; Claude places it). No cover/
                 closing exclude — it's on every slide by definition. */}
@@ -1293,6 +1281,18 @@ export default function CreatePage() {
                 ariaLabel={t.slideNumbering}
                 value={pagination}
                 onChange={setPagination}
+              />
+            </div>
+
+            {/* Generate-images toggle - in the settings card (owner direction
+                2026-10-04; was in the content card since 2026-08-03). Plus+
+                gated inside the panel itself; free users get the crown +
+                UpgradeModal. */}
+            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
+              <AIImagesPanel
+                value={imagesMode}
+                onChange={setImagesMode}
+                disabled={submitting}
               />
             </div>
 
