@@ -2393,10 +2393,10 @@ body:has(.tq-support-toolbar) .support-fab-anchor {
   flex: 1 1 0;
 }
 /* /create palette grid: 48 presets in a fixed-size Design card, so the grid
-   scrolls inside it. 72px shows two full rows plus half of the third, which
-   tells the user there is more to scroll. */
+   scrolls inside it, like the template list (.design-scroll). 60px shows two
+   rows plus a sliver of the third, which tells the user there is more. */
 .palette-scroll {
-  max-height: 72px;
+  max-height: 60px;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 2px;

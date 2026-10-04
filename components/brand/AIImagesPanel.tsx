@@ -78,15 +78,17 @@ export function AIImagesPanel({
             // Gold crown = paid feature (ExportMenu's affordance).
             <PremiumCrown size={14} />
           ) : null}
-          {freeTrialPerk ? (
-            <span className="rounded-full bg-[var(--tq-violet)]/20 px-2 py-0.5 text-[10px] font-semibold text-[var(--tq-violet)]">
-              {dict.flows.brand.aiImagesFreeHint}
-            </span>
-          ) : null}
         </span>
         <span className="block text-[11px] text-foreground/55">
           {dict.flows.brand.aiImagesDesc}
         </span>
+        {freeTrialPerk ? (
+          // Own line under the description, never wrapped: beside the title it
+          // squeezed the title onto two lines in the narrow settings card.
+          <span className="mt-1.5 inline-block whitespace-nowrap rounded-full bg-[var(--tq-violet)]/20 px-2 py-0.5 text-[10px] font-semibold text-[var(--tq-violet)]">
+            {dict.flows.brand.aiImagesFreeHint}
+          </span>
+        ) : null}
       </div>
       <Toggle
         ariaLabel={dict.flows.brand.aiImagesTitle}
