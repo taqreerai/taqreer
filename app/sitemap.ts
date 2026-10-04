@@ -43,6 +43,7 @@ const ROUTES: {
   { path: "redesign", changeFrequency: "weekly", priority: 0.8, lastModified: "2026-07-01" },
   { path: "presentation-style", changeFrequency: "weekly", priority: 0.8, lastModified: "2026-07-01" },
   { path: "arabic-presentations", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-07-01" },
+  { path: "gamma-arabic", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-10-04" },
   { path: "pdf-to-powerpoint", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-10-01" },
   { path: "word-to-powerpoint", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-10-01" },
   { path: "powerpoint-online", changeFrequency: "weekly", priority: 0.8, lastModified: "2026-10-01" },

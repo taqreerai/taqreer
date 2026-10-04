@@ -100,6 +100,8 @@ machine: no `.env.local`, no docker DB, no Inngest, no `ssh taqreer`, no local M
 - **What does NOT work:** running the app, generating decks, uploads, logged-in pages,
   prod DB / logs, deploying. Never ask for or store prod secrets (Stripe live key,
   Supabase service role) in the cloud environment.
+- **Secrets never go in the repo**, private or not: `.env*` stays gitignored. If a task
+  seems to need a key, stop and say so; the owner tests it locally instead.
 - **Branch:** commit to `dev` and `git push origin dev`. If the environment forces its
   own branch, open a PR into `dev`. Never push to `main` (`deploy.sh` owns it).
 - **Commits:** `git -c user.name="Osama" -c user.email="dsignerarts@gmail.com" commit`,

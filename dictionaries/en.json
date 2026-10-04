@@ -182,6 +182,7 @@
       "brandKit": { "title": "Brand kit", "body": "Your colors, fonts, and logo on every deck" },
       "collaboration": { "title": "Collaboration", "body": "Share, comment, and edit with your team" },
       "exportFormats": { "title": "Export", "body": "PowerPoint, PDF, and Google Slides" },
+      "gammaArabic": { "title": "Gamma in Arabic", "body": "Gamma AI vs taqreer.ai for Arabic decks" },
       "pricing": { "title": "Pricing", "body": "Simple plans; start free." }
     }
   },
@@ -668,6 +669,154 @@
       "billing": "Billing & payments",
       "support": "Support & bug report"
     }
+  },
+  "gammaArabic": {
+    "meta": {
+      "title": "Gamma AI in Arabic: Gamma vs taqreer.ai compared",
+      "description": "Does Gamma AI work in Arabic? We gave the Gamma app and taqreer.ai the same idea and compared colors, spacing, design, and right-to-left text. See the slides side by side."
+    },
+    "breadcrumb": "Gamma in Arabic",
+    "hero": {
+      "eyebrow": "Gamma AI vs taqreer.ai",
+      "title": "Gamma in Arabic: same idea, a very different design",
+      "subtitle": "Gamma is one of the best-known AI presentation tools. We asked it and taqreer.ai for a deck on the same idea: a launch plan for a specialty coffee shop in Riyadh. These are the slides exactly as both tools exported them, opened in PowerPoint, with no edits.",
+      "cta": "Try taqreer.ai free"
+    },
+    "compare": {
+      "title": "Gamma AI and taqreer.ai slides side by side",
+      "subtitle": "Screenshots of the PowerPoint files each tool exported, unedited.",
+      "taqreer": "taqreer.ai",
+      "gamma": "Gamma",
+      "alt": {
+        "taqreer": "{title} slide from taqreer.ai",
+        "gamma": "{title} slide from Gamma AI"
+      },
+      "pairs": [
+        {
+          "title": "Cover",
+          "note": "taqreer.ai picked a warm brown palette that looks like coffee itself and put the project's key numbers in cards on the cover. Gamma's cover is plain red with a large title only."
+        },
+        {
+          "title": "Content",
+          "note": "In taqreer.ai the Arabic title stays right-aligned even with the phrase Specialty Coffee inside it, and big numbers lead the reading. In Gamma the title came out left-aligned with the English phrase split over two lines, and a large empty yellow area sits between the title and the bullets."
+        },
+        {
+          "title": "Chart",
+          "note": "taqreer.ai's chart shows the budget split with a clear key of amounts and percentages, in the deck's own colors. In Gamma's chart the bottom axis title is cut off and the side axis title overlaps the chart frame."
+        },
+        {
+          "title": "Closing",
+          "note": "taqreer.ai closes on a full photo with the project summary and its key numbers. Gamma's closing slide mixes four different colors on one slide, and some text touches the edges of its boxes."
+        }
+      ]
+    },
+    "table": {
+      "title": "Gamma AI vs taqreer.ai on the points you care about",
+      "subtitle": "What anyone notices when they open the deck.",
+      "criterion": "Criterion",
+      "rows": [
+        {
+          "criterion": "Colors",
+          "taqreer": "One palette drawn from the topic (brown, cream, and olive for a coffee deck) on every slide",
+          "gamma": "Loud primary colors (red, yellow, blue, green) unrelated to the topic, changing from slide to slide"
+        },
+        {
+          "criterion": "Spacing",
+          "taqreer": "Balanced margins, with content filling the slide",
+          "gamma": "Large empty areas on some slides, and text touching the edges of boxes"
+        },
+        {
+          "criterion": "Design",
+          "taqreer": "One system: a section label and slide number on every page, stat cards, and topic-matched images",
+          "gamma": "Each slide looks like a different template"
+        },
+        {
+          "criterion": "Arabic with English",
+          "taqreer": "Titles stay right-aligned even with English words inside them",
+          "gamma": "An Arabic title containing an English phrase came out left-aligned and split over two lines"
+        },
+        {
+          "criterion": "Numbers and charts",
+          "taqreer": "Clear numbers, and charts in the deck's own colors",
+          "gamma": "Axis titles cut off or overlapping in the chart"
+        }
+      ]
+    },
+    "why": {
+      "title": "AI PowerPoint with a consistent design: how taqreer.ai works",
+      "subtitle": "Not a ready-made template: a design built around your content.",
+      "points": [
+        {
+          "title": "Colors from your topic",
+          "body": "If you don't pick colors, the AI reads your deck's topic and mood, chooses a 3 to 6 color palette that fits, and applies it to every slide. A coffee deck comes out in coffee colors."
+        },
+        {
+          "title": "A fixed design system",
+          "body": "taqreer.ai locks one frame for the whole deck: margins, section label, and slide number, then builds slides from a consistent set of layouts instead of new geometry on every page."
+        },
+        {
+          "title": "Arabic first",
+          "body": "taqreer.ai was built for Arabic from day one: right-to-left direction, alignment that holds with English words and numbers, and a PowerPoint export that keeps it."
+        },
+        {
+          "title": "Your brand when you want it",
+          "body": "Prefer your company colors? Add your colors, font, and logo, or change the whole deck's colors and font after it's made, in one click."
+        }
+      ]
+    },
+    "article": {
+      "title": "Does the Gamma app support Arabic?",
+      "intro": "Gamma AI is one of the best-known presentation tools. If your decks are in Arabic, though, the real question isn't whether Gamma can write Arabic, but what the final file looks like when you open it in PowerPoint: does the alignment hold, do the colors fit your topic, and does the deck look like one design?",
+      "sections": [
+        {
+          "heading": "Gamma to PowerPoint: how the file looks",
+          "blocks": [
+            "We gave both tools the same idea: a launch plan for a specialty coffee shop in Riyadh with a 250,000 riyal budget. We exported both decks to PowerPoint and took screenshots of the cover, a content slide, a chart slide, and the closing slide, with no manual edits. The results are in the slides and table above."
+          ]
+        },
+        {
+          "heading": "The Gamma app or taqreer.ai?",
+          "blocks": [
+            "Choose taqreer.ai if:",
+            {
+              "bullets": [
+                "Your decks are in Arabic, or mix Arabic with English words and numbers",
+                "You want a consistent deck that reads as one design from the first slide to the last",
+                "You need an editable PowerPoint file: [export options](/export)",
+                "You want your company colors and logo applied: [brand kit](/brand-kit)"
+              ]
+            },
+            "If you need more than presentations, such as documents or webpages you publish directly, with embedded outside content and analytics on who viewed what you shared, Gamma offers that. If your goal is a polished Arabic or English deck as a PowerPoint file, this comparison is for you."
+          ]
+        }
+      ]
+    },
+    "faq": [
+      {
+        "q": "Does the Gamma app support Arabic?",
+        "a": "Gamma can write Arabic text, but in our test titles mixing Arabic and English were misaligned, and colors and spacing were inconsistent. taqreer.ai is built for Arabic first."
+      },
+      {
+        "q": "Is Gamma free?",
+        "a": "Gamma has a free plan with 400 credits at sign-up. The credits don't refresh; once they're used you need referrals or a paid plan (per Gamma's help center, October 2026). You can also start free with taqreer.ai."
+      },
+      {
+        "q": "What is the best Gamma AI alternative for Arabic?",
+        "a": "taqreer.ai is an Arabic Gamma alternative: it designs the deck with AI, picks colors that fit your topic, and exports a PowerPoint file that keeps Arabic text direction."
+      },
+      {
+        "q": "Is taqreer.ai free?",
+        "a": "You can start free and create your first deck. For more decks and features, paid plans are listed on the pricing page."
+      },
+      {
+        "q": "Can I edit the deck after it's made?",
+        "a": "Yes. Every slide is editable in the editor, you can change the whole deck's colors and font, then export to PowerPoint or PDF."
+      },
+      {
+        "q": "Is the comparison fair?",
+        "a": "We used the same idea in both tools and show the screenshots exactly as the PowerPoint files came out, unedited. You can repeat the test yourself with your own idea."
+      }
+    ]
   },
   "pdfToPowerpoint": {
     "meta": {

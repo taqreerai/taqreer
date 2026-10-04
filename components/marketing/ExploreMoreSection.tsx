@@ -25,7 +25,8 @@ export type SpokeKey =
   | "powerpointImages"
   | "brandKit"
   | "collaboration"
-  | "exportFormats";
+  | "exportFormats"
+  | "gammaArabic";
 
 const SPOKE_PATHS: Record<SpokeKey, string> = {
   aiPresentations: "/ai-presentations",
@@ -43,6 +44,8 @@ const SPOKE_PATHS: Record<SpokeKey, string> = {
   brandKit: "/brand-kit",
   collaboration: "/collaboration",
   exportFormats: "/export",
+  // Comparison page (2026-10-04).
+  gammaArabic: "/gamma-arabic",
 };
 
 // Each spoke links the 3 siblings that FOLLOW it in SPOKE_PATHS order,
