@@ -110,6 +110,11 @@ export async function rewardInviterOnFirstPayment(inviteeId: string): Promise<vo
   });
   const inviterId = invitee?.referredById;
   if (!inviterId || invitee.referralRewardedAt) return;
+  const inviter = await prisma.user.findUnique({
+    where: { id: inviterId },
+    select: { bannedAt: true },
+  });
+  if (!inviter || inviter.bannedAt) return;
 
   const now = new Date();
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));

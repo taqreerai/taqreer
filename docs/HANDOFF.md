@@ -90,6 +90,18 @@ copy in `dict.gammaArabic`, screenshots in `public/compare/*.webp`):
 
 ## Pending work (owner decides order)
 
+- **On the cloud branch, NOT deployed (2026-10-04 evening):** desktop /create shows
+  all 3 cards (xl+); AI images toggle in the settings card, renamed "صور ذكية لمحتواك";
+  AI images FREE (0 credits) + default ON for the free plan (imageCreditsForPlan in
+  estimate / preflight / settle; free image regen limited to retrying failed boxes);
+  48 palettes; quiet free watermark ("Designed with taqreer", 38% opacity, none on
+  the cover, NO closing slide: BRANDED_CLOSING_SLIDE=false); free PPTX gets Company
+  property + last-slide speaker note; shared-link viewers see no watermark;
+  invite-a-colleague referrals (+400 invitee after a passed signup grant, +2,000
+  inviter on the invitee's first paid checkout, cap 10/month; schema migration
+  20261004120000_referrals; InviteCard on /plans). Needs `npx prisma migrate deploy`
+  locally and a dev -> main PR (schema + webhook) before deploy.
+
 0. **Education push (decided 2026-10-04).** Research in
    `docs/seo-research-education-2026-10-04.md`: per-subject pages do NOT pay off (all 25
    subjects ~600/mo combined). Plan: (a) owner generates 5 lesson decks (math gr8,
