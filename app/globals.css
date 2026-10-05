@@ -3200,3 +3200,20 @@ img[data-genimage].tq-genimg-in {
 .admin-globe-skeleton {
   min-height: 360px;
 }
+
+/* Studio: the collapsed Slides-rail arrow nudges toward the canvas while the
+   deck is generating, so phone users discover the panel of slides being built
+   (2026-10-05). The rail sits on the physical right, so the nudge is physical. */
+@keyframes tq-edge-nudge {
+  0%, 55%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  35% { transform: translateX(0); }
+  45% { transform: translateX(-3px); }
+}
+.tq-edge-nudge {
+  display: inline-block;
+  animation: tq-edge-nudge 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tq-edge-nudge { animation: none; }
+}

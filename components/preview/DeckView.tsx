@@ -5346,14 +5346,27 @@ export function DeckView({
           type="button"
           onClick={() => setSlidesCollapsed((v) => !v)}
           aria-label={slidesCollapsed ? dict.editor.nav.expandPanel : dict.editor.nav.collapsePanel}
-          className="fixed z-[31] flex items-center justify-center p-1.5 text-muted transition-[right] duration-300 hover:text-foreground"
+          // Generating with the rail closed (phones): a visible chip + nudging
+          // arrow so users find the slides being built. Bare arrow otherwise.
+          className={`fixed z-[31] flex items-center justify-center transition-[right] duration-300 hover:text-foreground ${
+            slidesCollapsed && generating
+              ? "surface-menu rounded-full p-2 text-[var(--tq-blue)] shadow-lg"
+              : "p-1.5 text-muted"
+          }`}
           style={{
             right: slidesCollapsed ? 10 : SLIDE_NAV_WIDTH + 16,
             top: `calc(50% - ${(RAIL_BOTTOM - RAIL_TOP) / 2}px)`,
             transform: "translateY(-50%)",
+            ...(slidesCollapsed && generating
+              ? { border: "1px solid var(--tq-border-hairline)" }
+              : {}),
           }}
         >
-          <span className="material-symbols-outlined" style={{ fontSize: 22 }} aria-hidden>
+          <span
+            className={`material-symbols-outlined ${slidesCollapsed && generating ? "tq-edge-nudge" : ""}`}
+            style={{ fontSize: 22 }}
+            aria-hidden
+          >
             {slidesCollapsed ? "chevron_left" : "chevron_right"}
           </span>
         </button>
