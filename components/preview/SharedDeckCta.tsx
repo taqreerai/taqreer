@@ -32,7 +32,14 @@ export function SharedDeckCta({ anonymous }: { anonymous: boolean }) {
         <p className="text-xs font-semibold text-foreground">{t.title}</p>
         <p className="text-[11px] text-foreground/60">{t.body}</p>
       </div>
-      <Link href={href} className="btn-gradient shrink-0 px-4 py-2 text-xs">
+      {/* New tab (owner direction 2026-10-05): the viewer keeps the shared
+          deck open while signing up / creating. */}
+      <Link
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="btn-gradient shrink-0 px-4 py-2 text-xs"
+      >
         {t.cta}
       </Link>
       <button

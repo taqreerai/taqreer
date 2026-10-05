@@ -110,6 +110,18 @@ export function FreeWatermarkLayer({
     const onDown = (e: PointerEvent) => {
       const badge = layerRef.current?.querySelector<HTMLElement>("[data-tq-badge]");
       if (!badge) return;
+      // Never steal a click from UI layered ABOVE the slide (2026-10-05: the
+      // share dialog's public-link toggle sits over the badge's corner and
+      // this position-only test swallowed it). Dialogs, modals, their dim
+      // and popovers keep their clicks; the slide's own overlays still don't.
+      if (
+        e.target instanceof Element &&
+        e.target.closest(
+          '[role="dialog"],[aria-modal="true"],[role="menu"],.modal-dim,.surface-modal,.surface-popover',
+        )
+      ) {
+        return;
+      }
       const r = badge.getBoundingClientRect();
       if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
       e.preventDefault();
