@@ -21,7 +21,8 @@
 // (per "reuse existing components" rule). Both call sites pass
 // their own `onGenerate`, `quality`, `disabled`, `loading`.
 
-import { TEASER_VISIBLE_COUNT } from "@/lib/credits/cost";
+import { FREE_PLAN_FEATURE_LOCKS } from "@/lib/free-trial";
+import { TEASER_DEFAULT_TOTAL, TEASER_VISIBLE_COUNT } from "@/lib/credits/cost";
 import { imageCreditsForPlan } from "@/lib/images/images-gating";
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -154,14 +155,20 @@ export function GenerateSplitButton({
   // price in view). Null until the first fetch - rows render without
   // the credit chip rather than with a wrong number.
   const credits = useCreditBalance();
-  // Free trial teaser: a free (non-admin) deck builds and charges only the
-  // first TEASER_VISIBLE_COUNT slides whatever length was asked, so price
-  // exactly that (same rule as the server, app/api/projects/route.ts).
+  // Free trial teaser (owner direction 2026-10-05): the price shown is the
+  // FULL deck's (what the whole deck is worth), but a free (non-admin) deck
+  // only builds and charges the first TEASER_VISIBLE_COUNT slides, so
+  // affordability is judged on those (no amber "can't afford" on a long
+  // deck the 400 signup credits do cover). Auto plans TEASER_DEFAULT_TOTAL
+  // slides for free users, same as the server (app/api/projects/route.ts).
   const teaserPriced = !!credits && !credits.isAdmin && credits.plan === "free";
-  const requestedSlides = slideCount && slideCount > 0 ? slideCount : 8;
-  const effectiveSlideCount = teaserPriced
-    ? Math.min(requestedSlides, TEASER_VISIBLE_COUNT)
-    : requestedSlides;
+  const requestedSlides =
+    teaserPriced && slideCountUpTo
+      ? TEASER_DEFAULT_TOTAL
+      : slideCount && slideCount > 0
+        ? slideCount
+        : 8;
+  const effectiveSlideCount = requestedSlides;
   // The current user's slide cap (5 for free) — the {cap} in the upsell copy.
   const freeSlideCap = useSlideCap();
   // Tier gating pill: the lowest tier whose preset list carries each
@@ -229,10 +236,11 @@ export function GenerateSplitButton({
             // admin can't be shown it (CR #154). The button stays visually
             // enabled; the next click lands normally.
             if (!credits) return;
-            // Free tier: show the slide-cap upsell before generating.
-            // NEVER for admins - their plan resolves "free" (no sub) but the
-            // superuser bypasses all gating (owner report 2026-07-18).
-            if (isFree && !isAdmin) {
+            // Free tier: NO pre-generate slide-cap pop-up since the
+            // 2026-10-05 free trial (owner direction): the user picks any
+            // count or Auto and discovers the 5-slide teaser in the deck.
+            // The dialog stays mounted behind FREE_PLAN_FEATURE_LOCKS.
+            if (FREE_PLAN_FEATURE_LOCKS && isFree && !isAdmin) {
               setShowSlideCapUpsell(true);
               return;
             }
@@ -353,7 +361,7 @@ export function GenerateSplitButton({
               // MIN_REDUCED_SLIDES; below it the server blocks anyway and
               // the unaffordable amber styling tells the story.
               let rowSlides = effectiveSlideCount;
-              if (slideCountUpTo && !isAdmin && credits) {
+              if (slideCountUpTo && !isAdmin && credits && !teaserPriced) {
                 while (
                   rowSlides > MIN_REDUCED_SLIDES &&
                   rowCost(rowSlides) > credits.balance.total
@@ -368,7 +376,11 @@ export function GenerateSplitButton({
                 userPlan !== null &&
                 gateTier !== null &&
                 TIER_ORDER.indexOf(userPlan) < TIER_ORDER.indexOf(gateTier);
-              const affordable = credits ? cost <= credits.balance.total : true;
+              const affordable = credits
+                ? (teaserPriced
+                    ? rowCost(Math.min(rowSlides, TEASER_VISIBLE_COUNT))
+                    : cost) <= credits.balance.total
+                : true;
               const active = effectiveQuality === preset.key;
               return (
                 <button

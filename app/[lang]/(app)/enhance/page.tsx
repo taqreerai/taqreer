@@ -33,6 +33,7 @@
 // InlinePaletteSwatch, Toggle are the same primitives /create uses —
 // per "reuse > extend > fork > build new".
 
+import { TemplatePickerGrid } from "@/components/create/TemplatePickerGrid";
 import { PalettePresetPicker } from "@/components/brand/PalettePresetPicker";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -309,6 +310,10 @@ export default function EnhanceContentPage() {
   // if still empty. Starts empty so the extraction's suggestion can
   // fill it on a fresh run with no kit.
   const [colors, setColors] = useState<string[]>([]);
+  // Enhance + template (2026-10-05): a picked deck template's id. The server
+  // mints its design reference and the redesign follows the template's look;
+  // null = the classic enhance (the AI designs its own look).
+  const [templateId, setTemplateId] = useState<string | null>(null);
   const updateColor = (index: number, next: string) =>
     setColors((c) => c.map((v, i) => (i === index ? next : v)));
   const addColor = () =>
@@ -798,6 +803,7 @@ export default function EnhanceContentPage() {
           saveBrandKit,
           slideCount: resolvedSlideCount,
           quality,
+          ...(templateId ? { templateId } : {}),
           ...(source ? { source } : {}),
           // Optional user design instructions. Omitted when empty so an
           // instruction-less run's payload stays byte-for-byte unchanged.
@@ -1156,6 +1162,24 @@ export default function EnhanceContentPage() {
                 ) : null}
               </div>
             </header>
+
+            {/* Deck templates (2026-10-05): redesign the deck in a template's
+                look. Automatic (the default) keeps the classic enhance. */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs font-semibold text-foreground/70">
+                {dict.flows.design.tabTemplates}
+              </span>
+              <TemplatePickerGrid
+                selectedId={templateId}
+                onSelect={(picked) => setTemplateId(picked.template.id)}
+                onClear={() => setTemplateId(null)}
+              />
+              {templateId ? (
+                <p className="text-[11px] leading-4 text-foreground/55">
+                  {dict.flows.design.templateNoteEnhance}
+                </p>
+              ) : null}
+            </div>
 
             {/* Palette row — byte-for-byte the /create cluster: label
                 on the visual right, swatches + add tile on the visual

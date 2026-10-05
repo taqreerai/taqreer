@@ -58,6 +58,11 @@ export const SourceScratchSchema = z.object({
 
 export const SourceEnhanceSchema = z.object({
   kind: z.literal("enhance"),
+  // Enhance + template (2026-10-05): the picked deck template's design
+  // reference, minted SERVER-side from payload.templateId by POST
+  // /api/projects (any client-sent value is discarded there). Absent = the
+  // classic enhance, which invents its own design.
+  designAnthropicFileId: z.string().min(1).optional(),
   // Legacy (document-block path): Anthropic Files API file_id for the
   // source PDF. OPTIONAL now — the enhance overhaul (Phase 18) feeds
   // Claude per-slide PNGs rendered at GENERATION time instead of a PDF

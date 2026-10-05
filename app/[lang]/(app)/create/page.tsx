@@ -109,7 +109,6 @@ import {
 } from "@/lib/brand/upload";
 import { useDefaultQuality } from "@/lib/credits/use-default-quality";
 import { MAX_CONTENT_TEXT_CHARS } from "@/lib/types/brief-limits";
-import { SlideCapHint } from "@/components/billing/SlideCapHint";
 import {
   readBrandFromSession,
   fetchDefaultBrandKit,
@@ -1273,8 +1272,6 @@ export default function CreatePage() {
                   </AnimatePresence>
                 </motion.div>
               </div>
-              {/* Free plan: the slide cap stated up front, not a silent clamp. */}
-              <SlideCapHint className="mt-1.5" />
             </div>
 
             <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-hairline)] pt-3">

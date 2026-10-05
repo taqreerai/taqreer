@@ -66,10 +66,11 @@ const off = { enabled: false };
 // Paid tiers (Plus/Pro/Max) share ONE aligned feature list (model + 8 features);
 // flags toggle the premium tail: Plus lacks premium templates + priority, Pro
 // lacks priority, Max has everything. (row 0 = credits, row 1 = model.)
-// Free's row 5 ("Latest GPT images") went OFF 2026-08-03: generated images
-// are Plus+ now (lib/images/images-gating.ts).
+// Free (2026-10-05 free trial): its OWN list - 5 designed slides per deck,
+// every format, every creation method + AI edits, free photos and brand
+// identity ON; no watermark, full (unlocked) decks and premium templates OFF.
 const TIERS: Tier[] = [
-  { features: [on, on, on, on, on, off, off, off, off, off], isFree: true },
+  { features: [on, on, on, on, on, on, on, off, off, off], isFree: true },
   { features: [on, on, on, on, on, on, on, on, off, off] },
   { features: [on, on, on, on, on, on, on, on, on, off], popular: true },
   { features: [on, on, on, on, on, on, on, on, on, on] },
