@@ -56,18 +56,23 @@ export function AIImagesPanel({
     // Row layout (2026-10-04 redesign): matches the settings card's other
     // rows (label on the reading edge, Toggle on the far edge, hairline
     // separators owned by the parent) instead of a tinted feature box.
-    <div className="flex items-start justify-between gap-3">
+    <div className="flex items-center gap-3">
+      {/* Square icon tile, exactly as tall as the two text lines (2 x 16px
+          line + 4px gap = 36px), so title and description sit level with it. */}
+      <span
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors ${
+          value
+            ? "bg-[var(--tq-violet)]/15 text-[var(--tq-violet)]"
+            : "bg-[var(--tq-overlay-soft)] text-foreground/55"
+        }`}
+        aria-hidden
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: 22 }}>
+          image
+        </span>
+      </span>
       <div className="min-w-0 flex-1">
-        <span className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-foreground/70">
-          <span
-            className={`material-symbols-outlined transition-colors ${
-              value ? "text-[var(--tq-violet)]" : "text-foreground/45"
-            }`}
-            style={{ fontSize: 20 }}
-            aria-hidden
-          >
-            image
-          </span>
+        <span className="flex flex-wrap items-center gap-1.5 text-xs font-semibold leading-4 text-foreground/70">
           {dict.flows.brand.aiImagesTitle}
           {locked ? (
             // Gold crown = paid feature (ExportMenu's affordance).
@@ -78,7 +83,7 @@ export function AIImagesPanel({
           {dict.flows.brand.aiImagesDesc}
         </span>
       </div>
-      <div className="shrink-0 pt-0.5">
+      <div className="shrink-0">
         <Toggle
           ariaLabel={dict.flows.brand.aiImagesTitle}
           value={value}

@@ -35,6 +35,7 @@
 
 import { TemplatePickerGrid } from "@/components/create/TemplatePickerGrid";
 import { PalettePresetPicker } from "@/components/brand/PalettePresetPicker";
+import { AIImagesPanel } from "@/components/brand/AIImagesPanel";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useAnimationControls } from "framer-motion";
@@ -345,6 +346,9 @@ export default function EnhanceContentPage() {
   const [kitOptions, setKitOptions] = useState<BrandKitOption[]>([]);
   const kitRawRef = useRef<Map<string, unknown>>(new Map());
   const [saveBrandKit, setSaveBrandKit] = useState<boolean>(false);
+  // AI photos (2026-10-05): off by default, same toggle as /create. On →
+  // deck-generate recreates the source slides' photos as generated images.
+  const [imagesMode, setImagesMode] = useState<boolean>(false);
 
   // Apply a resolved brand (sessionStorage, default kit, or a picked
   // saved kit) to the card state. Maps the heading font slot → the
@@ -828,6 +832,7 @@ export default function EnhanceContentPage() {
           // first paint instead of flipping mid-stream.
           language: extracted.language ?? "ar",
           saveBrandKit,
+          imagesMode,
           slideCount: resolvedSlideCount,
           quality,
           ...(templateId ? { templateId } : {}),
@@ -1150,6 +1155,14 @@ export default function EnhanceContentPage() {
               />
             </div>
 
+            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
+              <AIImagesPanel
+                value={imagesMode}
+                onChange={setImagesMode}
+                disabled={stage === "submitting"}
+              />
+            </div>
+
           </motion.div>
 
           {/* ─── Brand card (الهوية البصرية) ─────────────────
@@ -1352,6 +1365,7 @@ export default function EnhanceContentPage() {
             quality={quality}
             onQualityChange={setQuality}
             slideCount={extracted?.pageCount ?? undefined}
+            imagesMode={imagesMode}
             disabled={generateDisabled}
             loading={generateLoading}
             label={generateLabel}
