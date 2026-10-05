@@ -21,7 +21,6 @@
 // (per "reuse existing components" rule). Both call sites pass
 // their own `onGenerate`, `quality`, `disabled`, `loading`.
 
-import { FREE_PLAN_FEATURE_LOCKS } from "@/lib/free-trial";
 import { TEASER_DEFAULT_TOTAL, TEASER_VISIBLE_COUNT } from "@/lib/credits/cost";
 import { imageCreditsForPlan } from "@/lib/images/images-gating";
 import { useEffect, useRef, useState } from "react";
@@ -42,7 +41,6 @@ import {
 import { normalizePlan, planLabel } from "@/lib/plan";
 import {
   useCreditBalance,
-  useSlideCap,
   formatCredits,
   type CreditPreset,
 } from "@/lib/credits/store";
@@ -169,8 +167,6 @@ export function GenerateSplitButton({
         ? slideCount
         : 8;
   const effectiveSlideCount = requestedSlides;
-  // The current user's slide cap (5 for free) — the {cap} in the upsell copy.
-  const freeSlideCap = useSlideCap();
   // Tier gating pill: the lowest tier whose preset list carries each
   // preset. Rows above the user's plan show that tier name as a pill
   // (clicking still works - preflight 402s into the upgrade dialog).
@@ -236,11 +232,11 @@ export function GenerateSplitButton({
             // admin can't be shown it (CR #154). The button stays visually
             // enabled; the next click lands normally.
             if (!credits) return;
-            // Free tier: NO pre-generate slide-cap pop-up since the
-            // 2026-10-05 free trial (owner direction): the user picks any
-            // count or Auto and discovers the 5-slide teaser in the deck.
-            // The dialog stays mounted behind FREE_PLAN_FEATURE_LOCKS.
-            if (FREE_PLAN_FEATURE_LOCKS && isFree && !isAdmin) {
+            // Free tier: the trial pop-up before generating (restored
+            // 2026-10-05, owner direction): only the first
+            // TEASER_VISIBLE_COUNT slides are designed; see plans or design
+            // those slides.
+            if (isFree && !isAdmin) {
               setShowSlideCapUpsell(true);
               return;
             }
@@ -480,7 +476,7 @@ export function GenerateSplitButton({
           canonical dialog shell + the design-system button primitives. */}
       <SlideCapUpsellDialog
         open={showSlideCapUpsell}
-        cap={freeSlideCap}
+        cap={TEASER_VISIBLE_COUNT}
         max={SYSTEM_SLIDE_CAP}
         // Dismiss (X / Esc / outside-click): cancel, don't generate.
         onClose={() => setShowSlideCapUpsell(false)}
@@ -491,11 +487,11 @@ export function GenerateSplitButton({
           setShowSlideCapUpsell(false);
           onGenerate();
         }}
-        // Upgrade now: close this and open the pricing modal at the Max tier
-        // (the plan that unlocks the 75-slide ceiling shown in the copy).
+        // See plans: close this and open the pricing modal at the first paid
+        // tier (any paid plan unlocks the full deck).
         onUpgrade={() => {
           setShowSlideCapUpsell(false);
-          setUpgradeTier("max");
+          setUpgradeTier("plus");
         }}
       />
 

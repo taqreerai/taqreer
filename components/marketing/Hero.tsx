@@ -225,7 +225,9 @@ export function Hero({ projectCount }: { projectCount?: number }) {
             {dict.landing.hero.subtitle}
           </p>
 
-          <div className="mb-20 flex w-full justify-center">
+          {/* The note under the CTA (2026-10-05) takes ~26px, so the bottom
+              margin drops from mb-20 to mb-14 to keep the fold composition. */}
+          <div className="mb-14 flex w-full flex-col items-center gap-2.5">
             {/* Single primary CTA. Uses `.btn-gradient-anim` (the
                 canonical AI-button — animated gradient stroke with
                 a hover gradient fill, see globals.css PATTERN 4)
@@ -240,6 +242,12 @@ export function Hero({ projectCount }: { projectCount?: number }) {
             >
               {dict.landing.hero.cta}
             </a>
+            <p
+              className="hero-enter text-xs text-foreground/55"
+              style={{ animationDelay: "0.5s" }}
+            >
+              {dict.landing.hero.ctaNote}
+            </p>
           </div>
         </div>
 
