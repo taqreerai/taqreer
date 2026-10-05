@@ -244,7 +244,7 @@
       { "q": "How do I design a presentation with AI?", "a": "Write your topic or upload a file, choose your brand, and the AI designs a complete deck in minutes that you can edit and export." },
       { "q": "Does it support Arabic?", "a": "Yes. taqreer.ai is Arabic-first with full right-to-left support and Arabic fonts, and it supports English too." },
       { "q": "Can I edit the deck after it is generated?", "a": "Yes. Edit text, colors, and slides and reorder them right in the editor, with autosave." },
-      { "q": "Can I export to PowerPoint?", "a": "Yes. On paid plans you export an editable PPTX for PowerPoint, with the Arabic formatting and text direction preserved. The free plan exports a present-ready PPTX where each slide is an image." }
+      { "q": "Can I export to PowerPoint?", "a": "Yes. You export an editable PPTX for PowerPoint on every plan, with the Arabic formatting and text direction preserved. Free-plan exports carry a small watermark." }
     ],
     "article": {
       "title": "How to make a PowerPoint with AI in taqreer.ai",
@@ -367,7 +367,7 @@
             {
               "bullets": [
                 "Save your [brand kit](/brand-kit) so every post comes out the same way without setup each time.",
-                "On paid plans, turn on [generated images](/powerpoint-images) so the AI adds images that fit the post's idea.",
+                "Turn on [generated images](/powerpoint-images) so the AI adds images that fit the post's idea.",
                 "Write the key message and the audience clearly: it helps the AI choose the right headline and design.",
                 "Arabic posts are fully supported with correct right-to-left direction."
               ]
@@ -407,7 +407,7 @@
       { "q": "How do I redesign a presentation with AI?", "a": "Upload your deck in PDF or PowerPoint, choose your brand, and the AI redesigns every slide while keeping your content, in minutes." },
       { "q": "Which file formats are supported?", "a": "taqreer.ai supports uploading decks in PDF and PowerPoint (PPTX)." },
       { "q": "Does it keep my text and images?", "a": "Yes. taqreer.ai extracts the text, images, and fonts from your file and redesigns them in a new deck without losing content." },
-      { "q": "Can I export to PowerPoint?", "a": "Yes. On paid plans you export the redesigned deck as an editable PPTX for PowerPoint, with the Arabic formatting preserved." }
+      { "q": "Can I export to PowerPoint?", "a": "Yes. You export the redesigned deck as an editable PPTX for PowerPoint on every plan, with the Arabic formatting preserved." }
     ],
     "article": {
       "title": "Professional PowerPoint design for your existing deck",
@@ -479,7 +479,7 @@
       { "q": "How do I design a deck in another deck's style?", "a": "Attach the deck whose style you like, write or upload your content, and the AI applies its visual style to new slides in minutes." },
       { "q": "What does taqreer.ai take from the reference deck?", "a": "It captures the colors, fonts, layout patterns, and overall visual spirit, and applies them to your new content without copying the original content." },
       { "q": "Does it support Arabic?", "a": "Yes. taqreer.ai is Arabic-first with full right-to-left support and Arabic fonts, and it supports English too." },
-      { "q": "Can I export to PowerPoint?", "a": "Yes. On paid plans you export an editable PPTX for PowerPoint, with the Arabic formatting and text direction preserved. The free plan exports a present-ready PPTX where each slide is an image." }
+      { "q": "Can I export to PowerPoint?", "a": "Yes. You export an editable PPTX for PowerPoint on every plan, with the Arabic formatting and text direction preserved. Free-plan exports carry a small watermark." }
     ],
     "article": {
       "title": "Copy any PowerPoint design and apply it to your content",
@@ -887,7 +887,7 @@
                 "Choose your brand: your colors, fonts, and logo, or pick a [saved brand kit](/brand-kit) to apply it to the whole deck.",
                 "Set the slide size (16:9 for standard decks or 9:16 for vertical) and choose an exact slide count or leave it on auto.",
                 "Click create and watch the slides appear, then adjust any detail in the [editor](/powerpoint-online).",
-                "Export as PPTX to open in PowerPoint, or as PDF to share. An editable PPTX and PDF are on paid plans. The free plan exports a present-ready PPTX where each slide is an image."
+                "Export as PPTX to open in PowerPoint, or as PDF to share. Both are available on every plan; free-plan exports carry a small watermark."
               ]
             },
             "With these steps, converting a PDF to PPT becomes one task instead of copying text and formatting every slide by hand."
@@ -914,7 +914,7 @@
                 "Pick a slide count that fits your file's length: long files need more slides so each one stays clear.",
                 "Use a saved brand kit so all your decks share the same colors and fonts.",
                 "If a slide isn't right, leave a note on it and ask the AI to redesign just that slide instead of starting over.",
-                "On paid plans, turn on [generated images](/powerpoint-images) when your file is all text, so the AI adds images that fit your slides."
+                "Turn on [generated images](/powerpoint-images) when your file is all text, so the AI adds images that fit your slides."
               ]
             }
           ]
@@ -945,7 +945,7 @@
         { "title": "Organizes your content", "body": "The AI turns long paragraphs into headings, bullet points, and well-structured slides." },
         { "title": "Designs every slide", "body": "Each slide is designed for its content, not text pasted onto a fixed template." },
         { "title": "In your brand", "body": "Your colors, fonts, and logo apply across the whole deck." },
-        { "title": "Export to PowerPoint", "body": "Edit in the editor, then export a PPTX (editable on paid plans)." }
+        { "title": "Export to PowerPoint", "body": "Edit in the editor, then export an editable PPTX." }
       ]
     },
     "faq": [
@@ -967,7 +967,7 @@
                 "Upload your Word document as a DOCX.",
                 "Pick your colors, fonts, and logo, or leave colors on auto so the AI chooses a palette that fits your content.",
                 "Set the slide count and size, then click create.",
-                "Review and adjust the slides in the [editor](/powerpoint-online), then export a PPTX to open in PowerPoint (an editable PPTX is on paid plans; the free plan exports each slide as an image)."
+                "Review and adjust the slides in the [editor](/powerpoint-online), then export an editable PPTX to open in PowerPoint."
               ]
             }
           ]
@@ -1041,7 +1041,7 @@
       { "q": "Do I need to install anything?", "a": "No. The editor runs right in your browser." },
       { "q": "Can I edit images and text?", "a": "Yes. Change text size, color, and direction, and replace images or generate new ones with AI." },
       { "q": "Does the editor work on mobile?", "a": "Full editing is on desktop. On mobile you can preview your deck and edit it with AI." },
-      { "q": "Can I export to PowerPoint?", "a": "Yes. Export an editable PPTX on paid plans, or a present-ready PPTX and PNG images on the free plan." }
+      { "q": "Can I export to PowerPoint?", "a": "Yes. Export an editable PPTX, a PDF or PNG images on every plan." }
     ],
     "article": {
       "title": "An online PowerPoint editor for every detail of your deck",
@@ -1144,7 +1144,7 @@
                 "Don't like an image? Regenerate or replace it from the [editor](/powerpoint-online)."
               ]
             },
-            "AI image generation is on paid plans and uses credits for each image."
+            "On paid plans each generated image uses credits; on the free plan, generated images are free during your trial."
           ]
         },
         {
@@ -1338,10 +1338,10 @@
       ]
     },
     "faq": [
-      { "q": "Which formats can I export?", "a": "PowerPoint (PPTX), PDF, PNG images, HTML, and Google Slides, depending on your plan." },
+      { "q": "Which formats can I export?", "a": "PowerPoint (PPTX), PDF, PNG images, HTML, and Google Slides, on every plan." },
       { "q": "Does Arabic stay correct after export?", "a": "Yes. taqreer.ai keeps right-to-left text direction and alignment in the exported PowerPoint." },
-      { "q": "Can I edit the file after exporting?", "a": "Yes, on paid plans the PPTX is fully editable in PowerPoint. On the free plan it is present-ready, with each slide as an image." },
-      { "q": "What does the free plan include?", "a": "The free plan exports PNG and a present-ready PPTX (each slide an image), both with a watermark. Editable PPTX, PDF and Google Slides are on paid plans, without a watermark." }
+      { "q": "Can I edit the file after exporting?", "a": "Yes, the PPTX is fully editable in PowerPoint on every plan." },
+      { "q": "What does the free plan include?", "a": "Every export format, including editable PPTX, PDF and Google Slides. Free-plan exports carry a small \"Designed with taqreer\" watermark, and the free plan designs the first 5 slides of each deck. Paid plans export without a watermark and design full decks." }
     ],
     "article": {
       "title": "Export formats in taqreer.ai: which one should you pick?",
@@ -1370,7 +1370,7 @@
         {
           "heading": "Export by plan",
           "blocks": [
-            "The free plan exports PNG and a present-ready PPTX where each slide is an image, both with a watermark. Editable PPTX, PDF and Google Slides are on paid plans, without a watermark. See [pricing and plans](/pricing)."
+            "Every plan exports every format, including an editable PPTX, PDF and Google Slides. Free-plan exports carry a small watermark; paid plans export without it. See [pricing and plans](/pricing)."
           ]
         }
       ]
@@ -1803,9 +1803,9 @@
       "tiers": [
         {
           "name": "Free",
-          "description": "To try it out and make simple decks fast.",
+          "description": "Try every feature free. We design the first 5 slides of each deck; subscribe to unlock the rest.",
           "credits": "{credits} credits (signup gift)",
-          "features": ["{model}", "Up to {slides} slides per deck", "PNG + PPTX as image slides", "Watermarked exports", "Latest GPT images", "Editable PPTX + all formats", "No watermark", "All creation methods + AI edits", "Custom brand identity"],
+          "features": ["{model}", "First 5 slides of each deck designed", "Editable PPTX + all formats", "All creation methods + AI edits", "Smart photos, free on your trial", "Custom brand identity", "No watermark", "Full decks, nothing locked", "Premium templates"],
           "footnote": "Upgrade anytime",
           "cta": "Start free"
         },
@@ -1813,7 +1813,7 @@
           "name": "Plus",
           "description": "To create decks regularly with every creation method.",
           "credits": "{credits} credits / month",
-          "features": ["{model}", "Up to {slides} slides per deck", "Editable PPTX + all formats", "No watermark", "All creation methods + AI edits", "Latest GPT images", "Custom brand identity", "Premium templates", "Processing priority"],
+          "features": ["{model}", "Full decks up to {slides} slides", "Editable PPTX + all formats", "No watermark", "All creation methods + AI edits", "Smart photos for your content", "Custom brand identity", "Premium templates", "Processing priority"],
           "footnote": "Upgrade or downgrade anytime",
           "cta": "Start now"
         },
@@ -1821,7 +1821,7 @@
           "name": "Pro",
           "description": "For pros who want top quality and premium templates.",
           "credits": "{credits} credits / month",
-          "features": ["{model}", "Up to {slides} slides per deck", "Editable PPTX + all formats", "No watermark", "All creation methods + AI edits", "Latest GPT images", "Custom brand identity", "Premium templates", "Processing priority"],
+          "features": ["{model}", "Full decks up to {slides} slides", "Editable PPTX + all formats", "No watermark", "All creation methods + AI edits", "Smart photos for your content", "Custom brand identity", "Premium templates", "Processing priority"],
           "footnote": "Upgrade or downgrade anytime",
           "cta": "Start now"
         },
@@ -1829,7 +1829,7 @@
           "name": "Max",
           "description": "For heavy use, with maximum capacity and priority.",
           "credits": "{credits} credits / month",
-          "features": ["{model}", "Up to {slides} slides per deck", "Editable PPTX + all formats", "No watermark", "All creation methods + AI edits", "Latest GPT images", "Custom brand identity", "Premium templates", "Processing priority"],
+          "features": ["{model}", "Full decks up to {slides} slides", "Editable PPTX + all formats", "No watermark", "All creation methods + AI edits", "Smart photos for your content", "Custom brand identity", "Premium templates", "Processing priority"],
           "footnote": "You can downgrade anytime",
           "cta": "Start now"
         }
@@ -1842,7 +1842,7 @@
       { "q": "Does it fully support Arabic?", "a": "Yes. taqreer.ai is Arabic-first: correct RTL direction, elegant Arabic fonts, and bidirectional formatting that handles English words and numbers inside Arabic text accurately." },
       { "q": "How does the credit system work?", "a": "Each deck uses credits based on its slide count and the model used. You get monthly credits with your plan, plus {credits} free credits at signup to try the platform." },
       { "q": "Can I edit the deck after creating it?", "a": "Absolutely. The editor lets you edit text, colors, and slides and reorder them, with autosave and checkpoints you can revert to anytime." },
-      { "q": "Can I export the deck to PowerPoint?", "a": "Yes. On paid plans you export your decks as an editable PPTX for PowerPoint, with the Arabic formatting and text direction preserved. The free plan exports a present-ready PPTX where each slide is an image." },
+      { "q": "Can I export the deck to PowerPoint?", "a": "Yes. You export your decks as an editable PPTX for PowerPoint on every plan, with the Arabic formatting and text direction preserved." },
       { "q": "Can I apply my own brand identity?", "a": "Yes. Upload your logo, colors, and fonts in the brand identity section, and taqreer.ai applies them automatically so your decks stay on-brand." },
       { "q": "Can I cancel my subscription anytime?", "a": "Yes. You can upgrade, downgrade, or cancel anytime from your account settings, with no long-term commitment." }
     ],
