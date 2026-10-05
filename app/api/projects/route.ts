@@ -35,6 +35,7 @@ import {
   TEASER_DEFAULT_TOTAL,
   TEASER_VISIBLE_COUNT,
   estimateSlides,
+  slideCapForFlow,
 } from "@/lib/credits/cost";
 import { normalizePlan } from "@/lib/plan";
 import { mintTemplateDesignFile } from "@/lib/template/mint-design";
@@ -892,9 +893,11 @@ export async function POST(request: Request) {
   let teaserPlannedTotal = 0;
   if (isFreeTrial) {
     const est = estimateSlides(slideInput);
+    // The flow's own cap (social carousels stop at 20) bounds the plan, so
+    // the comped unlock never writes more than a paid user could create.
     const wanted = Math.min(
       est.slides ?? TEASER_DEFAULT_TOTAL,
-      getTier("free").slideCap,
+      slideCapForFlow(creditFlow, getTier("free").slideCap),
     );
     if (wanted > TEASER_VISIBLE_COUNT) teaserPlannedTotal = wanted;
   }
