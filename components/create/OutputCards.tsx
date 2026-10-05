@@ -15,6 +15,7 @@
 
 import React, { useEffect, useState } from "react";
 import { DesignStylePicker } from "@/components/create/DesignStylePicker";
+import { DECK_STYLES } from "@/lib/design-styles";
 import { motion } from "framer-motion";
 import {
   Pill,
@@ -39,27 +40,14 @@ export type PersistentPosition = CornerPosition;
 // and the in-prompt anchor, so Claude can lean on the named tradition. Ordered
 // safe → expressive. Keep in sync with DESIGN_STYLE_DIRECTIVES in
 // inngest/functions/deck-generate.ts.
-export const DESIGN_STYLE_OPTIONS = [
-  "Swiss / Grid",
-  "Corporate / Data",
-  "Minimal / Keynote",
-  "Editorial",
-  "Bold / Display",
-  "Duotone / Full-bleed",
-  "Playful / Dopamine",
-  "Brutalist",
-];
+export const DESIGN_STYLE_OPTIONS: string[] = DECK_STYLES.map((s) => s.label);
 
 // Styles whose look leans on imagery → picking one auto-enables images mode
-// (overridable — the toggle flips on but isn't disabled; turning it off uses
-// the style's no-image fallback). The other four are image-averse / optional
-// and leave the toggle as the user set it.
-export const STYLE_REQUIRES_IMAGES = new Set<string>([
-  "Duotone / Full-bleed",
-  "Editorial",
-  "Minimal / Keynote",
-  "Playful / Dopamine",
-]);
+// (overridable: the toggle flips on but isn't disabled; turning it off uses
+// the style's no-image fallback). Source: DECK_STYLES[].photos.
+export const STYLE_REQUIRES_IMAGES = new Set<string>(
+  DECK_STYLES.filter((s) => s.photos).map((s) => s.label),
+);
 
 // Content language — user-picked on /create/content. Drives:
 //   • Project.language + Presentation.language (filter-accuracy on

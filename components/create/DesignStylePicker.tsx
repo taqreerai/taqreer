@@ -17,28 +17,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { useState } from "react";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
+import { DECK_STYLES, type DeckStyleKey } from "@/lib/design-styles";
+import { StyleThumb } from "@/components/create/StyleThumb";
+import { StyleInfoButton } from "@/components/create/StyleInfoButton";
+import { PickerExpandButton, PickerExpandModal } from "@/components/create/PickerExpandModal";
 
-// Option label -> dict desc key. Labels mirror DESIGN_STYLE_OPTIONS in
-// OutputCards.tsx (the prompt anchors - keep in sync).
-const STYLES: ReadonlyArray<{ label: string; key: StyleKey }> = [
-  { label: "Swiss / Grid", key: "swiss" },
-  { label: "Corporate / Data", key: "corporate" },
-  { label: "Minimal / Keynote", key: "minimal" },
-  { label: "Editorial", key: "editorial" },
-  { label: "Bold / Display", key: "bold" },
-  { label: "Duotone / Full-bleed", key: "duotone" },
-  { label: "Playful / Dopamine", key: "playful" },
-  { label: "Brutalist", key: "brutalist" },
-];
-type StyleKey =
-  | "swiss"
-  | "corporate"
-  | "minimal"
-  | "editorial"
-  | "bold"
-  | "duotone"
-  | "playful"
-  | "brutalist";
+// Deck styles: the shared list (lib/design-styles.ts). `label` is the prompt
+// anchor stored on the brief; the visible name comes from the dictionary.
+const STYLES = DECK_STYLES;
 
 // ── Social-media style set (2026 trends) ────────────────────────
 // Distinct from the deck styles above: these target portrait phone-feed
@@ -73,118 +59,12 @@ type SocialStyleKey =
   | "swiss"
   | "corporate";
 
-// ── The static mini-slide previews ──────────────────────────────
-// Each is a 16:9 box composed of token-colored blocks. Percentage
-// geometry so ONE markup serves both the small trigger swatch and the
-// gallery cards. `bar` = muted block; accent = var(--tq-purple).
+// ── Social mini-card colours ────────────────────────────────────
+// `bar` = muted block; accent = var(--tq-purple). (Deck styles use the
+// illustrated StyleThumb instead.)
 const BAR = "var(--tq-text-muted)";
 const BAR_SOFT = "color-mix(in srgb, var(--tq-text-muted) 45%, transparent)";
 const ACCENT = "var(--tq-purple)";
-
-function StyleMini({
-  k,
-  big = false,
-  // Locale-aware sample word for the Bold/Display preview ("عرض" in
-  // AR, "Deck" in EN).
-  boldSample = "عرض",
-}: {
-  k: StyleKey | "auto";
-  big?: boolean;
-  boldSample?: string;
-}) {
-  const base =
-    "relative w-full overflow-hidden rounded-md border border-[var(--tq-border-hairline)] bg-[var(--tq-surface)]";
-  const abs = (s: React.CSSProperties): React.CSSProperties => ({
-    position: "absolute",
-    ...s,
-  });
-  return (
-    <div className={base} style={{ aspectRatio: "16/9" }} dir="ltr">
-      {k === "swiss" && (
-        <>
-          {/* The grid itself as hairlines (2 columns x 2 rows) with
-              small text-like dashes in the cells + one blue marker -
-              reads as a layout grid, not content blocks (user
-              direction 2026-06-12). */}
-          <div style={abs({ top: "8%", bottom: "8%", left: "36%", width: 1, background: BAR_SOFT })} />
-          <div style={abs({ top: "8%", bottom: "8%", left: "67%", width: 1, background: BAR_SOFT })} />
-          <div style={abs({ left: "8%", right: "8%", top: "48%", height: 1, background: BAR_SOFT })} />
-          <div style={abs({ top: "16%", left: "10%", width: "18%", height: "7%", background: BAR })} />
-          <div style={abs({ top: "30%", left: "10%", width: "12%", height: "4%", background: BAR_SOFT })} />
-          <div style={abs({ top: "16%", left: "41%", width: "14%", height: "4%", background: BAR_SOFT })} />
-          <div style={abs({ top: "26%", left: "41%", width: "18%", height: "4%", background: BAR_SOFT })} />
-          <div style={abs({ top: "16%", left: "72%", width: "16%", height: "4%", background: BAR_SOFT })} />
-          <div style={abs({ top: "60%", left: "10%", width: "8%", aspectRatio: "1", background: ACCENT })} />
-          <div style={abs({ top: "60%", left: "41%", width: "16%", height: "4%", background: BAR_SOFT })} />
-          <div style={abs({ top: "70%", left: "41%", width: "12%", height: "4%", background: BAR_SOFT })} />
-          <div style={abs({ top: "60%", left: "72%", width: "14%", height: "4%", background: BAR_SOFT })} />
-        </>
-      )}
-      {k === "corporate" && (
-        <>
-          <div style={abs({ top: "10%", left: "8%", width: "44%", height: "10%", background: BAR })} />
-          <div style={abs({ bottom: "12%", left: "8%", width: "12%", height: "28%", background: BAR_SOFT })} />
-          <div style={abs({ bottom: "12%", left: "24%", width: "12%", height: "48%", background: ACCENT })} />
-          <div style={abs({ bottom: "12%", left: "40%", width: "12%", height: "38%", background: BAR_SOFT })} />
-          <div style={abs({ bottom: "12%", left: "56%", width: "12%", height: "60%", background: BAR })} />
-        </>
-      )}
-      {k === "minimal" && (
-        <>
-          <div style={abs({ top: "44%", left: "30%", width: "40%", height: "9%", background: BAR })} />
-          <div style={abs({ top: "60%", left: "40%", width: "20%", height: "5%", background: BAR_SOFT })} />
-        </>
-      )}
-      {k === "editorial" && (
-        <>
-          <div style={abs({ top: "10%", left: "6%", width: "34%", height: "14%", background: BAR })} />
-          <div style={abs({ top: "30%", bottom: "12%", left: "6%", width: "34%", background: BAR_SOFT })} />
-          <div style={abs({ top: "10%", bottom: "12%", left: "46%", width: "22%", background: BAR_SOFT })} />
-          <div style={abs({ top: "10%", bottom: "12%", left: "72%", width: "22%", background: BAR_SOFT })} />
-        </>
-      )}
-      {k === "bold" && (
-        <div
-          className="flex h-full w-full items-center justify-center font-black text-foreground"
-          style={{ fontSize: big ? 34 : 13, lineHeight: 1 }}
-        >
-          {boldSample}
-        </div>
-      )}
-      {k === "duotone" && (
-        <>
-          <div style={abs({ inset: 0, background: "color-mix(in srgb, var(--tq-purple) 55%, black)" })} />
-          <div style={abs({ inset: 0, background: ACCENT, clipPath: "polygon(0 0, 62% 0, 34% 100%, 0 100%)" })} />
-          <div style={abs({ bottom: "12%", right: "8%", width: "36%", height: "8%", background: "#fff" })} />
-        </>
-      )}
-      {k === "playful" && (
-        <>
-          <div style={abs({ top: "14%", left: "12%", width: "22%", aspectRatio: "1", borderRadius: "50%", background: ACCENT })} />
-          <div style={abs({ bottom: "16%", right: "14%", width: "30%", height: "22%", borderRadius: 999, background: BAR_SOFT })} />
-          <div style={abs({ top: "46%", left: "52%", width: "10%", aspectRatio: "1", borderRadius: "50%", background: BAR })} />
-        </>
-      )}
-      {k === "brutalist" && (
-        <>
-          <div style={abs({ inset: "10%", border: `${big ? 3 : 2}px solid var(--tq-text-primary)` })} />
-          <div style={abs({ top: "10%", left: "10%", width: "44%", height: "16%", background: "var(--tq-text-primary)" })} />
-        </>
-      )}
-      {k === "auto" && (
-        <div className="flex h-full w-full items-center justify-center text-muted">
-          <span
-            className="material-symbols-outlined"
-            style={{ fontSize: big ? 22 : 14 }}
-            aria-hidden
-          >
-            auto_awesome
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ── Portrait social-card previews ───────────────────────────────
 // Same CSS-block language as StyleMini, but a 4:5 portrait card so the
@@ -335,6 +215,11 @@ export function DesignStylePicker({
     ? SOCIAL_STYLES
     : STYLES;
   const descs: Record<string, string> = isSocial ? t.socialDescs : t.descs;
+  // Deck styles show their localized name; social keeps its English labels.
+  const names: Record<string, string> = t.names;
+  const nameOf = (st: { label: string; key: string }) =>
+    isSocial ? st.label : (names[st.key] ?? st.label);
+  const info: Record<string, { does: string; best: string }> = t.info;
   const renderMini = (key: string, opts: { big?: boolean }) =>
     isSocial ? (
       <SocialStyleMini
@@ -343,7 +228,7 @@ export function DesignStylePicker({
         boldSample={t.socialBoldSample}
       />
     ) : (
-      <StyleMini k={key as StyleKey | "auto"} big={opts.big} boldSample={t.boldSample} />
+      <StyleThumb k={key as DeckStyleKey | "auto"} title={t.thumbTitle} dir={dir} />
     );
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -375,7 +260,7 @@ export function DesignStylePicker({
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[13px] font-semibold text-foreground">
-            {current ? current.label : t.auto}
+            {current ? nameOf(current) : t.auto}
           </p>
           <p className="truncate text-[11px] text-muted">
             {current ? descs[current.key] : t.autoDesc}
@@ -442,14 +327,14 @@ export function DesignStylePicker({
                         {styles.map((s) => {
                           const active = value === s.label;
                           return (
+                            <div key={s.key} className="relative">
                             <button
-                              key={s.key}
                               type="button"
                               onClick={() => {
                                 onChange(s.label);
                                 setOpen(false);
                               }}
-                              className={`rounded-xl border p-2 text-start transition-colors ${
+                              className={`w-full rounded-xl border p-2 text-start transition-colors ${
                                 active
                                   ? "border-transparent outline outline-2 outline-[var(--tq-purple)]"
                                   : "border-[var(--tq-border-hairline)] hover:border-[var(--tq-purple)]"
@@ -459,10 +344,19 @@ export function DesignStylePicker({
                                 {renderMini(s.key, { big: true })}
                               </div>
                               <p className="mt-2 text-[12px] font-semibold text-foreground">
-                                {s.label}
+                                {nameOf(s)}
                               </p>
                               <p className="text-[11px] text-muted">{descs[s.key]}</p>
                             </button>
+                            {!isSocial && info[s.key] ? (
+                              <StyleInfoButton
+                                name={nameOf(s)}
+                                does={info[s.key].does}
+                                best={info[s.key].best}
+                                className="absolute end-3.5 top-3.5"
+                              />
+                            ) : null}
+                            </div>
                           );
                         })}
                         {/* Auto - clears the pick; Claude decides. */}
@@ -498,8 +392,10 @@ export function DesignStylePicker({
 }
 
 /**
- * Inline style grid for /create's Design step (2026-10-02): Auto + the deck
- * styles as tiles, no modal. Same previews + labels as the dialog above.
+ * Inline style grid for /create's Design step: Auto + every deck style as an
+ * illustrated tile with its localized name and an info button (what it does,
+ * best topics). More columns as the card widens; "Show all" opens the large
+ * gallery with descriptions.
  */
 export function DesignStyleGrid({
   value,
@@ -511,32 +407,74 @@ export function DesignStyleGrid({
   disabled?: boolean;
 }) {
   const dict = useDict();
+  const { dir } = useLocale();
   const t = dict.flows.stylePicker;
-  const tiles: ReadonlyArray<{ key: StyleKey | "auto"; label: string; desc: string; value: string | null }> = [
-    { key: "auto", label: t.auto, desc: t.autoDesc, value: null },
-    ...STYLES.map((s) => ({ key: s.key, label: s.label, desc: t.descs[s.key], value: s.label })),
+  const names: Record<string, string> = t.names;
+  const descs: Record<string, string> = t.descs;
+  const info: Record<string, { does: string; best: string }> = t.info;
+  const [expanded, setExpanded] = useState(false);
+  const tiles: ReadonlyArray<{
+    key: DeckStyleKey | "auto";
+    name: string;
+    desc: string;
+    does: string;
+    best: string;
+    value: string | null;
+  }> = [
+    { key: "auto", name: t.auto, desc: t.autoDesc, does: t.autoInfoDoes, best: t.autoInfoBest, value: null },
+    ...STYLES.map((s) => ({
+      key: s.key,
+      name: names[s.key] ?? s.label,
+      desc: descs[s.key] ?? "",
+      does: info[s.key]?.does ?? "",
+      best: info[s.key]?.best ?? "",
+      value: s.label,
+    })),
   ];
+
+  const tile = (tl: (typeof tiles)[number], big: boolean) => {
+    const active = value === tl.value;
+    return (
+      <div key={tl.key} className="relative">
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => {
+            onChange(tl.value);
+            if (big) setExpanded(false);
+          }}
+          aria-pressed={active}
+          className={`pick-tile flex w-full flex-col gap-1.5 rounded-lg p-1.5 text-start disabled:cursor-not-allowed disabled:opacity-50 ${
+            active ? "is-active" : ""
+          }`}
+        >
+          <StyleThumb k={tl.key} title={t.thumbTitle} dir={dir} />
+          <span className={`truncate font-medium text-foreground/85 ${big ? "text-[13px]" : "text-[11px]"}`}>
+            {tl.name}
+          </span>
+          {big ? <span className="-mt-1 text-[11px] leading-4 text-foreground/55">{tl.desc}</span> : null}
+        </button>
+        <StyleInfoButton
+          name={tl.name}
+          does={tl.does}
+          best={tl.best}
+          className={big ? "absolute end-3 top-3" : "absolute end-2.5 top-2.5"}
+        />
+      </div>
+    );
+  };
+
   return (
-    <div className="design-scroll grid grid-cols-3 gap-2">
-      {tiles.map((tile) => {
-        const active = value === tile.value;
-        return (
-          <button
-            key={tile.key}
-            type="button"
-            disabled={disabled}
-            onClick={() => onChange(tile.value)}
-            title={tile.desc}
-            aria-pressed={active}
-            className={`pick-tile flex flex-col gap-1.5 rounded-lg p-1.5 text-start disabled:cursor-not-allowed disabled:opacity-50 ${
-              active ? "is-active" : ""
-            }`}
-          >
-            <StyleMini k={tile.key} boldSample={t.boldSample} />
-            <span className="truncate text-[11px] font-medium text-foreground/80">{tile.label}</span>
-          </button>
-        );
-      })}
+    <div className="@container flex flex-col gap-1.5">
+      <div className="design-scroll grid shrink-0 auto-rows-max grid-cols-3 gap-2 @min-[26rem]:grid-cols-4 @min-[34rem]:grid-cols-5 @min-[46rem]:grid-cols-6">
+        {tiles.map((tl) => tile(tl, false))}
+      </div>
+      <PickerExpandButton onClick={() => setExpanded(true)} disabled={disabled} />
+      <PickerExpandModal open={expanded} title={t.allStyles} onClose={() => setExpanded(false)}>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+          {tiles.map((tl) => tile(tl, true))}
+        </div>
+      </PickerExpandModal>
     </div>
   );
 }
