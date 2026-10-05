@@ -1806,7 +1806,7 @@
           "name": "Free",
           "description": "Try every feature free. We design the first 5 slides of each deck; subscribe to unlock the rest.",
           "credits": "{credits} credits (signup gift)",
-          "features": ["{model}", "First 5 slides of each deck designed", "Editable PPTX + all formats", "All creation methods + AI edits", "Smart photos, free on your trial", "Custom brand identity", "No watermark", "Full decks, nothing locked", "Premium templates"],
+          "features": ["{model}", "First 5 slides of each deck designed", "Editable PPTX + all formats", "All creation methods", "Smart photos + custom brand identity", "AI edits after generation", "No watermark", "Full decks, nothing locked", "Premium templates"],
           "footnote": "Upgrade anytime",
           "cta": "Start free"
         },

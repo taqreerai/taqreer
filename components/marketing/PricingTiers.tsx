@@ -67,10 +67,11 @@ const off = { enabled: false };
 // flags toggle the premium tail: Plus lacks premium templates + priority, Pro
 // lacks priority, Max has everything. (row 0 = credits, row 1 = model.)
 // Free (2026-10-05 free trial): its OWN list - 5 designed slides per deck,
-// every format, every creation method + AI edits, free photos and brand
-// identity ON; no watermark, full (unlocked) decks and premium templates OFF.
+// every format, every creation method, photos + brand identity ON; AI edits
+// after generation (paid again 2026-10-05), no watermark, full (unlocked)
+// decks and premium templates OFF.
 const TIERS: Tier[] = [
-  { features: [on, on, on, on, on, on, on, off, off, off], isFree: true },
+  { features: [on, on, on, on, on, on, off, off, off, off], isFree: true },
   { features: [on, on, on, on, on, on, on, on, off, off] },
   { features: [on, on, on, on, on, on, on, on, on, off], popular: true },
   { features: [on, on, on, on, on, on, on, on, on, on] },

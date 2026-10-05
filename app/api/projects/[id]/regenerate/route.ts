@@ -89,6 +89,7 @@ export async function POST(
       ownerRole: project.user?.role ?? "user",
       ownerPlan: project.user?.plan ?? null,
       cost: carriedHold,
+      aiEdit: false,
     });
     if (gate) return NextResponse.json(gate, { status: 402 });
   }
