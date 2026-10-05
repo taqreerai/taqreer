@@ -101,6 +101,8 @@ IN-WELL CONTENT IMAGES - inside the well you may reserve FRAMED photo slots as c
   • NO src - the system generates and fills it. Set width/height in px (the system reads the shape). Round corners/borders welcome.
   • data-genimage describes SUBJECT / SCENE / MOOD only - never text, letters, numbers, logos, signage, charts, or UI inside the image (stripped server-side); keep it trademark-safe (no real brand / person / team / character names). One consistent medium + mood across the whole deck.
   • ‼️ NEVER place text on top of a well image, and never draw a scrim/overlay on one - text-over-photo happens ONLY via data-bg="image" or a split/band panel. Well images are clean framed blocks BESIDE/AROUND text.
+
+REAL PEOPLE, TEAMS AND BRANDS (every photo prompt, background or in-well) - the image generator cannot and must not depict a real, named person. When a slide is about one (a footballer, a CEO, a founder, a historical figure) or a real team / brand, picture THEIR WORLD instead: the arena, stadium, pitch, stage, workplace, city, era, equipment or trophy, in their colours and setting. Never a stand-in or lookalike person, never an unrelated metaphor (a random child, a stranger), and no identifiable face meant to read as them; people in that scene are an anonymous crowd, distant or from behind. Real PLACES and landmarks are fine to depict as they are.
 `
     : `
 BACKGROUND KINDS - "color" only for this deck: a flat or gradient ground via data-bg-css. Do not reference photos anywhere.

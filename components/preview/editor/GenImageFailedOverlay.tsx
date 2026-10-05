@@ -22,7 +22,7 @@
 // DeckView clears the genid from `failedImages` on click, so the card drops
 // and the honest shimmer resumes until the retry resolves either way.
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import type { GenImageAspect } from "@/lib/images/slide-images";
 
@@ -38,6 +38,9 @@ type GenImageFailedOverlayProps = {
   failed: ReadonlySet<string>;
   slideId: string;
   onRetry: (input: RetryInput) => void;
+  // The user's own photo for the box: DeckView swaps the src, drops the gen
+  // metadata and saves (same as the StylePill "Upload photo" button).
+  onUpload?: (genid: string, url: string) => void;
 };
 
 function findBox(editorDoc: Document, genid: string): HTMLImageElement | null {
@@ -52,6 +55,7 @@ export function GenImageFailedOverlay({
   failed,
   slideId,
   onRetry,
+  onUpload,
 }: GenImageFailedOverlayProps) {
   const t = useDict().editor.imageFailed;
   const { dir } = useLocale();
@@ -89,6 +93,34 @@ export function GenImageFailedOverlay({
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [editorDoc, genids]);
+
+  // Upload-your-own: one hidden input shared by every card; uploadFor holds the
+  // box being filled while its upload runs.
+  const fileRef = useRef<HTMLInputElement>(null);
+  const pendingGenid = useRef<string | null>(null);
+  const [uploadFor, setUploadFor] = useState<string | null>(null);
+  const onPickFile = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = "";
+      const genid = pendingGenid.current;
+      if (!file || !genid || !onUpload) return;
+      setUploadFor(genid);
+      try {
+        const body = new FormData();
+        body.append("file", file);
+        const res = await fetch("/api/storage/upload-image", { method: "POST", body });
+        const data = (await res.json().catch(() => null)) as { url?: string } | null;
+        if (!res.ok || !data?.url) throw new Error("upload failed");
+        onUpload(genid, data.url);
+      } catch (err) {
+        console.error("Image upload failed:", err);
+      } finally {
+        setUploadFor(null);
+      }
+    },
+    [onUpload],
+  );
 
   const handleRetry = useCallback(
     (genid: string) => {
@@ -155,8 +187,32 @@ export function GenImageFailedOverlay({
             </span>
             {t.retry}
           </button>
+          {onUpload ? (
+            <button
+              type="button"
+              disabled={uploadFor !== null}
+              onClick={() => {
+                pendingGenid.current = genid;
+                fileRef.current?.click();
+              }}
+              className="mt-2.5 ms-1.5 inline-flex h-7 items-center gap-1.5 rounded-full px-3.5 text-[12px] font-medium text-foreground/85 transition-colors hover:text-foreground disabled:opacity-60"
+              style={{ background: "var(--tq-surface)", border: "1px solid var(--tq-border-hairline)" }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 14 }} aria-hidden>
+                upload
+              </span>
+              {uploadFor === genid ? t.uploading : t.upload}
+            </button>
+          ) : null}
         </div>
       ))}
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        hidden
+        onChange={onPickFile}
+      />
     </>
   );
 }

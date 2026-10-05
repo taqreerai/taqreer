@@ -2159,9 +2159,9 @@
       "unlock": "Unlock",
       "graphicColour": "Graphic colour",
       "fillColour": "Fill colour",
-      "replaceImage": "Replace image",
+      "replaceImage": "Upload a photo from your computer instead",
       "uploading": "Uploading…",
-      "replace": "Replace",
+      "replace": "Upload photo",
       "regenImage": "Regenerate image with AI",
       "regenerate": "Regenerate",
       "regenPlaceholder": "Describe the image you want to generate…",
@@ -2171,7 +2171,9 @@
     "imageFailed": {
       "title": "Image could not be generated",
       "hint": "The description may include sensitive or copyrighted content. Select the image to edit its description, or try again.",
-      "retry": "Try again"
+      "retry": "Try again",
+      "upload": "Upload yours",
+      "uploading": "Uploading…"
     },
     "progress": {
       "thinking": "Thinking…",
