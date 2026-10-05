@@ -15,6 +15,7 @@
 // client-side (no route), so for them the UI gate is the only stop -
 // acceptable, the bypass audience is devtools users.
 
+import { FREE_PLAN_FEATURE_LOCKS } from "@/lib/free-trial";
 import { normalizePlan } from "@/lib/plan";
 import type { KnownPlan } from "@/lib/plan";
 
@@ -76,6 +77,10 @@ export function isExportGated(
 ): boolean {
   if (user.isAdmin) return false;
   if (user.plan !== null && normalizePlan(user.plan) !== "free") return false;
+  // Free trial (lib/free-trial): a SIGNED-IN free user exports every format
+  // (their decks carry the quiet watermark). An unknown plan (signed-out
+  // public-link viewer) keeps the rules below.
+  if (user.plan !== null && !FREE_PLAN_FEATURE_LOCKS) return false;
   if ((format ?? "16:9") === "3:4") return true;
   if (kind === "png") return false;
   // Free plan (2026-10-02): PPTX is open to signed-in free users; the deck

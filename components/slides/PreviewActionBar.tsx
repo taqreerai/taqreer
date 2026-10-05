@@ -1,5 +1,6 @@
 "use client";
 
+import { FREE_PLAN_FEATURE_LOCKS } from "@/lib/free-trial";
 import {
   createContext,
   useContext,
@@ -462,7 +463,11 @@ export function PreviewActionBar({
   // AI edits after generation are a paid feature (2026-10-02). The server
   // refuses them for a Free owner too (regenCreditGate -> ai_edit_locked).
   const creditData = useCreditBalance();
-  const aiEditLocked = !!creditData && !creditData.isAdmin && creditData.plan === "free";
+  const aiEditLocked =
+    FREE_PLAN_FEATURE_LOCKS &&
+    !!creditData &&
+    !creditData.isAdmin &&
+    creditData.plan === "free";
 
   // Measure the active mode content (pre-paint) so the slot animates to its
   // pixel width. Re-measures when the mode or the AI button set changes.

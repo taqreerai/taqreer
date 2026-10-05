@@ -7,6 +7,7 @@
 // which slides carry the logo. White-flatten the preview for the dark glass
 // chrome (preview only — saved bytes untouched). SVG-only.
 
+import { FREE_PLAN_FEATURE_LOCKS } from "@/lib/free-trial";
 import { useEffect, useRef, useState } from "react";
 import { useDict } from "@/components/i18n/LocaleProvider";
 import { useCreditBalance } from "@/lib/credits/store";
@@ -41,7 +42,8 @@ export function LogoRow({
   // crowned locked slot. The server drops a free user's logo regardless
   // (app/api/projects/route.ts); this keeps the UI from offering it.
   const credits = useCreditBalance();
-  const logoLocked = !!credits && !credits.isAdmin && credits.plan === "free";
+  const logoLocked =
+    FREE_PLAN_FEATURE_LOCKS && !!credits && !credits.isAdmin && credits.plan === "free";
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 

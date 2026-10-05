@@ -21,6 +21,7 @@
 // on exit (try/finally). The store is a module-scoped Map so it
 // survives across the React tree without a Context provider.
 
+import { FREE_PLAN_FEATURE_LOCKS } from "@/lib/free-trial";
 import { useState, useSyncExternalStore } from "react";
 import posthog from "posthog-js";
 import type { SlideManifest, SlideFormat } from "@/lib/schema/slide";
@@ -162,6 +163,10 @@ export function useExportActions({
   // unknown, so null never reaches an export.)
   const credits = useCreditBalance();
   const freeBranding = !!credits && !credits.isAdmin && credits.plan === "free";
+  // Free trial: Google Slides (built from the same PPTX) carries the mark too.
+  const freeWatermarkOpts: { freeWatermark?: "ar" | "en" } = freeBranding
+    ? { freeWatermark: manifest.language === "en" ? "en" : "ar" }
+    : {};
   // Localized copy for the server's `export_gated` 402 so the toast is
   // never English on an Arabic deck. The UI normally crowns gated formats
   // + opens the upgrade modal before ever calling the route, so this is
@@ -237,12 +242,17 @@ export function useExportActions({
       setState({ status: "running", message: "جار التصدير..." });
       try {
         const fileName = `${baseFileName(manifest.title || projectTitle)}.pptx`;
-        if (freeBranding) {
-          // Free plan: a present-ready PPTX built from the server's PNG
-          // renders (watermark + branded closing slide baked into the
-          // pictures). The editable PPTX is a paid feature.
+        if (freeBranding && FREE_PLAN_FEATURE_LOCKS) {
+          // Free plan, locked mode: a present-ready PPTX built from the
+          // server's PNG renders (watermark baked into the pictures).
           const imageSlides = await fetchWatermarkedSlideImages();
           await exportManifestAsPptx(exportManifest, fileName, { imageSlides });
+        } else if (freeBranding) {
+          // Free trial (lib/free-trial): the EDITABLE deck, with the quiet
+          // watermark picture on slides 2+ and the file credits.
+          await exportManifestAsPptx(exportManifest, fileName, {
+            freeWatermark: exportManifest.language === "en" ? "en" : "ar",
+          });
         } else {
           await exportManifestAsPptx(exportManifest, fileName);
         }
@@ -291,7 +301,7 @@ export function useExportActions({
         // a blocked or unreachable GIS script (plain Error). The upload
         // path below owns the post-token failures.
         try {
-          await exportManifestAsPptx(exportManifest, `${title}.pptx`);
+          await exportManifestAsPptx(exportManifest, `${title}.pptx`, freeWatermarkOpts);
           posthog.capture("deck_exported", {
             format: "gslides_fallback_pptx",
             project_id: projectId,
@@ -314,7 +324,7 @@ export function useExportActions({
         const { blob } = await exportManifestAsPptx(
           exportManifest,
           `${title}.pptx`,
-          { skipDownload: true },
+          { skipDownload: true, ...freeWatermarkOpts },
         );
         if (!blob) throw new Error("PPTX build produced no blob");
         // Slides can't render SVG - swap the upload copy to the raster

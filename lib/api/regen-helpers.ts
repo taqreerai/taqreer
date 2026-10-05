@@ -12,6 +12,7 @@
 // Lifted here (2026-05-27 simplifier pass) so the two routes can keep
 // their orchestration short and the shared logic stays in one place.
 
+import { FREE_PLAN_FEATURE_LOCKS } from "@/lib/free-trial";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getBalance } from "@/lib/credits/server";
@@ -212,7 +213,7 @@ export async function regenCreditGate(args: {
   cost: number;
 }): Promise<CreditGate402 | null> {
   if (args.ownerRole === "admin") return null;
-  if (normalizePlan(args.ownerPlan) === "free") {
+  if (FREE_PLAN_FEATURE_LOCKS && normalizePlan(args.ownerPlan) === "free") {
     return {
       error: "ai_edit_locked",
       balance: 0,
