@@ -135,20 +135,30 @@ export function LogoRow({
             setDragging(false);
             acceptSvg(event.dataTransfer.files?.[0]);
           }}
-          className={`flex w-full flex-col items-center justify-center gap-1 rounded-xl border border-dashed bg-overlay-soft transition-colors ${zoneH} ${
+          className={`flex w-full items-center justify-center rounded-xl border border-dashed bg-overlay-soft transition-colors ${
+            compact ? "gap-3 px-3" : "flex-col gap-1"
+          } ${zoneH} ${
             dragging
               ? "border-[var(--tq-violet)]/60 bg-[var(--tq-violet)]/10"
               : "border-foreground/15 hover:border-foreground/30"
           }`}
         >
+          {/* Compact (h-14): icon tile beside the two lines, so the stack
+              never overflows the zone. Full size keeps the centred stack. */}
           <span
-            className="material-symbols-outlined text-foreground/70"
+            className={`material-symbols-outlined text-foreground/70 ${
+              compact
+                ? "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--tq-overlay-soft)]"
+                : ""
+            }`}
             style={{ fontSize: 20 }}
           >
             image
           </span>
-          <span className="text-xs font-semibold text-foreground">{dict.flows.brand.svgLogo}</span>
-          <span className="text-[10px] text-foreground/40">{dict.flows.brand.svgOnly}</span>
+          <span className={`flex flex-col ${compact ? "items-start" : "items-center gap-1"}`}>
+            <span className="text-xs font-semibold leading-4 text-foreground">{dict.flows.brand.svgLogo}</span>
+            <span className={`text-[10px] leading-4 text-foreground/40 ${compact ? "mt-0.5" : ""}`}>{dict.flows.brand.svgOnly}</span>
+          </span>
         </button>
       )}
     </div>
