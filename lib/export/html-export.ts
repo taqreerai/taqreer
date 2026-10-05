@@ -13,6 +13,7 @@ import {
 } from "@/lib/export/bidi-postprocess";
 import { extractGradientIntents } from "@/lib/export/gradient-text";
 import { compressPptxMedia } from "@/lib/export/compress-pptx-media";
+import { watermarkGeometry, watermarkSide } from "@/lib/export/free-branding";
 import {
   embedConvertedFontsInPptx,
   type ConvertedFont,
@@ -847,6 +848,7 @@ export async function exportManifestAsPptx(
           JSZip as any,
           slideNodes.length,
           manifest.language === "en" ? "en" : "ar",
+          { width: canvasW, height: canvasH },
         );
       } catch (err) {
         if (typeof console !== "undefined") {
@@ -899,6 +901,10 @@ export async function exportManifestAsPptx(
 }
 
 // ─── Free-plan file credits ─────────────────────────────────────────
+// Also: a clickable link over the baked-in "Designed with taqreer" mark on
+// every slide but the cover (no mark there), so clicking it in slideshow
+// opens taqreer.ai. An invisible rectangle (fill at 0% opacity, which
+// PowerPoint still hit-tests) carrying an external hyperlink.
 // The Company document property (File > Info in PowerPoint) and a speaker
 // note on the LAST slide. Neither shows on screen while presenting. pptxgenjs
 // writes an empty notes slide for every slide, so the note goes into the
@@ -914,8 +920,10 @@ async function addFreeFileCredits(
   JSZip: any,
   slideCount: number,
   lang: "ar" | "en",
+  canvas: { width: number; height: number },
 ): Promise<Blob> {
   const zip = await JSZip.loadAsync(blob);
+  await addWatermarkLinks(zip, slideCount, lang, canvas);
   const appPath = "docProps/app.xml";
   const app = await zip.file(appPath)?.async("string");
   if (app) {
@@ -938,5 +946,44 @@ async function addFreeFileCredits(
     );
   }
   return zip.generateAsync({ type: "blob" });
+}
+
+const WATERMARK_LINK_SHAPE_ID = 9001;
+
+async function addWatermarkLinks(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  zip: any,
+  slideCount: number,
+  lang: "ar" | "en",
+  canvas: { width: number; height: number },
+): Promise<void> {
+  const pres = await zip.file("ppt/presentation.xml")?.async("string");
+  const sz = pres?.match(/<p:sldSz[^>]*\bcx="(\d+)"[^>]*\bcy="(\d+)"/);
+  if (!sz) return;
+  const emu = Number(sz[1]) / canvas.width; // EMU per slide pixel
+  // Same geometry as lib/export/free-branding watermarkHtml (x0.8 scale).
+  // The mark's width depends on the font, so the hit box is a little wider
+  // than the drawn pill; a few extra pixels of corner are harmless.
+  const base = watermarkGeometry(canvas);
+  const h = Math.round(base.height * 0.8);
+  const w = Math.round(h * 5.8);
+  const x = watermarkSide(lang) === "left" ? base.margin : canvas.width - base.margin - w;
+  const y = canvas.height - base.margin - h;
+  const url = `https://taqreer.ai/${lang}?utm_source=pptx&amp;utm_medium=watermark`;
+  const shape =
+    `<p:sp><p:nvSpPr><p:cNvPr id="${WATERMARK_LINK_SHAPE_ID}" name="taqreer"><a:hlinkClick r:id="rIdTqLink"/></p:cNvPr><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+    `<p:spPr><a:xfrm><a:off x="${Math.round(x * emu)}" y="${Math.round(y * emu)}"/><a:ext cx="${Math.round(w * emu)}" cy="${Math.round(h * emu)}"/></a:xfrm>` +
+    `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="FFFFFF"><a:alpha val="0"/></a:srgbClr></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr></p:sp>`;
+  const rel = `<Relationship Id="rIdTqLink" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="${url}" TargetMode="External"/>`;
+  // Slide 1 is the cover: no mark, no link.
+  for (let n = 2; n <= slideCount; n++) {
+    const slidePath = `ppt/slides/slide${n}.xml`;
+    const relsPath = `ppt/slides/_rels/slide${n}.xml.rels`;
+    const slide = await zip.file(slidePath)?.async("string");
+    const rels = await zip.file(relsPath)?.async("string");
+    if (!slide || !rels || !slide.includes("</p:spTree>") || rels.includes("rIdTqLink")) continue;
+    zip.file(slidePath, slide.replace("</p:spTree>", `${shape}</p:spTree>`));
+    zip.file(relsPath, rels.replace("</Relationships>", `${rel}</Relationships>`));
+  }
 }
 

@@ -764,6 +764,14 @@ textarea.input-dark {
   height: calc(var(--spacing) * 12);
 }
 
+/* `desk:` breakpoint (73.75rem = 1180px) for the /create three-cards-in-a-row
+   layout. A NAMED breakpoint in rem sorts with sm/md/lg/xl by value, so it
+   reliably overrides `sm:` widths; the arbitrary `min-[1180px]:` variant lost
+   to `sm:w-[430px]` and the cards overlapped (2026-10-05). */
+@theme {
+  --breakpoint-desk: 73.75rem;
+}
+
 @theme inline {
   /* Blue scale (names kept for back-compat — e.g. `selection:bg-brand-purple-500`
      in the root layout; values are blue so the selection highlight reads blue). */
