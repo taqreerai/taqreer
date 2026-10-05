@@ -158,6 +158,18 @@ const MIMIC_IMG_ADDENDUM = `MIMIC IMAGES: images mode is ON for this mimic. Stud
   • Two attributes only: data-genimage (the prompt) + data-genid (unique per box). Set width/height in px so the system requests the right image shape. Keep one consistent medium and mood across the whole deck.
   • SUBJECT / SCENE / MOOD only: never request text, letters, numbers, logos, signage, charts, or UI inside the image (stripped server-side); keep it trademark-safe (no real brand / person / team / character names). Stats, data, and charts stay CSS + inline SVG. When text sits on a generated image, add ONE scrim layer for legibility.`;
 
+// Enhance with images on (2026-10-05): the source slides' photos become
+// generated-image boxes that recreate their subject (Claude cannot reuse the
+// original pixels), and a slide with no photo gets one only when its content
+// genuinely benefits. Charts, logos, diagrams and screenshots are never turned
+// into photos. Same box contract + safety rails as MIMIC_IMG_ADDENDUM.
+const ENHANCE_IMG_ADDENDUM = `ENHANCE IMAGES: images mode is ON for this redesign. This overrides the "PHOTOS → styled placeholder" rule in the user message.
+  • Where a SOURCE slide shows a photograph or illustration, keep imagery on the matching redesigned slide: reserve a generated-image box (an in-well data-genimage slot, or a photo background/panel) whose prompt RECREATES that image's subject, scene and mood as closely as you can describe it, so the original's meaning survives the redesign.
+  • Where a source slide has NO photo, add one only when the slide's content clearly benefits (a cover, a section divider, a story or people-focused slide). Text-dense, data, chart, table and agenda slides stay photo-free. Never more than one photo per slide unless the source slide had more.
+  • NEVER turn logos, brand marks, charts, graphs, diagrams, tables, maps or software screenshots into generated photos: those keep the placeholder handling from the user message.
+  • Photos never displace content: every fact from the slide's exact-text block still appears. Keep one consistent medium and mood across the deck.
+  • SUBJECT / SCENE / MOOD only in every prompt: never request text, letters, numbers, logos, signage, charts, or UI inside the image (stripped server-side); keep it trademark-safe (no real brand / person / team / character names).`;
+
 // Enhance flow's HTML system addendum. Enhance REDESIGNS an existing deck rather
 // than inventing one, so it must neutralise the create prompt's "ORIGINAL / fresh"
 // framing AND its "VARY the composition slide to slide" rule (enhance wants the
@@ -190,16 +202,20 @@ const AUTO_PALETTE_ADDENDUM = `PALETTE — choose a 3-6 color hex palette that m
 const SLIDE_ROLES = new Set<NonNullable<SlideType["role"]>>(SLIDE_ROLE_VALUES);
 
 // Images mode = create/scratch + MIMIC (opt-in, 2026-06-14: mimic recreates the
-// reference's imagery via gpt-image, see MIMIC_IMG_ADDENDUM). enhance + data keep
-// their own visual handling and never get the override even if the flag leaks on.
+// reference's imagery via gpt-image, see MIMIC_IMG_ADDENDUM) + ENHANCE (opt-in,
+// 2026-10-05: ENHANCE_IMG_ADDENDUM). Data decks keep their own visual handling
+// and never get the override even if the flag leaks on.
 export function isImagesMode(event: DeckGenerateEvent): boolean {
   const sourceKind = (event.brief as { source?: { kind?: string } } | null)
     ?.source?.kind;
   const type = event.type ?? "create";
+  if ((event.brief as { imagesMode?: boolean } | null)?.imagesMode !== true) {
+    return false;
+  }
+  if (type === "enhance") return sourceKind === "enhance";
   return (
-    (event.brief as { imagesMode?: boolean } | null)?.imagesMode === true &&
     // Social rides the SAME images path as create (owner: social = create at
-    // social ratios). enhance + data keep their own visual handling.
+    // social ratios).
     (type === "create" || type === "social") &&
     sourceKind !== "enhance" &&
     sourceKind !== "data"
@@ -1414,7 +1430,9 @@ function buildSourceTextDirective(
       ``,
       `VISUAL HANDLING — placeholders over redraws (saves time, looks honest):`,
       `  • LOGOS / BRAND MARKS — never recreate. If anything in a slide image looks like a logo, brand mark, monogram, or stylized identifier, do NOT draw it in SVG (approximations look off and bloat the output). Two options: (a) brand name is readable as text → styled text matching the weight/colour you can read; (b) otherwise → a styled placeholder <div> with a short label (the brand name if readable, else "Logo"). The user swaps it post-generation.`,
-      `  • PHOTOS / photographic content → styled placeholder <div> describing the subject ("Photo: portrait of CEO", "Photo: factory floor"). Use the palette for its background; drop purely-decorative filler.`,
+      isImagesMode(event)
+        ? `  • PHOTOS / photographic content → images mode is ON: recreate them as generated-image boxes per ENHANCE IMAGES in the system rules; drop purely-decorative filler.`
+        : `  • PHOTOS / photographic content → styled placeholder <div> describing the subject ("Photo: portrait of CEO", "Photo: factory floor"). Use the palette for its background; drop purely-decorative filler.`,
       `  • COMPLEX CHARTS / DIAGRAMS (multi-series charts, org/flow charts, custom illustrations) → styled placeholder block with the title + any axis labels you can read. Do not reconstruct the data graphically.`,
       `  • SIMPLE ICONS (arrows, checkmarks, stars, Lucide-style strokes) → inline <svg> in your usual clean style.`,
       `  • DECORATIVE shapes that carry no meaning → skip them. The redesign is the priority.`,
@@ -2172,6 +2190,9 @@ export const deckGenerate = inngest.createFunction(
             : null,
           htmlSourceKind === "mimic" ? MIMIC_HTML_ADDENDUM : null,
           data.type === "enhance" ? ENHANCE_HTML_ADDENDUM : null,
+          isImagesMode(data) && data.type === "enhance"
+            ? ENHANCE_IMG_ADDENDUM
+            : null,
           data.type === "enhance" && enhanceTemplate ? ENHANCE_TEMPLATE_ADDENDUM : null,
         ]
           .filter(Boolean)
