@@ -6,7 +6,8 @@ machine. Update it when a task lands or a new one starts.
 
 ## State
 
-- **Live (taqreer.ai)** = commit `12136ed`, deployed 2026-10-04. Nothing waiting on `dev`.
+- **Live (taqreer.ai)** = commit `6967b33`, deployed 2026-10-05 (includes the referral
+  migration, applied by scripts/post-receive.sh). Nothing waiting on `dev`.
 - Shipped in that deploy: `/gamma-arabic` in an "A vs B" layout (face-off hero,
   "pick X if" cards, tabbed screenshot pairs that stack below 1024px, comparison grid);
   /create "No template" now reads "تلقائي / Automatic"; /create step 3 card hugs its
@@ -90,7 +91,7 @@ copy in `dict.gammaArabic`, screenshots in `public/compare/*.webp`):
 
 ## Pending work (owner decides order)
 
-- **On the cloud branch, NOT deployed (2026-10-04 evening):** desktop /create shows
+- **Shipped 2026-10-05 (was the 2026-10-04 evening batch):** desktop /create shows
   all 3 cards (xl+); AI images toggle in the settings card, renamed "صور ذكية لمحتواك";
   AI images FREE (0 credits) + default ON for the free plan (imageCreditsForPlan in
   estimate / preflight / settle; free image regen limited to retrying failed boxes);
@@ -99,8 +100,8 @@ copy in `dict.gammaArabic`, screenshots in `public/compare/*.webp`):
   property + last-slide speaker note; shared-link viewers see no watermark;
   invite-a-colleague referrals (+400 invitee after a passed signup grant, +2,000
   inviter on the invitee's first paid checkout, cap 10/month; schema migration
-  20261004120000_referrals; InviteCard on /plans). Needs `npx prisma migrate deploy`
-  locally and a dev -> main PR (schema + webhook) before deploy.
+  20261004120000_referrals; InviteCard on /plans); show-all modals for templates +
+  colour templates; photo toggle as a plain settings row.
 
 0. **Education push (decided 2026-10-04).** Research in
    `docs/seo-research-education-2026-10-04.md`: per-subject pages do NOT pay off (all 25
