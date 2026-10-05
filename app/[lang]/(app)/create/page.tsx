@@ -151,7 +151,7 @@ const CARD_MIN_H_CLASS = "min-h-[440px]";
 // and must hug its content (user direction 2026-10-04: no dead space), so on
 // step 3 the other two cards leave layout entirely.
 // Desktop (1180px+, 2026-10-05: was xl/1280, which missed a 4K screen at 300% scaling): all three cards show side by side
-// in reading order with Generate below; the `min-[1180px]:` overrides on each card undo
+// in reading order with Generate below; the `desk:` overrides on each card undo
 // the wizard stacking, and the rail + Next button hide. Below 1180px it stays the
 // one-card-at-a-time wizard.
 function stackedCardVisibility(card: 0 | 1, step: number): string {
@@ -869,7 +869,7 @@ export default function CreatePage() {
         {/* Step rail - labelled with the existing card titles, Latin
             numerals; completed steps are click-to-jump, forward travel
             goes through Next so gating stays in one place. */}
-        <div className="min-[1180px]:hidden">
+        <div className="desk:hidden">
           <WizardStepRail
             steps={[t.contentCard, t.design.card, t.outputCard]}
             active={step}
@@ -891,12 +891,12 @@ export default function CreatePage() {
               steps 1-2 and the frame never jumps between them
               (user direction 2026-08-30). Step 3 hugs its content
               (stackedCardVisibility, 2026-10-04). */}
-          <div className="grid w-full justify-items-center min-[1180px]:w-auto min-[1180px]:grid-cols-[repeat(3,minmax(0,430px))] min-[1180px]:gap-4">
+          <div className="grid w-full justify-items-center desk:w-auto desk:grid-cols-[repeat(3,minmax(0,430px))] desk:gap-6">
           {/* ═══════════════════════════════════════════════════════
               CONTENT CARD (step 1)
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`surface-card ${stackedCardVisibility(0, step)} col-start-1 row-start-1 w-full sm:w-[430px] ${CARD_MIN_H_CLASS} flex-col min-[1180px]:visible min-[1180px]:col-start-auto min-[1180px]:row-start-auto min-[1180px]:flex min-[1180px]:w-full gap-4 rounded-2xl p-4`}
+            className={`surface-card ${stackedCardVisibility(0, step)} col-start-1 row-start-1 w-full sm:w-[430px] ${CARD_MIN_H_CLASS} flex-col desk:visible desk:col-start-auto desk:row-start-auto desk:flex desk:w-full desk:min-w-0 gap-4 rounded-2xl p-4`}
           >
             <CardHeader icon="subject" title={t.contentCard} />
 
@@ -995,7 +995,7 @@ export default function CreatePage() {
               scrolls inside it.
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`surface-card ${stackedCardVisibility(1, step)} col-start-1 row-start-1 w-full sm:w-[430px] ${CARD_MIN_H_CLASS} flex-col min-[1180px]:visible min-[1180px]:col-start-auto min-[1180px]:row-start-auto min-[1180px]:flex min-[1180px]:w-full gap-4 rounded-2xl p-4`}
+            className={`surface-card ${stackedCardVisibility(1, step)} col-start-1 row-start-1 w-full sm:w-[430px] ${CARD_MIN_H_CLASS} flex-col desk:visible desk:col-start-auto desk:row-start-auto desk:flex desk:w-full desk:min-w-0 gap-4 rounded-2xl p-4`}
           >
             {/* Mirrors CardHeader exactly (icon + title + pb-4 hairline) so
                 the separator and title sit at the same heights as the other
@@ -1219,7 +1219,7 @@ export default function CreatePage() {
               EXPORT SETTINGS CARD (step 3)
               ═══════════════════════════════════════════════════════ */}
           <div
-            className={`surface-card ${step === 2 ? "" : "invisible"} col-start-1 row-start-1 flex w-full sm:w-[430px] flex-col min-[1180px]:visible min-[1180px]:col-start-auto min-[1180px]:row-start-auto min-[1180px]:flex min-[1180px]:w-full gap-4 rounded-2xl p-4`}
+            className={`surface-card ${step === 2 ? "" : "invisible"} col-start-1 row-start-1 flex w-full sm:w-[430px] flex-col desk:visible desk:col-start-auto desk:row-start-auto desk:flex desk:w-full desk:min-w-0 gap-4 rounded-2xl p-4`}
           >
             <CardHeader icon="settings" title={t.outputCard} />
 
@@ -1343,7 +1343,7 @@ export default function CreatePage() {
               card so the button hugs its end edge; logical flex only, so
               RTL mirrors free. */}
           {step < 2 && (
-            <div className="flex w-full justify-end sm:w-[430px] min-[1180px]:hidden">
+            <div className="flex w-full justify-end sm:w-[430px] desk:hidden">
               <PillButton
                 variant="primary"
                 onClick={() => setStep((s) => Math.min(2, s + 1))}
@@ -1359,7 +1359,7 @@ export default function CreatePage() {
               Generate on the last step would reflect a state the user
               can no longer see. */}
           {fileExtracting && step > 0 && (
-            <p className="flex items-center gap-2 text-xs min-[1180px]:hidden text-[var(--tq-text-muted)]">
+            <p className="flex items-center gap-2 text-xs desk:hidden text-[var(--tq-text-muted)]">
               <span className="spinner h-3.5 w-3.5 rounded-full border-2 border-foreground/30 border-t-foreground" />
               {t.wizard.extracting}
             </p>
@@ -1367,7 +1367,7 @@ export default function CreatePage() {
         </div>
 
         {/* Always shown on desktop (all cards visible); last step only below xl. */}
-        <div className={`${step === 2 ? "flex" : "hidden min-[1180px]:flex"} justify-center`}>
+        <div className={`${step === 2 ? "flex" : "hidden desk:flex"} justify-center`}>
           <GenerateSplitButton
             onGenerate={handleGenerate}
             quality={quality}
