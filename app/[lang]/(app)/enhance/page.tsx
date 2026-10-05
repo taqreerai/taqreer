@@ -310,14 +310,27 @@ export default function EnhanceContentPage() {
   // if still empty. Starts empty so the extraction's suggestion can
   // fill it on a fresh run with no kit.
   const [colors, setColors] = useState<string[]>([]);
+  // "Auto" picked: send no palette so the AI chooses the colours, and keep
+  // the file's extracted colours from refilling the picker.
+  const [colorsAuto, setColorsAuto] = useState(false);
+  const colorsAutoRef = useRef(false);
+  useEffect(() => {
+    colorsAutoRef.current = colorsAuto;
+  }, [colorsAuto]);
   // Enhance + template (2026-10-05): a picked deck template's id. The server
   // mints its design reference and the redesign follows the template's look;
   // null = the classic enhance (the AI designs its own look).
   const [templateId, setTemplateId] = useState<string | null>(null);
   const updateColor = (index: number, next: string) =>
     setColors((c) => c.map((v, i) => (i === index ? next : v)));
-  const addColor = () =>
+  const addColor = () => {
+    setColorsAuto(false);
     setColors((c) => (c.length >= MAX_PALETTE ? c : [...c, "#FFFFFF"]));
+  };
+  const pickPalette = (next: string[]) => {
+    setColorsAuto(false);
+    setColors(next);
+  };
   const removeColor = (index: number) =>
     setColors((c) =>
       c.length <= MIN_PALETTE ? c : c.filter((_, i) => i !== index),
@@ -338,7 +351,10 @@ export default function EnhanceContentPage() {
   // colours + logo + position apply directly. Shared by mount
   // hydration + the in-card brand-kit dropdown. Mirrors /create.
   const applyBrand = useCallback((h: HydratedBrand) => {
-    if (h.colors.length > 0) setColors(h.colors);
+    if (h.colors.length > 0) {
+      setColorsAuto(false);
+      setColors(h.colors);
+    }
     const heading = h.headingFontSlot;
     if (heading.googleFamily) {
       setBrandFont({
@@ -595,7 +611,9 @@ export default function EnhanceContentPage() {
         // Seed the editable palette from the extraction's colours — but
         // only if the brand kit hasn't already provided some (kit wins,
         // CR #41). The user can then tweak them in the picker.
-        setColors((prev) => (prev.length > 0 ? prev : result.colors));
+        if (!colorsAutoRef.current) {
+          setColors((prev) => (prev.length > 0 ? prev : result.colors));
+        }
 
         // Seed sessionStorage with extraction's brand pre-fill (colors,
         // fonts hint, format). Logo + user-picked fonts come from local
@@ -760,8 +778,16 @@ export default function EnhanceContentPage() {
       // in the palette picker. Falls back to the sessionStorage-seeded
       // colours only if the user somehow cleared the palette entirely.
       const mergedBrand = {
-        colors: colors.length > 0 ? colors : seededBrand.colors ?? [],
-        paletteMode: seededBrand.paletteMode ?? "manual",
+        colors:
+          colors.length > 0
+            ? colors
+            : colorsAuto
+              ? []
+              : seededBrand.colors ?? [],
+        paletteMode:
+          colors.length === 0 && colorsAuto
+            ? "auto"
+            : seededBrand.paletteMode ?? "manual",
         paletteScreenshotUrl: seededBrand.paletteScreenshotUrl ?? null,
         fonts: {
           heading: fontField,
@@ -1190,6 +1216,29 @@ export default function EnhanceContentPage() {
                 {dict.flows.colors}
               </span>
               <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setColorsAuto(true);
+                    setColors([]);
+                  }}
+                  disabled={colors.length === 0}
+                  aria-pressed={colors.length === 0}
+                  title={dict.flows.autoColorsHint}
+                  className={`flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-[11px] font-medium transition-colors ${
+                    colors.length === 0
+                      ? "border-foreground/40 text-foreground"
+                      : "border-dashed border-foreground/20 text-foreground/60 hover:border-foreground/40 hover:text-foreground"
+                  }`}
+                >
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: 13 }}
+                  >
+                    auto_awesome
+                  </span>
+                  {dict.flows.autoColors}
+                </button>
                 {colors.map((color, index) => (
                   <InlinePaletteSwatch
                     key={index}
@@ -1219,7 +1268,7 @@ export default function EnhanceContentPage() {
             </div>
             {/* Colour templates (shared with /create, 2026-10-05). */}
             <div className="flex flex-col gap-1.5">
-              <PalettePresetPicker colors={colors} onPick={setColors} disabled={false} />
+              <PalettePresetPicker colors={colors} onPick={pickPalette} disabled={false} />
             </div>
 
             {/* Single brand font — one Google family (Claude varies
