@@ -44,6 +44,7 @@
 //     at submit) + save-brand-kit toggle + output settings
 //   • GenerateSplitButton + quality presets
 
+import { PalettePresetPicker } from "@/components/brand/PalettePresetPicker";
 import { DesignStylePicker } from "@/components/create/DesignStylePicker";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -790,6 +791,10 @@ export default function DatasheetPage() {
                   </button>
                 ) : null}
               </div>
+            </div>
+            {/* Colour templates (shared with /create, 2026-10-05). */}
+            <div className="flex flex-col gap-1.5">
+              <PalettePresetPicker colors={colors} onPick={setColors} disabled={submitting} />
             </div>
 
             {/* Single brand font — one Google family (Claude varies
