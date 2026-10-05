@@ -21,6 +21,7 @@
 // (per "reuse existing components" rule). Both call sites pass
 // their own `onGenerate`, `quality`, `disabled`, `loading`.
 
+import { FREE_PLAN_FEATURE_LOCKS } from "@/lib/free-trial";
 import { TEASER_VISIBLE_COUNT } from "@/lib/credits/cost";
 import { imageCreditsForPlan } from "@/lib/images/images-gating";
 import { useEffect, useRef, useState } from "react";
@@ -229,10 +230,11 @@ export function GenerateSplitButton({
             // admin can't be shown it (CR #154). The button stays visually
             // enabled; the next click lands normally.
             if (!credits) return;
-            // Free tier: show the slide-cap upsell before generating.
-            // NEVER for admins - their plan resolves "free" (no sub) but the
-            // superuser bypasses all gating (owner report 2026-07-18).
-            if (isFree && !isAdmin) {
+            // Free tier: NO pre-generate slide-cap pop-up since the
+            // 2026-10-05 free trial (owner direction): the user picks any
+            // count or Auto and discovers the 5-slide teaser in the deck.
+            // The dialog stays mounted behind FREE_PLAN_FEATURE_LOCKS.
+            if (FREE_PLAN_FEATURE_LOCKS && isFree && !isAdmin) {
               setShowSlideCapUpsell(true);
               return;
             }
