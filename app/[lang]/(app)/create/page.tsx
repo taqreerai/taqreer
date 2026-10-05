@@ -65,7 +65,6 @@ import {
 } from "@/components/credits/CreditGateDialog";
 import { useSlideCap, useCreditBalance } from "@/lib/credits/store";
 import { isImagesLocked } from "@/lib/images/images-gating";
-import { isPaidPlan } from "@/lib/plan";
 import { displaySlideEstimate } from "@/lib/credits/cost";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { localizedExtractError } from "@/lib/extract/error-codes";
@@ -361,16 +360,9 @@ export default function CreatePage() {
     plan: creditsForImages?.plan ?? null,
     isAdmin: creditsForImages?.isAdmin ?? false,
   });
-  // Images default ON for free accounts (their images cost 0 credits, owner
-  // decision 2026-10-04: the first deck shows the product at its best) and
-  // OFF for paid plans. Derived until the user touches the toggle, so the
-  // default follows /api/credits once it resolves without a mount effect.
-  const [imagesChoice, setImagesMode] = useState<boolean | null>(null);
-  const imagesMode =
-    imagesChoice ??
-    (creditsForImages !== null &&
-      !creditsForImages.isAdmin &&
-      !isPaidPlan(creditsForImages.plan));
+  // Images default OFF for every plan (owner decision 2026-10-05); the user
+  // opts in with the toggle.
+  const [imagesMode, setImagesMode] = useState<boolean>(false);
   // Picked template (Design step, declared here so the style handler below
   // can clear it): its minted design reference. Null = from scratch.
   const [template, setTemplate] = useState<{
