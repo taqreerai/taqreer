@@ -12,7 +12,7 @@
 // Lifted here (2026-05-27 simplifier pass) so the two routes can keep
 // their orchestration short and the shared logic stays in one place.
 
-import { FREE_PLAN_FEATURE_LOCKS } from "@/lib/free-trial";
+import { FREE_AI_EDIT_LOCK, FREE_PLAN_FEATURE_LOCKS } from "@/lib/free-trial";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getBalance } from "@/lib/credits/server";
@@ -211,9 +211,15 @@ export async function regenCreditGate(args: {
   // (2026-10-02), so a Free owner's regen is refused before any cost check.
   ownerPlan: string | null | undefined;
   cost: number;
+  // false = not an AI edit (the full-deck regenerate, which also serves Retry
+  // on a failed generation): skip the free-plan AI-edit lock.
+  aiEdit?: boolean;
 }): Promise<CreditGate402 | null> {
   if (args.ownerRole === "admin") return null;
-  if (FREE_PLAN_FEATURE_LOCKS && normalizePlan(args.ownerPlan) === "free") {
+  if (
+    (FREE_PLAN_FEATURE_LOCKS || (FREE_AI_EDIT_LOCK && args.aiEdit !== false)) &&
+    normalizePlan(args.ownerPlan) === "free"
+  ) {
     return {
       error: "ai_edit_locked",
       balance: 0,

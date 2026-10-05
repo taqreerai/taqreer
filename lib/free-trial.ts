@@ -8,3 +8,8 @@
 // The per-feature free locks are kept behind this switch rather than deleted,
 // so the paid gates can be restored in one place.
 export const FREE_PLAN_FEATURE_LOCKS = false;
+
+// AI edits after generation (slide / selection regen in the studio) are paid
+// again (owner decision 2026-10-05), independent of the switch above. Retrying
+// a FAILED generation stays open to free users (regenerate route).
+export const FREE_AI_EDIT_LOCK = true;

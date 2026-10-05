@@ -1,6 +1,6 @@
 "use client";
 
-import { FREE_PLAN_FEATURE_LOCKS } from "@/lib/free-trial";
+import { FREE_AI_EDIT_LOCK, FREE_PLAN_FEATURE_LOCKS } from "@/lib/free-trial";
 import {
   createContext,
   useContext,
@@ -464,7 +464,7 @@ export function PreviewActionBar({
   // refuses them for a Free owner too (regenCreditGate -> ai_edit_locked).
   const creditData = useCreditBalance();
   const aiEditLocked =
-    FREE_PLAN_FEATURE_LOCKS &&
+    (FREE_PLAN_FEATURE_LOCKS || FREE_AI_EDIT_LOCK) &&
     !!creditData &&
     !creditData.isAdmin &&
     creditData.plan === "free";
