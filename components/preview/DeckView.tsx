@@ -1839,6 +1839,34 @@ export function DeckView({
   // its src (→ shimmer); the regenerated image arrives via `slide.image.ready`
   // → filledImages → the iframe-patch effect below swaps it in. Fire-and-forget
   // with an error log (the box keeps its shimmer; the user can retry).
+  // Failed AI photo → the user's own upload: swap the src, drop the gen
+  // metadata (same as the StylePill "Upload photo" button, so regen and the
+  // live-fill paths stop targeting the box), clear the failed flag and save.
+  const handleUploadForFailed = useCallback(
+    (genid: string, url: string) => {
+      if (!editorDoc) return;
+      const img = editorDoc.querySelector<HTMLImageElement>(
+        `img[data-genid="${CSS.escape(genid)}"]`,
+      );
+      if (!img) return;
+      img.removeAttribute("srcset");
+      img.setAttribute("src", url);
+      for (const a of ["data-genid", "data-genimage", "data-genrole", "data-genaspect"]) {
+        img.removeAttribute(a);
+      }
+      setFailedImages((prev) => {
+        if (!prev.has(genid)) return prev;
+        const next = new Set(prev);
+        next.delete(genid);
+        return next;
+      });
+      const sec = img.closest("section") as HTMLElement | null;
+      const key = focusedSlideKeyFromRefs();
+      if (sec && key) handleSlideEdit(key, serializeSlideSection(sec));
+    },
+    [editorDoc, focusedSlideKeyFromRefs, handleSlideEdit],
+  );
+
   const handleRegenImage = useCallback(
     async (input: {
       genid: string;
@@ -5799,6 +5827,7 @@ export function DeckView({
                 failed={failedImages}
                 slideId={focusedSlide!.slideId}
                 onRetry={handleRegenImage}
+                onUpload={handleUploadForFailed}
               />
             ) : null}
           </div>

@@ -212,7 +212,9 @@ export function isImagesMode(event: DeckGenerateEvent): boolean {
   if ((event.brief as { imagesMode?: boolean } | null)?.imagesMode !== true) {
     return false;
   }
-  if (type === "enhance") return sourceKind === "enhance";
+  // Enhance projects reach the worker as type "create" (the /enhance page
+  // sends no type), so key off the source kind, not event.type.
+  if (sourceKind === "enhance") return type === "create" || type === "enhance";
   return (
     // Social rides the SAME images path as create (owner: social = create at
     // social ratios).
@@ -2190,10 +2192,10 @@ export const deckGenerate = inngest.createFunction(
             : null,
           htmlSourceKind === "mimic" ? MIMIC_HTML_ADDENDUM : null,
           data.type === "enhance" ? ENHANCE_HTML_ADDENDUM : null,
-          isImagesMode(data) && data.type === "enhance"
+          isImagesMode(data) && htmlSourceKind === "enhance"
             ? ENHANCE_IMG_ADDENDUM
             : null,
-          data.type === "enhance" && enhanceTemplate ? ENHANCE_TEMPLATE_ADDENDUM : null,
+          enhanceTemplate ? ENHANCE_TEMPLATE_ADDENDUM : null,
         ]
           .filter(Boolean)
           .join("\n\n");
