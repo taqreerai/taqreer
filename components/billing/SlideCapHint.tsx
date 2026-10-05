@@ -5,6 +5,7 @@
 // Previously the stepper just stopped silently at the cap. Renders nothing
 // for paid plans, admins, or before /api/credits resolves.
 
+import { TEASER_VISIBLE_COUNT } from "@/lib/credits/cost";
 import { useState } from "react";
 import { useDict } from "@/components/i18n/LocaleProvider";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
@@ -22,7 +23,9 @@ export function SlideCapHint({ className = "" }: { className?: string }) {
     <>
       <p className={`flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--tq-text-muted)] ${className}`}>
         <PremiumCrown size={13} />
-        <span>{t.slideCapHint.replace("{count}", String(credits.slideCap))}</span>
+        {/* Free trial: the teaser builds the first TEASER_VISIBLE_COUNT slides
+            of any length; the rest unlock on subscribe. */}
+        <span>{t.slideCapHint.replace("{count}", String(TEASER_VISIBLE_COUNT))}</span>
         <button
           type="button"
           onClick={() => setOpen(true)}

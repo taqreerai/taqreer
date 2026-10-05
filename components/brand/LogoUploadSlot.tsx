@@ -33,6 +33,7 @@
 // CompactUploadZone's default minHeight). The card row this slot
 // lives in stays exactly the same height before and after upload.
 
+import { FREE_PLAN_FEATURE_LOCKS } from "@/lib/free-trial";
 import { useEffect, useRef, useState } from "react";
 import { CompactUploadZone } from "@/components/brand/CompactUploadZone";
 import { useDict } from "@/components/i18n/LocaleProvider";
@@ -276,7 +277,8 @@ function LogoUploadSlotInner({
 // their decks carry the "Made with taqreer.ai" watermark instead.
 export function LogoUploadSlot(props: Parameters<typeof LogoUploadSlotInner>[0]) {
   const credits = useCreditBalance();
-  const locked = !!credits && !credits.isAdmin && credits.plan === "free";
+  const locked =
+    FREE_PLAN_FEATURE_LOCKS && !!credits && !credits.isAdmin && credits.plan === "free";
   if (!locked) return <LogoUploadSlotInner {...props} />;
   return <LockedLogoSlot compact={props.compact} fillHeight={props.fillHeight} />;
 }

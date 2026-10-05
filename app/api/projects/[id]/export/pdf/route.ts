@@ -18,6 +18,7 @@
 // cover 5-25 slides; longer decks would benefit from the async path
 // planned for step 15.7 + concurrency.
 
+import { isPaidPlan } from "@/lib/plan";
 import { NextResponse } from "next/server";
 import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 import {
@@ -121,6 +122,8 @@ export async function POST(
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     include: {
+      // The OWNER's plan decides the free watermark (same rule as PNG).
+      user: { select: { plan: true, role: true } },
       presentation: {
         include: {
           versions: { select: { id: true, slideJson: true } },
@@ -174,7 +177,14 @@ export async function POST(
   // `page.pdf()` produces a multi-page PDF, one slide per page at
   // the exact canvas dimensions. No per-slide loop here — Puppeteer
   // does the pagination from the CSS.
-  const html = buildHtmlDocumentServer(manifest, { printPageBreaks: true });
+  // Free-plan decks carry the quiet watermark in PDF too (free trial opened
+  // PDF export to free accounts, 2026-10-05).
+  const freeBranding =
+    !isPaidPlan(project.user.plan) && project.user.role !== "admin";
+  const html = buildHtmlDocumentServer(manifest, {
+    printPageBreaks: true,
+    watermark: freeBranding,
+  });
 
   const browser = await launchGuardedBrowser();
   let pdfBuffer: Buffer;

@@ -14,6 +14,7 @@
 // so a standalone instance here shares the same serialisation the ShareDialog's
 // Export tab uses — two exports can't run at once.
 
+import { FREE_PLAN_FEATURE_LOCKS } from "@/lib/free-trial";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -123,7 +124,10 @@ export function ExportMenu({
   // Free plan (2026-10-02): PPTX exports as present-ready image slides; the
   // editable PPTX is listed separately as a paid row so the difference is
   // stated in writing, not discovered after download.
-  const imageOnlyPptx = !!credits && !credits.isAdmin && credits.plan === "free";
+  // Free trial (lib/free-trial): free users get the normal, editable PPTX
+  // row; the image-only split only applies while the free locks are on.
+  const freeUser = !!credits && !credits.isAdmin && credits.plan === "free";
+  const imageOnlyPptx = FREE_PLAN_FEATURE_LOCKS && freeUser;
 
   // Esc closes. Outside-click dismissal is owned entirely by the scrim below
   // (a viewport layer above the deck <iframe>): a parent-document mousedown
@@ -309,7 +313,7 @@ export function ExportMenu({
                       );
                     })}
                   </ul>
-                  {imageOnlyPptx ? (
+                  {freeUser ? (
                     // Free plan: nudge toward sharing a link, whose viewers
                     // see the slides without the watermark (project page).
                     <p className="flex items-start gap-1.5 border-t border-foreground/[0.08] px-3 pb-1 pt-2.5 text-[11px] leading-relaxed text-foreground/55">

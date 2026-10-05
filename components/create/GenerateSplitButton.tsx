@@ -21,6 +21,7 @@
 // (per "reuse existing components" rule). Both call sites pass
 // their own `onGenerate`, `quality`, `disabled`, `loading`.
 
+import { TEASER_VISIBLE_COUNT } from "@/lib/credits/cost";
 import { imageCreditsForPlan } from "@/lib/images/images-gating";
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -148,13 +149,19 @@ export function GenerateSplitButton({
     };
   }, [presetMenuOpen]);
 
-  const effectiveSlideCount =
-    slideCount && slideCount > 0 ? slideCount : 8;
   // Live balance for the per-preset credit estimate (§3a of the
   // subscription model: model choice is a cost choice, made with the
   // price in view). Null until the first fetch - rows render without
   // the credit chip rather than with a wrong number.
   const credits = useCreditBalance();
+  // Free trial teaser: a free (non-admin) deck builds and charges only the
+  // first TEASER_VISIBLE_COUNT slides whatever length was asked, so price
+  // exactly that (same rule as the server, app/api/projects/route.ts).
+  const teaserPriced = !!credits && !credits.isAdmin && credits.plan === "free";
+  const requestedSlides = slideCount && slideCount > 0 ? slideCount : 8;
+  const effectiveSlideCount = teaserPriced
+    ? Math.min(requestedSlides, TEASER_VISIBLE_COUNT)
+    : requestedSlides;
   // The current user's slide cap (5 for free) — the {cap} in the upsell copy.
   const freeSlideCap = useSlideCap();
   // Tier gating pill: the lowest tier whose preset list carries each

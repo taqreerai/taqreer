@@ -13,7 +13,7 @@ import {
 } from "@/lib/export/bidi-postprocess";
 import { extractGradientIntents } from "@/lib/export/gradient-text";
 import { compressPptxMedia } from "@/lib/export/compress-pptx-media";
-import { watermarkGeometry, watermarkSide } from "@/lib/export/free-branding";
+import { watermarkGeometry, watermarkImage, watermarkSide } from "@/lib/export/free-branding";
 import {
   embedConvertedFontsInPptx,
   type ConvertedFont,
@@ -507,6 +507,10 @@ export async function exportManifestAsPptx(
     // is editable text, so the watermark can't be edited out. Paid plans omit
     // this and get the fully editable deck.
     imageSlides?: string[];
+    // Free plan, EDITABLE PPTX (2026-10-05 free trial): the deck language;
+    // adds the quiet watermark picture on slides 2+ plus the file credits
+    // and the clickable link over the mark.
+    freeWatermark?: "ar" | "en";
   }
 ): Promise<{ stats: BiDiPostprocessStats; slideCount: number; blob?: Blob }> {
   // Slide canvas dimensions from the manifest's format (16:9 → 1920×1080;
@@ -540,6 +544,9 @@ export async function exportManifestAsPptx(
   const root = createRoot(container);
 
   const imageSlides = opts?.imageSlides ?? null;
+  const freeWatermark = opts?.freeWatermark
+    ? watermarkImage(opts.freeWatermark, { width: canvasW, height: canvasH })
+    : null;
 
   try {
     const slideEls = imageSlides
@@ -558,7 +565,7 @@ export async function exportManifestAsPptx(
             }),
           ),
         )
-      : manifest.slides.map((slide) =>
+      : manifest.slides.map((slide, slideIndex) =>
       createElement(
         "div",
         {
@@ -575,6 +582,22 @@ export async function exportManifestAsPptx(
           height: canvasH,
           scale: 1,
         }),
+        // Free plan, editable PPTX: the quiet watermark as a picture on every
+        // slide but the cover (lib/export/free-branding watermarkImage).
+        freeWatermark && slideIndex > 0
+          ? createElement("img", {
+              src: freeWatermark.src,
+              alt: "",
+              "data-tq-watermark": "",
+              style: {
+                position: "absolute" as const,
+                left: freeWatermark.x,
+                top: freeWatermark.y,
+                width: freeWatermark.width,
+                height: freeWatermark.height,
+              },
+            })
+          : null,
       ),
     );
     root.render(createElement("div", { dir: manifest.direction }, slideEls));
@@ -840,7 +863,7 @@ export async function exportManifestAsPptx(
     // direction 2026-10-04) - the file's Company property and a speaker note
     // on the last slide. Best-effort: a failure ships the deck without them.
     let creditedBlob: Blob = fixedBlob;
-    if (imageSlides) {
+    if (imageSlides || freeWatermark) {
       try {
         creditedBlob = await addFreeFileCredits(
           fixedBlob,

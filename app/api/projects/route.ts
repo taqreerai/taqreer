@@ -701,11 +701,9 @@ export async function POST(request: Request) {
   // Storage so pipelining saves a round trip. `svgMarkup` enables
   // the inline-per-slide path (Claude overrides `fill` for per-slide
   // contrast); `signedUrl` is the fallback to <img src=...>.
-  // Logo upload is a paid feature (2026-10-02): a Free (non-admin) user's
-  // logo is ignored server-side whatever the client sends (e.g. one carried
-  // over from a saved brand kit); the deck shows Taqreer's watermark instead.
-  const logoAllowed =
-    dbUser.role === "admin" || normalizePlan(dbUser.plan) !== "free";
+  // Logo upload: open to every plan since the 2026-10-05 free trial (it was
+  // paid-only from 2026-10-02). Free decks still carry the quiet watermark.
+  const logoAllowed = true;
   const effectiveLogoPath = logoAllowed ? logoPath : null;
   const [logoSignedUrl, logoRead] = effectiveLogoPath
     ? await Promise.all([signBrandAssetUrl(effectiveLogoPath), readLogo(effectiveLogoPath)])
@@ -978,7 +976,7 @@ export async function POST(request: Request) {
     slideCountMode: preflight.exact ? "exact" : "ceiling",
     // Free plan: the badge corner the generator must keep clear
     // (deck-generate buildFreeBrandingBlock). Absent for paid / admin.
-    ...(logoAllowed
+    ...(!isFreeTrial
       ? {}
       : { freeBranding: { corner: contentLanguage === "en" ? "right" : "left" } }),
     // Teaser paywall: when present, deck-generate declares `plannedTotal`

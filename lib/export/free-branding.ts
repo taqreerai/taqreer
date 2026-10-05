@@ -140,3 +140,41 @@ export function closingSlideHtml(lang: BrandLang, dims: SlideDims): string {
   const slogan = CLOSING_SLOGAN[lang];
   return `<div style="position:relative;width:${dims.width}px;height:${dims.height}px;overflow:hidden;background:${BRAND.surface};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:${g.gap}px;font-family:'Cairo',sans-serif;color:${BRAND.text}"><div style="position:absolute;left:50%;bottom:-${Math.round(dims.height * 0.55)}px;width:${Math.round(dims.width * 1.2)}px;height:${Math.round(dims.height)}px;transform:translateX(-50%);border-radius:50%;background:radial-gradient(closest-side,rgba(0,87,255,0.55),rgba(0,87,255,0) 100%)"></div><div style="position:relative">${wordmarkSvg(g.wordmarkWidth)}</div><div dir="${lang === "ar" ? "rtl" : "ltr"}" style="position:relative;font-size:${g.sloganSize}px;font-weight:700;line-height:1.3;text-align:center;padding:0 ${Math.round(dims.width * 0.06)}px">${esc(slogan)}</div><div dir="ltr" style="position:relative;font-size:${g.pillSize}px;font-weight:700;line-height:1;padding:${Math.round(g.pillSize * 0.55)}px ${Math.round(g.pillSize * 1.1)}px;border-radius:${g.pillSize * 2}px;background:${BRAND.accent};color:#FFFFFF">${esc(SITE_LABEL)}</div></div>`;
 }
+
+/**
+ * The watermark as a standalone image (SVG data URI) + its slide-pixel box,
+ * for the EDITABLE free PPTX (2026-10-05 free trial): a picture keeps its
+ * transparency through dom-to-pptx, where a translucent CSS fill would not.
+ * Same geometry, opacity and corner as watermarkHtml. The text uses a
+ * system sans-serif (webfonts don't load inside an <img> SVG).
+ */
+export function watermarkImage(
+  lang: BrandLang,
+  dims: SlideDims,
+): { src: string; x: number; y: number; width: number; height: number } {
+  const base = watermarkGeometry(dims);
+  const h = Math.round(base.height * 0.8);
+  const icon = Math.round(base.icon * 0.8);
+  const fontSize = Math.round(base.fontSize * 0.8);
+  const padX = Math.round(base.padX * 0.8);
+  const gap = Math.round(base.gap * 0.8);
+  const width = Math.round(h * 5.5);
+  const textX = Math.round(padX * 0.55) + icon + gap;
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${h}" viewBox="0 0 ${width} ${h}">` +
+    `<g opacity="${WATERMARK_OPACITY}">` +
+    `<rect width="${width}" height="${h}" rx="${h / 2}" fill="#0A0A0A" fill-opacity="0.6"/>` +
+    `<g transform="translate(${Math.round(padX * 0.55)},${Math.round((h - icon) / 2)})">${barsIconSvg(icon)}</g>` +
+    `<text x="${textX}" y="${Math.round(h / 2)}" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" fill="#FFFFFF">` +
+    `<tspan font-weight="600">${esc(WATERMARK_TEXT)} </tspan><tspan font-weight="800">${esc(WATERMARK_BRAND)}</tspan></text>` +
+    `</g></svg>`;
+  const x = watermarkSide(lang) === "left" ? base.margin : dims.width - base.margin - width;
+  return {
+    src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+    x,
+    y: dims.height - base.margin - h,
+    width,
+    height: h,
+  };
+}
+

@@ -4,6 +4,7 @@
 // the exporter's own plan (user direction 2026-07-13), so a free or
 // anonymous public-link viewer hits the same wall as a free owner.
 
+import { FREE_PLAN_FEATURE_LOCKS } from "@/lib/free-trial";
 import { prisma } from "@/lib/prisma";
 import { isPaidPlan } from "@/lib/plan";
 
@@ -21,5 +22,7 @@ export async function exporterHasPaidExports(
     select: { plan: true, role: true },
   });
   if (!row) return false;
+  // Free trial (lib/free-trial): every signed-in account may export.
+  if (!FREE_PLAN_FEATURE_LOCKS) return true;
   return row.role === "admin" || isPaidPlan(row.plan);
 }
