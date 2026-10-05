@@ -48,9 +48,7 @@ import {
   TemplatePickerGrid,
   type PickedTemplate,
 } from "@/components/create/TemplatePickerGrid";
-import { PalettePresetGrid } from "@/components/brand/PalettePresets";
-import { PickerExpandButton, PickerExpandModal } from "@/components/create/PickerExpandModal";
-import { PALETTE_PRESETS, samePalette } from "@/lib/brand/palette-presets";
+import { PalettePresetPicker } from "@/components/brand/PalettePresetPicker";
 import {
   fetchUse,
   readCachedUse,
@@ -460,9 +458,6 @@ export default function CreatePage() {
   // URLs and fixed-position popovers survive step changes, and the
   // /api/extract poll keeps running while the user moves on.
   const [step, setStep] = useState(0);
-  // Design card "show all" modal for the colour templates (the template
-  // picker owns its own, see TemplatePickerGrid).
-  const [palettesExpanded, setPalettesExpanded] = useState(false);
 
   // ─── Submit-level state ────────────────────────────────────────
   const [submitting, setSubmitting] = useState(false);
@@ -1133,37 +1128,11 @@ export default function CreatePage() {
                 ) : null}
               </div>
             </div>
-            <PalettePresetGrid
-              activeId={
-                PALETTE_PRESETS.find((p) => samePalette(colors, p.colors))?.id ??
-                null
-              }
-              onPick={(p) => setColors([...p.colors])}
-              disabled={submitting}
-              className="palette-scroll grid grid-cols-6 gap-1.5"
-            />
-            <PickerExpandButton
-              onClick={() => setPalettesExpanded(true)}
+            <PalettePresetPicker
+              colors={colors}
+              onPick={setColors}
               disabled={submitting}
             />
-            <PickerExpandModal
-              open={palettesExpanded}
-              title={t.design.allColorTemplates}
-              onClose={() => setPalettesExpanded(false)}
-            >
-              <PalettePresetGrid
-                activeId={
-                  PALETTE_PRESETS.find((p) => samePalette(colors, p.colors))?.id ??
-                  null
-                }
-                onPick={(p) => {
-                  setColors([...p.colors]);
-                  setPalettesExpanded(false);
-                }}
-                labels
-                className="grid grid-cols-2 gap-2 sm:grid-cols-4 md:grid-cols-6"
-              />
-            </PickerExpandModal>
             </div>
 
             {/* Single brand font — one Google family (Claude varies

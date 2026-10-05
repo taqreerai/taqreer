@@ -33,6 +33,7 @@
 // InlinePaletteSwatch, Toggle are the same primitives /create uses —
 // per "reuse > extend > fork > build new".
 
+import { PalettePresetPicker } from "@/components/brand/PalettePresetPicker";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useAnimationControls } from "framer-motion";
@@ -887,18 +888,20 @@ export default function EnhanceContentPage() {
             they share the row width equally; items-stretch makes the
             fonts card grow to match the source card's height (which
             is taller — dropzone + logo stacked + file chip). */}
+        <div className="desk:hidden">
         <WizardStepRail
           steps={[dict.flows.enhance.originalFile, dict.flows.brandCard]}
           active={step}
           onJump={setStep}
         />
+        </div>
 
         {/* Wizard column (was a fluid 2-across row until 2026-08-30):
             both cards share ONE grid cell; the inactive one is
             `invisible` (not display:none) so the stack keeps the taller
             card's height and extraction keeps its live DOM. */}
         <div className="flex w-full flex-col items-center gap-4">
-          <div className="grid w-full justify-items-center">
+          <div className="grid w-full justify-items-center desk:w-auto desk:grid-cols-[repeat(2,minmax(0,430px))] desk:gap-6">
           {/* ─── Source + Logo card ──────────────────────────
               File dropzone on top (primary action), logo dropzone
               underneath (optional brand asset). One card because
@@ -908,7 +911,7 @@ export default function EnhanceContentPage() {
               cards so the row reads compact, not airy. */}
           <motion.div
             animate={cardShake}
-            className={`surface-card ${step === 0 ? "" : "invisible"} col-start-1 row-start-1 flex min-h-[440px] w-full flex-col gap-4 rounded-2xl p-4 sm:w-[430px]`}
+            className={`surface-card ${step === 0 ? "" : "invisible"} col-start-1 row-start-1 desk:visible desk:col-start-auto desk:row-start-auto flex min-h-[440px] w-full flex-col gap-4 rounded-2xl p-4 sm:w-[430px] desk:w-full desk:min-w-0`}
           >
             <input
               ref={fileInputRef}
@@ -1121,7 +1124,7 @@ export default function EnhanceContentPage() {
               dropdown in the header, palette, single brand-font picker,
               logo row, save toggle. Same min-h / min-w / flex-1 sizing
               as the source card so the two-card row stays balanced. */}
-          <div className={`surface-card ${step === 1 ? "" : "invisible"} col-start-1 row-start-1 flex min-h-[440px] w-full flex-col gap-4 rounded-2xl p-4 sm:w-[430px]`}>
+          <div className={`surface-card ${step === 1 ? "" : "invisible"} col-start-1 row-start-1 desk:visible desk:col-start-auto desk:row-start-auto flex min-h-[440px] w-full flex-col gap-4 rounded-2xl p-4 sm:w-[430px] desk:w-full desk:min-w-0`}>
             {/* Inline header (not CardHeader) so the saved-kit pill can
                 overlay the title row. Mirrors /create's branding header:
                 pb-4 balances the card's p-4 top padding so the title sits
@@ -1190,6 +1193,10 @@ export default function EnhanceContentPage() {
                 ) : null}
               </div>
             </div>
+            {/* Colour templates (shared with /create, 2026-10-05). */}
+            <div className="flex flex-col gap-1.5">
+              <PalettePresetPicker colors={colors} onPick={setColors} disabled={false} />
+            </div>
 
             {/* Single brand font — one Google family (Claude varies
                 weights) OR up to 5 uploaded families (Claude pairs).
@@ -1249,7 +1256,7 @@ export default function EnhanceContentPage() {
               Gated on a file being picked - extraction may continue
               across steps (the Generate CTA carries its loading). */}
           {step < 1 && (
-            <div className="flex w-full justify-end sm:w-[430px]">
+            <div className="flex w-full justify-end sm:w-[430px] desk:hidden">
               <PillButton
                 variant="primary"
                 onClick={() => setStep(1)}
@@ -1261,8 +1268,9 @@ export default function EnhanceContentPage() {
           )}
         </div>
 
-        {step === 1 && (
-        <div className="flex justify-center">
+        {/* Desktop (desk:) shows every card at once, so Generate is always there. */}
+        {(
+        <div className={`${step === 1 ? "flex" : "hidden desk:flex"} justify-center`}>
           <GenerateSplitButton
             onGenerate={handleGenerate}
             quality={quality}

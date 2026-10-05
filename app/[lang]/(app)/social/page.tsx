@@ -5,6 +5,7 @@
 // consistent. It posts `type: "social"` + `brand.slideSize` = the chosen ratio;
 // the deck engine + full studio + pricing are reused unchanged.
 
+import { PalettePresetPicker } from "@/components/brand/PalettePresetPicker";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -508,6 +509,7 @@ export default function SocialPage() {
           <p className="tq-subhead mt-2">{dict.flows.social.subtitle}</p>
         </header>
 
+        <div className="desk:hidden">
         <WizardStepRail
           steps={[
             dict.flows.social.contentCard,
@@ -517,16 +519,17 @@ export default function SocialPage() {
           active={step}
           onJump={setStep}
         />
+        </div>
 
         {/* Wizard column (was a wrapping 3-across row until 2026-08-30):
             all three cards share ONE grid cell; inactive cards are
             `invisible` (not display:none) so the stack keeps the tallest
             card's height at every step. */}
         <div className="flex w-full flex-col items-center gap-4">
-          <div className="grid w-full justify-items-center">
+          <div className="grid w-full justify-items-center desk:w-auto desk:grid-cols-[repeat(3,minmax(0,430px))] desk:gap-6">
           {/* ── CONTENT CARD (step 1) ─────────────────────────── */}
           <div
-            className={`surface-card ${step === 0 ? "" : "invisible"} col-start-1 row-start-1 flex w-full sm:w-[430px] ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card ${step === 0 ? "" : "invisible"} col-start-1 row-start-1 desk:visible desk:col-start-auto desk:row-start-auto flex w-full sm:w-[430px] desk:w-full desk:min-w-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <CardHeader icon="edit_note" title={dict.flows.social.contentCard} />
             <div className="flex flex-1 flex-col space-y-1.5">
@@ -595,7 +598,7 @@ export default function SocialPage() {
 
           {/* ── BRAND CARD (identical to /datasheet) ──────────── */}
           <div
-            className={`surface-card ${step === 1 ? "" : "invisible"} col-start-1 row-start-1 flex w-full sm:w-[430px] ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card ${step === 1 ? "" : "invisible"} col-start-1 row-start-1 desk:visible desk:col-start-auto desk:row-start-auto flex w-full sm:w-[430px] desk:w-full desk:min-w-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <header className="relative z-30 border-b border-foreground/[0.08] pb-4">
               <div className="relative flex items-center gap-2">
@@ -674,6 +677,10 @@ export default function SocialPage() {
                 ) : null}
               </div>
             </div>
+            {/* Colour templates (shared with /create, 2026-10-05). */}
+            <div className="flex flex-col gap-1.5">
+              <PalettePresetPicker colors={colors} onPick={setColors} disabled={submitting} />
+            </div>
 
             <div className="border-t border-[var(--tq-border-hairline)] pt-3">
               <BrandFontPicker
@@ -717,7 +724,7 @@ export default function SocialPage() {
 
           {/* ── DESIGN CARD ───────────────────────────────────── */}
           <div
-            className={`surface-card ${step === 2 ? "" : "invisible"} col-start-1 row-start-1 flex w-full sm:w-[430px] ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card ${step === 2 ? "" : "invisible"} col-start-1 row-start-1 desk:visible desk:col-start-auto desk:row-start-auto flex w-full sm:w-[430px] desk:w-full desk:min-w-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <CardHeader icon="tune" title={dict.flows.social.designCard} />
 
@@ -789,7 +796,7 @@ export default function SocialPage() {
 
           {/* Next only (`.btn-gradient` CTA); back-travel via the rail. */}
           {step < 2 && (
-            <div className="flex w-full justify-end sm:w-[430px]">
+            <div className="flex w-full justify-end sm:w-[430px] desk:hidden">
               <PillButton
                 variant="primary"
                 onClick={() => setStep((s) => Math.min(2, s + 1))}
@@ -801,8 +808,9 @@ export default function SocialPage() {
           )}
         </div>
 
-        {step === 2 && (
-        <div className="flex justify-center">
+        {/* Desktop (desk:) shows every card at once, so Generate is always there. */}
+        {(
+        <div className={`${step === 2 ? "flex" : "hidden desk:flex"} justify-center`}>
           <GenerateSplitButton
             onGenerate={handleGenerate}
             quality={quality}

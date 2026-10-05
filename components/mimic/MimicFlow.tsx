@@ -15,6 +15,7 @@
 // takes the tallest card's height; one flex-1 element per card absorbs the
 // spare height (content textarea / logo zone / instructions textarea).
 
+import { PalettePresetPicker } from "@/components/brand/PalettePresetPicker";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useAnimationControls } from "framer-motion";
@@ -100,7 +101,7 @@ const DEFAULT_PALETTE = ["#000000", "#FFFFFF"];
 // later promote a shared "flow card" primitive we can hoist this.
 // Full-width single column on phones; fixed 360px at sm+ so the desktop
 // wrapping row is preserved (see the card-row flex-col→flex-row switch below).
-const CARD_W_CLASS = "w-full sm:w-[430px]";
+const CARD_W_CLASS = "w-full sm:w-[430px] desk:w-full desk:min-w-0";
 // Fixed card height — pinned to /enhance's empty-state card height
 // measured live (2026-05-25, after /enhance content page polish):
 // 387 px. The static-math estimate from the section breakdown
@@ -891,6 +892,7 @@ export default function MimicFlow({
           </p>
         </header>
 
+        <div className="desk:hidden">
         <WizardStepRail
           steps={[
             dict.flows.mimic.stepFiles,
@@ -900,6 +902,7 @@ export default function MimicFlow({
           active={step}
           onJump={setStep}
         />
+        </div>
 
         {/* Wizard column (3 steps): 1 content + design reference, each in
             its own framed panel so the two uploads read as two separate
@@ -910,7 +913,7 @@ export default function MimicFlow({
             each card has one flex-1 element that absorbs the spare height,
             so no card shows dead space. */}
         <div className="flex w-full flex-col items-center gap-4">
-          <div className="grid w-full justify-items-center">
+          <div className="grid w-full justify-items-center desk:w-auto desk:grid-cols-[repeat(3,minmax(0,430px))] desk:gap-6">
           {/* ═══════════════════════════════════════════════════════
               STEP 1: CONTENT + DESIGN REFERENCE
               ═══════════════════════════════════════════════════════ */}
@@ -918,7 +921,7 @@ export default function MimicFlow({
             layout
             animate={contentCardShake}
             transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
-            className={`surface-card ${step === 0 ? "" : "invisible"} col-start-1 row-start-1 flex ${CARD_W_CLASS} ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card ${step === 0 ? "" : "invisible"} col-start-1 row-start-1 desk:visible desk:col-start-auto desk:row-start-auto flex ${CARD_W_CLASS} ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <input
               ref={contentInputRef}
@@ -1052,7 +1055,7 @@ export default function MimicFlow({
           <motion.div
             layout
             transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
-            className={`${step === 1 ? "" : "invisible"} col-start-1 row-start-1 ${CARD_W_CLASS} ${CARD_MIN_H_CLASS}`}
+            className={`${step === 1 ? "" : "invisible"} col-start-1 row-start-1 desk:visible desk:col-start-auto desk:row-start-auto ${CARD_W_CLASS} ${CARD_MIN_H_CLASS}`}
           >
                 <div className={`surface-card flex h-full ${CARD_W_CLASS} ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}>
                   {/* Inline header (not CardHeader) so the saved-kit pill
@@ -1140,6 +1143,16 @@ export default function MimicFlow({
                         </div>
                       )}
                     </div>
+                    {/* Colour templates (shared with /create, 2026-10-05).
+                        Picking one switches to custom colours. */}
+                    <PalettePresetPicker
+                      colors={colorSource === "custom" ? colors : []}
+                      onPick={(next) => {
+                        setColors(next);
+                        setColorSource("custom");
+                      }}
+                      disabled={submitting}
+                    />
                   </div>
 
                   {/* Single brand font — one Google family (Claude varies
@@ -1201,7 +1214,7 @@ export default function MimicFlow({
           <motion.div
             layout
             transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
-            className={`surface-card ${step === 2 ? "" : "invisible"} col-start-1 row-start-1 flex ${CARD_W_CLASS} ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
+            className={`surface-card ${step === 2 ? "" : "invisible"} col-start-1 row-start-1 desk:visible desk:col-start-auto desk:row-start-auto flex ${CARD_W_CLASS} ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
             <CardHeader icon="tune" title={dict.flows.mimic.stepSettings} />
               {/* ── Output: slide size + slide count ── */}
@@ -1293,7 +1306,7 @@ export default function MimicFlow({
               files) and a picked reference; the reference may keep
               extracting, Generate on step 3 waits for it. */}
           {step < 2 && (
-            <div className="flex w-full justify-end sm:w-[430px]">
+            <div className="flex w-full justify-end sm:w-[430px] desk:hidden">
               <PillButton
                 variant="primary"
                 onClick={() => setStep((s) => Math.min(2, s + 1))}
@@ -1309,8 +1322,9 @@ export default function MimicFlow({
           )}
         </div>
 
-        {step === 2 && (
-        <div className="flex justify-center">
+        {/* Desktop (desk:) shows every card at once, so Generate is always there. */}
+        {(
+        <div className={`${step === 2 ? "flex" : "hidden desk:flex"} justify-center`}>
           <GenerateSplitButton
             onGenerate={handleGenerate}
             quality={quality}
