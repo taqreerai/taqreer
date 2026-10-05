@@ -240,6 +240,25 @@ export function GoogleFontSlot({
           )}
         </div>
       ) : null}
+      {selected ? (
+        // Install hint (2026-10-05): exports embed only the glyphs a deck
+        // uses, so EDITING in PowerPoint is smoothest with the font
+        // installed. Links straight to the picked family's Google Fonts page.
+        <p className="mt-1.5 text-start text-[11px] leading-4 text-foreground/50">
+          {dict.flows.brand.fontInstallHint}{" "}
+          <a
+            href={`https://fonts.google.com/specimen/${encodeURIComponent(selected).replace(/%20/g, "+")}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-0.5 font-medium text-[var(--tq-violet)] underline-offset-2 hover:underline"
+          >
+            <span>{dict.flows.brand.fontInstallCta.replace("{font}", selected)}</span>
+            <span className="material-symbols-outlined" style={{ fontSize: 12 }} aria-hidden>
+              open_in_new
+            </span>
+          </a>
+        </p>
+      ) : null}
       {hideSample ? null : (
         <p
           // alignStart pins the sample to the chrome's reading edge (inherit

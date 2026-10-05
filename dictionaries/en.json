@@ -1655,7 +1655,9 @@
       "savedKits": "Saved brand kits",
       "aiImagesTitle": "Smart photos for your content",
       "aiImagesDesc": "AI photos generated to fit each slide",
-      "aiImagesFreeHint": "Free on your trial"
+      "aiImagesFreeHint": "Free on your trial",
+      "fontInstallHint": "To edit text in this font smoothly in PowerPoint, install it on your computer.",
+      "fontInstallCta": "Download {font}"
     },
     "output": {
       "slideSize": "Slide size",

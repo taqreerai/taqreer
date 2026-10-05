@@ -1655,7 +1655,9 @@
       "savedKits": "الهويات المحفوظة",
       "aiImagesTitle": "صور ذكية لمحتواك",
       "aiImagesDesc": "صور يولدها الذكاء الاصطناعي لتناسب كل شريحة",
-      "aiImagesFreeHint": "مجانا في تجربتك"
+      "aiImagesFreeHint": "مجانا في تجربتك",
+      "fontInstallHint": "لتعديل النص بهذا الخط بسلاسة في PowerPoint، ثبّته على جهازك.",
+      "fontInstallCta": "تحميل {font}"
     },
     "output": {
       "slideSize": "حجم الشريحة",
