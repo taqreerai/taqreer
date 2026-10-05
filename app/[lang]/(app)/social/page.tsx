@@ -501,7 +501,7 @@ export default function SocialPage() {
         }}
         onClose={() => setProductUpgradeOpen(false)}
       />
-      <div className="mt-[6vh] flex w-full flex-col items-center gap-6 px-4">
+      <div className="mt-[6vh] flex w-full desk:px-8 flex-col items-center gap-6 px-4">
         {/* Upfront plan notice when this flow isn't in the user's plan. */}
         <LockedFlowBanner flow="social" />
         <header className="text-center">
@@ -526,7 +526,7 @@ export default function SocialPage() {
             `invisible` (not display:none) so the stack keeps the tallest
             card's height at every step. */}
         <div className="flex w-full flex-col items-center gap-4">
-          <div className="grid w-full justify-items-center desk:w-auto desk:grid-cols-[repeat(3,minmax(0,430px))] desk:gap-6">
+          <div className="grid w-full justify-items-center desk:max-w-[1800px] desk:grid-cols-3 desk:gap-6">
           {/* ── CONTENT CARD (step 1) ─────────────────────────── */}
           <div
             className={`surface-card ${step === 0 ? "" : "invisible"} col-start-1 row-start-1 desk:visible desk:col-start-auto desk:row-start-auto flex w-full sm:w-[430px] desk:w-full desk:min-w-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}

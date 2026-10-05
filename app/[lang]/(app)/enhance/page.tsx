@@ -907,7 +907,7 @@ export default function EnhanceContentPage() {
         onClose={() => setCreditGate(null)}
         allowReduce={false}
       />
-      <div className="mt-[6vh] flex w-full max-w-3xl flex-col items-center gap-6 px-4">
+      <div className="mt-[6vh] flex w-full desk:px-8 max-w-3xl desk:max-w-none flex-col items-center gap-6 px-4">
         {/* Upfront plan notice when this flow isn't in the user's plan. */}
         <LockedFlowBanner flow="enhance" />
         <header className="text-center">
@@ -933,7 +933,7 @@ export default function EnhanceContentPage() {
             `invisible` (not display:none) so the stack keeps the taller
             card's height and extraction keeps its live DOM. */}
         <div className="flex w-full flex-col items-center gap-4">
-          <div className="grid w-full justify-items-center desk:w-auto desk:grid-cols-[repeat(2,minmax(0,430px))] desk:gap-6">
+          <div className="grid w-full justify-items-center desk:max-w-[1800px] desk:grid-cols-2 desk:gap-6">
           {/* ─── Source + Logo card ──────────────────────────
               File dropzone on top (primary action), logo dropzone
               underneath (optional brand asset). One card because
