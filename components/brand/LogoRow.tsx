@@ -135,8 +135,8 @@ export function LogoRow({
             setDragging(false);
             acceptSvg(event.dataTransfer.files?.[0]);
           }}
-          className={`flex w-full items-center justify-center rounded-xl border border-dashed bg-overlay-soft transition-colors ${
-            compact ? "gap-3 px-3" : "flex-col gap-1"
+          className={`flex w-full items-center rounded-xl border border-dashed bg-overlay-soft transition-colors ${
+            compact ? "justify-start gap-3 px-2.5" : "flex-col justify-center gap-1"
           } ${zoneH} ${
             dragging
               ? "border-[var(--tq-violet)]/60 bg-[var(--tq-violet)]/10"
@@ -145,16 +145,20 @@ export function LogoRow({
         >
           {/* Compact (h-14): icon tile beside the two lines, so the stack
               never overflows the zone. Full size keeps the centred stack. */}
-          <span
-            className={`material-symbols-outlined text-foreground/70 ${
-              compact
-                ? "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--tq-overlay-soft)]"
-                : ""
-            }`}
-            style={{ fontSize: 20 }}
-          >
-            image
-          </span>
+          {compact ? (
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--tq-overlay-soft)] text-foreground/70">
+              <span className="material-symbols-outlined leading-none" style={{ fontSize: 20 }}>
+                image
+              </span>
+            </span>
+          ) : (
+            <span
+              className="material-symbols-outlined text-foreground/70"
+              style={{ fontSize: 20 }}
+            >
+              image
+            </span>
+          )}
           <span className={`flex flex-col ${compact ? "items-start" : "items-center gap-1"}`}>
             <span className="text-xs font-semibold leading-4 text-foreground">{dict.flows.brand.svgLogo}</span>
             <span className={`text-[10px] leading-4 text-foreground/40 ${compact ? "mt-0.5" : ""}`}>{dict.flows.brand.svgOnly}</span>
