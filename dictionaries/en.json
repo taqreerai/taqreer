@@ -91,7 +91,7 @@
       "eyebrow": "Templates",
       "title": "Ready-made, editable presentation templates",
       "subtitle": "Start from a professionally designed presentation template, in Arabic or English. Customize it with AI and your brand in minutes, then export to PowerPoint.",
-      "cta": "Start free"
+      "cta": "Try it free"
     },
     "gallery": {
       "title": "Featured templates",
@@ -108,7 +108,7 @@
       ]
     },
     "faq": [
-      { "q": "Are the templates free?", "a": "Yes, start free with credits at signup. Some premium templates are available on paid plans." },
+      { "q": "Are the templates free?", "a": "Yes, you can try them free with credits at signup. Some premium templates are available on paid plans." },
       { "q": "Can I edit a template?", "a": "Completely. Change text, colors, images, slides, and their order in the editor, with autosave." },
       { "q": "Do the templates support Arabic?", "a": "Yes. Every template is Arabic-first with correct right-to-left direction and Arabic fonts." },
       { "q": "How do I use a template?", "a": "Pick a template, add your content and brand, let the AI redesign the deck, then export to PowerPoint." }
@@ -183,19 +183,19 @@
       "collaboration": { "title": "Collaboration", "body": "Share, comment, and edit with your team" },
       "exportFormats": { "title": "Export", "body": "PowerPoint, PDF, and Google Slides" },
       "gammaArabic": { "title": "Gamma in Arabic", "body": "Gamma AI vs taqreer.ai for Arabic decks" },
-      "pricing": { "title": "Pricing", "body": "Simple plans; start free." }
+      "pricing": { "title": "Pricing", "body": "Simple plans; try it free." }
     }
   },
   "pricing": {
     "meta": {
       "title": "Pricing & Plans | taqreer.ai",
-      "description": "taqreer.ai plans and pricing for designing AI presentations and reports. Start free, then pick the plan that fits the number of decks and slides you need."
+      "description": "taqreer.ai plans and pricing for designing AI presentations and reports. Try it free, then pick the plan that fits the number of decks and slides you need."
     },
     "breadcrumb": "Pricing",
     "hero": {
       "eyebrow": "Pricing",
       "title": "Simple plans for what you need",
-      "subtitle": "Start free and design your first deck, then pick the plan that fits your deck and slide volume. Upgrade or cancel anytime."
+      "subtitle": "Try it free with the first 5 slides of your deck designed, then pick the plan that fits your deck and slide volume. Upgrade or cancel anytime."
     },
     "credits": {
       "title": "How credits work",
@@ -208,7 +208,7 @@
       ]
     },
     "faq": [
-      { "q": "Is there a free plan?", "a": "Yes. Start free with {credits} credits at signup, no card required. Upgrade later as you need." },
+      { "q": "Is there a free plan?", "a": "Yes. Try it free with {credits} credits at signup, no card required; we design the first 5 slides of each deck. Upgrade later as you need." },
       { "q": "How do credits work?", "a": "Each deck uses credits based on its slide count and the model used. You get monthly credits with your plan, and can buy top-up packs when needed." },
       { "q": "Can I upgrade or cancel anytime?", "a": "Yes. Upgrade, downgrade, or cancel anytime from your account settings, with no long-term commitment." },
       { "q": "What is the difference between monthly and yearly?", "a": "Yearly costs less per month than monthly with the same features. Choose monthly for flexibility or yearly to save." }
@@ -224,7 +224,7 @@
       "eyebrow": "Create",
       "title": "Make PowerPoint presentations with AI",
       "subtitle": "From an idea or a file to a fully designed deck, in Arabic and English. The AI designs every slide with your brand, and you can still tweak every detail.",
-      "cta": "Start free"
+      "cta": "Try it free"
     },
     "preview": {
       "title": "Full control over your deck",
@@ -316,7 +316,7 @@
       "eyebrow": "Social",
       "title": "Social media post and ad design with AI",
       "subtitle": "Pick a platform and size, add your brief and brand, and taqreer.ai designs an on-brand post or carousel for Instagram, Facebook, X, and LinkedIn, in Arabic and English, ready to export as PDF or PNG.",
-      "cta": "Start free"
+      "cta": "Try it free"
     },
     "preview": {
       "title": "From a brief to a post",
@@ -387,7 +387,7 @@
       "eyebrow": "Enhance",
       "title": "Professional PowerPoint design with AI",
       "subtitle": "Upload an existing deck in PDF or PowerPoint, and taqreer.ai redesigns it with your brand while keeping your content and images, in Arabic and English.",
-      "cta": "Start free"
+      "cta": "Try it free"
     },
     "preview": {
       "title": "From an old deck to a new design",
@@ -459,7 +459,7 @@
       "eyebrow": "Your own template",
       "title": "Copy the design of any PowerPoint",
       "subtitle": "Attach a deck or design you like, and taqreer.ai applies its visual style to your new content in Arabic and English, keeping colors, fonts, and layout consistent.",
-      "cta": "Start free"
+      "cta": "Try it free"
     },
     "preview": {
       "title": "From a reference design to your deck",
@@ -530,7 +530,7 @@
       "eyebrow": "Arabic-first",
       "title": "Arabic presentations, formatted right",
       "subtitle": "Arabic is more than a translation. taqreer.ai designs and exports your decks with correct right-to-left direction, alignment, numbers, and Arabic fonts that stay intact, even inside PowerPoint.",
-      "cta": "Start free"
+      "cta": "Try it free"
     },
     "compare": {
       "title": "Arabic, the way it should look",
@@ -821,7 +821,7 @@
       },
       {
         "q": "Is Gamma free?",
-        "a": "Gamma has a free plan with 400 credits at sign-up. The credits don't refresh; once they're used you need referrals or a paid plan (per Gamma's help center, October 2026). You can also start free with taqreer.ai."
+        "a": "Gamma has a free plan with 400 credits at sign-up. The credits don't refresh; once they're used you need referrals or a paid plan (per Gamma's help center, October 2026). You can also try taqreer.ai for free."
       },
       {
         "q": "What is the best Gamma AI alternative for Arabic?",
@@ -829,7 +829,7 @@
       },
       {
         "q": "Is taqreer.ai free?",
-        "a": "You can start free and create your first deck. For more decks and features, paid plans are listed on the pricing page."
+        "a": "You can try it free: we design the first 5 slides of your deck, no credit card needed. For more decks and features, paid plans are listed on the pricing page."
       },
       {
         "q": "Can I edit the deck after it's made?",
@@ -851,7 +851,7 @@
       "eyebrow": "PDF to PowerPoint",
       "title": "Convert PDF to PowerPoint with AI",
       "subtitle": "Upload a PDF and the AI reads its content and turns it into a designed PowerPoint deck in your brand, ready to edit and export as PPTX.",
-      "cta": "Start free"
+      "cta": "Try it free"
     },
     "preview": {
       "title": "Start from a PDF",
@@ -932,7 +932,7 @@
       "eyebrow": "Word to PowerPoint",
       "title": "Convert Word to PowerPoint with AI",
       "subtitle": "Upload a Word document and the AI turns your text into an organized PowerPoint deck in your brand, in Arabic and English.",
-      "cta": "Start free"
+      "cta": "Try it free"
     },
     "preview": {
       "title": "Start from a Word document",
@@ -1025,7 +1025,7 @@
       "eyebrow": "Editor",
       "title": "Edit PowerPoint online with AI",
       "subtitle": "Change every detail of your deck right in the browser: drag, resize, and arrange layers, or ask the AI to redesign any slide.",
-      "cta": "Start free"
+      "cta": "Try it free"
     },
     "why": {
       "title": "An editor built for presentations",
@@ -1108,7 +1108,7 @@
       "eyebrow": "Images",
       "title": "AI images for your PowerPoint",
       "subtitle": "The AI generates images that fit each slide's content and design, or pick from the photo library or upload your own.",
-      "cta": "Start free"
+      "cta": "Try it free"
     },
     "preview": {
       "title": "Turn on images when you create",
@@ -1186,7 +1186,7 @@
       "eyebrow": "Brand",
       "title": "A brand kit for every presentation",
       "subtitle": "Save your colors, fonts, and logo in one brand kit, and every new deck comes out on brand with no setup.",
-      "cta": "Start free"
+      "cta": "Try it free"
     },
     "preview": {
       "title": "Start with your brand",
@@ -1257,7 +1257,7 @@
       "eyebrow": "Collaboration",
       "title": "Collaborate on decks with your team",
       "subtitle": "Invite colleagues and clients to your deck, choose who can view, comment, or edit, and work together in one place.",
-      "cta": "Start free"
+      "cta": "Try it free"
     },
     "why": {
       "title": "Teamwork in one place",
@@ -1325,7 +1325,7 @@
       "eyebrow": "Export",
       "title": "Export to PowerPoint, PDF, and Google Slides",
       "subtitle": "One deck, five formats: an editable PowerPoint file, a PDF to share, PNG images, an HTML page, and Google Slides.",
-      "cta": "Start free"
+      "cta": "Try it free"
     },
     "why": {
       "title": "A format for every use",
@@ -1446,8 +1446,8 @@
     },
     "signup": {
       "title": "Create account",
-      "subtitle": "Start free. No credit card needed.",
-      "eyebrow": "Start free, no credit card",
+      "subtitle": "Try it free. No credit card needed.",
+      "eyebrow": "Try it free, no credit card",
       "continue": "Continue",
       "back": "Back",
       "detailsTitle": "A few more details",
@@ -1711,11 +1711,11 @@
       "balance": "Balance: {count} cr",
       "creditsEstimate": "\u2248 {credits} cr", "creditsEstimateUpTo": "up to {credits} cr",
       "slideCapUpsell": {
-        "title": "Slide limit",
+        "title": "Free trial",
         "close": "Close",
-        "body": "The maximum allowed is {cap} slides. Upgrade to raise the limit to {max} slides.",
-        "upgrade": "Upgrade now",
-        "continue": "Create {cap} slides"
+        "body": "On the free plan we design the first {cap} slides of your deck; the rest stay locked until you subscribe. Subscribe now to get the full deck.",
+        "upgrade": "See plans",
+        "continue": "Design the first {cap} slides"
       }
     },
     "fonts": {
@@ -1740,7 +1740,7 @@
       "titleRotate": ["Design presentations", "Enhance your deck", "Use your own template", "Create social posts"],
       "titleLine2": "with AI",
       "subtitle": "taqreer.ai turns your ideas and files into designed presentations and reports with AI, in Arabic and English, while keeping your brand identity, with an advanced editor to fine-tune every slide.",
-      "cta": "Start free now"
+      "cta": "Try it free", "ctaNote": "No credit card needed"
     },
     "sections": {
       "features": {
@@ -1757,7 +1757,7 @@
       "pricing": {
         "eyebrow": "Pricing",
         "title": "Simple plans for what you need",
-        "subtitle": "Start free, or pick a monthly plan that fits your deck volume and the slide count you need."
+        "subtitle": "Try it free, or pick a monthly plan that fits your deck volume and the slide count you need."
       },
       "faq": {
         "eyebrow": "Help",
@@ -1774,7 +1774,7 @@
     "templatesCard": {
       "title": "Ready-made templates with RTL support",
       "description": "Start from templates designed for Arabic and English decks, with full right-to-left text support and proper formatting for headings, paragraphs, tables, and bilingual slides.",
-      "cta": "Start for free"
+      "cta": "Try it free"
     },
     "templatesGrid": {
       "previewAria": "Preview the template",
@@ -1808,7 +1808,7 @@
           "credits": "{credits} credits (signup gift)",
           "features": ["{model}", "First 5 slides of each deck designed", "Editable PPTX + all formats", "All creation methods", "Smart photos + custom brand identity", "AI edits after generation", "No watermark", "Full decks, nothing locked", "Premium templates"],
           "footnote": "Upgrade anytime",
-          "cta": "Start free"
+          "cta": "Try it free"
         },
         {
           "name": "Plus",
