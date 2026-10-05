@@ -854,7 +854,7 @@ export default function CreatePage() {
           void handleGenerate(slides);
         }}
       />
-      <div className="mt-[6vh] flex w-full flex-col items-center gap-6 px-4">
+      <div className="mt-[6vh] flex w-full desk:px-8 flex-col items-center gap-6 px-4">
         <header className="text-center">
           <h1 className="tq-h1">{t.create.title}</h1>
           <p className="tq-subhead mt-2">{t.create.subtitle}</p>
@@ -885,7 +885,7 @@ export default function CreatePage() {
               steps 1-2 and the frame never jumps between them
               (user direction 2026-08-30). Step 3 hugs its content
               (stackedCardVisibility, 2026-10-04). */}
-          <div className="grid w-full justify-items-center desk:w-auto desk:grid-cols-[repeat(3,minmax(0,430px))] desk:gap-6">
+          <div className="grid w-full justify-items-center desk:max-w-[1800px] desk:grid-cols-3 desk:gap-6">
           {/* ═══════════════════════════════════════════════════════
               CONTENT CARD (step 1)
               ═══════════════════════════════════════════════════════ */}

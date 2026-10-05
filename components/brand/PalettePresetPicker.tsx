@@ -25,12 +25,15 @@ export function PalettePresetPicker({
   const activeId = PALETTE_PRESETS.find((p) => samePalette(colors, p.colors))?.id ?? null;
   return (
     <>
-      <PalettePresetGrid
-        activeId={activeId}
-        onPick={(p) => onPick([...p.colors])}
-        disabled={disabled}
-        className="palette-scroll grid grid-cols-6 gap-1.5"
-      />
+      {/* More palettes per row as the card widens (full-width desktop cards). */}
+      <div className="@container">
+        <PalettePresetGrid
+          activeId={activeId}
+          onPick={(p) => onPick([...p.colors])}
+          disabled={disabled}
+          className="palette-scroll grid grid-cols-6 gap-1.5 @min-[26rem]:grid-cols-8 @min-[34rem]:grid-cols-10 @min-[46rem]:grid-cols-12"
+        />
+      </div>
       <PickerExpandButton onClick={() => setExpanded(true)} disabled={disabled} />
       <PickerExpandModal
         open={expanded}

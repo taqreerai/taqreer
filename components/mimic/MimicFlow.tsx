@@ -878,7 +878,7 @@ export default function MimicFlow({
           void handleGenerate(slides);
         }}
       />
-      <div className="mt-[6vh] flex w-full flex-col items-center gap-6 px-4">
+      <div className="mt-[6vh] flex w-full desk:px-8 flex-col items-center gap-6 px-4">
         {/* Upfront plan notice when this flow isn't in the user's plan. */}
         <LockedFlowBanner flow="mimic" />
         <header className="text-center">
@@ -913,7 +913,7 @@ export default function MimicFlow({
             each card has one flex-1 element that absorbs the spare height,
             so no card shows dead space. */}
         <div className="flex w-full flex-col items-center gap-4">
-          <div className="grid w-full justify-items-center desk:w-auto desk:grid-cols-[repeat(3,minmax(0,430px))] desk:gap-6">
+          <div className="grid w-full justify-items-center desk:max-w-[1800px] desk:grid-cols-3 desk:gap-6">
           {/* ═══════════════════════════════════════════════════════
               STEP 1: CONTENT + DESIGN REFERENCE
               ═══════════════════════════════════════════════════════ */}
