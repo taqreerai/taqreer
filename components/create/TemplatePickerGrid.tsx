@@ -117,7 +117,7 @@ export function TemplatePickerGrid({
         }}
         title={name}
         aria-pressed={active}
-        className={`pick-tile relative overflow-hidden rounded-lg p-1 disabled:cursor-not-allowed ${
+        className={`pick-tile relative rounded-lg p-1 disabled:cursor-not-allowed ${
           active ? "is-active" : ""
         }`}
       >
@@ -185,7 +185,11 @@ export function TemplatePickerGrid({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="design-scroll grid grid-cols-3 gap-2">
+      {/* auto-rows-max + shrink-0 (2026-10-05): the tiles are overflow-hidden,
+          which lets CSS shrink their rows to nothing when the card is tight
+          (seen squashed in /enhance). Rows keep their 16:9 height; the list
+          scrolls instead. */}
+      <div className="design-scroll grid shrink-0 auto-rows-max grid-cols-3 gap-2">
         {noneTile}
         {templates === null
           ? Array.from({ length: 5 }).map((_, i) => (
