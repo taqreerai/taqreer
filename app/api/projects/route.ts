@@ -31,7 +31,11 @@ import {
 import { detectImageRegion } from "@/lib/geo/image-region";
 import { preflightGenerate } from "@/lib/credits/preflight";
 import type { Flow as CreditFlow, SlideEstimateInput } from "@/lib/credits/cost";
-import { TEASER_LOCKED_COUNT } from "@/lib/credits/cost";
+import {
+  TEASER_DEFAULT_TOTAL,
+  TEASER_VISIBLE_COUNT,
+  estimateSlides,
+} from "@/lib/credits/cost";
 import { normalizePlan } from "@/lib/plan";
 import { mintTemplateDesignFile } from "@/lib/template/mint-design";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
@@ -875,12 +879,37 @@ export async function POST(request: Request) {
       text: payload.content?.type === "text" ? payload.content.text ?? "" : "",
     };
   }
+  // ─── Teaser (free trial, re-enabled 2026-10-05 for EVERY flow) ─────
+  // A free (non-admin) user asks for any length; the model designs the FULL
+  // deck but only the first TEASER_VISIBLE_COUNT slides are built, held and
+  // charged. The rest show blurred + locked and are authored (comped, on
+  // Opus) only when the owner subscribes (/api/projects/[id]/unlock). The
+  // planned total is what they asked for: an exact pick, else the flow's
+  // estimate (enhance page count, datasheet...), else TEASER_DEFAULT_TOTAL
+  // for a free-running auto deck; capped at the free tier's slide cap.
+  // At or below the visible count there is nothing to lock: a normal deck.
+  await ensureFresh();
+  const isFreeTrial =
+    dbUser.role !== "admin" && normalizePlan(dbUser.plan) === "free";
+  let teaserPlannedTotal = 0;
+  if (isFreeTrial) {
+    const est = estimateSlides(slideInput);
+    const wanted = Math.min(
+      est.slides ?? TEASER_DEFAULT_TOTAL,
+      getTier("free").slideCap,
+    );
+    if (wanted > TEASER_VISIBLE_COUNT) teaserPlannedTotal = wanted;
+  }
+  const isTeaser = teaserPlannedTotal > 0;
+  const teaserLockedCount = isTeaser ? teaserPlannedTotal - TEASER_VISIBLE_COUNT : 0;
+
   const preflight = await preflightGenerate({
     userId: dbUser.id,
     plan: dbUser.plan,
     flow: creditFlow,
     preset: quality,
-    slideInput,
+    // Teaser: hold (and so charge) only the visible slides.
+    slideInput: isTeaser ? { kind: "fixed", count: TEASER_VISIBLE_COUNT } : slideInput,
     // Images-mode decks hold (and settle) a per-image surcharge on top
     // of the slide cost - 2026-07 repricing; images were free before.
     imagesMode: payload.imagesMode === true,
@@ -916,37 +945,14 @@ export async function POST(request: Request) {
   // (it IS the holdSlides basis). The only behavioural change is that
   // estimate-driven source flows now author at the quoted size instead
   // of the prompt's free-running default.
-  const cappedSlideCount = preflight.exact
-    ? resolvedSlideCount
-    : preflight.holdSlides;
+  const cappedSlideCount = isTeaser
+    ? TEASER_VISIBLE_COUNT
+    : preflight.exact
+      ? resolvedSlideCount
+      : preflight.holdSlides;
 
-  // Teaser paywall (free-tier conversion). A free-tier `create` deck is
-  // authored as a longer deck (visible + TEASER_LOCKED_COUNT) but ONLY the
-  // visible slides are held, charged, and streamed - deck-generate keeps its
-  // slide-cap abort at holdSlides, so cost is identical to today. The locked
-  // slides render blurred in the viewer and are generated (on Opus, comped)
-  // only if the owner subscribes. Images decks included: the unlock authors
-  // the tail with images too (deck-unlock mirrors the deck.images.requested
-  // fill when the source is an images deck). Admins are never gated.
-  // `plannedTotal` is what the model designs toward so the visible slides read
-  // as an unfinished first act.
-  // Teaser OFF for new decks (2026-10-02): free decks are now a complete
-  // 8-slide deck + a system-appended branded closing slide, with the
-  // "Made with taqreer.ai" watermark as the upgrade push. Existing teaser
-  // decks keep their stored brief.teaser, so their locked slots + unlock
-  // still work. Flip TEASER_FOR_NEW_DECKS to restore the old behaviour.
-  const TEASER_FOR_NEW_DECKS = false;
-  const isTeaser =
-    TEASER_FOR_NEW_DECKS &&
-    creditFlow === "create" &&
-    dbUser.role !== "admin" &&
-    normalizePlan(dbUser.plan) === "free";
-  const teaserLockedCount = isTeaser ? TEASER_LOCKED_COUNT : 0;
-  // `cappedSlideCount` is only null in the (unreachable-for-teaser) exact path
-  // with no picked count; fall back to the held count so the planned total is
-  // always a number.
-  const teaserPlannedTotal =
-    (cappedSlideCount ?? preflight.holdSlides) + teaserLockedCount;
+  // Teaser plan: computed above, before the preflight (isTeaser,
+  // teaserPlannedTotal, teaserLockedCount).
 
   // Location-aware lifestyle imagery: map the REQUEST's country (the "area of
   // generation") to a regional people descriptor so an images-deck made from

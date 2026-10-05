@@ -189,7 +189,10 @@ export const deckUnlock = inngest.createFunction(
       kind: format === "3:4" ? "social" : "deck",
     });
     const briefText = source.rawBrief
-      ? JSON.stringify(source.rawBrief).slice(0, 6000)
+      ? // 40k chars (was 6k, 2026-10-05): the teaser now covers every flow,
+        // and an enhance / datasheet / mimic brief carries the WHOLE source,
+        // whose later pages are exactly what the locked tail must use.
+        JSON.stringify(source.rawBrief).slice(0, 40000)
       : manifest.title;
 
     // ── 2. Author the withheld tail (one Opus call, N sections) ──

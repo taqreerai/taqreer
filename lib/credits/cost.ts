@@ -107,6 +107,12 @@ export function slideCapForFlow(flow: Flow, tierCap: number): number {
 // one number. The visible count is the free tier's own slideCap, so the
 // hold/charge is identical to today; only the locked count is added on top.
 export const TEASER_LOCKED_COUNT = 5;
+// 2026-10-05 (owner decision, every flow): a free deck builds only the first
+// TEASER_VISIBLE_COUNT slides; the rest of the requested length is locked.
+// TEASER_DEFAULT_TOTAL is the planned length when the user picked "auto" and
+// the flow has no estimate of its own.
+export const TEASER_VISIBLE_COUNT = 5;
+export const TEASER_DEFAULT_TOTAL = 10;
 
 // Top-up packs expire 12 months after purchase (§1).
 export const TOPUP_EXPIRY_MONTHS = 12;
