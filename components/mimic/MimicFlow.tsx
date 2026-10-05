@@ -1161,6 +1161,7 @@ export default function MimicFlow({
                       /create's BrandFontPicker. */}
                   <div className="border-t border-[var(--tq-border-hairline)] pt-3">
                     <BrandFontPicker
+                      compact
                       value={brandFont}
                       onChange={setBrandFont}
                       sampleText={
@@ -1171,14 +1172,14 @@ export default function MimicFlow({
                     />
                   </div>
 
-                  {/* Logo — flex-1 so the dropzone grows to fill the card's
-                      leftover height (matches /create); gap-4 unifies the
-                      title→zone gap with الخطوط. */}
-                  <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-hairline)] pt-3">
+                  {/* Logo: compact fixed-height zone like /create (2026-10-05:
+                      keeps the brand card short instead of growing to fill it). */}
+                  <div className="flex flex-col gap-2 border-t border-[var(--tq-border-hairline)] pt-3">
                     <span className="block text-xs font-semibold text-foreground/70">
                       {dict.flows.logo}
                     </span>
                     <LogoRow
+                      compact
                       file={logoFile}
                       previewUrl={loadedLogo?.displayUrl ?? null}
                       onSelect={(f) => {
