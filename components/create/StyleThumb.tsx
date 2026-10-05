@@ -90,12 +90,12 @@ export function StyleThumb({
       style={{ aspectRatio: "16/9", containerType: "inline-size" }}
       aria-hidden
     >
-      {render(k, title)}
+      {render(k, title, dir)}
     </div>
   );
 }
 
-function render(k: DeckStyleKey | "auto", title: string): ReactNode {
+function render(k: DeckStyleKey | "auto", title: string, dir: "rtl" | "ltr"): ReactNode {
   switch (k) {
     case "auto":
       return (
@@ -230,6 +230,116 @@ function render(k: DeckStyleKey | "auto", title: string): ReactNode {
           </span>
           <L top="58%" e="10%" w="26%" c="#2F80ED44" />
           <L top="66%" e="10%" w="18%" c="#2F80ED44" />
+        </>
+      );
+    case "earlyyears":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FFF7E6" />
+          <B top="0" s="0" w="100%" h="100%" c="transparent" r={10} style={{ border: "4px solid #4FC3F7" }} />
+          <B top="10%" e="8%" w="18%" h="32%" c="#FFC93C" r="50%" style={{ boxShadow: "0 0 0 6px #FFC93C55" }} />
+          <B bottom="-34%" s="-6%" w="70%" h="70%" c="transparent" r="50%" style={{ border: "8px solid #FF7A7A", boxShadow: "inset 0 0 0 8px #FFD166, inset 0 0 0 16px #7BD389" }} />
+          <T top="20%" s="10%" c="#FF6B6B" size={16} weight={900} style={{ letterSpacing: dir === "ltr" ? "0.05em" : undefined }}>
+            {dir === "rtl" ? "أ ب ت" : "A B C"}
+          </T>
+          <span className="material-symbols-outlined" style={box({ bottom: "12%", e: "14%" }, { fontSize: "12cqw", color: "#7B61FF" })}>
+            pets
+          </span>
+          <span className="material-symbols-outlined" style={box({ top: "52%", e: "34%" }, { fontSize: "7cqw", color: "#FFC93C" })}>
+            star
+          </span>
+        </>
+      );
+    case "primary":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#E8F7FF" />
+          <B top="0" s="0" w="100%" h="20%" c="#FF6B6B" r="0 0 14px 14px" />
+          <T top="5%" s="6%" c="#fff" size={6.5}>{title}</T>
+          {[
+            ["#4CC9F0", "science"],
+            ["#80ED99", "calculate"],
+            ["#FFB703", "menu_book"],
+          ].map(([c, icon], i) => (
+            <div key={i}>
+              <B top="30%" s={`${6 + i * 20}%`} w="17%" h="32%" c="#FFFFFF" r={8} style={{ border: `2px solid ${c}` }} />
+              <span
+                className="material-symbols-outlined"
+                style={box({ top: "36%", s: `${9.5 + i * 20}%` }, { fontSize: "8cqw", color: c })}
+              >
+                {icon}
+              </span>
+            </div>
+          ))}
+          <L top="70%" s="6%" w="54%" c="#0B486B44" />
+          <L top="78%" s="6%" w="40%" c="#0B486B33" />
+          <B top="30%" e="5%" w="28%" h="56%" c="#FFE066" r={8} style={{ transform: "rotate(2deg)" }} />
+          <T top="38%" e="9%" c="#7A4E00" size={7} weight={900}>?</T>
+          <L top="60%" e="9%" w="18%" c="#7A4E0066" />
+        </>
+      );
+    case "middleschool":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FFFFFF" />
+          <B top="0" s="0" w="5%" h="100%" c="#7C3AED" />
+          <T top="9%" s="10%" c="#1F1147" size={8.5} weight={900}>{title}</T>
+          <svg viewBox="0 0 100 56" style={box({ top: "30%", s: "10%", w: "56%", h: "62%" })}>
+            <g stroke="#C4B5FD" strokeWidth="1.2">
+              <line x1="50" y1="28" x2="16" y2="10" />
+              <line x1="50" y1="28" x2="16" y2="46" />
+              <line x1="50" y1="28" x2="86" y2="12" />
+              <line x1="50" y1="28" x2="86" y2="44" />
+            </g>
+            <circle cx="50" cy="28" r="11" fill="#7C3AED" />
+            <circle cx="16" cy="10" r="7" fill="#22D3EE" />
+            <circle cx="16" cy="46" r="7" fill="#F472B6" />
+            <circle cx="86" cy="12" r="7" fill="#FACC15" />
+            <circle cx="86" cy="44" r="7" fill="#34D399" />
+          </svg>
+          <B top="30%" e="5%" w="24%" h="24%" c="#22D3EE" r={6} />
+          <B top="60%" e="5%" w="24%" h="24%" c="#F472B6" r={6} />
+          <span className="material-symbols-outlined" style={box({ top: "35%", e: "13%" }, { fontSize: "8cqw", color: "#fff" })}>
+            bolt
+          </span>
+        </>
+      );
+    case "highschool":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#F8FAFC" />
+          <B top="0" s="0" w="100%" h="10%" c="#0F766E" />
+          <T top="16%" s="6%" c="#0F172A" size={7.5}>{title}</T>
+          <B top="38%" s="6%" w="46%" h="26%" c="#E6FFFA" style={{ borderInlineStart: "4px solid #0F766E" }} />
+          <T top="44%" s="10%" c="#0F766E" size={7} weight={700} style={{ fontFamily: "Georgia, serif" }}>
+            <span dir="ltr">E = mc²</span>
+          </T>
+          <L top="72%" s="6%" w="40%" c="#0F172A33" />
+          <L top="80%" s="6%" w="30%" c="#0F172A22" />
+          <svg viewBox="0 0 40 30" style={box({ top: "28%", e: "6%", w: "34%", h: "56%" })}>
+            <path d="M3 2 V27 H38" fill="none" stroke="#334155" strokeWidth="1" />
+            <path d="M5 24 C 12 22, 18 12, 24 10 S 33 4, 37 3" fill="none" stroke="#F97316" strokeWidth="1.6" />
+          </svg>
+        </>
+      );
+    case "university":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FFFFFF" />
+          <T top="12%" s="7%" c="#1E293B" size={8} weight={700} style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>{title}</T>
+          <B top="30%" s="7%" w="12%" h="1.5%" c="#9F1239" />
+          {[0, 1, 2].map((i) => (
+            <div key={i}>
+              <T top={`${40 + i * 13}%`} s="7%" c="#9F1239" size={4} weight={700}>{i + 1}</T>
+              <L top={`${41 + i * 13}%`} s="12%" w={i === 2 ? "26%" : "36%"} c="#1E293B44" />
+            </div>
+          ))}
+          <B top="24%" e="7%" w="34%" h="56%" c="#F8F7F4" style={{ border: "1px solid #E2E8F0" }} />
+          {[30, 52, 40, 64].map((h, i) => (
+            <B key={i} bottom="26%" e={`${10 + i * 7.5}%`} w="5%" h={`${h * 0.5}%`} c={i === 3 ? "#9F1239" : "#94A3B8"} />
+          ))}
+          <B bottom="7%" s="7%" e="7%" h="1px" c="#CBD5E1" />
+          <L bottom="3%" s="7%" w="20%" c="#94A3B8" />
         </>
       );
     case "official":

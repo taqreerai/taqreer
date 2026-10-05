@@ -17,7 +17,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { useState } from "react";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
-import { DECK_STYLES, type DeckStyleKey } from "@/lib/design-styles";
+import { DECK_STYLES, STYLE_SECTORS, type DeckStyleKey, type StyleSector } from "@/lib/design-styles";
 import { StyleThumb } from "@/components/create/StyleThumb";
 import { StyleInfoButton } from "@/components/create/StyleInfoButton";
 import { PickerExpandButton, PickerExpandModal } from "@/components/create/PickerExpandModal";
@@ -25,6 +25,49 @@ import { PickerExpandButton, PickerExpandModal } from "@/components/create/Picke
 // Deck styles: the shared list (lib/design-styles.ts). `label` is the prompt
 // anchor stored on the brief; the visible name comes from the dictionary.
 const STYLES = DECK_STYLES;
+
+type SectorFilter = "all" | StyleSector;
+
+// Sector filter chips above the deck-style tiles (2026-10-05). Same pill
+// treatment as the colours "Auto" pill; scrolls sideways on narrow cards.
+function SectorChips({
+  value,
+  onChange,
+}: {
+  value: SectorFilter;
+  onChange: (next: SectorFilter) => void;
+}) {
+  const t = useDict().flows.stylePicker;
+  const labels: Record<string, string> = t.sectors;
+  return (
+    <div role="group" aria-label={t.filterAria} className="hide-scrollbar -mx-0.5 flex gap-1.5 overflow-x-auto px-0.5 pb-0.5">
+      {(["all", ...STYLE_SECTORS] as const).map((sec) => {
+        const active = value === sec;
+        return (
+          <button
+            key={sec}
+            type="button"
+            onClick={() => onChange(sec)}
+            aria-pressed={active}
+            className={`h-7 shrink-0 whitespace-nowrap rounded-full border px-2.5 text-[11px] font-medium transition-colors ${
+              active
+                ? "border-foreground/40 bg-[var(--tq-overlay-soft)] text-foreground"
+                : "border-[var(--tq-border-hairline)] text-foreground/60 hover:border-foreground/30 hover:text-foreground"
+            }`}
+          >
+            {labels[sec]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function inSector(key: string, sector: SectorFilter): boolean {
+  if (sector === "all" || key === "auto") return true;
+  const st = DECK_STYLES.find((d) => d.key === key);
+  return !!st && (st.sectors as readonly string[]).includes(sector);
+}
 
 // ── Social-media style set (2026 trends) ────────────────────────
 // Distinct from the deck styles above: these target portrait phone-feed
@@ -231,6 +274,7 @@ export function DesignStylePicker({
       <StyleThumb k={key as DeckStyleKey | "auto"} title={t.thumbTitle} dir={dir} />
     );
   const [open, setOpen] = useState(false);
+  const [sector, setSector] = useState<SectorFilter>("all");
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(panelRef, open);
 
@@ -323,8 +367,13 @@ export function DesignStylePicker({
                         </button>
                       </div>
 
+                      {!isSocial ? (
+                        <div className="mb-3">
+                          <SectorChips value={sector} onChange={setSector} />
+                        </div>
+                      ) : null}
                       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                        {styles.map((s) => {
+                        {styles.filter((s) => isSocial || inSector(s.key, sector)).map((s) => {
                           const active = value === s.label;
                           return (
                             <div key={s.key} className="relative">
@@ -413,7 +462,8 @@ export function DesignStyleGrid({
   const descs: Record<string, string> = t.descs;
   const info: Record<string, { does: string; best: string }> = t.info;
   const [expanded, setExpanded] = useState(false);
-  const tiles: ReadonlyArray<{
+  const [sector, setSector] = useState<SectorFilter>("all");
+  const allTiles: ReadonlyArray<{
     key: DeckStyleKey | "auto";
     name: string;
     desc: string;
@@ -431,8 +481,9 @@ export function DesignStyleGrid({
       value: s.label,
     })),
   ];
+  const tiles = allTiles.filter((tl) => inSector(tl.key, sector));
 
-  const tile = (tl: (typeof tiles)[number], big: boolean) => {
+  const tile = (tl: (typeof allTiles)[number], big: boolean) => {
     const active = value === tl.value;
     return (
       <div key={tl.key} className="relative">
@@ -466,11 +517,15 @@ export function DesignStyleGrid({
 
   return (
     <div className="@container flex flex-col gap-1.5">
+      <SectorChips value={sector} onChange={setSector} />
       <div className="design-scroll grid shrink-0 auto-rows-max grid-cols-3 gap-2 @min-[26rem]:grid-cols-4 @min-[34rem]:grid-cols-5 @min-[46rem]:grid-cols-6">
         {tiles.map((tl) => tile(tl, false))}
       </div>
       <PickerExpandButton onClick={() => setExpanded(true)} disabled={disabled} />
       <PickerExpandModal open={expanded} title={t.allStyles} onClose={() => setExpanded(false)}>
+        <div className="mb-3">
+          <SectorChips value={sector} onChange={setSector} />
+        </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
           {tiles.map((tl) => tile(tl, true))}
         </div>
