@@ -164,6 +164,8 @@ const MIMIC_IMG_ADDENDUM = `MIMIC IMAGES: images mode is ON for this mimic. Stud
 // OPPOSITE — one locked chrome + type system). The detailed per-slide redesign
 // brief lives in the user message (buildSourceTextDirective enhance branch); this
 // just redirects the base prompt toward it. Appended AFTER so it wins.
+const ENHANCE_TEMPLATE_ADDENDUM = `ENHANCE + TEMPLATE — the user picked a deck TEMPLATE for this redesign. Override "improve only layout, hierarchy, typography, spacing, and rhythm" and any instruction to invent your own visual system: REPRODUCE the attached DESIGN reference's visual language (layout system, type hierarchy, spacing, shapes, grids, decorative motifs) on every slide, recoloured to the injected brand variables. Everything else in ENHANCE MODE still holds: exactly one redesigned slide per source slide, same order, each slide's content from its own exact-text block, never the template's words.`;
+
 const ENHANCE_HTML_ADDENDUM = `ENHANCE MODE — this is a REDESIGN of an EXISTING deck, not a fresh original. Override "Design a complete, ORIGINAL slide deck — your own visual system, fresh for this brief" and "VARY the composition slide to slide" above: follow the per-slide redesign brief in the user message instead. PRESERVE each source slide's CONTENT and the brand's VISUAL IDENTITY (palette, fonts, logo); improve only layout, hierarchy, typography, spacing, and rhythm. LOCK one consistent chrome + type system across every slide — a single coherent redesign, not a set of unrelated layouts. (Output format is unchanged: one \`<style>\` then the \`<section>\` slides.)`;
 
 // Auto-palette addendum — appended ONLY when the brief carries no brand
@@ -1297,6 +1299,16 @@ function buildSourceContentBlocks(
             : "(no extractable text on this slide — reproduce only what the image clearly shows)"),
       });
     });
+    // Enhance + template (2026-10-05): the picked template's design
+    // reference goes LAST, labelled, so it can't be mistaken for a source
+    // slide.
+    if (source.designAnthropicFileId) {
+      blocks.push({
+        type: "text",
+        text: "── DESIGN reference (deck template) — the LOOK to apply, NOT content ──",
+      });
+      blocks.push(toDocBlock(source.designAnthropicFileId));
+    }
     return blocks;
   }
 
@@ -1381,8 +1393,16 @@ function buildSourceTextDirective(
       `  • Never drop real information — every distinct fact in the source must survive somewhere in the deck; you may relocate, compress, or reword it, but not delete it.`,
       `  • Keep each slide's own language and script (Arabic stays Arabic, English stays English, mixed stays mixed) — do NOT translate or transliterate.`,
       ``,
+      ...(source.designAnthropicFileId
+        ? [
+            `DESIGN TEMPLATE — a deck template's design reference is attached AFTER the slides (labelled "DESIGN reference"). Apply ITS look to every redesigned slide: its layout system, type hierarchy, spacing rhythm, shapes, grids and decorative motifs. Where a slide holds more content than the template's layouts were designed for, adapt the closest template layout rather than inventing a new style. The template governs the LOOK only: never copy its words, headings, numbers or images; every slide's content still comes from its own exact-text block.`,
+            ``,
+          ]
+        : []),
       `THEME = the user's brand kit (authoritative — do NOT invent a theme):`,
-      colors.length > 0
+      source.designAnthropicFileId && colors.length === 0
+        ? `  • No brand palette was provided: use the DESIGN template's own colours (see PALETTE in the system rules) consistently on every slide.`
+        : colors.length > 0
         ? `  • Brand palette (from the Brief's \`brand.colors\`): ${colors.slice(0, 6).join(", ")}. Build every slide on this palette plus a restrained set of accents drawn from it.`
         : `  • No brand palette was provided. Derive ONE restrained palette from the dominant colours across the source slide images and apply it CONSISTENTLY to every slide (chrome-locked) — do not let each slide drift to its own colours.`,
       `  • Use the brand fonts from the Brief (resolved below) as the type system. Keep ONE coherent theme across all ${slideCount} slides — shared chrome, type scale, and spacing.`,
@@ -2118,8 +2138,13 @@ export const deckGenerate = inngest.createFunction(
           data.type !== "enhance";
         // Mimic with no brand colours = the "template colours" option: take
         // the palette from the DESIGN reference (REFERENCE_PALETTE_ADDENDUM).
+        const enhanceTemplate =
+          htmlSourceKind === "enhance" &&
+          !!(readSource(data) as { designAnthropicFileId?: string } | null)
+            ?.designAnthropicFileId;
         const paletteReference =
-          !briefHasBrandColors(data.brief) && htmlSourceKind === "mimic";
+          !briefHasBrandColors(data.brief) &&
+          (htmlSourceKind === "mimic" || enhanceTemplate);
         const htmlSystem = [
           // The FRAME base (context/frame-architecture-2026-07-10.md) is the
           // ONLY generation contract since the 2026-07-10 cutover. It embeds
@@ -2147,6 +2172,7 @@ export const deckGenerate = inngest.createFunction(
             : null,
           htmlSourceKind === "mimic" ? MIMIC_HTML_ADDENDUM : null,
           data.type === "enhance" ? ENHANCE_HTML_ADDENDUM : null,
+          data.type === "enhance" && enhanceTemplate ? ENHANCE_TEMPLATE_ADDENDUM : null,
         ]
           .filter(Boolean)
           .join("\n\n");
