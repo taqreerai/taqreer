@@ -60,15 +60,22 @@ export function AIImagesPanel({
       {/* Square icon tile, exactly as tall as the two text lines (2 x 16px
           line + 4px gap = 36px), so title and description sit level with it. */}
       <span
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors ${
+        className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors ${
           value
             ? "bg-[var(--tq-violet)]/15 text-[var(--tq-violet)]"
             : "bg-[var(--tq-overlay-soft)] text-foreground/55"
         }`}
         aria-hidden
       >
-        <span className="material-symbols-outlined" style={{ fontSize: 22 }}>
+        <span className="material-symbols-outlined leading-none" style={{ fontSize: 22 }}>
           image
+        </span>
+        {/* AI sparkle on the tile's corner: these photos are generated. */}
+        <span
+          className="material-symbols-outlined absolute -end-1 -top-1 rounded-full bg-[var(--tq-surface)] leading-none text-[var(--tq-violet)]"
+          style={{ fontSize: 13, padding: 1 }}
+        >
+          auto_awesome
         </span>
       </span>
       <div className="min-w-0 flex-1">
