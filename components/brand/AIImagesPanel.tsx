@@ -63,7 +63,7 @@ export function AIImagesPanel({
             className={`material-symbols-outlined transition-colors ${
               value ? "text-[var(--tq-violet)]" : "text-foreground/45"
             }`}
-            style={{ fontSize: 15 }}
+            style={{ fontSize: 20 }}
             aria-hidden
           >
             image
