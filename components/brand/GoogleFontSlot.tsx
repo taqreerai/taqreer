@@ -51,6 +51,9 @@ export function GoogleFontSlot({
   // Open the result list ABOVE the input (studio font menu, which sits near
   // the bottom of the screen).
   dropUp = false,
+  // Compact rows (BrandFontPicker compact) render <FontInstallHint> under the
+  // WHOLE row instead, so the label + upload button stay on one aligned line.
+  hideInstallHint = false,
 }: {
   // `label` was previously passed but never rendered — combobox doesn't
   // own its own heading. Card-level <h3> sits above the slot in the
@@ -63,6 +66,7 @@ export function GoogleFontSlot({
   hideSample?: boolean;
   compact?: boolean;
   dropUp?: boolean;
+  hideInstallHint?: boolean;
 }) {
   const dict = useDict();
   const [open, setOpen] = useState(false);
@@ -240,25 +244,7 @@ export function GoogleFontSlot({
           )}
         </div>
       ) : null}
-      {selected ? (
-        // Install hint (2026-10-05): exports embed only the glyphs a deck
-        // uses, so EDITING in PowerPoint is smoothest with the font
-        // installed. Links straight to the picked family's Google Fonts page.
-        <p className="mt-1.5 text-start text-[11px] leading-4 text-foreground/50">
-          {dict.flows.brand.fontInstallHint}{" "}
-          <a
-            href={`https://fonts.google.com/specimen/${encodeURIComponent(selected).replace(/%20/g, "+")}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-0.5 font-medium text-[var(--tq-violet)] underline-offset-2 hover:underline"
-          >
-            <span>{dict.flows.brand.fontInstallCta.replace("{font}", selected)}</span>
-            <span className="material-symbols-outlined" style={{ fontSize: 12 }} aria-hidden>
-              open_in_new
-            </span>
-          </a>
-        </p>
-      ) : null}
+      {selected && !hideInstallHint ? <FontInstallHint family={selected} /> : null}
       {hideSample ? null : (
         <p
           // alignStart pins the sample to the chrome's reading edge (inherit
@@ -278,3 +264,35 @@ export function GoogleFontSlot({
     </div>
   );
 }
+
+/**
+ * "Install this font" hint (2026-10-05). PPTX exports embed only the glyphs a
+ * deck uses, so EDITING in PowerPoint is smoothest with the font installed.
+ * Links straight to the family's Google Fonts page in a new tab.
+ */
+export function FontInstallHint({
+  family,
+  className = "mt-1.5",
+}: {
+  family: string;
+  className?: string;
+}) {
+  const dict = useDict();
+  return (
+    <p className={`text-start text-[11px] leading-4 text-foreground/50 ${className}`}>
+      {dict.flows.brand.fontInstallHint}{" "}
+      <a
+        href={`https://fonts.google.com/specimen/${encodeURIComponent(family).replace(/%20/g, "+")}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-0.5 font-medium text-[var(--tq-violet)] underline-offset-2 hover:underline"
+      >
+        <span>{dict.flows.brand.fontInstallCta.replace("{font}", family)}</span>
+        <span className="material-symbols-outlined" style={{ fontSize: 12 }} aria-hidden>
+          open_in_new
+        </span>
+      </a>
+    </p>
+  );
+}
+

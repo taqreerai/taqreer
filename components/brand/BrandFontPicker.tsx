@@ -17,7 +17,7 @@
 // the parent owns the `BrandFontState`.
 
 import { useRef, useState } from "react";
-import { GoogleFontSlot } from "@/components/brand/GoogleFontSlot";
+import { FontInstallHint, GoogleFontSlot } from "@/components/brand/GoogleFontSlot";
 import {
   FONT_ACCEPT_EXTS,
   MAX_UPLOADED_FONTS,
@@ -134,6 +134,7 @@ export function BrandFontPicker({
               }
               hideSample
               compact
+              hideInstallHint
             />
           </div>
           {fileInput}
@@ -158,6 +159,10 @@ export function BrandFontPicker({
         </div>
         {hasPills ? (
           <div className="flex items-center gap-1.5 overflow-x-auto hide-scrollbar">{chips}</div>
+        ) : value.googleFamily ? (
+          // Full-width line under the row (not inside the dropdown's column),
+          // so the label, dropdown and upload button stay on one aligned line.
+          <FontInstallHint family={value.googleFamily} className="" />
         ) : null}
       </div>
     );
