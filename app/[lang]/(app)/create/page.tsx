@@ -90,6 +90,7 @@ import {
 } from "@/components/create/OutputCards";
 import {
   CardHeader,
+  CardStepBadge,
   InlinePaletteSwatch,
   SegmentedToggle,
   Toggle,
@@ -892,7 +893,7 @@ export default function CreatePage() {
           <div
             className={`surface-card ${stackedCardVisibility(0, step)} col-start-1 row-start-1 w-full sm:w-[430px] ${CARD_MIN_H_CLASS} flex-col desk:visible desk:col-start-auto desk:row-start-auto desk:flex desk:w-full desk:min-w-0 gap-4 rounded-2xl p-4`}
           >
-            <CardHeader icon="subject" title={t.contentCard} />
+            <CardHeader step={1} icon="subject" title={t.contentCard} />
 
             <input
               ref={contentInputRef}
@@ -1003,6 +1004,7 @@ export default function CreatePage() {
                   pb-4 holds the separator below. The pill is absolute so it
                   never grows the row or shifts the separator off the others. */}
               <div className="relative flex items-center gap-2">
+                <CardStepBadge step={2} />
                 <span
                   className="material-symbols-outlined text-foreground"
                   style={{ fontSize: 18 }}
@@ -1189,7 +1191,7 @@ export default function CreatePage() {
           <div
             className={`surface-card ${step === 2 ? "" : "invisible"} col-start-1 row-start-1 flex w-full sm:w-[430px] flex-col desk:visible desk:col-start-auto desk:row-start-auto desk:flex desk:w-full desk:min-w-0 gap-4 rounded-2xl p-4`}
           >
-            <CardHeader icon="settings" title={t.outputCard} />
+            <CardHeader step={3} icon="settings" title={t.outputCard} />
 
             {/* Each section wrapped in space-y-1.5 (label-to-content
                 gap consistent with the branding card). Sections

@@ -57,6 +57,7 @@ import {
 } from "@/components/brand/BrandKitDropdown";
 import {
   CardHeader,
+  CardStepBadge,
   InlinePaletteSwatch,
   Toggle,
 } from "@/components/create/controls";
@@ -955,7 +956,7 @@ export default function EnhanceContentPage() {
               }
             />
 
-            <CardHeader icon="subject" title={dict.flows.enhance.originalFile} />
+            <CardHeader step={1} icon="subject" title={dict.flows.enhance.originalFile} />
 
             {/* File dropzone — primary action of the page.
                 When a file IS selected, the dropzone CONTENT swaps to
@@ -1164,6 +1165,7 @@ export default function EnhanceContentPage() {
                 later rows. */}
             <header className="relative z-30 border-b border-foreground/[0.08] pb-4">
               <div className="relative flex items-center gap-2">
+                <CardStepBadge step={2} />
                 <span
                   className="material-symbols-outlined text-foreground"
                   style={{ fontSize: 18 }}

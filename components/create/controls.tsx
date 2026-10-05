@@ -52,13 +52,22 @@ export const CORNER_POSITIONS: ReadonlyArray<CornerPosition> = CORNER_OPTIONS.ma
 // create/enhance/mimic flows. Icon + h3 title + bottom hairline.
 // Promoted from /create's local definition 2026-05-26 so /enhance
 // and /mimic carry the same chrome — no fork, byte-identical rendering.
-export function CardHeader({ icon, title }: { icon: string; title: string }) {
+export function CardHeader({
+  icon,
+  title,
+  step,
+}: {
+  icon: string;
+  title: string;
+  step?: number;
+}) {
   return (
     // pb-4 matches the card's p-4 TOP padding, so the title ends up the same
     // distance from the card's top edge as it is from the separator — i.e.
     // visually centred in the header region. (This balance holds regardless of
     // the row height, since the top padding above and pb-4 below are equal.)
     <header className="flex items-center gap-2 border-b border-foreground/[0.08] pb-4">
+      {step ? <CardStepBadge step={step} /> : null}
       <span
         className="material-symbols-outlined text-foreground"
         style={{ fontSize: 18 }}
@@ -67,6 +76,16 @@ export function CardHeader({ icon, title }: { icon: string; title: string }) {
       </span>
       <h3 className="text-sm font-semibold text-foreground">{title}</h3>
     </header>
+  );
+}
+
+// CardStepBadge: the card's order in its flow (1, 2, 3), so users see where
+// to start and where to finish. Same blue dot as the wizard step rail.
+export function CardStepBadge({ step }: { step: number }) {
+  return (
+    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[var(--tq-blue)] text-[11px] font-bold text-white">
+      {step}
+    </span>
   );
 }
 
