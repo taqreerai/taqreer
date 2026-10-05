@@ -20,7 +20,7 @@ import { Toggle } from "@/components/create/controls";
 import { useDict } from "@/components/i18n/LocaleProvider";
 import { useCreditBalance } from "@/lib/credits/store";
 import { isImagesLocked, IMAGES_GATE_TIER } from "@/lib/images/images-gating";
-import { isPaidPlan, planLabel } from "@/lib/plan";
+import { planLabel } from "@/lib/plan";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import { PremiumCrown } from "@/components/billing/PremiumCrown";
 
@@ -43,9 +43,6 @@ export function AIImagesPanel({
     isAdmin: credits?.isAdmin ?? false,
   });
   const [upgradeOpen, setUpgradeOpen] = useState(false);
-  // Free accounts: images cost them 0 credits (lib/images/images-gating).
-  const freeTrialPerk =
-    credits !== null && !credits.isAdmin && !isPaidPlan(credits.plan);
 
   const handleChange = (next: boolean) => {
     if (locked && next) {
@@ -75,11 +72,6 @@ export function AIImagesPanel({
           {locked ? (
             // Gold crown = paid feature (ExportMenu's affordance).
             <PremiumCrown size={13} />
-          ) : null}
-          {freeTrialPerk ? (
-            <span className="whitespace-nowrap rounded-full bg-[var(--tq-violet)]/15 px-1.5 py-px text-[10px] font-semibold text-[var(--tq-violet)]">
-              {dict.flows.brand.aiImagesFreeHint}
-            </span>
           ) : null}
         </span>
         <span className="mt-1 block text-[11px] leading-4 text-foreground/50">
