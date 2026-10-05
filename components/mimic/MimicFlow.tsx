@@ -48,6 +48,7 @@ import {
 } from "@/components/create/OutputCards";
 import {
   CardHeader,
+  CardStepBadge,
   SegmentedToggle,
   Toggle,
 } from "@/components/create/controls";
@@ -938,7 +939,7 @@ export default function MimicFlow({
               onChange={(event) => setDesignFromInput(event.target.files?.[0])}
             />
 
-            <CardHeader icon="upload_file" title={dict.flows.mimic.stepFiles} />
+            <CardHeader step={1} icon="upload_file" title={dict.flows.mimic.stepFiles} />
 
             {/* ── Panel 1, your content: text XOR file. Framed (like panel
                 2) so the two uploads read as two separate inputs; flex-1 +
@@ -1065,6 +1066,7 @@ export default function MimicFlow({
                       menu above the later rows. */}
                   <header className="relative z-30 border-b border-foreground/[0.08] pb-4">
                     <div className="relative flex items-center gap-2">
+                      <CardStepBadge step={2} />
                       <span
                         className="material-symbols-outlined text-foreground"
                         style={{ fontSize: 18 }}
@@ -1217,7 +1219,7 @@ export default function MimicFlow({
             transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
             className={`surface-card ${step === 2 ? "" : "invisible"} col-start-1 row-start-1 desk:visible desk:col-start-auto desk:row-start-auto flex ${CARD_W_CLASS} ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
-            <CardHeader icon="tune" title={dict.flows.mimic.stepSettings} />
+            <CardHeader step={3} icon="tune" title={dict.flows.mimic.stepSettings} />
               {/* ── Output: slide size + slide count ── */}
               <div className="flex flex-col gap-3">
                 <SlideSizeFields

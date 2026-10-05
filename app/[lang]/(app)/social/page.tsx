@@ -37,6 +37,7 @@ import { DesignStylePicker } from "@/components/create/DesignStylePicker";
 import { AIImagesPanel } from "@/components/brand/AIImagesPanel";
 import {
   CardHeader,
+  CardStepBadge,
   SegmentedToggle,
   Toggle,
   type LanguageCode,
@@ -531,7 +532,7 @@ export default function SocialPage() {
           <div
             className={`surface-card ${step === 0 ? "" : "invisible"} col-start-1 row-start-1 desk:visible desk:col-start-auto desk:row-start-auto flex w-full sm:w-[430px] desk:w-full desk:min-w-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
-            <CardHeader icon="edit_note" title={dict.flows.social.contentCard} />
+            <CardHeader step={1} icon="edit_note" title={dict.flows.social.contentCard} />
             <div className="flex flex-1 flex-col space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-foreground/70">
@@ -602,6 +603,7 @@ export default function SocialPage() {
           >
             <header className="relative z-30 border-b border-foreground/[0.08] pb-4">
               <div className="relative flex items-center gap-2">
+                <CardStepBadge step={2} />
                 <span
                   className="material-symbols-outlined text-foreground"
                   style={{ fontSize: 18 }}
@@ -726,7 +728,7 @@ export default function SocialPage() {
           <div
             className={`surface-card ${step === 2 ? "" : "invisible"} col-start-1 row-start-1 desk:visible desk:col-start-auto desk:row-start-auto flex w-full sm:w-[430px] desk:w-full desk:min-w-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
           >
-            <CardHeader icon="tune" title={dict.flows.social.designCard} />
+            <CardHeader step={3} icon="tune" title={dict.flows.social.designCard} />
 
             <SocialFormatFields
               platform={platform}
