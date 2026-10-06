@@ -95,7 +95,7 @@ export default async function AiPresentationsPage(props: {
               {t.hero.subtitle}
             </p>
             <a
-              href={localizedHref("/signup", locale)}
+              href={localizedHref("/create", locale)}
               className="btn-gradient-anim inline-block rounded-full px-8 py-3 text-sm font-medium"
             >
               {t.hero.cta}
@@ -114,7 +114,7 @@ export default async function AiPresentationsPage(props: {
         </ScrollReveal>
       </section>
 
-      <RepeatCta href={localizedHref("/signup", locale)} label={t.hero.cta} />
+      <RepeatCta href={localizedHref("/create", locale)} label={t.hero.cta} />
 
       {/* Why — 4 points. */}
       <section className="py-16">
@@ -139,7 +139,7 @@ export default async function AiPresentationsPage(props: {
         </div>
       </section>
 
-      <RepeatCta href={localizedHref("/signup", locale)} label={t.hero.cta} />
+      <RepeatCta href={localizedHref("/create", locale)} label={t.hero.cta} />
 
       {/* Long-form SEO article (2026-10-01). */}
       <FeatureArticleSection locale={locale} article={t.article} />
@@ -154,7 +154,7 @@ export default async function AiPresentationsPage(props: {
         </ScrollReveal>
       </section>
 
-      <RepeatCta href={localizedHref("/signup", locale)} label={t.hero.cta} />
+      <RepeatCta href={localizedHref("/create", locale)} label={t.hero.cta} />
 
       {/* Cross-links to the sibling marketing pages (crawl path between spokes). */}
       <ExploreMoreSection locale={locale} current="aiPresentations" dict={dict} />

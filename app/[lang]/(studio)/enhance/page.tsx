@@ -75,7 +75,24 @@ import {
   type UploadedFontFieldBrief,
 } from "@/lib/brand/upload";
 import { seedFromExtraction } from "@/lib/create/seed-from-extraction";
-import { useSlideCap } from "@/lib/credits/store";
+import { useCreditBalance, useSlideCap } from "@/lib/credits/store";
+import { normalizePlan } from "@/lib/plan";
+import { TEASER_VISIBLE_COUNT } from "@/lib/credits/cost";
+import posthog from "posthog-js";
+import { useIsGuest } from "@/components/app/GuestContext";
+import { GuestSignupDialog } from "@/components/create/GuestSignupDialog";
+import {
+  GUEST_SAVE_EVENT,
+  clearGuestDraft,
+  fontFromDraft,
+  fontToDraft,
+  loadGuestDraft,
+  readResumeMode,
+  saveGuestFiles,
+  saveGuestSettings,
+  type EnhanceGuestSettings,
+  type GuestDraftFiles,
+} from "@/lib/create/guest-draft";
 import { localizedExtractError } from "@/lib/extract/error-codes";
 import { readSource, clearSource } from "@/lib/types/source";
 import { MAX_ENHANCE_INSTRUCTIONS_CHARS } from "@/lib/types/brief-limits";
@@ -87,6 +104,10 @@ import {
   mapKitToHydrated,
   type HydratedBrand,
 } from "@/lib/create/hydrate-brand-from-session";
+
+// Free-trial enhance page ceiling (2026-10-06): above this, even a free test
+// is refused (rasterizing hundreds of pages for a 5-slide preview).
+const FREE_TRIAL_MAX_PAGES = 100;
 
 const POLL_INTERVAL_MS = 2_500;
 const POLL_TIMEOUT_MS = 5 * 60 * 1_000; // 5 min ceiling
@@ -253,6 +274,10 @@ const MAX_PALETTE = 6;
 
 export default function EnhanceContentPage() {
   const dict = useDict();
+  // Signed-out visitor (2026-10-06, /enhance open before sign-up): the file
+  // stays in the browser; upload + analysis, brand kits and generation wait
+  // for sign-in (the draft carries the setup through it).
+  const guest = useIsGuest();
   const { dir } = useLocale();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -395,6 +420,8 @@ export default function EnhanceContentPage() {
   // the same key as a colour fallback. Clearing would orphan the
   // extraction's seeded colors.
   useEffect(() => {
+    // Visitors have no kits; a resumed draft carries its own brand.
+    if (guest || readResumeMode()) return;
     let aborted = false;
     (async () => {
       let hydrated = readBrandFromSession();
@@ -426,10 +453,11 @@ export default function EnhanceContentPage() {
     return () => {
       aborted = true;
     };
-  }, [applyBrand]);
+  }, [applyBrand, guest]);
 
   // Fetch the user's saved kits (last 5) for the in-card brand dropdown.
   useEffect(() => {
+    if (guest) return;
     let aborted = false;
     (async () => {
       try {
@@ -449,7 +477,7 @@ export default function EnhanceContentPage() {
     return () => {
       aborted = true;
     };
-  }, []);
+  }, [guest]);
 
   // Apply a picked saved kit (overwrites colours / font / logo).
   const handlePickKit = (id: string) => {
@@ -491,9 +519,11 @@ export default function EnhanceContentPage() {
     pollCancelledRef.current = false;
     setFile(next);
     setExtracted(null);
-    setStage("extracting");
+    // A visitor's file waits in the browser (analysed after sign-in), so it
+    // is "ready" right away.
+    setStage(guest ? "ready" : "extracting");
     setPrepPercent(0);
-    setPrepStage("uploading");
+    setPrepStage(guest ? null : "uploading");
     setError("");
     return next;
   };
@@ -562,7 +592,8 @@ export default function EnhanceContentPage() {
   // this effect body only owns external work (POST + poll) — keeps
   // the react-hooks/set-state-in-effect lint clean.
   useEffect(() => {
-    if (!file) return;
+    // Visitors: no upload before sign-in (the draft keeps the file).
+    if (!file || guest) return;
 
     // One controller per file selection — aborts the in-flight POST
     // /api/extract AND the polling fetch when the effect cleans up
@@ -694,7 +725,95 @@ export default function EnhanceContentPage() {
       pollCancelledRef.current = true;
       controller.abort();
     };
-  }, [file, dict]);
+  }, [file, dict, guest]);
+
+  // ─── Guest draft (2026-10-06) ──────────────────────────────────
+  // Same model as /create: a visitor's setup is saved as they go, and back
+  // here signed in with ?resume=<mode> it is restored once and cleared;
+  // "generate" then presses Create by itself once the file is analysed.
+  const guestFont = fontToDraft(brandFont);
+  const guestSettings: EnhanceGuestSettings = {
+    step,
+    instructions,
+    templateId,
+    colors,
+    colorsAuto,
+    fontMode: guestFont.fontMode,
+    googleFamily: guestFont.googleFamily,
+    uploadedFonts: guestFont.uploadedFonts,
+    imagesMode,
+  };
+  const guestSettingsJson = JSON.stringify(guestSettings);
+  useEffect(() => {
+    if (!guest) return;
+    const id = window.setTimeout(
+      () => saveGuestSettings("enhance", JSON.parse(guestSettingsJson)),
+      300,
+    );
+    return () => window.clearTimeout(id);
+  }, [guest, guestSettingsJson]);
+  const guestFiles: GuestDraftFiles = {
+    content: file,
+    logo: logoFile,
+    fonts: guestFont.fontFiles,
+  };
+  useEffect(() => {
+    if (!guest) return;
+    void saveGuestFiles("enhance", { content: file, logo: logoFile, fonts: fontToDraft(brandFont).fontFiles });
+  }, [guest, file, logoFile, brandFont]);
+  // The top bar's "Log in" asks for an immediate save before leaving.
+  useEffect(() => {
+    if (!guest) return;
+    const flush = () => saveGuestSettings("enhance", JSON.parse(guestSettingsJson));
+    window.addEventListener(GUEST_SAVE_EVENT, flush);
+    return () => window.removeEventListener(GUEST_SAVE_EVENT, flush);
+  }, [guest, guestSettingsJson]);
+
+  const [guestSignupOpen, setGuestSignupOpen] = useState(false);
+  const openGuestSignup = async () => {
+    saveGuestSettings("enhance", guestSettings);
+    await saveGuestFiles("enhance", guestFiles);
+    posthog.capture("create_guest_signup_prompt", { flow: "enhance", step, template: !!templateId });
+    setGuestSignupOpen(true);
+  };
+
+  const [autoStart, setAutoStart] = useState(false);
+  useEffect(() => {
+    if (guest) return;
+    const mode = readResumeMode();
+    if (!mode) return;
+    let aborted = false;
+    (async () => {
+      const draft = await loadGuestDraft<EnhanceGuestSettings>("enhance");
+      // Drop ?resume so a reload never replays it.
+      const url = new URL(window.location.href);
+      url.searchParams.delete("resume");
+      window.history.replaceState(null, "", url.toString());
+      if (aborted || !draft) return;
+      const d = draft.settings;
+      setInstructions(d.instructions ?? "");
+      setTemplateId(d.templateId ?? null);
+      setColorsAuto(!!d.colorsAuto);
+      setColors(Array.isArray(d.colors) ? d.colors.slice(0, MAX_PALETTE) : []);
+      const font = fontFromDraft(d, draft.files);
+      if (font) setBrandFont(font);
+      if (draft.files.logo) {
+        setLogoFile(draft.files.logo);
+        setLoadedLogo(null);
+      }
+      setImagesMode(!!d.imagesMode);
+      // Starts the upload + analysis, now signed in.
+      if (draft.files.content) validateAndSetFile(draft.files.content);
+      setStep(mode === "generate" ? 1 : Math.min(1, Math.max(0, d.step)));
+      void clearGuestDraft("enhance");
+      posthog.capture("create_guest_resumed", { flow: "enhance", mode, hasFile: !!draft.files.content });
+      if (mode === "generate" && draft.files.content) setAutoStart(true);
+    })();
+    return () => {
+      aborted = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on mount; validateAndSetFile is stable for this purpose
+  }, [guest]);
 
   // ─── Submit ──────────────────────────────────────────────────
   // 1. Upload optional logo + font files (parallel) to brand-assets
@@ -878,11 +997,30 @@ export default function EnhanceContentPage() {
   // Reject a source deck with more pages than the tier cap: enhance rebuilds
   // it ~1:1, so it would be silently clipped. Block Generate + step advance,
   // shake the card, and surface the reason as a persistent tooltip.
+  // Free trial (2026-10-06, owner direction): no block up to
+  // FREE_TRIAL_MAX_PAGES. A free run only builds the first
+  // TEASER_VISIBLE_COUNT slides (and only sends those pages' images, see
+  // deck-generate), so a long file costs the same as a short one; a soft
+  // note says what the trial covers instead.
+  const credits = useCreditBalance();
+  const freeTrial =
+    !!credits && !credits.isAdmin && normalizePlan(credits.plan) === "free";
+  const pageCount = extracted?.pageCount ?? 0;
   const overCap =
-    stage === "ready" && !!extracted && (extracted.pageCount ?? 0) > slideCap;
-  const overCapMessage = dict.flows.overCapWarning
-    .replace("{pages}", String(extracted?.pageCount ?? 0))
-    .replace("{cap}", String(slideCap));
+    stage === "ready" &&
+    !!extracted &&
+    pageCount > (freeTrial ? FREE_TRIAL_MAX_PAGES : slideCap);
+  const overCapMessage = freeTrial
+    ? dict.flows.overCapTrial.replace("{max}", String(FREE_TRIAL_MAX_PAGES))
+    : dict.flows.overCapWarning
+        .replace("{pages}", String(pageCount))
+        .replace("{cap}", String(slideCap));
+  const trialPagesNote =
+    stage === "ready" && freeTrial && !overCap && pageCount > TEASER_VISIBLE_COUNT
+      ? (pageCount > slideCap ? dict.flows.trialPagesNoteOver : dict.flows.trialPagesNote)
+          .replace("{visible}", String(TEASER_VISIBLE_COUNT))
+          .replace("{cap}", String(slideCap))
+      : null;
   const generateDisabled = stage === "idle" || overCap;
   // Shake the source card the moment an over-cap file is rejected.
   useEffect(() => {
@@ -908,6 +1046,11 @@ export default function EnhanceContentPage() {
     <div className="page-container flex w-full justify-center" dir={dir}>
       {/* Enhance is a 1:1 rebuild - no reduce offer (fewer slides would
           mean truncating the source). */}
+      <GuestSignupDialog
+        flow="enhance"
+        open={guestSignupOpen}
+        onClose={() => setGuestSignupOpen(false)}
+      />
       <CreditGateDialog
         gate={creditGate}
         onClose={() => setCreditGate(null)}
@@ -1065,6 +1208,11 @@ export default function EnhanceContentPage() {
                               ? dict.flows.enhance.creating
                               : ""}
                       </p>
+                      {trialPagesNote ? (
+                        <p className="mt-1.5 text-[11px] leading-4 text-[var(--tq-brand-blue)]">
+                          {trialPagesNote}
+                        </p>
+                      ) : null}
                       {stage === "extracting" ? (
                         <div
                           className="mt-2 h-1 w-full overflow-hidden rounded-full bg-foreground/10"
@@ -1211,6 +1359,7 @@ export default function EnhanceContentPage() {
                 {dict.flows.design.tabTemplates}
               </span>
               <TemplatePickerGrid
+                onGuestSelect={guest ? (tpl) => setTemplateId(tpl.id) : undefined}
                 selectedId={templateId}
                 onSelect={(picked) => setTemplateId(picked.template.id)}
                 onClear={() => setTemplateId(null)}
@@ -1361,7 +1510,9 @@ export default function EnhanceContentPage() {
         {(
         <div className={`${step === 1 ? "flex" : "hidden desk:flex"} justify-center`}>
           <GenerateSplitButton
-            onGenerate={handleGenerate}
+            guest={guest}
+            autoStart={autoStart}
+            onGenerate={guest ? () => void openGuestSignup() : handleGenerate}
             quality={quality}
             onQualityChange={setQuality}
             slideCount={extracted?.pageCount ?? undefined}

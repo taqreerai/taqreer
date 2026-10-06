@@ -15,8 +15,8 @@ const protectedRoutes = [
   "/dashboard",
   "/projects",
   "/editor",
-  "/create",
-  "/enhance",
+  // "/create" and "/enhance" are open to visitors since 2026-10-06: they set the deck up and
+  // sign up at the Create button (app/[lang]/(studio)/layout.tsx).
   "/social",
   "/settings",
   "/brand-kits",

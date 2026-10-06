@@ -128,7 +128,7 @@ export default async function TemplatesPage(props: {
               {t.hero.subtitle}
             </p>
             <a
-              href={localizedHref("/signup", locale)}
+              href={localizedHref("/create", locale)}
               className="btn-gradient-anim inline-block rounded-full px-8 py-3 text-sm font-medium"
             >
               {t.hero.cta}
@@ -150,7 +150,7 @@ export default async function TemplatesPage(props: {
         </section>
       ) : null}
 
-      <RepeatCta href={localizedHref("/signup", locale)} label={t.hero.cta} />
+      <RepeatCta href={localizedHref("/create", locale)} label={t.hero.cta} />
 
       {/* Why taqreer templates — 4 points. */}
       <section className="py-16">
@@ -185,7 +185,7 @@ export default async function TemplatesPage(props: {
         </ScrollReveal>
       </section>
 
-      <RepeatCta href={localizedHref("/signup", locale)} label={t.hero.cta} />
+      <RepeatCta href={localizedHref("/create", locale)} label={t.hero.cta} />
 
       {/* Cross-links to the sibling marketing pages (crawl path between spokes). */}
       <ExploreMoreSection locale={locale} current="templates" dict={dict} />

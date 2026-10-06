@@ -122,7 +122,7 @@ export default async function StockImagesPage(props: {
         </ScrollReveal>
       </section>
 
-      <RepeatCta href={localizedHref("/signup", locale)} label={t.cta} />
+      <RepeatCta href={localizedHref("/create", locale)} label={t.cta} />
 
       {/* Searchable, filterable masonry (seeded with the server's first page). */}
       <section className="pb-16">
@@ -133,7 +133,7 @@ export default async function StockImagesPage(props: {
         />
       </section>
 
-      <RepeatCta href={localizedHref("/signup", locale)} label={t.cta} />
+      <RepeatCta href={localizedHref("/create", locale)} label={t.cta} />
 
       {/* Cross-links to the sibling marketing spokes (crawl path). */}
       <ExploreMoreSection locale={locale} current="stockImages" dict={dict} />

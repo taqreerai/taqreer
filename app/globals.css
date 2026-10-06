@@ -2234,6 +2234,15 @@ html.app-shell-scroll body {
   z-index: 1040;
   transition: inset-block-end 0.2s ease;
 }
+/* Phones on /create (2026-10-06): the sticky wizard bar sits at the bottom
+   edge, so the button rides above it instead of covering Next / Create. */
+@media (max-width: 767px) {
+  body:has(.tq-wizard-bar) .support-fab-anchor {
+    inset-block-end: calc(
+      var(--tq-cookie-banner-h, 20px) + env(safe-area-inset-bottom, 0px) + 76px
+    );
+  }
+}
 .support-fab {
   display: flex;
   align-items: center;
@@ -2673,6 +2682,14 @@ body:has(.tq-support-toolbar) .support-fab-anchor {
   min-height: calc(100vh - 16px);
   overflow: hidden;            /* clips the glow + keeps the rounded corners */
   isolation: isolate;
+}
+/* /create's wizard bar (2026-10-06) is position: sticky; a `hidden` panel is
+   a scroll container, which pins sticky children to the panel (never
+   scrolls) instead of the page. `clip` clips the same, without that. Scoped
+   to pages that carry the bar so other sticky elements keep today's
+   behaviour. */
+.tq-content-panel:has(.tq-wizard-bar) {
+  overflow: clip;
 }
 
 /* Flat gray panel — every page except home + the 4 creation flows. */

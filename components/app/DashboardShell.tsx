@@ -1,5 +1,7 @@
 "use client";
 
+import { GuestTopBar } from "@/components/app/GuestTopBar";
+import { GuestProvider } from "@/components/app/GuestContext";
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "@/components/app/Sidebar";
@@ -12,6 +14,7 @@ import { stripLocale, localizedHref } from "@/lib/i18n/navigation";
 export function DashboardShell({
   children,
   isAdmin = false,
+  guest = false,
 }: {
   children: React.ReactNode;
   // §22: collapse/expand was removed (rail is always collapsed). The prop is
@@ -20,6 +23,9 @@ export function DashboardShell({
   initialIsCollapsed?: boolean;
   // Server-resolved (User.role === "admin"); gates the Sidebar's Admin entry.
   isAdmin?: boolean;
+  // Signed-out visitor on /create (2026-10-06): no rail, no account cluster;
+  // a light top bar (logo, language, theme, log in) instead.
+  guest?: boolean;
 }) {
   // pathname is locale-prefixed (/ar/dashboard); every route check below compares
   // against unprefixed constants, so strip the locale first. Missing this is what
@@ -118,7 +124,7 @@ export function DashboardShell({
 
   return (
     <div className="dashboard-bg min-h-screen relative opacity-100">
-      <Sidebar isAdmin={isAdmin} />
+      {guest ? null : <Sidebar isAdmin={isAdmin} />}
 
       {/* The bell now lives in the TopUtilityBar (user direction
           2026-06-11) - that instance boots the notification store and
@@ -127,7 +133,7 @@ export function DashboardShell({
       <main
         // `.tq-shell-main` offsets the content past the desktop rail (md+) and
         // drops to 0 below md, where the MobileNav drawer replaces the rail.
-        className="tq-shell-main min-h-screen text-on-background relative"
+        className={`${guest ? "" : "tq-shell-main "}min-h-screen text-on-background relative`}
         style={{ zIndex: 1 }}
       >
         {/* §22/§24: rounded content panel floating on the dark gutter. Home gets
@@ -141,8 +147,14 @@ export function DashboardShell({
           {/* §24: search + theme + language cluster, pinned to the panel's
               top-start corner. On mobile it also leads with the hamburger that
               opens the MobileNav drawer (the rail is hidden below md). */}
-          <TopUtilityBar leading={<MobileNav isAdmin={isAdmin} />} />
-          <div className={contentClasses}>{children}</div>
+          {guest ? (
+            <GuestTopBar />
+          ) : (
+            <TopUtilityBar leading={<MobileNav isAdmin={isAdmin} />} />
+          )}
+          <div className={contentClasses}>
+            <GuestProvider value={guest}>{children}</GuestProvider>
+          </div>
         </div>
       </main>
     </div>

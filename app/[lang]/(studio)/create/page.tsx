@@ -35,6 +35,10 @@
 // pattern the legacy CardShell used) so the cards read as a
 // labelled cluster, not a wall of inputs.
 //
+// 2026-10-06 (owner direction): a 4-step wizard on EVERY screen size (the
+// desktop 3-cards-across layout is gone): Content, Design (templates / styles
+// full width, hover flips a template's slides), Brand (colours, font, logo),
+// Output + Generate, with a sticky Back / Next bar. All steps stay mounted.
 // Phase 19 (2026-10-02, user direction): step 2 is now ONE "Design" step -
 // templates, design styles, colour templates, font and logo together. A
 // picked TEMPLATE turns the run into a template generation (the Mimic engine
@@ -88,8 +92,6 @@ import {
   type SlideCountMode,
 } from "@/components/create/OutputCards";
 import {
-  CardHeader,
-  CardStepBadge,
   InlinePaletteSwatch,
   SegmentedToggle,
   Toggle,
@@ -108,6 +110,21 @@ import {
   type UploadedFontFieldBrief,
 } from "@/lib/brand/upload";
 import { useDefaultQuality } from "@/lib/credits/use-default-quality";
+import posthog from "posthog-js";
+import { useIsGuest } from "@/components/app/GuestContext";
+import { GuestSignupDialog } from "@/components/create/GuestSignupDialog";
+import { FlowSwitcher } from "@/components/create/FlowSwitcher";
+import type { PickerTemplate } from "@/app/api/templates/route";
+import {
+  GUEST_SAVE_EVENT,
+  clearGuestDraft,
+  loadGuestDraft,
+  saveGuestFiles,
+  saveGuestSettings,
+  type GuestDraftFiles,
+  type GuestDraftSettings,
+  readResumeMode,
+} from "@/lib/create/guest-draft";
 import { MAX_CONTENT_TEXT_CHARS } from "@/lib/types/brief-limits";
 import {
   readBrandFromSession,
@@ -132,29 +149,10 @@ const MIN_PALETTE = 2;
 const MAX_PALETTE = 6;
 const DEFAULT_PALETTE = ["#000000", "#FFFFFF"];
 
-// Cards use a responsive grid with `auto-fit` + `minmax(280px, 1fr)`
-// instead of fixed widths. Math at common viewports:
-//   • 1440 viewport, ~1184 content row → 4 cards at ~284 px each
-//   • 1100 → 2×2, each card ~530 px
-//   • 760  → 2×2 at ~360 px
-//   • 540  → 1 column at 280 px floor
-// Cards stretch to fill row when fewer than 4 fit, capping at 1fr
-// share so they never leave gutters on either edge. /enhance + /mimic
-// keep their fixed-width 360 px cards (fewer of them per row).
-const CARD_MIN_H_CLASS = "min-h-[440px]";
-
-// Steps 1-2 share one grid cell and the inactive card stays `invisible` (keeps
-// its height) so the frame doesn't jump between them. Step 3 is much shorter
-// and must hug its content (user direction 2026-10-04: no dead space), so on
-// step 3 the other two cards leave layout entirely.
-// Desktop (1180px+, 2026-10-05: was xl/1280, which missed a 4K screen at 300% scaling): all three cards show side by side
-// in reading order with Generate below; the `desk:` overrides on each card undo
-// the wizard stacking, and the rail + Next button hide. Below 1180px it stays the
-// one-card-at-a-time wizard.
-function stackedCardVisibility(card: 0 | 1, step: number): string {
-  if (step === card) return "flex";
-  return step === 2 ? "hidden" : "invisible flex";
-}
+// Wizard steps (2026-10-06 redesign, owner direction: the three side-by-side
+// cards read as crammed): 0 Content, 1 Design, 2 Brand, 3 Output + Generate,
+// one focused screen per step on every screen size.
+const LAST_STEP = 3;
 
 // SLIDE_COUNT_OPTIONS + LANGUAGE_OPTIONS are built inside the component so their
 // labels can come from the active-locale dictionary.
@@ -198,6 +196,9 @@ export default function CreatePage() {
   const dict = useDict();
   const { locale } = useLocale();
   const t = dict.flows;
+  // Signed-out visitor (2026-10-06): everything that needs an account
+  // (extraction, template setup, brand kits, generation) waits for sign-in.
+  const guest = useIsGuest();
   const SLIDE_COUNT_OPTIONS = [
     { value: "auto" as const, label: t.auto },
     { value: "custom" as const, label: t.custom },
@@ -292,6 +293,8 @@ export default function CreatePage() {
   // nothing's there, fall back to the user's default brand kit. Single-shot;
   // clear the sessionStorage key after applying so refresh doesn't re-hydrate.
   useEffect(() => {
+    // Guests have no kits; a resumed draft carries its own brand.
+    if (guest || readResumeMode()) return;
     let aborted = false;
     (async () => {
       let hydrated = readBrandFromSession();
@@ -307,10 +310,11 @@ export default function CreatePage() {
     return () => {
       aborted = true;
     };
-  }, [applyBrand]);
+  }, [applyBrand, guest]);
 
   // Fetch the user's saved kits (last 5) for the in-card brand dropdown.
   useEffect(() => {
+    if (guest) return;
     let aborted = false;
     (async () => {
       try {
@@ -330,7 +334,7 @@ export default function CreatePage() {
     return () => {
       aborted = true;
     };
-  }, []);
+  }, [guest]);
 
   // Apply a picked saved kit (overwrites colours / font / logo).
   const handlePickKit = (id: string) => {
@@ -417,31 +421,53 @@ export default function CreatePage() {
     },
     [applyTemplateUse],
   );
+  // A visitor's pick is only remembered (empty design reference = "set up
+  // after sign-in"); its palette + format pre-fill like a resolved one.
+  const pickGuestTemplate = useCallback((tpl: PickerTemplate) => {
+    setTemplate({ id: tpl.id, designAnthropicFileId: "" });
+    setDesignStyle(null);
+    if (tpl.palette.length > 0) setColors(tpl.palette.slice(0, MAX_PALETTE));
+    setSlideSize(tpl.format);
+  }, []);
+  // Resolve a template id to its design reference (cached per id). Returns
+  // the use, or null when gated / gone.
+  const resolveTemplateUse = useCallback(async (id: string) => {
+    try {
+      let use = readCachedUse("template", id);
+      if (!use) {
+        use = await fetchUse("template", id);
+        writeCachedUse("template", id, use);
+      }
+      return use;
+    } catch {
+      return null;
+    }
+  }, []);
   // /create?template=<id> - the gallery's "Use this template" lands here with
   // the template preselected (the gallery already resolved + cached it).
+  // A visitor only gets the pick remembered (resolved after sign-in).
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("template");
     if (!id) return;
     let aborted = false;
     (async () => {
-      try {
-        let use = readCachedUse("template", id);
-        if (!use) {
-          use = await fetchUse("template", id);
-          writeCachedUse("template", id, use);
-        }
+      if (guest) {
         if (aborted) return;
-        setTemplate({ id, designAnthropicFileId: use.designAnthropicFileId });
+        setTemplate({ id, designAnthropicFileId: "" });
         setDesignStyle(null);
-        applyTemplateUse(use);
-      } catch {
-        /* gated / gone: the user just starts without it */
+        return;
       }
+      const use = await resolveTemplateUse(id);
+      // gated / gone: the user just starts without it
+      if (aborted || !use) return;
+      setTemplate({ id, designAnthropicFileId: use.designAnthropicFileId });
+      setDesignStyle(null);
+      applyTemplateUse(use);
     })();
     return () => {
       aborted = true;
     };
-  }, [applyTemplateUse]);
+  }, [applyTemplateUse, resolveTemplateUse, guest]);
 
   // ─── Wizard step (2026-08-30, user direction) ─────────────────
   // The three cards present one at a time: 0 Content, 1 Brand,
@@ -467,7 +493,9 @@ export default function CreatePage() {
   // dangling fileName before the document is available to Claude.
   const fileReady = hasFile && contentFileStage === "ready" && !!contentAnthropicFileId;
   const fileExtracting = hasFile && contentFileStage === "extracting";
-  const contentReady = hasText || fileReady;
+  // A visitor's file is only kept in the browser (extracted after sign-in),
+  // so for them a picked file is enough.
+  const contentReady = hasText || (guest ? hasFile : fileReady);
   // Split-button credit estimate. Custom = the exact pick. Auto = the MODEL
   // decides the count (owner ruling 2026-07-18) - the display is the held
   // CEILING (tier cap, admin 75) rendered as "up to", matching the server's
@@ -484,7 +512,10 @@ export default function CreatePage() {
   );
   const generateDisabled =
     !contentReady || submitting || fileExtracting;
-  const generateLoading = submitting || fileExtracting;
+  // A remembered-but-unresolved template (a visitor's pick, or one being
+  // set up right after sign-in): generating must wait for its reference.
+  const templatePending = !!template && !template.designAnthropicFileId;
+  const generateLoading = submitting || fileExtracting || (!guest && templatePending);
 
   // ─── File validation ───────────────────────────────────────────
   const validateFile = (next?: File | null): File | null => {
@@ -519,7 +550,7 @@ export default function CreatePage() {
     // react-hooks/set-state-in-effect quiet — same pattern as
     // /enhance + /mimic.
     setContentAnthropicFileId(null);
-    setContentFileStage("extracting");
+    setContentFileStage(guest ? "idle" : "extracting");
     setError("");
   };
   const removeContentFile = () => {
@@ -536,7 +567,8 @@ export default function CreatePage() {
   // block in deck-generate.ts. Without this effect the file picker
   // was decorative (CR critical 2026-05-26).
   useEffect(() => {
-    if (!contentFile) return;
+    // Visitors: no upload before sign-in (the draft keeps the file).
+    if (!contentFile || guest) return;
     const controller = new AbortController();
     let isCurrent = true;
     (async () => {
@@ -616,7 +648,7 @@ export default function CreatePage() {
       controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- t.parseFailed is a stable i18n string used only in the error path; re-running on locale change is unwanted
-  }, [contentFile]);
+  }, [contentFile, guest]);
 
   // ─── Palette handlers ──────────────────────────────────────────
   const updateColor = (index: number, next: string) =>
@@ -633,6 +665,168 @@ export default function CreatePage() {
     setColors((c) =>
       c.length <= MIN_PALETTE ? c : c.filter((_, i) => i !== index),
     );
+
+  // ─── Guest draft (2026-10-06) ──────────────────────────────────
+  // A visitor's setup is saved as they go (settings debounced, files on
+  // change) so the sign-up round trip never loses it; back here signed in
+  // with ?resume=<mode>, it is restored once and cleared.
+  const guestSettings = useMemo<GuestDraftSettings>(
+    () => ({
+      step,
+      contentText,
+      language,
+      persistentText,
+      templateId: template?.id ?? null,
+      designStyle,
+      lookTab,
+      colors,
+      fontMode: brandFont.mode,
+      googleFamily: brandFont.googleFamily,
+      uploadedFonts: brandFont.uploaded.map((f) => ({
+        name: f.name,
+        weights: f.faces.map((face) => face.weight),
+      })),
+      slideSize,
+      slideCountMode,
+      slideCountValue,
+      pagination,
+      imagesMode,
+    }),
+    [
+      step,
+      contentText,
+      language,
+      persistentText,
+      template,
+      designStyle,
+      lookTab,
+      colors,
+      brandFont,
+      slideSize,
+      slideCountMode,
+      slideCountValue,
+      pagination,
+      imagesMode,
+    ],
+  );
+  const guestFiles = useMemo<GuestDraftFiles>(() => {
+    const fonts: Record<string, File> = {};
+    brandFont.uploaded.forEach((family, fi) =>
+      family.faces.forEach((face, ci) => {
+        if (face.file) fonts[`${fi}:${ci}`] = face.file;
+      }),
+    );
+    return { content: contentFile, logo: logoFile, fonts };
+  }, [brandFont, contentFile, logoFile]);
+
+  useEffect(() => {
+    if (!guest) return;
+    const id = window.setTimeout(() => saveGuestSettings("create", guestSettings), 300);
+    return () => window.clearTimeout(id);
+  }, [guest, guestSettings]);
+  useEffect(() => {
+    if (!guest) return;
+    void saveGuestFiles("create", guestFiles);
+  }, [guest, guestFiles]);
+  // The top bar's "Log in" asks for an immediate save before leaving.
+  useEffect(() => {
+    if (!guest) return;
+    const flush = () => saveGuestSettings("create", guestSettings);
+    window.addEventListener(GUEST_SAVE_EVENT, flush);
+    return () => window.removeEventListener(GUEST_SAVE_EVENT, flush);
+  }, [guest, guestSettings]);
+
+  const [guestSignupOpen, setGuestSignupOpen] = useState(false);
+  const openGuestSignup = async () => {
+    saveGuestSettings("create", guestSettings);
+    await saveGuestFiles("create", guestFiles);
+    posthog.capture("create_guest_signup_prompt", { step, hasFile, template: !!template });
+    setGuestSignupOpen(true);
+  };
+
+  // Restore after sign-up. "generate" also presses Create by itself (the
+  // free-trial pop-up still shows first for a free account) once the file
+  // is extracted and the template resolved.
+  const [autoStart, setAutoStart] = useState(false);
+  useEffect(() => {
+    if (guest) return;
+    const mode = readResumeMode();
+    if (!mode) return;
+    let aborted = false;
+    (async () => {
+      const draft = await loadGuestDraft<GuestDraftSettings>("create");
+      // Drop ?resume so a reload never replays it.
+      const url = new URL(window.location.href);
+      url.searchParams.delete("resume");
+      window.history.replaceState(null, "", url.toString());
+      if (aborted || !draft) return;
+      const d = draft.settings;
+      setContentText(d.contentText ?? "");
+      if (d.language === "ar" || d.language === "en") setLanguage(d.language);
+      setPersistentText(d.persistentText ?? "");
+      setLookTab(d.lookTab === "styles" ? "styles" : "templates");
+      setDesignStyle(d.designStyle ?? null);
+      setColors(Array.isArray(d.colors) ? d.colors.slice(0, MAX_PALETTE) : []);
+      if (d.fontMode === "upload" && d.uploadedFonts.length > 0) {
+        setBrandFont({
+          mode: "upload",
+          googleFamily: null,
+          uploaded: d.uploadedFonts
+            .map((family, fi) => ({
+              name: family.name,
+              faces: family.weights
+                .map((weight, ci) => ({
+                  weight,
+                  file: draft.files.fonts[`${fi}:${ci}`] ?? null,
+                  storageUrl: null,
+                }))
+                .filter((face) => face.file),
+            }))
+            .filter((family) => family.faces.length > 0),
+        });
+      } else if (d.googleFamily) {
+        setBrandFont({ mode: "google", googleFamily: d.googleFamily, uploaded: [] });
+      }
+      if (draft.files.logo) {
+        setLogoFile(draft.files.logo);
+        setLoadedLogo(null);
+      }
+      if (d.slideSize === "16:9" || d.slideSize === "9:16") setSlideSize(d.slideSize);
+      if (d.slideCountMode === "auto" || d.slideCountMode === "custom") {
+        setSlideCountMode(d.slideCountMode);
+      }
+      if (typeof d.slideCountValue === "number") setSlideCountValue(d.slideCountValue);
+      setPagination(d.pagination !== false);
+      setImagesMode(!!d.imagesMode);
+      if (draft.files.content) setContentFromInput(draft.files.content);
+      setStep(mode === "generate" ? LAST_STEP : Math.min(LAST_STEP, Math.max(0, d.step)));
+      void clearGuestDraft("create");
+      posthog.capture("create_guest_resumed", { mode, hasFile: !!draft.files.content });
+
+      if (d.templateId) {
+        setTemplate({ id: d.templateId, designAnthropicFileId: "" });
+        const use = await resolveTemplateUse(d.templateId);
+        if (aborted) return;
+        if (!use) {
+          // Gated or gone: back to the Design step, nothing generates.
+          setTemplate(null);
+          setStep(1);
+          setError(t.design.failed);
+          return;
+        }
+        setTemplate({ id: d.templateId, designAnthropicFileId: use.designAnthropicFileId });
+        applyTemplateUse(use);
+        // The draft's colours outrank the template's (the visitor may have
+        // changed them after picking).
+        setColors(Array.isArray(d.colors) ? d.colors.slice(0, MAX_PALETTE) : []);
+      }
+      if (mode === "generate") setAutoStart(true);
+    })();
+    return () => {
+      aborted = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on mount; setContentFromInput / t are stable for this purpose
+  }, [guest]);
 
   // ─── Submit ────────────────────────────────────────────────────
   const handleGenerate = async (overrideSlideCount?: number) => {
@@ -837,8 +1031,29 @@ export default function CreatePage() {
     }
   };
 
+  // ─── Wizard chrome (2026-10-06 redesign) ───────────────────────
+  const stepTitles = [t.contentCard, t.design.card, t.brandCard, t.outputCard];
+  const stepHints = [
+    t.wizard.hints.content,
+    t.wizard.hints.design,
+    t.wizard.hints.brand,
+    t.wizard.hints.output,
+  ];
+  const hasContent = hasText || hasFile;
+  const goToStep = (next: number) => {
+    setStep(Math.max(0, Math.min(LAST_STEP, next)));
+    // Page scroll lives on <body> (RTL scrollbar), so scroll both.
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    document.body.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   return (
     <div className="page-container flex w-full justify-center">
+      <GuestSignupDialog
+        flow="create"
+        open={guestSignupOpen}
+        onClose={() => setGuestSignupOpen(false)}
+      />
       <CreditGateDialog
         gate={creditGate}
         onClose={() => setCreditGate(null)}
@@ -847,497 +1062,395 @@ export default function CreatePage() {
           void handleGenerate(slides);
         }}
       />
-      <div className="mt-[6vh] flex w-full desk:px-8 flex-col items-center gap-6 px-4">
+      <div className="mt-[4vh] flex w-full flex-col items-center gap-5 px-4 desk:px-8">
         <header className="text-center">
           <h1 className="tq-h1">{t.create.title}</h1>
           <p className="tq-subhead mt-2">{t.create.subtitle}</p>
         </header>
 
-        {/* Step rail - labelled with the existing card titles, Latin
-            numerals; completed steps are click-to-jump, forward travel
-            goes through Next so gating stays in one place. */}
-        <div className="desk:hidden">
-          <WizardStepRail
-            steps={[t.contentCard, t.design.card, t.outputCard]}
-            active={step}
-            onJump={setStep}
+        {/* Step rail: every step is one click away once there is content
+            (the only hard gate); before that only step 1 is reachable. */}
+        <WizardStepRail
+          steps={stepTitles}
+          active={step}
+          onJump={goToStep}
+          reachable={hasContent ? LAST_STEP : 0}
+        />
+        <p className="-mt-2 max-w-xl text-center text-sm text-[var(--tq-text-muted)]">
+          {stepHints[step]}
+        </p>
+        {/* The other flows, one click away, on the first step only. */}
+        {step === 0 ? <FlowSwitcher /> : null}
+
+        {/* ═══════════════════════════════════════════════════════
+            STEP 1 · CONTENT
+            ═══════════════════════════════════════════════════════ */}
+        <section
+          className={`${step === 0 ? "flex" : "hidden"} surface-card w-full max-w-3xl flex-col gap-4 rounded-2xl p-4 sm:p-6`}
+        >
+          <input
+            ref={contentInputRef}
+            type="file"
+            accept=".pdf,.pptx,.ppt,.docx"
+            className="hidden"
+            onChange={(event) => setContentFromInput(event.target.files?.[0])}
           />
-        </div>
 
-        {/* Wizard column: ONE card visible per step (was a 3-across
-            wrapping row until 2026-08-30, user direction - three dense
-            cards at once read as overwhelming). All three stay mounted;
-            the inactive ones swap `flex` for `hidden`. Width is capped
-            per-card (not full-bleed) so the flex-1 textarea / logo zones
-            keep their designed proportions inside min-h-[440px]. */}
-        <div className="flex w-full flex-col items-center gap-4">
-          {/* Single-cell grid: all three cards occupy the SAME cell
-              (col/row-start-1) and the inactive ones are `invisible`
-              (visibility, not display) - they keep participating in
-              layout, so the stack's height is the TALLEST card at
-              steps 1-2 and the frame never jumps between them
-              (user direction 2026-08-30). Step 3 hugs its content
-              (stackedCardVisibility, 2026-10-04). */}
-          <div className="grid w-full justify-items-center desk:max-w-[1800px] desk:grid-cols-3 desk:gap-6">
-          {/* ═══════════════════════════════════════════════════════
-              CONTENT CARD (step 1)
-              ═══════════════════════════════════════════════════════ */}
-          <div
-            className={`surface-card ${stackedCardVisibility(0, step)} col-start-1 row-start-1 w-full sm:w-[430px] ${CARD_MIN_H_CLASS} flex-col desk:visible desk:col-start-auto desk:row-start-auto desk:flex desk:w-full desk:min-w-0 gap-4 rounded-2xl p-4`}
-          >
-            <CardHeader step={1} icon="subject" title={t.contentCard} />
-
-            <input
-              ref={contentInputRef}
-              type="file"
-              accept=".pdf,.pptx,.ppt,.docx"
-              className="hidden"
-              onChange={(event) => setContentFromInput(event.target.files?.[0])}
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-foreground/80">
+                {t.language}
+              </span>
+              <SegmentedToggle
+                options={LANGUAGE_OPTIONS}
+                value={language}
+                onChange={setLanguage}
+                ariaLabel={t.contentLanguageAria}
+              />
+            </div>
+            <textarea
+              value={contentText}
+              onChange={(event) => {
+                const next = event.target.value;
+                setContentText(next);
+                if (next.length > 0 && contentFile) removeContentFile();
+              }}
+              placeholder={t.contentPlaceholder}
+              rows={8}
+              dir={language === "en" ? "ltr" : "rtl"}
+              // Mirrors the server's content.text 400 cap in /api/projects
+              // (brief-limits.ts) so the limit is felt here, not as a
+              // failed submit.
+              maxLength={MAX_CONTENT_TEXT_CHARS}
+              disabled={submitting || hasFile}
+              className="input-dark min-h-[220px] resize-y text-sm leading-6 disabled:cursor-not-allowed disabled:opacity-50"
             />
-
-            {/* Language label-row + textarea grouped into ONE section
-                so the gap between them is the same 6 px (space-y-1.5)
-                used in the fonts card's "خط العناوين → input slot"
-                pattern. Without this wrapper they were two separate
-                top-level card children separated by the card's
-                gap-4 (16 px). flex-1 on the wrapper + flex-1 on the
-                textarea keeps the textarea growing to fill the
-                card's leftover vertical space. */}
-            <div className="flex flex-1 flex-col space-y-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-foreground/70">
-                  {t.language}
-                </span>
-                <SegmentedToggle
-                  options={LANGUAGE_OPTIONS}
-                  value={language}
-                  onChange={setLanguage}
-                  ariaLabel={t.contentLanguageAria}
-                />
-              </div>
-
-              <textarea
-                value={contentText}
-                onChange={(event) => {
-                  const next = event.target.value;
-                  setContentText(next);
-                  if (next.length > 0 && contentFile) removeContentFile();
-                }}
-                placeholder={t.contentPlaceholder}
-                rows={2}
-                dir={language === "en" ? "ltr" : "rtl"}
-                // Mirrors the server's content.text 400 cap in
-                // /api/projects (brief-limits.ts) so the limit is felt
-                // here, not as a failed submit.
-                maxLength={MAX_CONTENT_TEXT_CHARS}
-                disabled={submitting || hasFile}
-                className="input-dark min-h-[60px] flex-1 resize-none text-sm leading-5 disabled:cursor-not-allowed disabled:opacity-50"
-              />
-            </div>
-
-            {/* Dropzone — always rendered, dimmed when text typed.
-                `inert` (not pointer-events-none/aria-hidden) when text is
-                present: it also pulls the inner button out of the tab
-                order so keyboard / AT users can't open the picker while
-                the text path is active — `aria-hidden` alone left it
-                focusable. Mirrors /mimic's content dropzone fix. */}
-            <div
-              className={`flex flex-col gap-2.5 transition-opacity duration-200 ${
-                hasText ? "opacity-40" : ""
-              }`}
-              inert={hasText}
-            >
-              <div className="flex items-center gap-2 text-[11px] text-foreground/40">
-                <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
-                <span>{t.or}</span>
-                <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
-              </div>
-              <ContentDropzone
-                file={contentFile}
-                submitting={submitting}
-                dragging={contentDragging}
-                setDragging={setContentDragging}
-                onOpen={() => contentInputRef.current?.click()}
-                onDrop={(f) => setContentFromInput(f)}
-                onRemove={removeContentFile}
-              />
-            </div>
-
-            {/* Persistent footer element — text input only (position
-                picker removed 2026-06-02; Claude places it). No cover/
-                closing exclude — it's on every slide by definition. */}
-            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
-              <PersistentRow
-                text={persistentText}
-                language={language}
-                onText={setPersistentText}
-              />
-            </div>
           </div>
 
-          {/* ═══════════════════════════════════════════════════════
-              DESIGN CARD (step 2) — template OR style, colour
-              templates + palette, one font, logo. Same size as the other
-              two cards (user direction 2026-10-02); the template grid
-              scrolls inside it.
-              ═══════════════════════════════════════════════════════ */}
+          {/* Dropzone - dimmed + `inert` while text is typed (also pulls the
+              button out of the tab order). Mirrors /mimic's dropzone. */}
           <div
-            className={`surface-card ${stackedCardVisibility(1, step)} col-start-1 row-start-1 w-full sm:w-[430px] ${CARD_MIN_H_CLASS} flex-col desk:visible desk:col-start-auto desk:row-start-auto desk:flex desk:w-full desk:min-w-0 gap-4 rounded-2xl p-4`}
+            className={`flex flex-col gap-2.5 transition-opacity duration-200 ${
+              hasText ? "opacity-40" : ""
+            }`}
+            inert={hasText}
           >
-            {/* Mirrors CardHeader exactly (icon + title + pb-4 hairline) so
-                the separator and title sit at the same heights as the other
-                cards. z-30 lifts the whole header — and the saved-kit menu
-                that drops out of it — above the later palette/font/logo rows,
-                which would otherwise paint on top of the open menu. */}
-            <header className="relative z-30 border-b border-foreground/[0.08] pb-4">
-              {/* The title row is the positioning context for the saved-kit
-                  pill, so the pill centres on the TITLE (top-1/2 of this row),
-                  not the full header — keeping it level with the title while
-                  pb-4 holds the separator below. The pill is absolute so it
-                  never grows the row or shifts the separator off the others. */}
-              <div className="relative flex items-center gap-2">
-                <CardStepBadge step={2} />
-                <span
-                  className="material-symbols-outlined text-foreground"
-                  style={{ fontSize: 18 }}
-                >
-                  palette
-                </span>
-                <h3 className="text-sm font-semibold text-foreground">
-                  {t.design.card}
-                </h3>
-                {kitOptions.length > 0 ? (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute end-0 top-1/2 -translate-y-1/2"
-                  >
-                    <BrandKitDropdown
-                      kits={kitOptions}
-                      onSelect={handlePickKit}
-                    />
-                  </motion.div>
-                ) : null}
-              </div>
-            </header>
-
-            {/* The deck's look: a ready-made template (template
-                generation) OR a design style (from scratch). Both grids stay
-                mounted so the template list isn't refetched per tab flip. */}
-            <div className="flex flex-col gap-2.5">
-              <div role="tablist" aria-label={t.design.card} className="design-tabs">
-                {(["templates", "styles"] as const).map((tab) => (
-                  <button
-                    key={tab}
-                    type="button"
-                    role="tab"
-                    aria-selected={lookTab === tab}
-                    onClick={() => setLookTab(tab)}
-                    className={`design-tab ${lookTab === tab ? "is-active" : ""}`}
-                  >
-                    {tab === "templates" ? t.design.tabTemplates : t.design.tabStyles}
-                  </button>
-                ))}
-              </div>
-              <div className={lookTab === "templates" ? "" : "hidden"}>
-                <TemplatePickerGrid
-                  selectedId={template?.id ?? null}
-                  onSelect={pickTemplate}
-                  onClear={() => setTemplate(null)}
-                  disabled={submitting}
-                />
-              </div>
-              <div className={lookTab === "styles" ? "" : "hidden"}>
-                {/* A picked template outranks the style grid: no tile reads
-                    as active (not even Auto) while one is set. */}
-                <DesignStyleGrid
-                  value={template ? "__template__" : designStyle}
-                  onChange={onDesignStyle}
-                  disabled={submitting}
-                />
-              </div>
-              {template ? (
-                <p className="text-[11px] leading-4 text-foreground/55">
-                  {t.design.templateNote}
-                </p>
-              ) : null}
+            <div className="flex items-center gap-2 text-[11px] text-foreground/40">
+              <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
+              <span>{t.or}</span>
+              <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
             </div>
+            <ContentDropzone
+              file={contentFile}
+              submitting={submitting}
+              dragging={contentDragging}
+              setDragging={setContentDragging}
+              onOpen={() => contentInputRef.current?.click()}
+              onDrop={(f) => setContentFromInput(f)}
+              onRemove={removeContentFile}
+            />
+          </div>
 
-            {/* Colours: Auto / custom swatches on the first row, the
-                one-click colour templates under it. */}
-            <div className="flex flex-col gap-2 border-t border-[var(--tq-border-hairline)] pt-3">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold text-foreground/70">
-                {t.colors}
-              </span>
-              <div className="flex items-center gap-1.5">
-                {/* Auto pill — active (solid stroke) when no colors are
-                    picked; in manual mode it becomes the way back to Auto. */}
+          {/* Persistent footer element (Claude places it on every slide). */}
+          <div className="border-t border-[var(--tq-border-hairline)] pt-4">
+            <PersistentRow
+              text={persistentText}
+              language={language}
+              onText={setPersistentText}
+            />
+          </div>
+        </section>
+
+        {/* ═══════════════════════════════════════════════════════
+            STEP 2 · DESIGN - a template OR a design style, full width.
+            Both grids stay mounted so the template list isn't refetched
+            per tab flip.
+            ═══════════════════════════════════════════════════════ */}
+        <section
+          className={`${step === 1 ? "flex" : "hidden"} w-full max-w-[1400px] flex-col gap-4`}
+        >
+          <div className="flex flex-col items-center gap-2">
+            <div
+              role="tablist"
+              aria-label={t.design.card}
+              className="design-tabs w-full max-w-sm"
+            >
+              {(["templates", "styles"] as const).map((tab) => (
                 <button
+                  key={tab}
                   type="button"
-                  onClick={() => setColors([])}
-                  disabled={colors.length === 0}
-                  aria-pressed={colors.length === 0}
-                  title={t.autoColorsHint}
-                  className={`flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-[11px] font-medium transition-colors ${
-                    colors.length === 0
-                      ? "border-foreground/40 text-foreground"
-                      : "border-dashed border-foreground/20 text-foreground/60 hover:border-foreground/40 hover:text-foreground"
-                  }`}
+                  role="tab"
+                  aria-selected={lookTab === tab}
+                  onClick={() => setLookTab(tab)}
+                  className={`design-tab ${lookTab === tab ? "is-active" : ""}`}
                 >
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ fontSize: 13 }}
-                  >
-                    auto_awesome
-                  </span>
-                  {t.autoColors}
+                  {tab === "templates" ? t.design.tabTemplates : t.design.tabStyles}
                 </button>
-                {colors.map((color, index) => (
-                  <InlinePaletteSwatch
-                    key={index}
-                    value={color}
-                    index={index}
-                    removable={colors.length > MIN_PALETTE}
-                    onChange={(next) => updateColor(index, next)}
-                    onRemove={() => removeColor(index)}
-                  />
-                ))}
-                {colors.length < MAX_PALETTE ? (
-                  <button
-                    type="button"
-                    onClick={addColor}
-                    aria-label={t.addColor}
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-foreground/20 text-foreground/60 transition-colors hover:border-foreground/40 hover:text-foreground"
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: 14 }}
-                    >
-                      add
-                    </span>
-                  </button>
-                ) : null}
-              </div>
+              ))}
             </div>
-            <PalettePresetPicker
-              colors={colors}
-              onPick={setColors}
+            {template ? (
+              <p className="max-w-xl text-center text-xs leading-5 text-foreground/55">
+                {t.design.templateNote}
+              </p>
+            ) : null}
+          </div>
+          <div className={lookTab === "templates" ? "" : "hidden"}>
+            <TemplatePickerGrid
+              wide
+              onGuestSelect={guest ? pickGuestTemplate : undefined}
+              selectedId={template?.id ?? null}
+              onSelect={pickTemplate}
+              onClear={() => setTemplate(null)}
               disabled={submitting}
             />
-            </div>
-
-            {/* Single brand font — one Google family (Claude varies
-                weights) OR up to 5 uploaded families (Claude pairs). */}
-            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
-              <BrandFontPicker
-                compact
-                value={brandFont}
-                onChange={setBrandFont}
-                sampleText={
-                  language === "en" ? HEADING_SAMPLE_LATIN : HEADING_SAMPLE_AR
-                }
-              />
-            </div>
-
-            {/* Logo — compact fixed-height zone (the Design card shares its
-                size with the other two steps). Free plan: crowned lock. */}
-            <div className="flex flex-col gap-2 border-t border-[var(--tq-border-hairline)] pt-3">
-              <span className="block text-xs font-semibold text-foreground/70">
-                {t.logo}
-              </span>
-              <LogoRow
-                compact
-                file={logoFile}
-                previewUrl={loadedLogo?.displayUrl ?? null}
-                onSelect={(f) => {
-                  setLogoFile(f);
-                  setLoadedLogo(null);
-                }}
-                onRemove={() => {
-                  setLogoFile(null);
-                  setLoadedLogo(null);
-                }}
-              />
-            </div>
-
-            {/* Save brand kit — present on BOTH branding cards
-                (fonts+colors AND logo), backed by the same state,
-                so the user can flip the toggle from either card. */}
-            <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-hairline)] pt-2">
-              <span className="text-xs font-semibold text-foreground/70">
-                {t.saveAsDefault}
-              </span>
-              <Toggle
-                ariaLabel={t.saveAsDefault}
-                value={saveBrandKit}
-                onChange={setSaveBrandKit}
-              />
-            </div>
           </div>
-
-          {/* ═══════════════════════════════════════════════════════
-              EXPORT SETTINGS CARD (step 3)
-              ═══════════════════════════════════════════════════════ */}
-          <div
-            className={`surface-card ${step === 2 ? "" : "invisible"} col-start-1 row-start-1 flex w-full sm:w-[430px] flex-col desk:visible desk:col-start-auto desk:row-start-auto desk:flex desk:w-full desk:min-w-0 gap-4 rounded-2xl p-4`}
-          >
-            <CardHeader step={3} icon="settings" title={t.outputCard} />
-
-            {/* Each section wrapped in space-y-1.5 (label-to-content
-                gap consistent with the branding card). Sections
-                separated by `border-t pt-3` for visible breathing
-                room between distinct knob groups. */}
-            {/* stacked (full-width rows, not columns): refills the vertical
-                space the AI-images panel freed when it moved to the content
-                card (2026-08-03). 3:4 منشور removed 2026-08-03: the /social
-                flow owns post formats now. */}
-            <SlideSizeFields
-              slideSize={slideSize}
-              onSlideSize={setSlideSize}
-              stacked
+          <div className={lookTab === "styles" ? "" : "hidden"}>
+            {/* A picked template outranks the style grid: no tile reads as
+                active (not even Auto) while one is set. */}
+            <DesignStyleGrid
+              wide
+              value={template ? "__template__" : designStyle}
+              onChange={onDesignStyle}
+              disabled={submitting}
             />
+          </div>
+        </section>
 
-            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
-              <div className="flex min-h-[24px] items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-foreground/70">
-                  {t.slideCount}
+        {/* ═══════════════════════════════════════════════════════
+            STEP 3 · BRAND - colours on one side, font + logo on the
+            other. All optional.
+            ═══════════════════════════════════════════════════════ */}
+        <section
+          className={`${step === 2 ? "flex" : "hidden"} w-full max-w-5xl flex-col gap-4`}
+        >
+          {kitOptions.length > 0 ? (
+            // z-30 keeps the saved-kit menu above the cards below it.
+            <div className="relative z-30 flex justify-end">
+              <BrandKitDropdown kits={kitOptions} onSelect={handlePickKit} />
+            </div>
+          ) : null}
+          <div className="grid w-full gap-4 desk:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+            {/* Colours: Auto / custom swatches, then the named colour
+                templates. */}
+            <div className="surface-card flex flex-col gap-3 rounded-2xl p-4 sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-sm font-semibold text-foreground/80">
+                  {t.colors}
                 </span>
-                {/* `layout` on the controls container so the
-                    SegmentedToggle slides smoothly when the stepper
-                    mounts/unmounts (toggle's anchor inside the group
-                    shifts as the stepper's width animates in/out).
-                    AnimatePresence wraps the stepper to give it a
-                    width-+-opacity grow/shrink animation matching
-                    the existing toggle spring (stiffness 500,
-                    damping 35) so the whole row reads as one smooth
-                    transition rather than a pop-in. */}
-                <motion.div
-                  // `layout` on the parent FLIPs the SegmentedToggle's
-                  // position when the stepper appears/disappears so
-                  // the toggle slides smoothly over to make room.
-                  // Inner motion.div does NOT use `layout` (would
-                  // conflict with the parent's layout pass and cause
-                  // a snap at the end of the animation). It only
-                  // animates its own width + opacity instead.
-                  layout
-                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                  className="flex items-center gap-1.5"
-                >
-                  <SegmentedToggle
-                    options={SLIDE_COUNT_OPTIONS}
-                    value={slideCountMode}
-                    onChange={setSlideCountMode}
-                    ariaLabel={t.slideCount}
-                  />
-                  <AnimatePresence initial={false}>
-                    {slideCountMode === "custom" ? (
-                      <motion.div
-                        key="slide-count-stepper"
-                        // Fixed width (66 px = stepper natural size:
-                        // 20 + 24 + 20 + 2 px border) avoids the
-                        // framer-motion `auto`-to-numeric jump that
-                        // shows up as a 1-frame snap at the end of
-                        // the spring. Also bake in `-mr-1.5` on exit
-                        // to absorb the parent's gap-1.5 between the
-                        // toggle and the stepper as the stepper
-                        // collapses — otherwise the gap stays put
-                        // until unmount and pops the toggle 6 px at
-                        // the very end.
-                        initial={{ width: 0, opacity: 0, marginInlineStart: -6 }}
-                        animate={{ width: 66, opacity: 1, marginInlineStart: 0 }}
-                        exit={{ width: 0, opacity: 0, marginInlineStart: -6 }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 500,
-                          damping: 35,
-                        }}
-                        style={{ overflow: "hidden" }}
-                      >
-                        <InlineStepper
-                          value={slideCountValue}
-                          onChange={setSlideCountValue}
-                          min={1}
-                          max={slideCap}
-                        />
-                      </motion.div>
-                    ) : null}
-                  </AnimatePresence>
-                </motion.div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {/* Auto pill: active when no colours are picked; in manual
+                      mode it is the way back to Auto. */}
+                  <button
+                    type="button"
+                    onClick={() => setColors([])}
+                    disabled={colors.length === 0}
+                    aria-pressed={colors.length === 0}
+                    title={t.autoColorsHint}
+                    className={`flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-[11px] font-medium transition-colors ${
+                      colors.length === 0
+                        ? "border-foreground/40 text-foreground"
+                        : "border-dashed border-foreground/20 text-foreground/60 hover:border-foreground/40 hover:text-foreground"
+                    }`}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: 13 }}>
+                      auto_awesome
+                    </span>
+                    {t.autoColors}
+                  </button>
+                  {colors.map((color, index) => (
+                    <InlinePaletteSwatch
+                      key={index}
+                      value={color}
+                      index={index}
+                      removable={colors.length > MIN_PALETTE}
+                      onChange={(next) => updateColor(index, next)}
+                      onRemove={() => removeColor(index)}
+                    />
+                  ))}
+                  {colors.length < MAX_PALETTE ? (
+                    <button
+                      type="button"
+                      onClick={addColor}
+                      aria-label={t.addColor}
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-foreground/20 text-foreground/60 transition-colors hover:border-foreground/40 hover:text-foreground"
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+                        add
+                      </span>
+                    </button>
+                  ) : null}
+                </div>
               </div>
-            </div>
-
-            <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-hairline)] pt-3">
-              <span className="text-xs font-semibold text-foreground/70">
-                {t.slideNumbering}
+              <span className="text-xs font-medium text-foreground/55">
+                {t.design.colorTemplates}
               </span>
-              <Toggle
-                ariaLabel={t.slideNumbering}
-                value={pagination}
-                onChange={setPagination}
-              />
-            </div>
-
-            {/* Generate-images toggle - in the settings card (owner direction
-                2026-10-04; was in the content card since 2026-08-03). Plus+
-                gated inside the panel itself; free users get the crown +
-                UpgradeModal. */}
-            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
-              <AIImagesPanel
-                value={imagesMode}
-                onChange={setImagesMode}
+              <PalettePresetPicker
+                wide
+                colors={colors}
+                onPick={setColors}
                 disabled={submitting}
               />
             </div>
 
-          </div>
-
-          </div>
-
-          {/* Wizard nav - Next only (`.btn-gradient` CTA via PillButton
-              primary, the /brand PATTERN 2 button). Going BACK happens by
-              clicking a completed step in the rail (user direction
-              2026-08-30 - no dedicated back button). The last step swaps
-              Next for the GenerateSplitButton below. Width matches the
-              card so the button hugs its end edge; logical flex only, so
-              RTL mirrors free. */}
-          {step < 2 && (
-            <div className="flex w-full justify-end sm:w-[430px] desk:hidden">
-              <PillButton
-                variant="primary"
-                onClick={() => setStep((s) => Math.min(2, s + 1))}
-                disabled={submitting || (step === 0 && !(hasText || hasFile))}
-              >
-                {t.wizard.next}
-              </PillButton>
+            <div className="flex flex-col gap-4">
+              {/* One brand font: a Google family (Claude varies weights) OR
+                  up to 5 uploaded families (Claude pairs). */}
+              <div className="surface-card rounded-2xl p-4 sm:p-5">
+                <BrandFontPicker
+                  value={brandFont}
+                  onChange={setBrandFont}
+                  sampleText={
+                    language === "en" ? HEADING_SAMPLE_LATIN : HEADING_SAMPLE_AR
+                  }
+                />
+              </div>
+              <div className="surface-card flex flex-col gap-2 rounded-2xl p-4 sm:p-5">
+                <span className="text-sm font-semibold text-foreground/80">{t.logo}</span>
+                <LogoRow
+                  file={logoFile}
+                  previewUrl={loadedLogo?.displayUrl ?? null}
+                  onSelect={(f) => {
+                    setLogoFile(f);
+                    setLoadedLogo(null);
+                  }}
+                  onRemove={() => {
+                    setLogoFile(null);
+                    setLoadedLogo(null);
+                  }}
+                />
+              </div>
+              <div className="surface-card flex items-center justify-between gap-2 rounded-2xl px-4 py-3 sm:px-5">
+                <span className="text-sm font-semibold text-foreground/80">
+                  {t.saveAsDefault}
+                </span>
+                <Toggle
+                  ariaLabel={t.saveAsDefault}
+                  value={saveBrandKit}
+                  onChange={setSaveBrandKit}
+                />
+              </div>
             </div>
-          )}
+          </div>
+        </section>
 
-          {/* Extraction status - the file poll keeps running while the
-              user moves past step 1; without this chip the disabled
-              Generate on the last step would reflect a state the user
-              can no longer see. */}
-          {fileExtracting && step > 0 && (
-            <p className="flex items-center gap-2 text-xs desk:hidden text-[var(--tq-text-muted)]">
+        {/* ═══════════════════════════════════════════════════════
+            STEP 4 · OUTPUT SETTINGS, then Generate in the bar below.
+            ═══════════════════════════════════════════════════════ */}
+        <section
+          className={`${step === 3 ? "flex" : "hidden"} surface-card w-full max-w-2xl flex-col gap-4 rounded-2xl p-4 sm:p-6`}
+        >
+          <SlideSizeFields slideSize={slideSize} onSlideSize={setSlideSize} />
+
+          <div className="border-t border-[var(--tq-border-hairline)] pt-4">
+            <div className="flex min-h-[24px] items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-foreground/80">
+                {t.slideCount}
+              </span>
+              {/* `layout` on the parent FLIPs the toggle when the stepper
+                  appears; the inner motion.div only animates its own
+                  width + opacity (a fixed 66 px avoids the auto-width
+                  snap) and absorbs the gap on exit. */}
+              <motion.div
+                layout
+                transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                className="flex items-center gap-1.5"
+              >
+                <SegmentedToggle
+                  options={SLIDE_COUNT_OPTIONS}
+                  value={slideCountMode}
+                  onChange={setSlideCountMode}
+                  ariaLabel={t.slideCount}
+                />
+                <AnimatePresence initial={false}>
+                  {slideCountMode === "custom" ? (
+                    <motion.div
+                      key="slide-count-stepper"
+                      initial={{ width: 0, opacity: 0, marginInlineStart: -6 }}
+                      animate={{ width: 66, opacity: 1, marginInlineStart: 0 }}
+                      exit={{ width: 0, opacity: 0, marginInlineStart: -6 }}
+                      transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                      style={{ overflow: "hidden" }}
+                    >
+                      <InlineStepper
+                        value={slideCountValue}
+                        onChange={setSlideCountValue}
+                        min={1}
+                        max={slideCap}
+                      />
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
+              </motion.div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-hairline)] pt-4">
+            <span className="text-sm font-semibold text-foreground/80">
+              {t.slideNumbering}
+            </span>
+            <Toggle
+              ariaLabel={t.slideNumbering}
+              value={pagination}
+              onChange={setPagination}
+            />
+          </div>
+
+          {/* AI images: Plus+ gated inside the panel itself; free users get
+              the crown + UpgradeModal. */}
+          <div className="border-t border-[var(--tq-border-hairline)] pt-4">
+            <AIImagesPanel
+              value={imagesMode}
+              onChange={setImagesMode}
+              disabled={submitting}
+            />
+          </div>
+        </section>
+
+        {/* Wizard bar: Back on the start side, Next (or Generate on the last
+            step) on the end side. Sticky so it stays in reach on the long
+            Design grid; logical flex only, so RTL mirrors free. */}
+        <div className="tq-wizard-bar sticky bottom-4 z-40 flex w-full max-w-3xl items-center justify-between gap-3 rounded-full border border-[var(--tq-border-hairline)] bg-[var(--tq-surface)] p-2 shadow-lg">
+          {step > 0 ? (
+            <PillButton
+              variant="secondary"
+              onClick={() => goToStep(step - 1)}
+              disabled={submitting}
+            >
+              {t.wizard.back}
+            </PillButton>
+          ) : (
+            <span />
+          )}
+          {/* The file poll keeps running after step 1; this chip explains a
+              disabled Generate the user can no longer see the cause of. */}
+          {fileExtracting && step > 0 ? (
+            <span className="hidden items-center gap-2 text-xs text-[var(--tq-text-muted)] sm:flex">
               <span className="spinner h-3.5 w-3.5 rounded-full border-2 border-foreground/30 border-t-foreground" />
               {t.wizard.extracting}
-            </p>
+            </span>
+          ) : null}
+          {step < LAST_STEP ? (
+            <PillButton
+              variant="primary"
+              onClick={() => goToStep(step + 1)}
+              disabled={submitting || (step === 0 && !hasContent)}
+            >
+              {t.wizard.next}
+            </PillButton>
+          ) : (
+            <GenerateSplitButton
+              guest={guest}
+              autoStart={autoStart && !templatePending}
+              onGenerate={guest ? () => void openGuestSignup() : handleGenerate}
+              quality={quality}
+              onQualityChange={setQuality}
+              slideCount={estimatedSlideCount.slides}
+              slideCountUpTo={estimatedSlideCount.upTo}
+              imagesMode={imagesMode}
+              disabled={generateDisabled}
+              loading={generateLoading}
+            />
           )}
-        </div>
-
-        {/* Always shown on desktop (all cards visible); last step only below xl. */}
-        <div className={`${step === 2 ? "flex" : "hidden desk:flex"} justify-center`}>
-          <GenerateSplitButton
-            onGenerate={handleGenerate}
-            quality={quality}
-            onQualityChange={setQuality}
-            slideCount={estimatedSlideCount.slides}
-            slideCountUpTo={estimatedSlideCount.upTo}
-            imagesMode={imagesMode}
-            disabled={generateDisabled}
-            loading={generateLoading}
-          />
         </div>
 
         <p

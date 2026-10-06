@@ -450,10 +450,14 @@ export function DesignStyleGrid({
   value,
   onChange,
   disabled = false,
+  wide = false,
 }: {
   value: string | null;
   onChange: (next: string | null) => void;
   disabled?: boolean;
+  // Full-width grid for /create's own Design step (2026-10-06): big tiles
+  // with the one-line description, no inner scroll and no "Show all" modal.
+  wide?: boolean;
 }) {
   const dict = useDict();
   const { dir } = useLocale();
@@ -492,7 +496,7 @@ export function DesignStyleGrid({
           disabled={disabled}
           onClick={() => {
             onChange(tl.value);
-            if (big) setExpanded(false);
+            if (big && !wide) setExpanded(false);
           }}
           aria-pressed={active}
           className={`pick-tile flex w-full flex-col gap-1.5 rounded-lg p-1.5 text-start disabled:cursor-not-allowed disabled:opacity-50 ${
@@ -514,6 +518,17 @@ export function DesignStyleGrid({
       </div>
     );
   };
+
+  if (wide) {
+    return (
+      <div className="flex flex-col gap-3">
+        <SectorChips value={sector} onChange={setSector} />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 2xl:grid-cols-5">
+          {tiles.map((tl) => tile(tl, true))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="@container flex flex-col gap-1.5">

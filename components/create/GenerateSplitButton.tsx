@@ -104,6 +104,14 @@ export function GenerateSplitButton({
   // dict.flows.generate.create). /enhance can pass its own copy. Pass through.
   label,
   loadingLabel,
+  // Signed-out visitor on /create (2026-10-06): no balance to wait for and no
+  // trial pop-up yet; the click goes straight to `onGenerate` (which opens the
+  // sign-up window). The pop-up shows after sign-up, via autoStart.
+  guest = false,
+  // Back from the sign-up with a restored draft: press Generate once, by
+  // itself, as soon as the balance has loaded and the button is enabled (a
+  // free user then sees the trial pop-up, as on a real click).
+  autoStart = false,
 }: {
   onGenerate: () => void;
   quality: Quality;
@@ -115,6 +123,8 @@ export function GenerateSplitButton({
   loading?: boolean;
   label?: string;
   loadingLabel?: string;
+  guest?: boolean;
+  autoStart?: boolean;
 }) {
   const dict = useDict();
   const resolvedLabel = label ?? dict.flows.generate.create;
@@ -203,6 +213,37 @@ export function GenerateSplitButton({
     ? quality
     : reconciledKey;
 
+  // The Generate click. Credits not resolved yet: no-op (sub-second window).
+  // Closes BOTH load races - a free user can't skip the upsell, and an admin
+  // can't be shown it (CR #154). The button stays visually enabled; the next
+  // click lands normally. Free tier: the trial pop-up before generating
+  // (restored 2026-10-05, owner direction): only the first
+  // TEASER_VISIBLE_COUNT slides are designed; see plans or design those.
+  const startGenerate = () => {
+    if (guest) {
+      onGenerate();
+      return;
+    }
+    if (!credits) return;
+    if (isFree && !isAdmin) {
+      setShowSlideCapUpsell(true);
+      return;
+    }
+    onGenerate();
+  };
+
+  // autoStart: one press per mount, once the click would actually land.
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (!autoStart || autoStarted.current || guest) return;
+    if (!credits || disabled || loading) return;
+    autoStarted.current = true;
+    // Next tick, outside the effect body (set-state-in-effect); not
+    // cancelled on re-render, the ref already marks it done.
+    window.setTimeout(startGenerate, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- startGenerate is rebuilt every render; the guard flags above are the real triggers
+  }, [autoStart, guest, credits, disabled, loading]);
+
   return (
     <div ref={splitButtonRef} className="relative">
       {/* Outer pill — the `.btn-gradient-anim` class supplies the full animated
@@ -226,22 +267,7 @@ export function GenerateSplitButton({
         <motion.button
           layout
           type="button"
-          onClick={() => {
-            // Credits not resolved yet: no-op (sub-second window). Closes
-            // BOTH load races - a free user can't skip the upsell, and an
-            // admin can't be shown it (CR #154). The button stays visually
-            // enabled; the next click lands normally.
-            if (!credits) return;
-            // Free tier: the trial pop-up before generating (restored
-            // 2026-10-05, owner direction): only the first
-            // TEASER_VISIBLE_COUNT slides are designed; see plans or design
-            // those slides.
-            if (isFree && !isAdmin) {
-              setShowSlideCapUpsell(true);
-              return;
-            }
-            onGenerate();
-          }}
+          onClick={startGenerate}
           disabled={disabled || loading}
           aria-label={label}
           className="relative z-10 inline-flex items-center justify-center gap-2 rounded-s-full bg-transparent px-6 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60"

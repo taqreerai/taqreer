@@ -56,7 +56,7 @@ export default async function GammaArabicPage(props: {
   const locale = resolve(lang);
   const dict = await getDictionary(locale);
   const t = dict.gammaArabic;
-  const signup = localizedHref("/signup", locale);
+  const signup = localizedHref("/create", locale);
 
   return (
     <div className="pb-8">

@@ -15,14 +15,31 @@ export function PalettePresetPicker({
   colors,
   onPick,
   disabled = false,
+  wide = false,
 }: {
   colors: readonly string[];
   onPick: (colors: string[]) => void;
   disabled?: boolean;
+  // /create's Brand step (2026-10-06): every preset named, in a tall
+  // scrolling grid, no "Show all" modal.
+  wide?: boolean;
 }) {
   const dict = useDict();
   const [expanded, setExpanded] = useState(false);
   const activeId = PALETTE_PRESETS.find((p) => samePalette(colors, p.colors))?.id ?? null;
+  if (wide) {
+    return (
+      <div className="@container max-h-[340px] overflow-y-auto overscroll-contain p-0.5">
+        <PalettePresetGrid
+          activeId={activeId}
+          onPick={(p) => onPick([...p.colors])}
+          disabled={disabled}
+          labels
+          className="grid grid-cols-2 gap-2 @min-[30rem]:grid-cols-3 @min-[40rem]:grid-cols-4"
+        />
+      </div>
+    );
+  }
   return (
     <>
       {/* More palettes per row as the card widens (full-width desktop cards). */}

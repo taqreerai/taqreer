@@ -125,7 +125,7 @@ export default async function PricingPage(props: {
         <PricingTiers tierNumbers={tierNumbers} tierPrices={tierPrices} />
       </section>
 
-      <RepeatCta href={localizedHref("/signup", locale)} label={dict.landing.hero.cta} />
+      <RepeatCta href={localizedHref("/create", locale)} label={dict.landing.hero.cta} />
 
       {/* How credits work — 4 points. */}
       <section className="py-16">
@@ -159,7 +159,7 @@ export default async function PricingPage(props: {
           <FaqAccordion items={pricingFaq} />
         </ScrollReveal>
       </section>
-      <RepeatCta href={localizedHref("/signup", locale)} label={dict.landing.hero.cta} />
+      <RepeatCta href={localizedHref("/create", locale)} label={dict.landing.hero.cta} />
 
     </div>
   );

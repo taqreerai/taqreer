@@ -123,7 +123,7 @@ export function PricingTiers({
   // (CR: bare paths dropped the active language).
   function checkout(planKey: string) {
     if (planKey === "free") {
-      window.location.href = localizedHref("/signup", locale);
+      window.location.href = localizedHref("/create", locale);
       return;
     }
     const lookupKey = `tier_${planKey}_${billing}`;
@@ -311,8 +311,9 @@ function PricingCard({
           {!tier.isFree && <span className="mb-1 text-muted">{pricing.perMonth}</span>}
         </div>
         <div className="mb-6 text-xs text-muted">{footnote}</div>
-        {/* Signed-in: a paid tier checks out via Stripe; Free + all
-            signed-out CTAs go to signup (acquisition). */}
+        {/* Signed-in: a paid tier checks out via Stripe; signed-out paid
+            CTAs go to signup; Free starts on /create, which is open before
+            sign-up (2026-10-06). */}
         {isAuthed && !tier.isFree ? (
           <button
             type="button"
@@ -324,7 +325,7 @@ function PricingCard({
           </button>
         ) : (
           <Link
-            href={localizedHref("/signup", locale)}
+            href={localizedHref(tier.isFree ? "/create" : "/signup", locale)}
             className="btn-gradient block w-full py-3 text-sm"
           >
             {copy.cta}

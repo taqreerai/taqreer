@@ -3,6 +3,34 @@ import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
 import { isLocale, defaultLocale, LOCALE_COOKIE } from "@/lib/i18n/config";
 import { siteOrigin } from "@/lib/api/site-origin";
+import { stripLocale } from "@/lib/i18n/navigation";
+
+const AUTH_ROUTES = ["/login", "/signup", "/forgot-password", "/callback", "/confirm"];
+
+// `next` is user-controlled: honour only an internal path on this origin
+// (one leading slash, no backslash tricks) that is not an auth page, so it
+// can't become an open redirect or a login loop. Returns the path (with its
+// query) or null for "use the dashboard". Added 2026-10-06: the open /create
+// page sends visitors through sign-up with next=/<lang>/create?resume=...,
+// and until now this handler always went to the dashboard.
+function safeNextPath(next: string | null, origin: string): string | null {
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.includes("\\")) {
+    return null;
+  }
+  try {
+    const url = new URL(next, origin);
+    if (url.origin !== new URL(origin).origin) return null;
+    // Dot segments can normalize to a protocol-relative path
+    // ("/a/..//evil.com" -> "//evil.com"), which would leave the origin on
+    // the redirect below. Refuse it.
+    if (url.pathname.startsWith("//")) return null;
+    const logical = stripLocale(url.pathname);
+    if (AUTH_ROUTES.some((r) => logical === r || logical.startsWith(`${r}/`))) return null;
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return null;
+  }
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -60,7 +88,14 @@ export async function GET(request: NextRequest) {
       // interstitial was removed 2026-05-28 — it served only as a 2.5 s
       // checkmark + redirect, which added a noticeable pause without conveying
       // anything the dashboard's own load state doesn't already.
-      const res = NextResponse.redirect(new URL(`/${locale}/dashboard`, origin));
+      // Back to where the auth started (e.g. /create's guest sign-up), when
+      // that is a safe internal path; the dashboard otherwise.
+      const nextPath = safeNextPath(searchParams.get("next"), origin);
+      const nextLocale = nextPath?.split(/[/?#]/)[1];
+      if (nextPath && isLocale(nextLocale)) locale = nextLocale;
+      const res = NextResponse.redirect(
+        new URL(nextPath ?? `/${locale}/dashboard`, origin),
+      );
       res.cookies.set(LOCALE_COOKIE, locale, {
         path: "/",
         maxAge: 31536000,

@@ -28,6 +28,7 @@ export function GoogleAuthButton({
   disabled,
   onError,
   onBusyChange,
+  nextUrl: nextOverride,
 }: {
   /** Disable while a sibling flow (email submit) is in-flight. */
   disabled?: boolean;
@@ -35,10 +36,15 @@ export function GoogleAuthButton({
   onError?: (message: string | null) => void;
   /** Mirror the OAuth-initiation busy state into the host page's loading flag. */
   onBusyChange?: (busy: boolean) => void;
+  /** Where to land after sign-in when the host is not an auth page (the
+   *  /create guest sign-up window). Must be an internal path. */
+  nextUrl?: string;
 }) {
   const dict = useDict();
   const t = dict.auth;
-  const { nextUrl, templateId } = useAuthNext();
+  const authNext = useAuthNext();
+  const nextUrl = nextOverride ?? authNext.nextUrl;
+  const templateId = nextOverride ? null : authNext.templateId;
   const supabase = createClient();
 
   const handleGoogle = async () => {

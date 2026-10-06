@@ -65,6 +65,10 @@ export default async function PresentationStylePage(props: {
   const locale = resolve(lang);
   const dict = await getDictionary(locale);
   const t = dict.presentationStyle;
+  // Free CTA (2026-10-06): this page is the mimic ("your own template")
+  // spoke, and that flow still needs an account, so sign up and land
+  // straight in it (/create is the only flow open to visitors).
+  const ctaHref = `${localizedHref("/signup", locale)}?next=${encodeURIComponent(localizedHref("/mimic", locale))}`;
 
   return (
     <div className="pb-8">
@@ -92,7 +96,7 @@ export default async function PresentationStylePage(props: {
               {t.hero.subtitle}
             </p>
             <a
-              href={localizedHref("/signup", locale)}
+              href={ctaHref}
               className="btn-gradient-anim inline-block rounded-full px-8 py-3 text-sm font-medium"
             >
               {t.hero.cta}
@@ -111,7 +115,7 @@ export default async function PresentationStylePage(props: {
         </ScrollReveal>
       </section>
 
-      <RepeatCta href={localizedHref("/signup", locale)} label={t.hero.cta} />
+      <RepeatCta href={ctaHref} label={t.hero.cta} />
 
       {/* Why — 4 points. */}
       <section className="py-16">
@@ -136,7 +140,7 @@ export default async function PresentationStylePage(props: {
         </div>
       </section>
 
-      <RepeatCta href={localizedHref("/signup", locale)} label={t.hero.cta} />
+      <RepeatCta href={ctaHref} label={t.hero.cta} />
 
       {/* Long-form SEO article (2026-10-01). */}
       <FeatureArticleSection locale={locale} article={t.article} />
@@ -151,7 +155,7 @@ export default async function PresentationStylePage(props: {
         </ScrollReveal>
       </section>
 
-      <RepeatCta href={localizedHref("/signup", locale)} label={t.hero.cta} />
+      <RepeatCta href={ctaHref} label={t.hero.cta} />
 
       {/* Cross-links to the sibling marketing pages (crawl path between spokes). */}
       <ExploreMoreSection locale={locale} current="presentationStyle" dict={dict} />

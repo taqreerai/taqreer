@@ -19,18 +19,23 @@ export function WizardStepRail({
   steps,
   active,
   onJump,
+  reachable = active,
 }: {
   steps: string[];
   active: number;
-  // Fired only for COMPLETED steps (i < active) - forward travel goes
-  // through the Next button so gating stays in one place.
+  // Fired for any other step up to `reachable` (default: completed steps
+  // only, so forward travel goes through Next and gating stays in one place).
   onJump: (i: number) => void;
+  // Highest step index the user may jump to (/create: every step once the
+  // content is in, 2026-10-06).
+  reachable?: number;
 }) {
   return (
     <nav className="flex items-center justify-center">
       {steps.map((title, i) => {
         const done = i < active;
         const current = i === active;
+        const jumpable = !current && i <= reachable;
         return (
           <div key={title} className="flex items-center">
             {i > 0 && (
@@ -43,11 +48,11 @@ export function WizardStepRail({
             )}
             <button
               type="button"
-              onClick={() => done && onJump(i)}
-              disabled={!done}
+              onClick={() => jumpable && onJump(i)}
+              disabled={!jumpable}
               aria-current={current ? "step" : undefined}
               className={`flex items-center gap-2 rounded-full py-1 ps-1 pe-2.5 transition-colors ${
-                done
+                jumpable
                   ? "cursor-pointer hover:bg-[var(--tq-overlay-soft)]"
                   : "cursor-default"
               }`}
@@ -81,7 +86,9 @@ export function WizardStepRail({
                     ? "text-foreground"
                     : done
                       ? "hidden text-foreground/70 sm:inline"
-                      : "hidden text-foreground/40 sm:inline"
+                      : jumpable
+                        ? "hidden text-foreground/60 sm:inline"
+                        : "hidden text-foreground/40 sm:inline"
                 }`}
               >
                 {title}

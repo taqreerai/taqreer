@@ -236,7 +236,7 @@ export function Hero({ projectCount }: { projectCount?: number }) {
                 Generate button. Pill radius pinned inline since
                 `.btn-gradient-anim` itself doesn't set one. */}
             <a
-              href={localizedHref("/signup", locale)}
+              href={localizedHref("/create", locale)}
               className="hero-enter btn-gradient-anim rounded-full px-8 py-3 text-sm font-medium"
               style={{ animationDelay: "0.45s" }}
             >

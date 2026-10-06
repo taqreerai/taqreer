@@ -1337,21 +1337,30 @@ function buildSourceContentBlocks(
     if (!enhanceImages || enhanceImages.fileIds.length === 0) return null;
     const { fileIds, textPerSlide } = enhanceImages;
     const blocks: Anthropic.Messages.ContentBlockParam[] = [];
-    fileIds.forEach((fileId, i) => {
-      blocks.push({
-        type: "image",
-        source: { type: "file", file_id: fileId },
-      } as unknown as Anthropic.Messages.ContentBlockParam);
+    // Free-trial teaser (2026-10-06): only the VISIBLE slides carry their
+    // image (those are the only ones built now); the rest of the planned deck
+    // comes as text only, so the model still plans the whole arc.
+    const total = Math.max(fileIds.length, textPerSlide.length);
+    for (let i = 0; i < total; i++) {
+      const fileId = fileIds[i];
+      if (fileId) {
+        blocks.push({
+          type: "image",
+          source: { type: "file", file_id: fileId },
+        } as unknown as Anthropic.Messages.ContentBlockParam);
+      }
       const text = (textPerSlide[i] ?? "").trim();
       blocks.push({
         type: "text",
         text:
-          `── SLIDE ${i + 1} / ${fileIds.length} — exact text (verbatim, authoritative) ──\n` +
+          `── SLIDE ${i + 1} / ${total} — exact text (verbatim, authoritative) ──\n` +
           (text.length > 0
             ? text
-            : "(no extractable text on this slide — reproduce only what the image clearly shows)"),
+            : fileId
+              ? "(no extractable text on this slide — reproduce only what the image clearly shows)"
+              : "(no extractable text on this slide)"),
       });
-    });
+    }
     // Enhance + template (2026-10-05): the picked template's design
     // reference goes LAST, labelled, so it can't be mistaken for a source
     // slide.
@@ -1430,11 +1439,17 @@ function buildSourceTextDirective(
     );
   } else if (source.kind === "enhance") {
     const fonts = source.fonts ?? [];
-    const slideCount = enhanceImages?.fileIds.length ?? 0;
+    // Source slides = the larger of the images and the text blocks: a
+    // free-trial teaser (2026-10-06) attaches images for the visible slides
+    // only, the rest as text.
+    const imageCount = enhanceImages?.fileIds.length ?? 0;
+    const slideCount = Math.max(imageCount, enhanceImages?.textPerSlide.length ?? 0);
     const { colors } = readBriefBrandColors(event.brief);
     lines.push(
       `SOURCE — Enhance flow (per-slide redesign)`,
-      `${slideCount} slide images are attached BEFORE this text, IN ORDER. Each image is the rendered ORIGINAL of one slide and is IMMEDIATELY FOLLOWED by a text block holding that slide's EXACT words. The image shows you the visual to improve; the paired text block is the authoritative content.`,
+      imageCount < slideCount
+        ? `${slideCount} source slides are attached BEFORE this text, IN ORDER. Slides 1-${imageCount} each come as the rendered ORIGINAL image IMMEDIATELY FOLLOWED by a text block holding that slide's EXACT words; slides ${imageCount + 1}-${slideCount} come as their text block only (no image). The image shows you the visual to improve; the text block is the authoritative content.`
+        : `${slideCount} slide images are attached BEFORE this text, IN ORDER. Each image is the rendered ORIGINAL of one slide and is IMMEDIATELY FOLLOWED by a text block holding that slide's EXACT words. The image shows you the visual to improve; the paired text block is the authoritative content.`,
       ``,
       `YOUR JOB — redesign each slide to editorial quality:`,
       `  • Produce EXACTLY ${slideCount} slides — one per source slide, in the SAME order. Do not merge, split, drop, add, or reorder.`,
@@ -2019,9 +2034,28 @@ export const deckGenerate = inngest.createFunction(
           "enhance source is missing sourcePath/sourceMime — cannot rasterize",
         );
       }
+      // Free-trial teaser (2026-10-06, owner direction: a free user may now
+      // enhance a file longer than the plan cap): only the first VISIBLE
+      // slides are built in this run, so only their page images are uploaded
+      // and sent, and the text stops at the planned total (the free cap).
+      // Keeps a free test of a long file as cheap as a short one; the unlock
+      // authors the tail from the stored brief text, not from these images.
+      const teaserPlan = (data.brief as {
+        teaser?: { plannedTotal?: number; lockedCount?: number } | null;
+      } | null)?.teaser;
+      const teaserTotal =
+        teaserPlan && typeof teaserPlan.plannedTotal === "number" && teaserPlan.plannedTotal > 0
+          ? teaserPlan.plannedTotal
+          : null;
+      const teaserVisible =
+        teaserTotal != null
+          ? Math.max(1, teaserTotal - (teaserPlan?.lockedCount ?? 0))
+          : null;
       const prep = await step.run("rasterize-and-upload-source", async () => {
         const pngs = await sourceToSlideImages(sourcePath, sourceMime);
-        const fileIds = await uploadSlideImages(pngs);
+        const fileIds = await uploadSlideImages(
+          teaserVisible != null ? pngs.slice(0, teaserVisible) : pngs,
+        );
         // Stash the ids on the Job row so onFailure can flush them even
         // though Inngest's failure hook can't see step return values.
         // The success path overwrites Job.outputJson with the manifest
@@ -2039,8 +2073,11 @@ export const deckGenerate = inngest.createFunction(
             })
             .catch(() => undefined);
         }
-        return { fileIds };
+        return { fileIds, pageCount: pngs.length };
       });
+      // Older memoized step results (a retry of a run started before this
+      // change) carry no pageCount: every page was uploaded then.
+      const pageCount = prep.pageCount ?? prep.fileIds.length;
       // Guard the index pairing: buildEnhanceMessages aligns textPerSlide[i]
       // with fileIds[i] by position. An EMPTY textPerSlide is allowed (image-
       // only enhance — each slide just gets no authoritative text), but a
@@ -2050,14 +2087,18 @@ export const deckGenerate = inngest.createFunction(
       // uploads first) rather than ship a deck with mis-attributed text.
       if (
         textPerSlide.length > 0 &&
-        textPerSlide.length !== prep.fileIds.length
+        textPerSlide.length !== pageCount
       ) {
         await flushSlideImages(prep.fileIds);
         throw new Error(
-          `enhance prep mismatch: ${prep.fileIds.length} slide images vs ${textPerSlide.length} text blocks`,
+          `enhance prep mismatch: ${pageCount} slide images vs ${textPerSlide.length} text blocks`,
         );
       }
-      enhanceImages = { fileIds: prep.fileIds, textPerSlide };
+      enhanceImages = {
+        fileIds: prep.fileIds,
+        textPerSlide:
+          teaserTotal != null ? textPerSlide.slice(0, teaserTotal) : textPerSlide,
+      };
     }
 
     const validated = await step.run("call-claude-and-validate", async () => {

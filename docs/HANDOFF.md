@@ -17,6 +17,37 @@ lands or a new one starts.
   after the fact.
 - The owner works on Windows (Git Bash), is not a developer: give plain steps.
 
+## Batch on dev, 2026-10-06 desktop session (PR dev -> main, NOT live yet)
+
+- **/create redesign:** a 4-step wizard on every screen size (Content, Design, Brand,
+  Output + Generate), full width, sticky Back / Next bar (`.tq-wizard-bar`; the panel
+  switches to `overflow: clip` only on pages that carry it). Templates: big grid, hover
+  flips through the slides, eye button opens a preview window (`/api/templates` now
+  sends `thumbnails` + `slideCount`). "Or try" row (`FlowSwitcher`) on step 1.
+- **Visitors before sign-up (lazy registration):** `/create` and `/enhance` live in the
+  new `app/[lang]/(studio)` group (guest frame `GuestTopBar` when signed out, the normal
+  shell when signed in; `ensureAppUser` there does the Prisma row + signup grant like
+  the dashboard, `SignupConversion` mounted too). Nothing paid runs for a visitor:
+  files stay in the browser, template setup + extraction wait for sign-in. Draft per
+  flow in `lib/create/guest-draft.ts` (localStorage + IndexedDB, 24h). Create opens
+  `GuestSignupDialog`; the return is `/<flow>?resume=generate`, which restores the
+  draft and presses Create by itself (`GenerateSplitButton autoStart`, trial pop-up
+  first). Public `GET /api/templates` (approved public rows only, rate-limited).
+- **Auth callback** now honours a safe `next` (it always went to /dashboard before, so
+  Google + email-confirm users ignored `next`). Rejects `//`, backslashes, auth pages,
+  and dot-segment tricks (`/a/..//evil.com`).
+- **Free CTAs:** homepage + feature pages -> `/create`; Redesign page -> `/enhance`;
+  Presentation style -> signup?next=/mimic; Social posts -> signup?next=/social; free
+  pricing card -> `/create`.
+- **Enhance free trial:** no page-cap block for free users up to 100 pages (soft note
+  instead); deck-generate sends only the first 5 page images on a teaser run and text up
+  to the planned total (`inngest/functions/deck-generate.ts`), so long files cost the
+  same as short ones. Mimic keeps its block (it sends the whole file as one document).
+- **Local sign-up testing:** local uses the LIVE Supabase auth. Add
+  `http://localhost:3000/**` to Supabase Redirect URLs, use a fresh private window per
+  test account (one signup grant per browser, 3 per IP per day), comment out
+  `NEXT_PUBLIC_GOOGLE_ADS_ID` while testing, delete test users in Supabase afterwards.
+
 ## The free-trial model (decided 2026-10-05, owner)
 
 - `lib/free-trial.ts`: `FREE_PLAN_FEATURE_LOCKS = false` (every flow, non-premium
@@ -128,6 +159,18 @@ Name templates by stage ("درس المرحلة الابتدائية"), Arabic f
    stuffing. Claims about competitors must be verifiable.
 
 ## Pending work (owner decides order)
+
+00. **Unify every creation tool on the /create wizard (decided 2026-10-06, owner).**
+    Extract the shared shell from `/create` (header + rail + hint, full width, Design
+    grids, Brand step, sticky bar, visitor sign-up) and rebuild enhance, mimic, social,
+    datasheet on it. Owner answers: SKIP steps a tool doesn't need (not always 4); mimic
+    stays its own page (its Design step = upload your reference deck); ship the current
+    batch first. Open each tool to visitors in the same pass (enhance already is).
+    Mapping: enhance = file+instructions / templates / brand / AI photos; mimic =
+    content / reference upload / brand / settings; social = topic+product photo /
+    social styles / brand / format+count+photos; datasheet = spreadsheet / deck styles /
+    brand / size+count+numbering. Enhance stays templates-only (generator has no
+    enhance + design-style support yet).
 
 0. **Education push (decided 2026-10-04).** Research in
    `docs/seo-research-education-2026-10-04.md`: per-subject pages do NOT pay off (all 25
