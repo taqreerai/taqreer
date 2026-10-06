@@ -6,17 +6,15 @@ lands or a new one starts.
 
 ## State
 
-- **Live (taqreer.ai)** = commit `6967b33`, deployed 2026-10-05.
-- **Waiting, NOT on dev yet:** 34 commits on branch `claude/awesome-cannon-uay51e`
-  (cloud session 2026-10-05/06), listed below. Bring them in on the desktop:
-  `cd ~/Taqreer && git checkout dev && git pull --no-edit origin claude/awesome-cannon-uay51e`
-  then test locally (checklist below), then `./deploy.sh`.
-- The batch includes a **data migration** `20261005120000_free_trial_unlock` (free tier:
-  all flows, slideCap 30, configVersion bump). deploy.sh runs `prisma migrate deploy` on
-  the server; locally run `npx prisma migrate deploy` + `npx prisma generate` first.
+- **`main` = commit `4c419db`** (pushed 2026-10-05 by deploy.sh). It contains the whole
+  2026-10-05/06 cloud batch (34 commits from `claude/awesome-cannon-uay51e`, listed
+  below), now merged into `dev`. Confirm on taqreer.ai/ar: the "جرّب مجانا" button with
+  "بدون بطاقة ائتمان" under it means the batch is live.
+- The batch included the **data migration** `20261005120000_free_trial_unlock` (free
+  tier: all flows, slideCap 30, configVersion bump), applied by deploy.sh on the server.
 - `/security-review` was NOT run on this batch (only quick self-checks). Prompt-pipeline
   edits (styles, enhance photos, real-people rule) and the AI-edit gate qualify; run it
-  before deploying if the owner wants the full review.
+  after the fact.
 - The owner works on Windows (Git Bash), is not a developer: give plain steps.
 
 ## The free-trial model (decided 2026-10-05, owner)
@@ -36,7 +34,7 @@ lands or a new one starts.
   hero shows "بدون بطاقة ائتمان" under the button; FAQ / plans copy says "first 5 slides",
   never "your first deck". Paid plan cards keep "ابدأ الآن".
 
-## Waiting batch: what changed (branch claude/awesome-cannon-uay51e)
+## Last batch: what changed (shipped in 4c419db)
 
 **Creation flows (create, mimic, social, enhance, datasheet)**
 - Desktop cards fill the screen width (cap 1800px, `desk` breakpoint = 1180px in
@@ -73,7 +71,7 @@ lands or a new one starts.
 - Phones: while generating with the slides panel closed, the edge arrow sits in a chip
   and nudges (`.tq-edge-nudge` in globals.css).
 
-## Local test checklist before deploying this batch
+## Test checklist for this batch (run on live if not done locally)
 
 1. `npm run dev` + `npx inngest-cli@latest dev`; migrate + generate first.
 2. /ar/create and /en/create: wide cards, numbered cards, style tab (chips, "i" pop-ups,
@@ -105,7 +103,7 @@ Topic for all stages: the water cycle. Prompts were given in chat (2026-10-06); 
 
 Name templates by stage ("درس المرحلة الابتدائية"), Arabic first, English later.
 
-## Recently shipped (live, 6967b33)
+## Shipped before that (6967b33)
 
 - `/gamma-arabic` comparison page ("A vs B" layout, keyword table in git history of this
   file); request Search Console indexing for `/ar/gamma-arabic` + `/en/gamma-arabic`.
