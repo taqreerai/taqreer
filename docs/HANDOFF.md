@@ -1,79 +1,119 @@
-# Handoff: desktop to cloud sessions (updated 2026-10-04)
+# Handoff: cloud to desktop (updated 2026-10-06)
 
 Read with `CLAUDE.md` (conventions + the "Cloud sessions" rules) and `CONTEXT.md` (full
-system reference). This is the working state that used to live only on the owner's
-machine. Update it when a task lands or a new one starts.
+system reference). This is the working state between sessions. Update it when a task
+lands or a new one starts.
 
 ## State
 
-- **Live (taqreer.ai)** = commit `6967b33`, deployed 2026-10-05 (includes the referral
-  migration, applied by scripts/post-receive.sh). Nothing waiting on `dev`.
-- Shipped in that deploy: `/gamma-arabic` in an "A vs B" layout (face-off hero,
-  "pick X if" cards, tabbed screenshot pairs that stack below 1024px, comparison grid);
-  /create "No template" now reads "تلقائي / Automatic"; /create step 3 card hugs its
-  content (`stackedCardVisibility`); the brand/deck font dropdown (`GoogleFontSlot`)
-  searches the full ~1,900-family Google Fonts catalog, Arabic-capable first.
-- Owner to check: PowerPoint export with a newly selectable Arabic font (e.g. Alexandria);
-  request indexing for `/ar/gamma-arabic` + `/en/gamma-arabic` in Search Console.
-- The owner works on Windows (Git Bash), not macOS, and is not a developer: give plain
-  steps. Cloud branches reach dev via `git pull --no-edit origin <branch>` on the desktop.
+- **Live (taqreer.ai)** = commit `6967b33`, deployed 2026-10-05.
+- **Waiting, NOT on dev yet:** 34 commits on branch `claude/awesome-cannon-uay51e`
+  (cloud session 2026-10-05/06), listed below. Bring them in on the desktop:
+  `cd ~/Taqreer && git checkout dev && git pull --no-edit origin claude/awesome-cannon-uay51e`
+  then test locally (checklist below), then `./deploy.sh`.
+- The batch includes a **data migration** `20261005120000_free_trial_unlock` (free tier:
+  all flows, slideCap 30, configVersion bump). deploy.sh runs `prisma migrate deploy` on
+  the server; locally run `npx prisma migrate deploy` + `npx prisma generate` first.
+- `/security-review` was NOT run on this batch (only quick self-checks). Prompt-pipeline
+  edits (styles, enhance photos, real-people rule) and the AI-edit gate qualify; run it
+  before deploying if the owner wants the full review.
+- The owner works on Windows (Git Bash), is not a developer: give plain steps.
 
-## Recently shipped (live)
+## The free-trial model (decided 2026-10-05, owner)
 
-- **/create**: one "Design" step (template picker, design style, colour presets);
-  2 free templates (`Template.isFree`), the rest show the gold premium badge.
-- **Studio**: deck-wide recolor (`lib/deck/recolor.ts`) and font change
-  (`lib/deck/refont.ts`), deterministic, undoable. Default font Noto Sans Arabic.
-  Paid plans default to Opus (`lib/credits/use-default-quality.ts`).
-- **"Your own template" (قالبك الخاص)**: user-facing name of the mimic flow (URL stays
-  `/mimic`, code says mimic). 3-step wizard in `components/mimic/MimicFlow.tsx`:
-  1. content + design reference, in two framed panels
-  2. brand
-  3. slide size + count, AI images, instructions, then Generate
+- `lib/free-trial.ts`: `FREE_PLAN_FEATURE_LOCKS = false` (every flow, non-premium
+  template, logo, export open to free) and `FREE_AI_EDIT_LOCK = true` (AI edits after
+  generation are PAID: studio AI tab shows a crown + upsell; slide / partial regen routes
+  402 `ai_edit_locked`; full regenerate = Retry stays open via `aiEdit: false`).
+- The only other free gate is the **teaser**: 5 slides designed (`TEASER_VISIBLE_COUNT`,
+  lib/credits/cost.ts), the rest locked until they subscribe (`app/api/projects/route.ts`).
+- **Before generating**, free users get the pop-up again (`SlideCapUpsellDialog` via
+  `GenerateSplitButton`): "خطة التجربة المجانية", body says first 5 slides, buttons
+  "عرض الخطط" (UpgradeModal at plus) / "تصميم أول 5 شرائح".
+- Quiet watermark on free exports (`lib/export/free-branding.ts`), clickable in PPTX.
+- AI photos cost free users 0 credits but the toggle now starts OFF for everyone.
+- CTA copy: every free button is "جرّب مجانا" / "Try it free" (was "ابدأ مجانا");
+  hero shows "بدون بطاقة ائتمان" under the button; FAQ / plans copy says "first 5 slides",
+  never "your first deck". Paid plan cards keep "ابدأ الآن".
 
-  The brand card has "ألوان القالب / Template colors" (default): sends no brand colours,
-  and `deck-generate.ts` `REFERENCE_PALETTE_ADDENDUM` makes Claude read the reference's
-  palette and emit `data-deck-palette` on the cover. "ألوان مخصصة / Custom colors"
-  uses the swatches.
-- **PowerPoint export, donut charts** (`lib/export/html-export.ts`): Claude draws
-  donuts as `<circle>`s with `pathLength="100"` + `stroke-dasharray` percentages.
-  PowerPoint ignores `pathLength` and `stroke-dashoffset`, so before export:
-  - `normalizeSvgPathLength` rescales the dashes to real lengths
-  - `donutCirclesToArcs` redraws each one-arc-per-ring circle as an explicit `<path>` arc
+## Waiting batch: what changed (branch claude/awesome-cannon-uay51e)
 
-  Verified in PowerPoint on a real deck.
-- The free-plan slide-cap hint shows only on /create (the only free flow).
+**Creation flows (create, mimic, social, enhance, datasheet)**
+- Desktop cards fill the screen width (cap 1800px, `desk` breakpoint = 1180px in
+  globals.css `@theme`); template + colour-preset grids add columns via container queries.
+- Cards are numbered (`CardStepBadge` in components/create/controls.tsx).
+- Compact cards on enhance + mimic; font "install this font" hint with a Google Fonts
+  link (`FontInstallHint`); logo upload zone redesigned (icon tile beside the text).
+- AI photos row: square icon tile with an AI sparkle; free-trial badge removed.
+- Enhance: Auto colours button; deck templates for enhance; **AI photos for enhance**
+  (`ENHANCE_IMG_ADDENDUM`). Enhance projects reach deck-generate as type "create", so
+  enhance logic must key off `source.kind === "enhance"`, never `event.type`.
+- Real-people photo rule in lib/deck/frame.ts: a slide about a real person/team/brand
+  shows their world (stadium, stage, city), never a lookalike or an unrelated metaphor.
 
-## On dev, waiting for deploy
+**Design styles (biggest change)**
+- `lib/design-styles.ts` = the single list: 24 deck styles + Auto = 25 tiles. `label` is
+  the English name AND the `DESIGN_STYLE_DIRECTIVES` key in deck-generate.ts (never rename
+  without migrating); `key` indexes the dictionary + thumbnail; `photos` auto-enables AI
+  photos; `sectors` drive the filter chips.
+- New styles: Classroom, Official, Heritage, Luxury, Tech/Glass, Startup, Infographic,
+  Hand-drawn, Organic, Retro, Collage, plus 5 education stages: Early Years / KG,
+  Primary, Middle School, High School, University Lecture.
+- Names, one-line descriptions and a "what it does / best for" guide per style in AR + EN
+  (`dict.flows.stylePicker.names / descs / info / sectors`).
+- `components/create/StyleThumb.tsx`: illustrated colourful mini-slide per style, RTL
+  mirrored. `StyleInfoButton.tsx`: "i" pop-up (hover on mouse, tap on touch, portaled).
+- `DesignStyleGrid` (create) + `DesignStylePicker` (datasheet dialog): sector chips
+  (All, Education, Business, Government, Marketing, Tech, Creative, Culture, Lifestyle),
+  "Show all" gallery. Social styles unchanged.
 
-**`/gamma-arabic` comparison page** (`app/[lang]/(marketing)/gamma-arabic/page.tsx`,
-copy in `dict.gammaArabic`, screenshots in `public/compare/*.webp`):
-- Same idea (Riyadh specialty coffee shop launch plan) run through Gamma and taqreer.ai,
-  exported PowerPoint screenshots side by side, plus a comparison table: colours,
-  spacing, design, Arabic mixed with English, charts.
-- Keyword targets (Saudi Arabia, monthly, all KD 0), each used once or twice:
+**Studio / editor**
+- Image pill "Replace" is now "رفع صورة / Upload photo"; the failed-AI-photo card has
+  "ارفع صورتك / Upload yours" (DeckView `handleUploadForFailed`).
+- Phones: while generating with the slides panel closed, the edge arrow sits in a chip
+  and nudges (`.tq-edge-nudge` in globals.css).
 
-  | Keyword | Monthly |
-  |---|---|
-  | جاما ai | 880 |
-  | موقع جاما | 590 |
-  | gamma app بالعربي | 480 |
-  | جاما اب | 320 |
-  | تطبيق جاما | 210 |
-  | موقع gamma | 210 |
-  | gamma ai بالعربي | 170 |
-  | gamma مجاني | 140 |
-  | جاما الذكاء الاصطناعي | 140 |
-  | جاما بوربوينت | 110 |
+## Local test checklist before deploying this batch
 
-  Not an "alternative" page: "بديل gamma" is only ~10/mo.
-- Gamma credited honestly for what it does better (documents and webpages,
-  embeds, viewer analytics), verified on help.gamma.app. Do NOT credit Gamma
-  for English content: taqreer.ai is just as good in English (owner ruling).
-- Gamma free plan fact used in the FAQ: 400 credits at sign-up, no refresh
-  (help.gamma.app, Oct 2026). gamma.app/pricing blocks automated fetches.
-- After deploy, the owner requests indexing in Google Search Console for
-  `/ar/gamma-arabic` and `/en/gamma-arabic`.
+1. `npm run dev` + `npx inngest-cli@latest dev`; migrate + generate first.
+2. /ar/create and /en/create: wide cards, numbered cards, style tab (chips, "i" pop-ups,
+   Show all, Arabic names), colour presets, logo zone, photo row. Light + dark.
+3. Free account: Generate shows the trial pop-up on create / enhance / mimic; both
+   buttons work; closing it does not generate. AI tab in the studio shows the upsell.
+4. Enhance with photos ON on a deck with photos + a chart: photos come back as generated
+   images, the chart stays a placeholder, text intact. Also with a template.
+5. Editor: upload your own photo into a generated photo box (in-well + side panel),
+   reload, it stays.
+6. Generate one lesson with Early Years, Middle School and High School: decks must feel
+   clearly different in age. Report any style whose result doesn't match its thumbnail.
+7. Phone view (F12 + Ctrl+Shift+M) during generation: the nudging arrow chip.
+8. /ar + /en homepage: "جرّب مجانا" button + "بدون بطاقة ائتمان" line, fold intact.
+
+## Education templates (owner to generate, then save as templates)
+
+Topic for all stages: the water cycle. Prompts were given in chat (2026-10-06); settings:
+
+| Style | Slides | Photos | Font |
+|---|---|---|---|
+| Early Years / KG | 8 | on | Baloo Bhaijaan 2 |
+| Primary School | 10 | on | Playpen Sans Arabic |
+| Middle School | 10 | on | Changa |
+| High School | 12 | off | IBM Plex Sans Arabic |
+| University Lecture | 12 | off | Noto Naskh Arabic |
+| Classroom / Academic | 10 | off | Cairo |
+| Hand-drawn (topic: كيف تذاكر بذكاء) | 10 | off | Playpen Sans Arabic |
+
+Name templates by stage ("درس المرحلة الابتدائية"), Arabic first, English later.
+
+## Recently shipped (live, 6967b33)
+
+- `/gamma-arabic` comparison page ("A vs B" layout, keyword table in git history of this
+  file); request Search Console indexing for `/ar/gamma-arabic` + `/en/gamma-arabic`.
+- Referrals (`lib/referral.ts`, migration `20261004120000_referrals`, InviteCard on
+  /plans), 48 colour palettes, quiet watermark, Google Fonts catalog search.
+- **"Your own template" (قالبك الخاص)** = the mimic flow (URL `/mimic`).
+- PowerPoint donut charts: `normalizeSvgPathLength` + `donutCirclesToArcs` in
+  `lib/export/html-export.ts`.
 
 ## How to add an SEO page (the pattern)
 
@@ -90,18 +130,6 @@ copy in `dict.gammaArabic`, screenshots in `public/compare/*.webp`):
    stuffing. Claims about competitors must be verifiable.
 
 ## Pending work (owner decides order)
-
-- **Shipped 2026-10-05 (was the 2026-10-04 evening batch):** desktop /create shows
-  all 3 cards (xl+); AI images toggle in the settings card, renamed "صور ذكية لمحتواك";
-  AI images FREE (0 credits) + default ON for the free plan (imageCreditsForPlan in
-  estimate / preflight / settle; free image regen limited to retrying failed boxes);
-  48 palettes; quiet free watermark ("Designed with taqreer", 38% opacity, none on
-  the cover, NO closing slide: BRANDED_CLOSING_SLIDE=false); free PPTX gets Company
-  property + last-slide speaker note; shared-link viewers see no watermark;
-  invite-a-colleague referrals (+400 invitee after a passed signup grant, +2,000
-  inviter on the invitee's first paid checkout, cap 10/month; schema migration
-  20261004120000_referrals; InviteCard on /plans); show-all modals for templates +
-  colour templates; photo toggle as a plain settings row.
 
 0. **Education push (decided 2026-10-04).** Research in
    `docs/seo-research-education-2026-10-04.md`: per-subject pages do NOT pay off (all 25
@@ -131,7 +159,10 @@ copy in `dict.gammaArabic`, screenshots in `public/compare/*.webp`):
 
    Later: an English Gamma page (English "gamma ai" is 27-33k but navigational, harder),
    outreach emails, opt-in public deck pages.
-2. **Product ideas raised, not started:** viewer analytics on shared decks (who opened
+2. **Ideas raised, not started:** the ready-made presentations page and the teachers'
+   lesson-prep page (step 0 above) should showcase the education templates once saved.
+   Social styles could get the same Arabic names / info pop-ups / thumbnails treatment.
+   Also:  viewer analytics on shared decks (who opened
    it, which slides). This is Gamma's edge and would make a paid-plan feature.
 3. **Small fixes, offered but not requested:**
    - Missing space before "في" and after "،" in exported PowerPoint text
@@ -152,7 +183,7 @@ copy in `dict.gammaArabic`, screenshots in `public/compare/*.webp`):
   | sonnet-fast | 160 | 27 | 376 |
   | opus-fast | 460 | 34 | 732 |
 
-  - AI images +10/slide.
+  - AI images +10/slide (0 for the free plan, `imageCreditsForPlan`).
   - Auto slide count holds the plan cap, then refunds.
   - Mimic has no surcharge of its own.
   - Admin accounts are not metered (no CreditHold row).
