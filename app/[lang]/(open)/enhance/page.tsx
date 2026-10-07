@@ -33,7 +33,7 @@
 // InlinePaletteSwatch, Toggle are the same primitives /create uses —
 // per "reuse > extend > fork > build new".
 
-import { TemplatePickerGrid } from "@/components/create/TemplatePickerGrid";
+import { STYLE_REQUIRES_IMAGES } from "@/components/create/OutputCards";
 import { AIImagesPanel } from "@/components/brand/AIImagesPanel";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -67,7 +67,7 @@ import { TEASER_VISIBLE_COUNT } from "@/lib/credits/cost";
 import posthog from "posthog-js";
 import { useIsGuest } from "@/components/app/GuestContext";
 import { GuestSignupDialog } from "@/components/create/GuestSignupDialog";
-import { BrandStep, WizardBar, WizardHead, scrollWizardTop } from "@/components/create/wizard";
+import { BrandStep, DesignStep, WizardBar, WizardHead, scrollWizardTop } from "@/components/create/wizard";
 import {
   GUEST_SAVE_EVENT,
   clearGuestDraft,
@@ -335,6 +335,11 @@ export default function EnhanceContentPage() {
   // mints its design reference and the redesign follows the template's look;
   // null = the classic enhance (the AI designs its own look).
   const [templateId, setTemplateId] = useState<string | null>(null);
+  // Design style (2026-10-06, same grid as /create): steers the redesign's
+  // look; mutually exclusive with a template. Photo-led styles switch AI
+  // photos on (never off), like /create.
+  const [designStyle, setDesignStyle] = useState<string | null>(null);
+  const [lookTab, setLookTab] = useState<"templates" | "styles">("templates");
   const updateColor = (index: number, next: string) =>
     setColors((c) => c.map((v, i) => (i === index ? next : v)));
   const addColor = () => {
@@ -361,6 +366,13 @@ export default function EnhanceContentPage() {
   // AI photos (2026-10-05): off by default, same toggle as /create. On →
   // deck-generate recreates the source slides' photos as generated images.
   const [imagesMode, setImagesMode] = useState<boolean>(false);
+  // Picking a style clears the template; photo-led styles switch AI photos
+  // on (never off), like /create.
+  const onDesignStyle = (style: string | null) => {
+    setDesignStyle(style);
+    setTemplateId(null);
+    if (style && STYLE_REQUIRES_IMAGES.has(style)) setImagesMode(true);
+  };
 
   // Apply a resolved brand (sessionStorage, default kit, or a picked
   // saved kit) to the card state. Maps the heading font slot → the
@@ -723,6 +735,8 @@ export default function EnhanceContentPage() {
     step,
     instructions,
     templateId,
+    designStyle,
+    lookTab,
     colors,
     colorsAuto,
     fontMode: guestFont.fontMode,
@@ -780,6 +794,8 @@ export default function EnhanceContentPage() {
       const d = draft.settings;
       setInstructions(d.instructions ?? "");
       setTemplateId(d.templateId ?? null);
+      setDesignStyle(d.designStyle ?? null);
+      setLookTab(d.lookTab === "styles" ? "styles" : "templates");
       setColorsAuto(!!d.colorsAuto);
       setColors(Array.isArray(d.colors) ? d.colors.slice(0, MAX_PALETTE) : []);
       const font = fontFromDraft(d, draft.files);
@@ -927,7 +943,11 @@ export default function EnhanceContentPage() {
         body: JSON.stringify({
           content,
           brand: mergedBrand,
-          rules: null,
+          // Only the design style travels here (deck-generate keeps the
+          // source deck's own page numbers for enhance).
+          rules: designStyle && !templateId
+            ? { designStyle, fixTypos: false, pagination: false, persistent: null }
+            : null,
           // Use the language detected from the source PPTX/PDF
           // during extraction. Falls back to "ar" when detection
           // returned null (PDF inputs, empty PPTX text, or genuine
@@ -1300,28 +1320,32 @@ export default function EnhanceContentPage() {
 
         </motion.section>
 
-        {/* ═══════════════════════════════════════════════════════
-            STEP 2 · DESIGN - redesign the deck in a template's look
-            (2026-10-05), full width like /create. Automatic (the default)
-            keeps the classic enhance.
-            ═══════════════════════════════════════════════════════ */}
-        <section
-          className={`${step === 1 ? "flex" : "hidden"} w-full max-w-[1400px] flex-col gap-4`}
-        >
-          {templateId ? (
-            <p className="mx-auto max-w-xl text-center text-xs leading-5 text-foreground/55">
-              {dict.flows.design.templateNoteEnhance}
-            </p>
-          ) : null}
-          <TemplatePickerGrid
-            wide
-            onGuestSelect={guest ? (tpl) => setTemplateId(tpl.id) : undefined}
-            selectedId={templateId}
-            onSelect={(picked) => setTemplateId(picked.template.id)}
-            onClear={() => setTemplateId(null)}
-            disabled={stage === "submitting"}
-          />
-        </section>
+        {/* STEP 2 · DESIGN - a template (redesign in its look, 2026-10-05) OR
+            a design style (2026-10-06), shared with /create. Automatic (no
+            pick) keeps the classic enhance. */}
+        <DesignStep
+          visible={step === 1}
+          tab={lookTab}
+          onTab={setLookTab}
+          templateId={templateId}
+          onPickTemplate={(picked) => {
+            setTemplateId(picked.template.id);
+            setDesignStyle(null);
+          }}
+          onGuestPickTemplate={
+            guest
+              ? (tpl) => {
+                  setTemplateId(tpl.id);
+                  setDesignStyle(null);
+                }
+              : undefined
+          }
+          onClearTemplate={() => setTemplateId(null)}
+          designStyle={designStyle}
+          onDesignStyle={onDesignStyle}
+          templateNote={dict.flows.design.templateNoteEnhance}
+          disabled={stage === "submitting"}
+        />
 
         {/* STEP 3 · BRAND (shared with every creation tool), then Create. */}
         <BrandStep

@@ -60,6 +60,8 @@ export type EnhanceGuestSettings = {
   step: number;
   instructions: string;
   templateId: string | null;
+  designStyle: string | null;
+  lookTab: "templates" | "styles";
   colors: string[];
   colorsAuto: boolean;
   fontMode: "google" | "upload";

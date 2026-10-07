@@ -396,7 +396,7 @@ const DESIGN_STYLE_DIRECTIVES: Record<string, string> = {
     "A clear, trustworthy data card: ONE takeaway per card, led by a single hero figure or a compact chart (a short bar set, one line, or one ring), with a brief supporting label. Neutral ground, brand colour reserved for the figure that matters. Type stays large enough to read at thumbnail size in a feed. Imagery: minimal or none, let the number lead.",
 };
 
-function ruleLines(rules: Rules): string[] {
+function ruleLines(rules: Rules, keepSourcePagination = false): string[] {
   if (!rules) return [];
   // Bare info, ONE line per AVAILABLE option - no chrome/layout how-to (owner
   // direction 2026-07-10: the chrome variables hand off with NO position
@@ -405,11 +405,15 @@ function ruleLines(rules: Rules): string[] {
   // explicit). `data-anchor` is the one functional marker kept -
   // sanitize.ts's rewriteChromeOnTop reads it to lift chrome above images.
   const lines: string[] = [""];
-  lines.push(
-    rules.pagination
-      ? `Pagination — put a page number on every slide, marked \`data-anchor\`.`
-      : `No pagination.`,
-  );
+  // Enhance (2026-10-06: it now sends rules to carry a design style) keeps
+  // the source deck's own numbering, as before it sent any rules.
+  if (!keepSourcePagination) {
+    lines.push(
+      rules.pagination
+        ? `Pagination — put a page number on every slide, marked \`data-anchor\`.`
+        : `No pagination.`,
+    );
+  }
   if (rules.fixTypos) lines.push(`Fix typos silently, keeping the meaning.`);
   if (rules.persistent && rules.persistent.text.trim()) {
     const skip = rules.persistent.exclude.length
@@ -1116,7 +1120,7 @@ function buildUserMessage(event: DeckGenerateEvent) {
     );
   }
 
-  lines.push(...ruleLines(rules));
+  lines.push(...ruleLines(rules, readSource(event)?.kind === "enhance"));
 
   // Logo placement — brand logo, if provided, is up to Claude to compose
   // into the chrome. See `buildLogoBlock` below for the full block;

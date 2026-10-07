@@ -24,6 +24,12 @@ import {
   type BrandKitOption,
 } from "@/components/brand/BrandKitDropdown";
 import type { BrandFontState } from "@/lib/brand/fonts";
+import {
+  TemplatePickerGrid,
+  type PickedTemplate,
+} from "@/components/create/TemplatePickerGrid";
+import { DesignStyleGrid } from "@/components/create/DesignStylePicker";
+import type { PickerTemplate } from "@/app/api/templates/route";
 
 /** Scroll the page back to the top on a step change (page scroll lives on
  *  <body> in the app shell, on the window elsewhere, so both). */
@@ -122,6 +128,84 @@ export function WizardBar({
         generate
       )}
     </div>
+  );
+}
+
+/**
+ * The Design step: a ready-made template OR a design style, full width, in
+ * two tabs. Picking one clears the other (the caller's handlers do that).
+ * Both grids stay mounted so the template list isn't refetched per tab flip.
+ */
+export function DesignStep({
+  visible,
+  tab,
+  onTab,
+  templateId,
+  onPickTemplate,
+  onGuestPickTemplate,
+  onClearTemplate,
+  designStyle,
+  onDesignStyle,
+  templateNote,
+  disabled = false,
+}: {
+  visible: boolean;
+  tab: "templates" | "styles";
+  onTab: (next: "templates" | "styles") => void;
+  templateId: string | null;
+  onPickTemplate: (picked: PickedTemplate) => void;
+  // Visitor: remember the pick only (set up after sign-in).
+  onGuestPickTemplate?: (tpl: PickerTemplate) => void;
+  onClearTemplate: () => void;
+  designStyle: string | null;
+  onDesignStyle: (style: string | null) => void;
+  // What a picked template does in this tool (shown while one is picked).
+  templateNote: string;
+  disabled?: boolean;
+}) {
+  const t = useDict().flows;
+  return (
+    <section className={`${visible ? "flex" : "hidden"} w-full max-w-[1400px] flex-col gap-4`}>
+      <div className="flex flex-col items-center gap-2">
+        <div role="tablist" aria-label={t.design.card} className="design-tabs w-full max-w-sm">
+          {(["templates", "styles"] as const).map((k) => (
+            <button
+              key={k}
+              type="button"
+              role="tab"
+              aria-selected={tab === k}
+              onClick={() => onTab(k)}
+              className={`design-tab ${tab === k ? "is-active" : ""}`}
+            >
+              {k === "templates" ? t.design.tabTemplates : t.design.tabStyles}
+            </button>
+          ))}
+        </div>
+        {templateId ? (
+          <p className="max-w-xl text-center text-xs leading-5 text-foreground/55">{templateNote}</p>
+        ) : null}
+      </div>
+      <div className={tab === "templates" ? "" : "hidden"}>
+        <TemplatePickerGrid
+          wide
+          onGuestSelect={onGuestPickTemplate}
+          selectedId={templateId}
+          onSelect={onPickTemplate}
+          onClear={onClearTemplate}
+          disabled={disabled}
+        />
+      </div>
+      <div className={tab === "styles" ? "" : "hidden"}>
+        {/* A picked template outranks the style grid: no tile reads as
+            active (not even Auto) while one is set. */}
+        <DesignStyleGrid
+          wide
+          value={templateId ? "__template__" : designStyle}
+          onChange={onDesignStyle}
+          disabled={disabled}
+        />
+      </div>
+    </section>
   );
 }
 

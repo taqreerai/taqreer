@@ -47,11 +47,7 @@
 // this template" now lands here with ?template=<id> preselected. Brand kits
 // still hydrate from sessionStorage or the user's default.
 
-import { DesignStyleGrid } from "@/components/create/DesignStylePicker";
-import {
-  TemplatePickerGrid,
-  type PickedTemplate,
-} from "@/components/create/TemplatePickerGrid";
+import { type PickedTemplate } from "@/components/create/TemplatePickerGrid";
 import {
   fetchUse,
   readCachedUse,
@@ -105,7 +101,7 @@ import posthog from "posthog-js";
 import { useIsGuest } from "@/components/app/GuestContext";
 import { GuestSignupDialog } from "@/components/create/GuestSignupDialog";
 import { FlowSwitcher } from "@/components/create/FlowSwitcher";
-import { BrandStep, WizardBar, WizardHead, scrollWizardTop } from "@/components/create/wizard";
+import { BrandStep, DesignStep, WizardBar, WizardHead, scrollWizardTop } from "@/components/create/wizard";
 import type { PickerTemplate } from "@/app/api/templates/route";
 import {
   GUEST_SAVE_EVENT,
@@ -1147,60 +1143,20 @@ export default function CreatePage() {
           </div>
         </section>
 
-        {/* ═══════════════════════════════════════════════════════
-            STEP 2 · DESIGN - a template OR a design style, full width.
-            Both grids stay mounted so the template list isn't refetched
-            per tab flip.
-            ═══════════════════════════════════════════════════════ */}
-        <section
-          className={`${step === 1 ? "flex" : "hidden"} w-full max-w-[1400px] flex-col gap-4`}
-        >
-          <div className="flex flex-col items-center gap-2">
-            <div
-              role="tablist"
-              aria-label={t.design.card}
-              className="design-tabs w-full max-w-sm"
-            >
-              {(["templates", "styles"] as const).map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  role="tab"
-                  aria-selected={lookTab === tab}
-                  onClick={() => setLookTab(tab)}
-                  className={`design-tab ${lookTab === tab ? "is-active" : ""}`}
-                >
-                  {tab === "templates" ? t.design.tabTemplates : t.design.tabStyles}
-                </button>
-              ))}
-            </div>
-            {template ? (
-              <p className="max-w-xl text-center text-xs leading-5 text-foreground/55">
-                {t.design.templateNote}
-              </p>
-            ) : null}
-          </div>
-          <div className={lookTab === "templates" ? "" : "hidden"}>
-            <TemplatePickerGrid
-              wide
-              onGuestSelect={guest ? pickGuestTemplate : undefined}
-              selectedId={template?.id ?? null}
-              onSelect={pickTemplate}
-              onClear={() => setTemplate(null)}
-              disabled={submitting}
-            />
-          </div>
-          <div className={lookTab === "styles" ? "" : "hidden"}>
-            {/* A picked template outranks the style grid: no tile reads as
-                active (not even Auto) while one is set. */}
-            <DesignStyleGrid
-              wide
-              value={template ? "__template__" : designStyle}
-              onChange={onDesignStyle}
-              disabled={submitting}
-            />
-          </div>
-        </section>
+        {/* STEP 2 · DESIGN - a template OR a design style (shared). */}
+        <DesignStep
+          visible={step === 1}
+          tab={lookTab}
+          onTab={setLookTab}
+          templateId={template?.id ?? null}
+          onPickTemplate={pickTemplate}
+          onGuestPickTemplate={guest ? pickGuestTemplate : undefined}
+          onClearTemplate={() => setTemplate(null)}
+          designStyle={designStyle}
+          onDesignStyle={onDesignStyle}
+          templateNote={t.design.templateNote}
+          disabled={submitting}
+        />
 
         {/* STEP 3 · BRAND (shared with every creation tool). */}
         <BrandStep
