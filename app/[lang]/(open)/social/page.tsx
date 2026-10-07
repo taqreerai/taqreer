@@ -5,7 +5,6 @@
 // consistent. It posts `type: "social"` + `brand.slideSize` = the chosen ratio;
 // the deck engine + full studio + pricing are reused unchanged.
 
-import { PalettePresetPicker } from "@/components/brand/PalettePresetPicker";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -20,26 +19,29 @@ import { displaySlideEstimate, slideCapForFlow } from "@/lib/credits/cost";
 import { isImagesLocked, IMAGES_GATE_TIER } from "@/lib/images/images-gating";
 import { planLabel } from "@/lib/plan";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
-import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
-import { PillButton } from "@/components/create/PillButton";
-import { WizardStepRail } from "@/components/create/WizardChrome";
-import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
-import { LogoRow } from "@/components/brand/LogoRow";
 import { PersistentRow } from "@/components/brand/PersistentRow";
-import {
-  BrandKitDropdown,
-  type BrandKitOption,
-} from "@/components/brand/BrandKitDropdown";
-import { ColorPickerPopover } from "@/components/create/ColorPickerPopover";
+import { type BrandKitOption, } from "@/components/brand/BrandKitDropdown";
 import { InlineStepper, type SlideCountMode } from "@/components/create/OutputCards";
-import { DesignStylePicker } from "@/components/create/DesignStylePicker";
+import { SocialStyleGrid } from "@/components/create/DesignStylePicker";
+import { BrandStep, WizardBar, WizardHead, scrollWizardTop } from "@/components/create/wizard";
+import posthog from "posthog-js";
+import { useIsGuest } from "@/components/app/GuestContext";
+import { GuestSignupDialog } from "@/components/create/GuestSignupDialog";
+import {
+  GUEST_SAVE_EVENT,
+  clearGuestDraft,
+  fontFromDraft,
+  fontToDraft,
+  loadGuestDraft,
+  readResumeMode,
+  saveGuestFiles,
+  saveGuestSettings,
+  type SocialGuestSettings,
+} from "@/lib/create/guest-draft";
 import { AIImagesPanel } from "@/components/brand/AIImagesPanel";
 import {
-  CardHeader,
-  CardStepBadge,
   SegmentedToggle,
-  Toggle,
   type LanguageCode,
 } from "@/components/create/controls";
 import {
@@ -77,7 +79,6 @@ import { LockedFlowBanner } from "@/components/billing/LockedFlowBanner";
 const MIN_PALETTE = 2;
 const MAX_PALETTE = 6;
 const DEFAULT_PALETTE = ["#000000", "#FFFFFF"];
-const CARD_MIN_H_CLASS = "min-h-[440px]";
 
 // Product photo caps - mirror POST /api/storage/upload-image (10MB, raster
 // only). GIF is deliberately excluded here: gpt-image's images.edit input
@@ -104,6 +105,10 @@ function fewWords(s: string, max = 3): string {
   return parts.length <= max ? s.trim() : `${parts.slice(0, max).join(" ")}…`;
 }
 
+
+// Wizard: content, style, brand, settings + Create (2026-10-06).
+const SOCIAL_LAST_STEP = 3;
+
 export default function SocialPage() {
   const dict = useDict();
   const { dir, locale } = useLocale();
@@ -120,6 +125,10 @@ export default function SocialPage() {
     { value: "auto" as const, label: dict.flows.auto },
     { value: "custom" as const, label: dict.flows.custom },
   ];
+
+  // Signed-out visitor (2026-10-06, /social open before sign-up): brand
+  // kits and generation wait for sign-in; the draft carries the setup.
+  const guest = useIsGuest();
 
   // ─── Content ───────────────────────────────────────────────────
   const [topic, setTopic] = useState("");
@@ -227,6 +236,8 @@ export default function SocialPage() {
   }, []);
 
   useEffect(() => {
+    // Visitors have no kits; a resumed draft carries its own brand.
+    if (guest || readResumeMode()) return;
     let aborted = false;
     (async () => {
       let hydrated = readBrandFromSession();
@@ -242,9 +253,10 @@ export default function SocialPage() {
     return () => {
       aborted = true;
     };
-  }, [applyBrand]);
+  }, [applyBrand, guest]);
 
   useEffect(() => {
+    if (guest) return;
     let aborted = false;
     (async () => {
       try {
@@ -264,7 +276,7 @@ export default function SocialPage() {
     return () => {
       aborted = true;
     };
-  }, []);
+  }, [guest]);
 
   const handlePickKit = (id: string) => {
     const raw = kitRawRef.current.get(id);
@@ -479,8 +491,133 @@ export default function SocialPage() {
     }
   };
 
+  // ─── Guest draft (2026-10-06) ──────────────────────────────────
+  // Same model as the other open flows. Nothing is uploaded before Create
+  // here (the product photo uploads at submit), so a visitor's setup only
+  // needs saving through the sign-up round trip.
+  const guestFont = fontToDraft(brandFont);
+  const guestSettings: SocialGuestSettings = {
+    step,
+    topic,
+    language,
+    persistentText,
+    platform,
+    format,
+    slideCountMode,
+    slideCountValue,
+    designStyle,
+    imagesMode,
+    colors,
+    fontMode: guestFont.fontMode,
+    googleFamily: guestFont.googleFamily,
+    uploadedFonts: guestFont.uploadedFonts,
+  };
+  const guestSettingsJson = JSON.stringify(guestSettings);
+  useEffect(() => {
+    if (!guest) return;
+    const id = window.setTimeout(
+      () => saveGuestSettings("social", JSON.parse(guestSettingsJson)),
+      300,
+    );
+    return () => window.clearTimeout(id);
+  }, [guest, guestSettingsJson]);
+  useEffect(() => {
+    if (!guest) return;
+    void saveGuestFiles("social", {
+      content: productFile,
+      logo: logoFile,
+      fonts: fontToDraft(brandFont).fontFiles,
+    });
+  }, [guest, productFile, logoFile, brandFont]);
+  useEffect(() => {
+    if (!guest) return;
+    const flush = () => saveGuestSettings("social", JSON.parse(guestSettingsJson));
+    window.addEventListener(GUEST_SAVE_EVENT, flush);
+    return () => window.removeEventListener(GUEST_SAVE_EVENT, flush);
+  }, [guest, guestSettingsJson]);
+
+  const [guestSignupOpen, setGuestSignupOpen] = useState(false);
+  const openGuestSignup = async () => {
+    saveGuestSettings("social", guestSettings);
+    await saveGuestFiles("social", {
+      content: productFile,
+      logo: logoFile,
+      fonts: guestFont.fontFiles,
+    });
+    posthog.capture("create_guest_signup_prompt", { flow: "social", step });
+    setGuestSignupOpen(true);
+  };
+
+  const [autoStart, setAutoStart] = useState(false);
+  useEffect(() => {
+    if (guest) return;
+    const mode = readResumeMode();
+    if (!mode) return;
+    let aborted = false;
+    (async () => {
+      const draft = await loadGuestDraft<SocialGuestSettings>("social");
+      const url = new URL(window.location.href);
+      url.searchParams.delete("resume");
+      window.history.replaceState(null, "", url.toString());
+      if (aborted || !draft) return;
+      const d = draft.settings;
+      setTopic(d.topic ?? "");
+      if (d.language === "ar" || d.language === "en") setLanguage(d.language);
+      setPersistentText(d.persistentText ?? "");
+      if (d.platform) setPlatform(d.platform as SocialPlatform);
+      if (d.format) setFormat(d.format as SlideFormat);
+      if (d.slideCountMode === "auto" || d.slideCountMode === "custom") {
+        setSlideCountMode(d.slideCountMode);
+      }
+      if (typeof d.slideCountValue === "number") setSlideCountValue(d.slideCountValue);
+      setDesignStyle(d.designStyle ?? null);
+      setImagesMode(!!d.imagesMode);
+      setColors(Array.isArray(d.colors) ? d.colors.slice(0, MAX_PALETTE) : []);
+      const font = fontFromDraft(d, draft.files);
+      if (font) setBrandFont(font);
+      if (draft.files.logo) {
+        setLogoFile(draft.files.logo);
+        setLoadedLogo(null);
+      }
+      if (draft.files.content) setProductPhoto(draft.files.content);
+      setStep(mode === "generate" ? SOCIAL_LAST_STEP : Math.min(SOCIAL_LAST_STEP, Math.max(0, d.step)));
+      void clearGuestDraft("social");
+      posthog.capture("create_guest_resumed", { flow: "social", mode });
+      if (mode === "generate" && (d.topic ?? "").trim()) setAutoStart(true);
+    })();
+    return () => {
+      aborted = true;
+    };
+  }, [guest]);
+
+  // ─── Wizard chrome (2026-10-06: the shared /create wizard) ─────
+  // Four steps: the topic (+ product photo), the social style, the brand,
+  // then platform / size / count / AI photos and Create.
+  const stepTitles = [
+    dict.flows.social.contentCard,
+    dict.flows.design.card,
+    dict.flows.brandCard,
+    dict.flows.social.settingsCard,
+  ];
+  const stepHints = [
+    dict.flows.wizard.hints.socialContent,
+    dict.flows.wizard.hints.socialDesign,
+    dict.flows.wizard.hints.brand,
+    dict.flows.wizard.hints.socialSettings,
+  ];
+  const hasTopic = topic.trim().length > 0;
+  const goToStep = (next: number) => {
+    setStep(Math.max(0, Math.min(SOCIAL_LAST_STEP, next)));
+    scrollWizardTop();
+  };
+
   return (
     <div className="page-container flex w-full justify-center" dir={dir}>
+      <GuestSignupDialog
+        flow="social"
+        open={guestSignupOpen}
+        onClose={() => setGuestSignupOpen(false)}
+      />
       <CreditGateDialog
         gate={creditGate}
         onClose={() => setCreditGate(null)}
@@ -502,329 +639,188 @@ export default function SocialPage() {
         }}
         onClose={() => setProductUpgradeOpen(false)}
       />
-      <div className="mt-[6vh] flex w-full desk:px-8 flex-col items-center gap-6 px-4">
+      <div className="mt-[4vh] flex w-full flex-col items-center gap-5 px-4 desk:px-8">
         {/* Upfront plan notice when this flow isn't in the user's plan. */}
         <LockedFlowBanner flow="social" />
-        <header className="text-center">
-          <h1 className="tq-h1">{dict.flows.social.title}</h1>
-          <p className="tq-subhead mt-2">{dict.flows.social.subtitle}</p>
-        </header>
-
-        <div className="desk:hidden">
-        <WizardStepRail
-          steps={[
-            dict.flows.social.contentCard,
-            dict.flows.brandCard,
-            dict.flows.social.designCard,
-          ]}
-          active={step}
-          onJump={setStep}
+        <WizardHead
+          title={dict.flows.social.title}
+          subtitle={dict.flows.social.subtitle}
+          steps={stepTitles}
+          hints={stepHints}
+          step={step}
+          onStep={goToStep}
+          reachable={hasTopic ? SOCIAL_LAST_STEP : 0}
         />
-        </div>
 
-        {/* Wizard column (was a wrapping 3-across row until 2026-08-30):
-            all three cards share ONE grid cell; inactive cards are
-            `invisible` (not display:none) so the stack keeps the tallest
-            card's height at every step. */}
-        <div className="flex w-full flex-col items-center gap-4">
-          <div className="grid w-full justify-items-center desk:max-w-[1800px] desk:grid-cols-3 desk:gap-6">
-          {/* ── CONTENT CARD (step 1) ─────────────────────────── */}
-          <div
-            className={`surface-card ${step === 0 ? "" : "invisible"} col-start-1 row-start-1 desk:visible desk:col-start-auto desk:row-start-auto flex w-full sm:w-[430px] desk:w-full desk:min-w-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
-          >
-            <CardHeader step={1} icon="edit_note" title={dict.flows.social.contentCard} />
-            <div className="flex flex-1 flex-col space-y-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-foreground/70">
-                  {dict.flows.language}
-                </span>
-                <SegmentedToggle
-                  options={LANGUAGE_OPTIONS}
-                  value={language}
-                  onChange={setLanguage}
-                  ariaLabel={dict.flows.language}
-                />
-              </div>
-              <textarea
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                placeholder={dict.flows.social.topicPlaceholder}
-                dir={language === "en" ? "ltr" : "rtl"}
-                // Mirrors the server's content.text 400 cap in
-                // /api/projects (brief-limits.ts).
-                maxLength={MAX_CONTENT_TEXT_CHARS}
-                disabled={submitting}
-                // min-h matches /create's textarea (was 240px): the taller
-                // box pushed all 3 cards past the create flow's card height
-                // (owner direction 2026-08-03). flex-1 still grows it to
-                // fill whatever the card has.
-                className="input-dark min-h-[60px] flex-1 resize-none text-sm leading-6 disabled:cursor-not-allowed disabled:opacity-50"
-              />
-              {/* Product photo - under the textarea; the textarea is the
-                  card's only flex-1 child so it shrinks to make room and
-                  the card keeps its height. Muted when the user turned
-                  imagesMode back off (the photo won't be sent). */}
-              <ProductPhotoRow
-                file={productFile}
-                previewUrl={productPreviewUrl}
-                submitting={submitting}
-                locked={imagesLocked}
-                muted={Boolean(productFile) && !imagesMode}
-                onPick={acceptProductPhoto}
-                onRemove={() => setProductPhoto(null)}
-                onLocked={() => setProductUpgradeOpen(true)}
-              />
-            </div>
-            {/* Generate-images toggle — inside the content card, same as
-                /create (owner direction 2026-08-03). Plus+ gated inside
-                the panel itself. */}
-            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
-              <AIImagesPanel
-                value={imagesMode}
-                onChange={setImagesMode}
-                disabled={submitting}
-              />
-            </div>
-            {/* Persistent element: the same control /create and /datasheet put
-                at the bottom of the content card. Text only, Claude places it
-                (position picker went away 2026-06-02), on every card. */}
-            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
-              <PersistentRow
-                text={persistentText}
-                language={language}
-                onText={setPersistentText}
-              />
-            </div>
-          </div>
-
-          {/* ── BRAND CARD (identical to /datasheet) ──────────── */}
-          <div
-            className={`surface-card ${step === 1 ? "" : "invisible"} col-start-1 row-start-1 desk:visible desk:col-start-auto desk:row-start-auto flex w-full sm:w-[430px] desk:w-full desk:min-w-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
-          >
-            <header className="relative z-30 border-b border-foreground/[0.08] pb-4">
-              <div className="relative flex items-center gap-2">
-                <CardStepBadge step={2} />
-                <span
-                  className="material-symbols-outlined text-foreground"
-                  style={{ fontSize: 18 }}
-                >
-                  palette
-                </span>
-                <h3 className="text-sm font-semibold text-foreground">
-                  {dict.flows.brandCard}
-                </h3>
-                {kitOptions.length > 0 ? (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute end-0 top-1/2 -translate-y-1/2"
-                  >
-                    <BrandKitDropdown kits={kitOptions} onSelect={handlePickKit} />
-                  </motion.div>
-                ) : null}
-              </div>
-            </header>
-
+        {/* ═══════════════════════════════════════════════════════
+            STEP 1 · CONTENT - the topic, an optional product photo and the
+            persistent element.
+            ═══════════════════════════════════════════════════════ */}
+        <section
+          className={`${step === 0 ? "flex" : "hidden"} surface-card w-full max-w-3xl flex-col gap-4 rounded-2xl p-4 sm:p-6`}
+        >
+          <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold text-foreground/70">
-                {dict.flows.colors}
+              <span className="text-sm font-semibold text-foreground/80">
+                {dict.flows.language}
               </span>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setColors([])}
-                  disabled={colors.length === 0}
-                  aria-pressed={colors.length === 0}
-                  title={dict.flows.autoColorsHint}
-                  className={`flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-[11px] font-medium transition-colors ${
-                    colors.length === 0
-                      ? "border-foreground/40 text-foreground"
-                      : "border-dashed border-foreground/20 text-foreground/60 hover:border-foreground/40 hover:text-foreground"
-                  }`}
-                >
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ fontSize: 13 }}
-                  >
-                    auto_awesome
-                  </span>
-                  {dict.flows.autoColors}
-                </button>
-                {colors.map((color, index) => (
-                  <InlinePaletteSwatch
-                    key={index}
-                    value={color}
-                    index={index}
-                    removable={colors.length > MIN_PALETTE}
-                    onChange={(next) => updateColor(index, next)}
-                    onRemove={() => removeColor(index)}
-                    dict={dict}
-                  />
-                ))}
-                {colors.length < MAX_PALETTE ? (
-                  <button
-                    type="button"
-                    onClick={addColor}
-                    aria-label={dict.flows.addColor}
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-foreground/20 text-foreground/60 transition-colors hover:border-foreground/40 hover:text-foreground"
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: 14 }}
-                    >
-                      add
-                    </span>
-                  </button>
-                ) : null}
-              </div>
-            </div>
-            {/* Colour templates (shared with /create, 2026-10-05). */}
-            <div className="flex flex-col gap-1.5">
-              <PalettePresetPicker colors={colors} onPick={setColors} disabled={submitting} />
-            </div>
-
-            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
-              <BrandFontPicker
-                value={brandFont}
-                onChange={setBrandFont}
-                sampleText={
-                  language === "en" ? HEADING_SAMPLE_LATIN : HEADING_SAMPLE_AR
-                }
+              <SegmentedToggle
+                options={LANGUAGE_OPTIONS}
+                value={language}
+                onChange={setLanguage}
+                ariaLabel={dict.flows.language}
               />
             </div>
-
-            <div className="flex flex-1 flex-col gap-4 border-t border-[var(--tq-border-hairline)] pt-3">
-              <span className="block text-xs font-semibold text-foreground/70">
-                {dict.flows.logo}
-              </span>
-              <LogoRow
-                file={logoFile}
-                previewUrl={loadedLogo?.displayUrl ?? null}
-                onSelect={(f) => {
-                  setLogoFile(f);
-                  setLoadedLogo(null);
-                }}
-                onRemove={() => {
-                  setLogoFile(null);
-                  setLoadedLogo(null);
-                }}
-              />
-            </div>
-
-            <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-hairline)] pt-2">
-              <span className="text-xs font-semibold text-foreground/70">
-                {dict.flows.saveAsDefault}
-              </span>
-              <Toggle
-                ariaLabel={dict.flows.saveAsDefault}
-                value={saveBrandKit}
-                onChange={setSaveBrandKit}
-              />
-            </div>
-          </div>
-
-          {/* ── DESIGN CARD ───────────────────────────────────── */}
-          <div
-            className={`surface-card ${step === 2 ? "" : "invisible"} col-start-1 row-start-1 desk:visible desk:col-start-auto desk:row-start-auto flex w-full sm:w-[430px] desk:w-full desk:min-w-0 ${CARD_MIN_H_CLASS} flex-col gap-4 rounded-2xl p-4`}
-          >
-            <CardHeader step={3} icon="tune" title={dict.flows.social.designCard} />
-
-            <SocialFormatFields
-              platform={platform}
-              onPlatform={setPlatform}
-              format={format}
-              onFormat={setFormat}
+            <textarea
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder={dict.flows.social.topicPlaceholder}
+              dir={language === "en" ? "ltr" : "rtl"}
+              // Mirrors the server's content.text cap in /api/projects.
+              maxLength={MAX_CONTENT_TEXT_CHARS}
+              rows={6}
+              disabled={submitting}
+              className="input-dark min-h-[180px] resize-y text-sm leading-6 disabled:cursor-not-allowed disabled:opacity-50"
             />
-
-            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
-              <div className="flex min-h-[24px] items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-foreground/70">
-                  {dict.flows.social.count}
-                </span>
-                {/* Same animated Auto/Custom + stepper as /create (spring
-                    500/35): the toggle FLIPs over as the stepper grows in. */}
-                <motion.div
-                  layout
-                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                  className="flex items-center gap-1.5"
-                >
-                  <SegmentedToggle
-                    options={SLIDE_COUNT_OPTIONS}
-                    value={slideCountMode}
-                    onChange={setSlideCountMode}
-                    ariaLabel={dict.flows.social.count}
-                  />
-                  <AnimatePresence initial={false}>
-                    {slideCountMode === "custom" ? (
-                      <motion.div
-                        key="slide-count-stepper"
-                        initial={{ width: 0, opacity: 0, marginInlineStart: -6 }}
-                        animate={{ width: 66, opacity: 1, marginInlineStart: 0 }}
-                        exit={{ width: 0, opacity: 0, marginInlineStart: -6 }}
-                        transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                        style={{ overflow: "hidden" }}
-                      >
-                        <InlineStepper
-                          value={slideCountValue}
-                          onChange={setSlideCountValue}
-                          min={1}
-                          max={slideCap}
-                        />
-                      </motion.div>
-                    ) : null}
-                  </AnimatePresence>
-                </motion.div>
-              </div>
-            </div>
-
-            {/* Images toggle moved to the CONTENT card 2026-08-03 (same as
-                /create) — this block keeps only the style picker. */}
-            <div className="mt-auto flex flex-col gap-3 border-t border-[var(--tq-border-hairline)] pt-3">
-              <div className="space-y-1.5">
-                <span className="block text-xs font-semibold text-foreground/70">
-                  {dict.flows.social.style}
-                </span>
-                <DesignStylePicker
-                  value={designStyle}
-                  onChange={setDesignStyle}
-                  disabled={submitting}
-                  variant="social"
-                />
-              </div>
-            </div>
           </div>
-          </div>
-
-          {/* Next only (`.btn-gradient` CTA); back-travel via the rail. */}
-          {step < 2 && (
-            <div className="flex w-full justify-end sm:w-[430px] desk:hidden">
-              <PillButton
-                variant="primary"
-                onClick={() => setStep((s) => Math.min(2, s + 1))}
-                disabled={submitting || (step === 0 && topic.trim().length === 0)}
-              >
-                {dict.flows.wizard.next}
-              </PillButton>
-            </div>
-          )}
-        </div>
-
-        {/* Desktop (desk:) shows every card at once, so Generate is always there. */}
-        {(
-        <div className={`${step === 2 ? "flex" : "hidden desk:flex"} justify-center`}>
-          <GenerateSplitButton
-            onGenerate={handleGenerate}
-            quality={quality}
-            onQualityChange={setQuality}
-            slideCount={estimated.slides}
-            slideCountUpTo={estimated.upTo}
-            imagesMode={imagesMode}
-            disabled={generateDisabled}
-            loading={submitting}
+          {/* Product photo: the post is designed around it. Muted when the
+              user turned AI photos back off (the photo won't be sent). */}
+          <ProductPhotoRow
+            file={productFile}
+            previewUrl={productPreviewUrl}
+            submitting={submitting}
+            locked={imagesLocked}
+            muted={Boolean(productFile) && !imagesMode}
+            onPick={acceptProductPhoto}
+            onRemove={() => setProductPhoto(null)}
+            onLocked={() => setProductUpgradeOpen(true)}
           />
-        </div>
-        )}
+          <div className="border-t border-[var(--tq-border-hairline)] pt-4">
+            <PersistentRow
+              text={persistentText}
+              language={language}
+              onText={setPersistentText}
+            />
+          </div>
+        </section>
+
+        {/* ═══════════════════════════════════════════════════════
+            STEP 2 · DESIGN - the social style, full width.
+            ═══════════════════════════════════════════════════════ */}
+        <section
+          className={`${step === 1 ? "flex" : "hidden"} w-full max-w-[1400px] flex-col gap-4`}
+        >
+          <SocialStyleGrid value={designStyle} onChange={setDesignStyle} disabled={submitting} />
+        </section>
+
+        {/* STEP 3 · BRAND (shared with every creation tool). */}
+        <BrandStep
+          visible={step === 2}
+          kitOptions={kitOptions}
+          onPickKit={handlePickKit}
+          colors={colors}
+          minPalette={MIN_PALETTE}
+          maxPalette={MAX_PALETTE}
+          onAutoColors={() => setColors([])}
+          onUpdateColor={updateColor}
+          onRemoveColor={removeColor}
+          onAddColor={addColor}
+          onPickPreset={setColors}
+          brandFont={brandFont}
+          onBrandFont={setBrandFont}
+          sampleText={language === "en" ? HEADING_SAMPLE_LATIN : HEADING_SAMPLE_AR}
+          logoFile={logoFile}
+          logoPreviewUrl={loadedLogo?.displayUrl ?? null}
+          onLogoSelect={(f) => {
+            setLogoFile(f);
+            setLoadedLogo(null);
+          }}
+          onLogoRemove={() => {
+            setLogoFile(null);
+            setLoadedLogo(null);
+          }}
+          saveBrandKit={saveBrandKit}
+          onSaveBrandKit={setSaveBrandKit}
+          disabled={submitting}
+        />
+
+        {/* ═══════════════════════════════════════════════════════
+            STEP 4 · SETTINGS - platform + size, count, AI photos.
+            ═══════════════════════════════════════════════════════ */}
+        <section
+          className={`${step === 3 ? "flex" : "hidden"} surface-card w-full max-w-2xl flex-col gap-4 rounded-2xl p-4 sm:p-6`}
+        >
+          <SocialFormatFields
+            platform={platform}
+            onPlatform={setPlatform}
+            format={format}
+            onFormat={setFormat}
+          />
+          <div className="border-t border-[var(--tq-border-hairline)] pt-4">
+            <div className="flex min-h-[24px] items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-foreground/80">
+                {dict.flows.social.count}
+              </span>
+              {/* Same animated Auto/Custom + stepper as /create. */}
+              <motion.div
+                layout
+                transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                className="flex items-center gap-1.5"
+              >
+                <SegmentedToggle
+                  options={SLIDE_COUNT_OPTIONS}
+                  value={slideCountMode}
+                  onChange={setSlideCountMode}
+                  ariaLabel={dict.flows.social.count}
+                />
+                <AnimatePresence initial={false}>
+                  {slideCountMode === "custom" ? (
+                    <motion.div
+                      key="slide-count-stepper"
+                      initial={{ width: 0, opacity: 0, marginInlineStart: -6 }}
+                      animate={{ width: 66, opacity: 1, marginInlineStart: 0 }}
+                      exit={{ width: 0, opacity: 0, marginInlineStart: -6 }}
+                      transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                      style={{ overflow: "hidden" }}
+                    >
+                      <InlineStepper
+                        value={slideCountValue}
+                        onChange={setSlideCountValue}
+                        min={1}
+                        max={slideCap}
+                      />
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
+              </motion.div>
+            </div>
+          </div>
+          <div className="border-t border-[var(--tq-border-hairline)] pt-4">
+            <AIImagesPanel value={imagesMode} onChange={setImagesMode} disabled={submitting} />
+          </div>
+        </section>
+
+        <WizardBar
+          step={step}
+          lastStep={SOCIAL_LAST_STEP}
+          onStep={goToStep}
+          nextDisabled={step === 0 && !hasTopic}
+          busy={submitting}
+          generate={
+            <GenerateSplitButton
+              guest={guest}
+              autoStart={autoStart}
+              onGenerate={guest ? () => void openGuestSignup() : handleGenerate}
+              quality={quality}
+              onQualityChange={setQuality}
+              slideCount={estimated.slides}
+              slideCountUpTo={estimated.upTo}
+              imagesMode={imagesMode}
+              disabled={generateDisabled}
+              loading={submitting}
+            />
+          }
+        />
 
         <p
           className="min-h-5 text-center text-sm text-red-400"
@@ -961,53 +957,6 @@ function ProductPhotoRow({
           </span>
         </button>
       ) : null}
-    </div>
-  );
-}
-
-// InlinePaletteSwatch — identical copy of /datasheet's + /create's swatch.
-function InlinePaletteSwatch({
-  value,
-  index,
-  removable,
-  onChange,
-  onRemove,
-  dict,
-}: {
-  value: string;
-  index: number;
-  removable: boolean;
-  onChange: (next: string) => void;
-  onRemove: () => void;
-  dict: Dictionary;
-}) {
-  const [pickerOpen, setPickerOpen] = useState(false);
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setPickerOpen((v) => !v)}
-        className="block h-7 w-7 shrink-0 rounded-md border border-foreground/15 transition-shadow hover:shadow-md"
-        style={{ backgroundColor: value }}
-        aria-label={dict.flows.controls.colorN.replace("{n}", String(index + 1))}
-      />
-      <button
-        type="button"
-        onClick={onRemove}
-        disabled={!removable}
-        aria-label={dict.flows.controls.removeColor}
-        className="absolute -top-1 -end-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-black/70 text-white transition-opacity hover:bg-black/90 disabled:cursor-not-allowed disabled:opacity-0"
-      >
-        <span className="material-symbols-outlined" style={{ fontSize: 8 }}>
-          close
-        </span>
-      </button>
-      <ColorPickerPopover
-        open={pickerOpen}
-        value={value}
-        onChange={onChange}
-        onClose={() => setPickerOpen(false)}
-      />
     </div>
   );
 }

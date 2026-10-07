@@ -184,7 +184,9 @@ Name templates by stage ("درس المرحلة الابتدائية"), Arabic f
     instructions + AI photos / templates OR styles full width (shared DesignStep) /
     brand + Create). Mimic done too: 4 steps (content / reference upload / brand,
     "Auto" = the reference's colours / settings) and open to visitors (route group
-    `(open)`, both files kept in the browser). Next: social, datasheet.**
+    `(open)`, both files kept in the browser). Social done too: 4 steps (topic + product
+    photo / social styles full width via `SocialStyleGrid` / brand / platform, size,
+    count, AI photos) and open to visitors. Next: datasheet.**
     Mapping: enhance = file+instructions / templates / brand / AI photos; mimic =
     content / reference upload / brand / settings; social = topic+product photo /
     social styles / brand / format+count+photos; datasheet = spreadsheet / deck styles /

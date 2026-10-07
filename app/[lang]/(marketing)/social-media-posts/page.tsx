@@ -64,9 +64,9 @@ export default async function SocialMediaPostsPage(props: {
   const locale = resolve(lang);
   const dict = await getDictionary(locale);
   const t = dict.socialMediaPosts;
-  // Free CTA (2026-10-06): this flow still needs an account, so sign up and
-  // land straight in it (/create is the only flow open to visitors).
-  const ctaHref = `${localizedHref("/signup", locale)}?next=${encodeURIComponent(localizedHref("/social", locale))}`;
+  // Free CTA: /social is open to visitors (2026-10-06); they sign up at its
+  // Create button.
+  const ctaHref = localizedHref("/social", locale);
 
   return (
     <div className="pb-8">

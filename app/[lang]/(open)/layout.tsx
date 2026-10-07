@@ -8,7 +8,7 @@ import { SignupConversion } from "@/components/analytics/SignupConversion";
 import { isLocale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 
-// The creation tools open to visitors (/create, /enhance, /mimic; route group
+// The creation tools open to visitors (/create, /enhance, /mimic, /social; route group
 // "(open)", NOT "(studio)", which is the deck studio + public viewer and
 // keeps its own layout). 2026-10-06, owner direction: a visitor sets the
 // whole deck up first and signs up at the Create button (the draft survives

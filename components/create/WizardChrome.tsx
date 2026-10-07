@@ -37,7 +37,7 @@ export function WizardStepRail({
         const current = i === active;
         const jumpable = !current && i <= reachable;
         return (
-          <div key={title} className="flex items-center">
+          <div key={i} className="flex items-center">
             {i > 0 && (
               <span
                 aria-hidden

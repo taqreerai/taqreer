@@ -21,8 +21,8 @@ export const GUEST_SAVE_EVENT = "taqreer:guest-save-draft";
 
 // The flows a visitor can set up before signing up. The value is also the
 // route segment ("/create", "/enhance").
-export type GuestFlow = "create" | "enhance" | "mimic";
-export const GUEST_FLOWS: readonly GuestFlow[] = ["create", "enhance", "mimic"];
+export type GuestFlow = "create" | "enhance" | "mimic" | "social";
+export const GUEST_FLOWS: readonly GuestFlow[] = ["create", "enhance", "mimic", "social"];
 
 const settingsKey = (flow: GuestFlow) => `tq.${flow}GuestDraft.v1`;
 const dbName = (flow: GuestFlow) => `tq-${flow}-guest`;
@@ -84,6 +84,24 @@ export type MimicGuestSettings = {
   slideCountValue: number;
   imagesMode: boolean;
   instructions: string;
+};
+
+// /social's setup (the product photo travels as `content`).
+export type SocialGuestSettings = {
+  step: number;
+  topic: string;
+  language: string;
+  persistentText: string;
+  platform: string;
+  format: string;
+  slideCountMode: string;
+  slideCountValue: number;
+  designStyle: string | null;
+  imagesMode: boolean;
+  colors: string[];
+  fontMode: "google" | "upload";
+  googleFamily: string | null;
+  uploadedFonts: { name: string; weights: number[] }[];
 };
 
 export type GuestDraftFiles = {

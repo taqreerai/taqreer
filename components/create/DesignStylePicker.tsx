@@ -548,3 +548,52 @@ export function DesignStyleGrid({
     </div>
   );
 }
+
+/**
+ * Full-width social style grid for /social's Design step (2026-10-06, the
+ * shared creation wizard): Auto + every social style as a portrait post
+ * preview with its name and one-line description, the same tile language as
+ * the deck DesignStyleGrid. `value` is the style label (null = Auto).
+ */
+export function SocialStyleGrid({
+  value,
+  onChange,
+  disabled = false,
+}: {
+  value: string | null;
+  onChange: (next: string | null) => void;
+  disabled?: boolean;
+}) {
+  const dict = useDict();
+  const t = dict.flows.stylePicker;
+  const descs: Record<string, string> = t.socialDescs;
+  const tiles: ReadonlyArray<{ key: SocialStyleKey | "auto"; name: string; desc: string; value: string | null }> = [
+    { key: "auto", name: t.auto, desc: t.autoDesc, value: null },
+    ...SOCIAL_STYLES.map((s) => ({ key: s.key, name: s.label, desc: descs[s.key] ?? "", value: s.label })),
+  ];
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 xl:grid-cols-6">
+      {tiles.map((tl) => {
+        const active = value === tl.value;
+        return (
+          <button
+            key={tl.key}
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange(tl.value)}
+            aria-pressed={active}
+            className={`pick-tile flex w-full flex-col gap-1.5 rounded-xl p-2 text-start disabled:cursor-not-allowed disabled:opacity-50 ${
+              active ? "is-active" : ""
+            }`}
+          >
+            <div className="mx-auto w-3/4">
+              <SocialStyleMini k={tl.key} big boldSample={t.socialBoldSample} />
+            </div>
+            <span className="truncate text-[13px] font-medium text-foreground/85">{tl.name}</span>
+            <span className="-mt-1 text-[11px] leading-4 text-foreground/55">{tl.desc}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
