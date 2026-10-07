@@ -554,9 +554,9 @@ export function DesignCard({
 
 /**
  * The Brand card, fitting the stage without scrolling: saved kits in the
- * title row, colours (Auto / custom + as many colour-template rows as fit,
- * the rest in "Show all"), the one-row font picker, the compact logo slot,
- * and "save as default" pinned to the bottom. All optional.
+ * title row, the one-row font picker and the compact logo slot first, then
+ * colours (Auto / custom + as many colour-template rows as fit, the rest in
+ * "Show all"), and "save as default" pinned to the bottom. All optional.
  */
 export function BrandCard({
   kitOptions,
@@ -610,9 +610,33 @@ export function BrandCard({
         kitOptions.length > 0 ? <BrandKitDropdown kits={kitOptions} onSelect={onPickKit} /> : null
       }
     >
+      {/* Font and logo first: the font dropdown opens downward with the
+          card's height below it (at the bottom it was cut off). */}
+      <div>
+        <BrandFontPicker
+          value={brandFont}
+          onChange={onBrandFont}
+          sampleText={sampleText}
+          compact
+          tall
+        />
+      </div>
+      {/* Label and the compact slot share one row (saves a line). */}
+      <div className="flex items-center gap-3 border-t border-[var(--tq-border-hairline)] pt-4 stage:pt-3 stage-tight:pt-2">
+        <span className="shrink-0 text-sm font-semibold text-foreground/80">{t.logo}</span>
+        <div className="min-w-0 flex-1">
+          <LogoRow
+            compact
+            file={logoFile}
+            previewUrl={logoPreviewUrl}
+            onSelect={onLogoSelect}
+            onRemove={onLogoRemove}
+          />
+        </div>
+      </div>
       {/* Colours take the card's leftover height: as many colour-template
           rows as fit (no scroll), the rest in "Show all". */}
-      <div className="flex flex-col gap-2 stage:min-h-0 stage:flex-1">
+      <div className="flex flex-col gap-2 border-t border-[var(--tq-border-hairline)] pt-4 stage:min-h-0 stage:flex-1 stage:pt-3 stage-tight:pt-2">
         <PaletteRow
           colors={colors}
           minPalette={minPalette}
@@ -636,22 +660,6 @@ export function BrandCard({
           expanded={palettesOpen}
           onExpandedChange={setPalettesOpen}
         />
-      </div>
-      <div className="border-t border-[var(--tq-border-hairline)] pt-4 stage:pt-3 stage-tight:pt-2">
-        <BrandFontPicker value={brandFont} onChange={onBrandFont} sampleText={sampleText} compact />
-      </div>
-      {/* Label and the compact slot share one row (saves a line). */}
-      <div className="flex items-center gap-3 border-t border-[var(--tq-border-hairline)] pt-4 stage:pt-3 stage-tight:pt-2">
-        <span className="shrink-0 text-sm font-semibold text-foreground/80">{t.logo}</span>
-        <div className="min-w-0 flex-1">
-          <LogoRow
-            compact
-            file={logoFile}
-            previewUrl={logoPreviewUrl}
-            onSelect={onLogoSelect}
-            onRemove={onLogoRemove}
-          />
-        </div>
       </div>
       {/* Pinned to the card's bottom edge. */}
       <div className="mt-auto flex items-center justify-between gap-2 border-t border-[var(--tq-border-hairline)] pt-4 stage:pt-3 stage-tight:pt-2">

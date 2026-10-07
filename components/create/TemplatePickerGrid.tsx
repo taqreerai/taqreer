@@ -152,7 +152,6 @@ export function TemplatePickerGrid({
       active={selectedId === tpl.id}
       locked={lockFor(tpl) != null}
       freeBadge={flowLocked && tpl.isFree ? t.freeBadge : null}
-      mineBadge={tpl.isMine ? t.mine : null}
       loading={loadingId === tpl.id}
       disabled={disabled || (loadingId != null && loadingId !== tpl.id)}
       previewLabel={t.preview}
@@ -349,7 +348,6 @@ function TemplateTile({
   active,
   locked,
   freeBadge,
-  mineBadge,
   loading,
   disabled,
   previewLabel,
@@ -364,7 +362,6 @@ function TemplateTile({
   active: boolean;
   locked: boolean;
   freeBadge: string | null;
-  mineBadge: string | null;
   loading: boolean;
   disabled: boolean;
   previewLabel: string;
@@ -453,11 +450,6 @@ function TemplateTile({
           {freeBadge ? (
             <span className="absolute end-1 top-1 rounded-full bg-[var(--tq-brand-blue)] px-1.5 py-0.5 text-[9px] font-semibold text-white">
               {freeBadge}
-            </span>
-          ) : null}
-          {mineBadge && !flips ? (
-            <span className="absolute bottom-1 start-1 rounded-full bg-black/65 px-1.5 py-0.5 text-[9px] font-medium text-white">
-              {mineBadge}
             </span>
           ) : null}
           {active ? (

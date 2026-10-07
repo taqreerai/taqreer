@@ -32,10 +32,14 @@ export function BrandFontPicker({
   sampleText,
   sampleSizeClass = "text-sm",
   compact = false,
+  tall = false,
 }: {
   // One row (2026-10-02, /create Design step): label + the Google combobox
   // + a small upload button; uploaded families show as chips under it.
   compact?: boolean;
+  // With `compact`: the row at the regular 44px input height (/create's
+  // Brand card, 2026-10-07), the upload button matching it.
+  tall?: boolean;
   value: BrandFontState;
   onChange: (next: BrandFontState) => void;
   // Live-preview copy for the Google combobox sample line.
@@ -121,7 +125,9 @@ export function BrandFontPicker({
     return (
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          <span className="shrink-0 text-xs font-semibold text-foreground/70">
+          <span
+            className={`shrink-0 font-semibold ${tall ? "text-sm text-foreground/80" : "text-xs text-foreground/70"}`}
+          >
             {dict.flows.fonts.fonts}
           </span>
           <div className="min-w-0 flex-1">
@@ -133,7 +139,7 @@ export function BrandFontPicker({
                 onChange({ ...value, googleFamily: family, uploaded: [] })
               }
               hideSample
-              compact
+              compact={!tall}
               hideInstallHint
             />
           </div>
@@ -149,7 +155,7 @@ export function BrandFontPicker({
             disabled={atCap}
             title={`${dict.flows.fonts.uploadFonts} (${dict.flows.fonts.fontFormats.replace("{max}", String(MAX_UPLOADED_FONTS))})`}
             aria-label={dict.flows.fonts.uploadFonts}
-            className="flex h-[30px] shrink-0 items-center gap-1 rounded-lg border border-dashed border-foreground/20 px-2 text-[11px] font-medium text-foreground/70 transition-colors hover:border-foreground/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            className={`flex ${tall ? "h-11 rounded-full px-3" : "h-[30px] rounded-lg px-2"} shrink-0 items-center gap-1 border border-dashed border-foreground/20 text-[11px] font-medium text-foreground/70 transition-colors hover:border-foreground/40 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40`}
           >
             <span className="material-symbols-outlined" style={{ fontSize: 15 }} aria-hidden>
               upload
