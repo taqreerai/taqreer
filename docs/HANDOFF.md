@@ -25,7 +25,8 @@ lands or a new one starts.
   flips through the slides, eye button opens a preview window (`/api/templates` now
   sends `thumbnails` + `slideCount`). "Or try" row (`FlowSwitcher`) on step 1.
 - **Visitors before sign-up (lazy registration):** `/create` and `/enhance` live in the
-  new `app/[lang]/(studio)` group (guest frame `GuestTopBar` when signed out, the normal
+  new `app/[lang]/(open)` group (NOT `(studio)`: that is the deck studio + public
+  viewer and keeps its own layout) (guest frame `GuestTopBar` when signed out, the normal
   shell when signed in; `ensureAppUser` there does the Prisma row + signup grant like
   the dashboard, `SignupConversion` mounted too). Nothing paid runs for a visitor:
   files stay in the browser, template setup + extraction wait for sign-in. Draft per

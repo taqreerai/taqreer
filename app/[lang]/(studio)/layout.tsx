@@ -1,21 +1,30 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 import { DashboardShell } from "@/components/app/DashboardShell";
 import { PostHogIdentify } from "@/components/analytics/PostHogIdentify";
-import { getAuthUser } from "@/lib/supabase/user";
-import { ensureAppUser } from "@/lib/auth/ensure-app-user";
-import { SignupConversion } from "@/components/analytics/SignupConversion";
 import { isLocale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 
-// /create, open to visitors (2026-10-06, owner direction): a visitor sets the
-// whole deck up first and signs up at the Create button (the draft survives
-// the sign-up round trip, lib/create/guest-draft.ts). Signed-in users get the
-// exact (app) chrome; visitors get the light guest frame. Nothing that costs
-// money runs for a visitor: the page defers extraction + template setup
-// until after sign-in.
+// The deck studio/viewer route (/project/[projectId]) lives in its OWN route
+// group, deliberately OUTSIDE the auth-gated (app) group. A completed deck can
+// be opened by an anonymous "anyone with the link" public viewer, so this route
+// must NOT blanket-redirect signed-out visitors to /login the way (app)/layout
+// does — that redirect ran before the page and shadowed its public-view path.
+//
+// Access control is entirely the page's job: it calls
+// resolveProjectAccess(projectId, "view") and notFound()s on any error. That
+// helper is the security boundary — it rejects banned callers (403), hides the
+// existence of private/unauthorized decks behind the same 404 (never leaks
+// "wrong account" vs "not shared"), blocks explicitly-revoked users from the
+// public-link fallback, and only grants anonymous view when the deck's
+// publicAccessLevel is "view". This layout supplies chrome only.
+//
+// DashboardShell auto-detects the full-bleed, rail-less studio treatment from
+// the /project pathname, so no props are needed. force-dynamic because the page
+// reads auth cookies via resolveProjectAccess.
 export const dynamic = "force-dynamic";
 
+// Mirror the (app) layout's title so moving /project out of that group doesn't
+// leak the marketing landing title onto deck pages/shared links.
 export async function generateMetadata({
   params,
 }: {
@@ -26,39 +35,17 @@ export async function generateMetadata({
   return {
     title: dict.meta.dashboardTitle,
     description: dict.meta.dashboardDescription,
-    // A tool surface, not a landing page.
-    robots: { index: false, follow: true },
   };
 }
 
-export default async function StudioLayout({
+export default function StudioLayout({
   children,
-  params,
 }: {
   children: React.ReactNode;
-  params: Promise<{ lang: string }>;
 }) {
-  const { lang } = await params;
-  const user = await getAuthUser();
-
-  if (!user) {
-    return <DashboardShell guest>{children}</DashboardShell>;
-  }
-
-  // A visitor who signs up from the Create button lands HERE, not on the
-  // dashboard: create the Prisma row + the signup grant like the dashboard
-  // does. Then the (app) layout's gates: banned users go to the notice, role
-  // drives the admin rail entry.
-  const dbUser = await ensureAppUser(user, lang);
-  if (dbUser.bannedAt) {
-    redirect(`/${lang}/banned`);
-  }
-
   return (
-    <DashboardShell isAdmin={dbUser.role === "admin"}>
+    <DashboardShell>
       <PostHogIdentify />
-      {/* Google Ads sign-up conversion: fires once per new account. */}
-      <SignupConversion />
       {children}
     </DashboardShell>
   );
