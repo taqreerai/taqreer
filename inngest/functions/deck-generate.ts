@@ -52,6 +52,7 @@ import { scopeDeckCss } from "@/lib/deck/scope-css";
 import { StreamingHtmlSplitter, type ParsedSlide } from "@/lib/deck/html-stream";
 import { signBrandAssetUrl } from "@/lib/storage/sign";
 import { sourceToSlideImages } from "@/lib/extract/source-to-slide-images";
+import { MissingToolError } from "@/lib/extract/missing-tool";
 import {
   scanGenImages,
   collectSeedableGenImages,
@@ -2061,7 +2062,13 @@ export const deckGenerate = inngest.createFunction(
           ? Math.max(1, teaserTotal - (teaserPlan?.lockedCount ?? 0))
           : null;
       const prep = await step.run("rasterize-and-upload-source", async () => {
-        const pngs = await sourceToSlideImages(sourcePath, sourceMime);
+        const pngs = await sourceToSlideImages(sourcePath, sourceMime).catch(
+          (err: unknown) => {
+            // Missing LibreOffice / pdftoppm: no retry can fix it.
+            if (err instanceof MissingToolError) throw new NonRetriableError(err.message);
+            throw err;
+          },
+        );
         const fileIds = await uploadSlideImages(
           teaserVisible != null ? pngs.slice(0, teaserVisible) : pngs,
         );

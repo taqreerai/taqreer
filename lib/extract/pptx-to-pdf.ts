@@ -32,6 +32,7 @@
 // The Dockerfile / Vercel buildpack must include LibreOffice on the
 // runtime image for this to work in production.
 
+import { MissingToolError } from "@/lib/extract/missing-tool";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
@@ -163,8 +164,9 @@ async function officeToPdf(
       }
     }
 
-    // None of the candidate binaries existed.
-    throw new Error(
+    // None of the candidate binaries existed (never retried, see
+    // missing-tool.ts).
+    throw new MissingToolError(
       `LibreOffice is not installed on the server. To enable PPTX/DOCX uploads, ` +
         `install LibreOffice on the host:\n` +
         `  • macOS:  brew install --cask libreoffice\n` +

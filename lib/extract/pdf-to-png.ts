@@ -28,6 +28,7 @@
 // Production (Linux): `apt-get install -y poppler-utils`
 // The runtime image must include poppler alongside LibreOffice.
 
+import { MissingToolError } from "@/lib/extract/missing-tool";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
@@ -135,8 +136,9 @@ export async function pdfToPngs(
       }
     }
 
-    // None of the candidate binaries existed.
-    throw new Error(
+    // None of the candidate binaries existed (never retried, see
+    // missing-tool.ts).
+    throw new MissingToolError(
       `poppler (pdftoppm) is not installed on the server. To enable ` +
         `per-slide image rendering, install poppler on the host:\n` +
         `  • macOS:  brew install poppler\n` +

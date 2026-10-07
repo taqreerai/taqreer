@@ -41,6 +41,7 @@
 import type { Prisma } from "@prisma/client";
 import { inngest } from "@/inngest/client";
 import { NonRetriableError } from "inngest";
+import { MissingToolError } from "@/lib/extract/missing-tool";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { extract } from "@/lib/extract";
 import { uploadFileToAnthropic } from "@/lib/anthropic/files";
@@ -335,6 +336,11 @@ export const extractSource = inngest.createFunction(
         mime,
         flowKind,
         mimicRole,
+      }).catch((err: unknown) => {
+        // A missing host program (LibreOffice / pdftoppm) can't be fixed
+        // by a retry: fail now instead of after every backoff.
+        if (err instanceof MissingToolError) throw new NonRetriableError(err.message);
+        throw err;
       }),
     );
     logger.info("extract-source pipeline complete", {
