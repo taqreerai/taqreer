@@ -52,7 +52,6 @@ import {
   TemplatePickerGrid,
   type PickedTemplate,
 } from "@/components/create/TemplatePickerGrid";
-import { PalettePresetPicker } from "@/components/brand/PalettePresetPicker";
 import {
   fetchUse,
   readCachedUse,
@@ -74,16 +73,9 @@ import { localizedHref } from "@/lib/i18n/navigation";
 import { localizedExtractError } from "@/lib/extract/error-codes";
 import { AnimatePresence, motion } from "framer-motion";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
-import { PillButton } from "@/components/create/PillButton";
-import { WizardStepRail } from "@/components/create/WizardChrome";
-import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
-import { LogoRow } from "@/components/brand/LogoRow";
 import { PersistentRow } from "@/components/brand/PersistentRow";
 import { AIImagesPanel } from "@/components/brand/AIImagesPanel";
-import {
-  BrandKitDropdown,
-  type BrandKitOption,
-} from "@/components/brand/BrandKitDropdown";
+import { type BrandKitOption } from "@/components/brand/BrandKitDropdown";
 import {
   InlineStepper,
   SlideSizeFields,
@@ -92,7 +84,6 @@ import {
   type SlideCountMode,
 } from "@/components/create/OutputCards";
 import {
-  InlinePaletteSwatch,
   SegmentedToggle,
   Toggle,
   type LanguageCode,
@@ -114,6 +105,7 @@ import posthog from "posthog-js";
 import { useIsGuest } from "@/components/app/GuestContext";
 import { GuestSignupDialog } from "@/components/create/GuestSignupDialog";
 import { FlowSwitcher } from "@/components/create/FlowSwitcher";
+import { BrandStep, WizardBar, WizardHead, scrollWizardTop } from "@/components/create/wizard";
 import type { PickerTemplate } from "@/app/api/templates/route";
 import {
   GUEST_SAVE_EVENT,
@@ -1042,9 +1034,7 @@ export default function CreatePage() {
   const hasContent = hasText || hasFile;
   const goToStep = (next: number) => {
     setStep(Math.max(0, Math.min(LAST_STEP, next)));
-    // Page scroll lives on <body> (RTL scrollbar), so scroll both.
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    document.body.scrollTo({ top: 0, behavior: "smooth" });
+    scrollWizardTop();
   };
 
   return (
@@ -1063,24 +1053,20 @@ export default function CreatePage() {
         }}
       />
       <div className="mt-[4vh] flex w-full flex-col items-center gap-5 px-4 desk:px-8">
-        <header className="text-center">
-          <h1 className="tq-h1">{t.create.title}</h1>
-          <p className="tq-subhead mt-2">{t.create.subtitle}</p>
-        </header>
-
-        {/* Step rail: every step is one click away once there is content
-            (the only hard gate); before that only step 1 is reachable. */}
-        <WizardStepRail
+        <WizardHead
+          title={t.create.title}
+          subtitle={t.create.subtitle}
           steps={stepTitles}
-          active={step}
-          onJump={goToStep}
+          hints={stepHints}
+          step={step}
+          onStep={goToStep}
+          // Every step is one click away once there is content (the only
+          // hard gate); before that only step 1.
           reachable={hasContent ? LAST_STEP : 0}
-        />
-        <p className="-mt-2 max-w-xl text-center text-sm text-[var(--tq-text-muted)]">
-          {stepHints[step]}
-        </p>
-        {/* The other flows, one click away, on the first step only. */}
-        {step === 0 ? <FlowSwitcher /> : null}
+        >
+          {/* The other flows, one click away, on the first step only. */}
+          {step === 0 ? <FlowSwitcher /> : null}
+        </WizardHead>
 
         {/* ═══════════════════════════════════════════════════════
             STEP 1 · CONTENT
@@ -1216,122 +1202,36 @@ export default function CreatePage() {
           </div>
         </section>
 
-        {/* ═══════════════════════════════════════════════════════
-            STEP 3 · BRAND - colours on one side, font + logo on the
-            other. All optional.
-            ═══════════════════════════════════════════════════════ */}
-        <section
-          className={`${step === 2 ? "flex" : "hidden"} w-full max-w-5xl flex-col gap-4`}
-        >
-          {kitOptions.length > 0 ? (
-            // z-30 keeps the saved-kit menu above the cards below it.
-            <div className="relative z-30 flex justify-end">
-              <BrandKitDropdown kits={kitOptions} onSelect={handlePickKit} />
-            </div>
-          ) : null}
-          <div className="grid w-full gap-4 desk:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
-            {/* Colours: Auto / custom swatches, then the named colour
-                templates. */}
-            <div className="surface-card flex flex-col gap-3 rounded-2xl p-4 sm:p-5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-foreground/80">
-                  {t.colors}
-                </span>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {/* Auto pill: active when no colours are picked; in manual
-                      mode it is the way back to Auto. */}
-                  <button
-                    type="button"
-                    onClick={() => setColors([])}
-                    disabled={colors.length === 0}
-                    aria-pressed={colors.length === 0}
-                    title={t.autoColorsHint}
-                    className={`flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-[11px] font-medium transition-colors ${
-                      colors.length === 0
-                        ? "border-foreground/40 text-foreground"
-                        : "border-dashed border-foreground/20 text-foreground/60 hover:border-foreground/40 hover:text-foreground"
-                    }`}
-                  >
-                    <span className="material-symbols-outlined" style={{ fontSize: 13 }}>
-                      auto_awesome
-                    </span>
-                    {t.autoColors}
-                  </button>
-                  {colors.map((color, index) => (
-                    <InlinePaletteSwatch
-                      key={index}
-                      value={color}
-                      index={index}
-                      removable={colors.length > MIN_PALETTE}
-                      onChange={(next) => updateColor(index, next)}
-                      onRemove={() => removeColor(index)}
-                    />
-                  ))}
-                  {colors.length < MAX_PALETTE ? (
-                    <button
-                      type="button"
-                      onClick={addColor}
-                      aria-label={t.addColor}
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-foreground/20 text-foreground/60 transition-colors hover:border-foreground/40 hover:text-foreground"
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-                        add
-                      </span>
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-              <span className="text-xs font-medium text-foreground/55">
-                {t.design.colorTemplates}
-              </span>
-              <PalettePresetPicker
-                wide
-                colors={colors}
-                onPick={setColors}
-                disabled={submitting}
-              />
-            </div>
-
-            <div className="flex flex-col gap-4">
-              {/* One brand font: a Google family (Claude varies weights) OR
-                  up to 5 uploaded families (Claude pairs). */}
-              <div className="surface-card rounded-2xl p-4 sm:p-5">
-                <BrandFontPicker
-                  value={brandFont}
-                  onChange={setBrandFont}
-                  sampleText={
-                    language === "en" ? HEADING_SAMPLE_LATIN : HEADING_SAMPLE_AR
-                  }
-                />
-              </div>
-              <div className="surface-card flex flex-col gap-2 rounded-2xl p-4 sm:p-5">
-                <span className="text-sm font-semibold text-foreground/80">{t.logo}</span>
-                <LogoRow
-                  file={logoFile}
-                  previewUrl={loadedLogo?.displayUrl ?? null}
-                  onSelect={(f) => {
-                    setLogoFile(f);
-                    setLoadedLogo(null);
-                  }}
-                  onRemove={() => {
-                    setLogoFile(null);
-                    setLoadedLogo(null);
-                  }}
-                />
-              </div>
-              <div className="surface-card flex items-center justify-between gap-2 rounded-2xl px-4 py-3 sm:px-5">
-                <span className="text-sm font-semibold text-foreground/80">
-                  {t.saveAsDefault}
-                </span>
-                <Toggle
-                  ariaLabel={t.saveAsDefault}
-                  value={saveBrandKit}
-                  onChange={setSaveBrandKit}
-                />
-              </div>
-            </div>
-          </div>
-        </section>
+        {/* STEP 3 · BRAND (shared with every creation tool). */}
+        <BrandStep
+          visible={step === 2}
+          kitOptions={kitOptions}
+          onPickKit={handlePickKit}
+          colors={colors}
+          minPalette={MIN_PALETTE}
+          maxPalette={MAX_PALETTE}
+          onAutoColors={() => setColors([])}
+          onUpdateColor={updateColor}
+          onRemoveColor={removeColor}
+          onAddColor={addColor}
+          onPickPreset={setColors}
+          brandFont={brandFont}
+          onBrandFont={setBrandFont}
+          sampleText={language === "en" ? HEADING_SAMPLE_LATIN : HEADING_SAMPLE_AR}
+          logoFile={logoFile}
+          logoPreviewUrl={loadedLogo?.displayUrl ?? null}
+          onLogoSelect={(f) => {
+            setLogoFile(f);
+            setLoadedLogo(null);
+          }}
+          onLogoRemove={() => {
+            setLogoFile(null);
+            setLoadedLogo(null);
+          }}
+          saveBrandKit={saveBrandKit}
+          onSaveBrandKit={setSaveBrandKit}
+          disabled={submitting}
+        />
 
         {/* ═══════════════════════════════════════════════════════
             STEP 4 · OUTPUT SETTINGS, then Generate in the bar below.
@@ -1406,38 +1306,16 @@ export default function CreatePage() {
           </div>
         </section>
 
-        {/* Wizard bar: Back on the start side, Next (or Generate on the last
-            step) on the end side. Sticky so it stays in reach on the long
-            Design grid; logical flex only, so RTL mirrors free. */}
-        <div className="tq-wizard-bar sticky bottom-4 z-40 flex w-full max-w-3xl items-center justify-between gap-3 rounded-full border border-[var(--tq-border-hairline)] bg-[var(--tq-surface)] p-2 shadow-lg">
-          {step > 0 ? (
-            <PillButton
-              variant="secondary"
-              onClick={() => goToStep(step - 1)}
-              disabled={submitting}
-            >
-              {t.wizard.back}
-            </PillButton>
-          ) : (
-            <span />
-          )}
-          {/* The file poll keeps running after step 1; this chip explains a
-              disabled Generate the user can no longer see the cause of. */}
-          {fileExtracting && step > 0 ? (
-            <span className="hidden items-center gap-2 text-xs text-[var(--tq-text-muted)] sm:flex">
-              <span className="spinner h-3.5 w-3.5 rounded-full border-2 border-foreground/30 border-t-foreground" />
-              {t.wizard.extracting}
-            </span>
-          ) : null}
-          {step < LAST_STEP ? (
-            <PillButton
-              variant="primary"
-              onClick={() => goToStep(step + 1)}
-              disabled={submitting || (step === 0 && !hasContent)}
-            >
-              {t.wizard.next}
-            </PillButton>
-          ) : (
+        <WizardBar
+          step={step}
+          lastStep={LAST_STEP}
+          onStep={goToStep}
+          nextDisabled={step === 0 && !hasContent}
+          busy={submitting}
+          // The file poll keeps running after step 1; this explains a
+          // disabled Generate the user can no longer see the cause of.
+          status={fileExtracting ? t.wizard.extracting : null}
+          generate={
             <GenerateSplitButton
               guest={guest}
               autoStart={autoStart && !templatePending}
@@ -1450,8 +1328,8 @@ export default function CreatePage() {
               disabled={generateDisabled}
               loading={generateLoading}
             />
-          )}
-        </div>
+          }
+        />
 
         <p
           className="min-h-5 text-center text-sm text-red-400"

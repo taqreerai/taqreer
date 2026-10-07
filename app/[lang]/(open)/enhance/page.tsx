@@ -34,7 +34,6 @@
 // per "reuse > extend > fork > build new".
 
 import { TemplatePickerGrid } from "@/components/create/TemplatePickerGrid";
-import { PalettePresetPicker } from "@/components/brand/PalettePresetPicker";
 import { AIImagesPanel } from "@/components/brand/AIImagesPanel";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -48,20 +47,7 @@ import {
 import type { Dictionary } from "@/lib/i18n/dictionaries";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { Tooltip } from "@/components/common/Tooltip";
-import { PillButton } from "@/components/create/PillButton";
-import { WizardStepRail } from "@/components/create/WizardChrome";
-import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
-import { LogoRow } from "@/components/brand/LogoRow";
-import {
-  BrandKitDropdown,
-  type BrandKitOption,
-} from "@/components/brand/BrandKitDropdown";
-import {
-  CardHeader,
-  CardStepBadge,
-  InlinePaletteSwatch,
-  Toggle,
-} from "@/components/create/controls";
+import { type BrandKitOption } from "@/components/brand/BrandKitDropdown";
 import {
   emptyBrandFont,
   googleFontUrl,
@@ -81,6 +67,7 @@ import { TEASER_VISIBLE_COUNT } from "@/lib/credits/cost";
 import posthog from "posthog-js";
 import { useIsGuest } from "@/components/app/GuestContext";
 import { GuestSignupDialog } from "@/components/create/GuestSignupDialog";
+import { BrandStep, WizardBar, WizardHead, scrollWizardTop } from "@/components/create/wizard";
 import {
   GUEST_SAVE_EVENT,
   clearGuestDraft,
@@ -1039,61 +1026,63 @@ export default function EnhanceContentPage() {
     stage === "extracting" ? `${prepPercent}%` : dict.flows.generate.creating;
 
 
+  // ─── Wizard chrome (2026-10-06: the shared /create wizard) ─────
+  // Three steps (tools skip what they don't need): the deck file +
+  // instructions + AI photos, the template, the brand. Slide size and count
+  // come from the file, so enhance has no settings step.
+  const ENHANCE_LAST_STEP = 2;
+  const stepTitles = [
+    dict.flows.enhance.originalFile,
+    dict.flows.design.card,
+    dict.flows.brandCard,
+  ];
+  const stepHints = [
+    dict.flows.wizard.hints.enhanceFile,
+    dict.flows.wizard.hints.enhanceDesign,
+    dict.flows.wizard.hints.enhanceBrand,
+  ];
+  const hasSource = stage !== "idle" && !overCap;
+  const goToStep = (next: number) => {
+    setStep(Math.max(0, Math.min(ENHANCE_LAST_STEP, next)));
+    scrollWizardTop();
+  };
+
   return (
-    // Outer wrapper centered horizontally. Anchored toward top-third
-    // so the 3-card row sits in the visual sweet-spot instead of
-    // dead-center where it'd float low on tall screens.
     <div className="page-container flex w-full justify-center" dir={dir}>
-      {/* Enhance is a 1:1 rebuild - no reduce offer (fewer slides would
-          mean truncating the source). */}
       <GuestSignupDialog
         flow="enhance"
         open={guestSignupOpen}
         onClose={() => setGuestSignupOpen(false)}
       />
+      {/* Enhance is a 1:1 rebuild - no reduce offer (fewer slides would
+          mean truncating the source). */}
       <CreditGateDialog
         gate={creditGate}
         onClose={() => setCreditGate(null)}
         allowReduce={false}
       />
-      <div className="mt-[6vh] flex w-full desk:px-8 max-w-3xl desk:max-w-none flex-col items-center gap-6 px-4">
+      <div className="mt-[4vh] flex w-full flex-col items-center gap-5 px-4 desk:px-8">
         {/* Upfront plan notice when this flow isn't in the user's plan. */}
         <LockedFlowBanner flow="enhance" />
-        <header className="text-center">
-          <h1 className="tq-h1">{dict.flows.enhance.title}</h1>
-          <p className="tq-subhead mt-2">{dict.flows.enhance.subtitle}</p>
-        </header>
-
-        {/* 2-card horizontal row. RTL flow: source/logo (start, visual
-            right) → fonts (end, visual left). Both cards flex-1 so
-            they share the row width equally; items-stretch makes the
-            fonts card grow to match the source card's height (which
-            is taller — dropzone + logo stacked + file chip). */}
-        <div className="desk:hidden">
-        <WizardStepRail
-          steps={[dict.flows.enhance.originalFile, dict.flows.brandCard]}
-          active={step}
-          onJump={setStep}
+        <WizardHead
+          title={dict.flows.enhance.title}
+          subtitle={dict.flows.enhance.subtitle}
+          steps={stepTitles}
+          hints={stepHints}
+          step={step}
+          onStep={goToStep}
+          // Every step is one click away once a usable file is picked.
+          reachable={hasSource ? ENHANCE_LAST_STEP : 0}
         />
-        </div>
 
-        {/* Wizard column (was a fluid 2-across row until 2026-08-30):
-            both cards share ONE grid cell; the inactive one is
-            `invisible` (not display:none) so the stack keeps the taller
-            card's height and extraction keeps its live DOM. */}
-        <div className="flex w-full flex-col items-center gap-4">
-          <div className="grid w-full justify-items-center desk:max-w-[1800px] desk:grid-cols-2 desk:gap-6">
-          {/* ─── Source + Logo card ──────────────────────────
-              File dropzone on top (primary action), logo dropzone
-              underneath (optional brand asset). One card because
-              the two sub-cards looked unbalanced at equal width —
-              the file area needs much more vertical real estate.
-              p-4 + gap-4 deliberately tighter than the create-flow
-              cards so the row reads compact, not airy. */}
-          <motion.div
-            animate={cardShake}
-            className={`surface-card ${step === 0 ? "" : "invisible"} col-start-1 row-start-1 desk:visible desk:col-start-auto desk:row-start-auto flex min-h-[440px] w-full flex-col gap-4 rounded-2xl p-4 sm:w-[430px] desk:w-full desk:min-w-0`}
-          >
+        {/* ═══════════════════════════════════════════════════════
+            STEP 1 · YOUR DECK - the file, optional instructions and the
+            AI photos switch. Shakes when an over-cap file is rejected.
+            ═══════════════════════════════════════════════════════ */}
+        <motion.section
+          animate={cardShake}
+          className={`${step === 0 ? "flex" : "hidden"} surface-card w-full max-w-3xl flex-col gap-4 rounded-2xl p-4 sm:p-6`}
+        >
             <input
               ref={fileInputRef}
               type="file"
@@ -1103,8 +1092,6 @@ export default function EnhanceContentPage() {
                 validateAndSetFile(event.target.files?.[0])
               }
             />
-
-            <CardHeader step={1} icon="subject" title={dict.flows.enhance.originalFile} />
 
             {/* File dropzone — primary action of the page.
                 When a file IS selected, the dropzone CONTENT swaps to
@@ -1146,7 +1133,7 @@ export default function EnhanceContentPage() {
                   }}
                   disabled={stage === "extracting" || stage === "submitting"}
                   aria-describedby={overCap ? rejectReasonId : undefined}
-                  className={`flex h-full min-h-[160px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-4 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                  className={`flex h-full min-h-[240px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-4 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                     dragging
                       ? "border-foreground/40 bg-foreground/[0.04]"
                       : "border-foreground/20 bg-overlay-soft hover:border-foreground/30"
@@ -1311,219 +1298,90 @@ export default function EnhanceContentPage() {
               />
             </div>
 
-          </motion.div>
+        </motion.section>
 
-          {/* ─── Brand card (الهوية البصرية) ─────────────────
-              Replicates /create's consolidated brand card — saved-kit
-              dropdown in the header, palette, single brand-font picker,
-              logo row, save toggle. Same min-h / min-w / flex-1 sizing
-              as the source card so the two-card row stays balanced. */}
-          <div className={`surface-card ${step === 1 ? "" : "invisible"} col-start-1 row-start-1 desk:visible desk:col-start-auto desk:row-start-auto flex min-h-[440px] w-full flex-col gap-4 rounded-2xl p-4 sm:w-[430px] desk:w-full desk:min-w-0`}>
-            {/* Inline header (not CardHeader) so the saved-kit pill can
-                overlay the title row. Mirrors /create's branding header:
-                pb-4 balances the card's p-4 top padding so the title sits
-                centred in the strip; z-30 lifts the open menu above the
-                later rows. */}
-            <header className="relative z-30 border-b border-foreground/[0.08] pb-4">
-              <div className="relative flex items-center gap-2">
-                <CardStepBadge step={2} />
-                <span
-                  className="material-symbols-outlined text-foreground"
-                  style={{ fontSize: 18 }}
-                >
-                  palette
-                </span>
-                <h3 className="text-sm font-semibold text-foreground">
-                  {dict.flows.brandCard}
-                </h3>
-                {kitOptions.length > 0 ? (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.2 }}
-                    className="absolute end-0 top-1/2 -translate-y-1/2"
-                  >
-                    <BrandKitDropdown
-                      kits={kitOptions}
-                      onSelect={handlePickKit}
-                    />
-                  </motion.div>
-                ) : null}
-              </div>
-            </header>
-
-            {/* Deck templates (2026-10-05): redesign the deck in a template's
-                look. Automatic (the default) keeps the classic enhance. */}
-            <div className="flex flex-col gap-2">
-              <span className="text-xs font-semibold text-foreground/70">
-                {dict.flows.design.tabTemplates}
-              </span>
-              <TemplatePickerGrid
-                onGuestSelect={guest ? (tpl) => setTemplateId(tpl.id) : undefined}
-                selectedId={templateId}
-                onSelect={(picked) => setTemplateId(picked.template.id)}
-                onClear={() => setTemplateId(null)}
-              />
-              {templateId ? (
-                <p className="text-[11px] leading-4 text-foreground/55">
-                  {dict.flows.design.templateNoteEnhance}
-                </p>
-              ) : null}
-            </div>
-
-            {/* Palette row — byte-for-byte the /create cluster: label
-                on the visual right, swatches + add tile on the visual
-                left. Uses the shared InlinePaletteSwatch + the same
-                add/remove/update handlers. */}
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs font-semibold text-foreground/70">
-                {dict.flows.colors}
-              </span>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setColorsAuto(true);
-                    setColors([]);
-                  }}
-                  disabled={colors.length === 0}
-                  aria-pressed={colors.length === 0}
-                  title={dict.flows.autoColorsHint}
-                  className={`flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-[11px] font-medium transition-colors ${
-                    colors.length === 0
-                      ? "border-foreground/40 text-foreground"
-                      : "border-dashed border-foreground/20 text-foreground/60 hover:border-foreground/40 hover:text-foreground"
-                  }`}
-                >
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ fontSize: 13 }}
-                  >
-                    auto_awesome
-                  </span>
-                  {dict.flows.autoColors}
-                </button>
-                {colors.map((color, index) => (
-                  <InlinePaletteSwatch
-                    key={index}
-                    value={color}
-                    index={index}
-                    removable={colors.length > MIN_PALETTE}
-                    onChange={(next) => updateColor(index, next)}
-                    onRemove={() => removeColor(index)}
-                  />
-                ))}
-                {colors.length < MAX_PALETTE ? (
-                  <button
-                    type="button"
-                    onClick={addColor}
-                    aria-label={dict.flows.addColor}
-                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-foreground/20 text-foreground/60 transition-colors hover:border-foreground/40 hover:text-foreground"
-                  >
-                    <span
-                      className="material-symbols-outlined"
-                      style={{ fontSize: 14 }}
-                    >
-                      add
-                    </span>
-                  </button>
-                ) : null}
-              </div>
-            </div>
-            {/* Colour templates (shared with /create, 2026-10-05). */}
-            <div className="flex flex-col gap-1.5">
-              <PalettePresetPicker colors={colors} onPick={pickPalette} disabled={false} />
-            </div>
-
-            {/* Single brand font — one Google family (Claude varies
-                weights) OR up to 5 uploaded families (Claude pairs).
-                Replaces the old heading + body two-slot UI; identical to
-                /create's BrandFontPicker. */}
-            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
-              <BrandFontPicker
-                compact
-                value={brandFont}
-                onChange={setBrandFont}
-                sampleText={
-                  extracted?.language === "en"
-                    ? HEADING_SAMPLE_LATIN
-                    : HEADING_SAMPLE_AR
-                }
-              />
-            </div>
-
-            {/* Logo: compact fixed-height zone like /create (2026-10-05:
-                keeps the brand card short instead of growing to fill it). */}
-            <div className="flex flex-col gap-2 border-t border-[var(--tq-border-hairline)] pt-3">
-              <span className="block text-xs font-semibold text-foreground/70">
-                {dict.flows.logo}
-              </span>
-              <LogoRow
-                compact
-                file={logoFile}
-                previewUrl={loadedLogo?.displayUrl ?? null}
-                onSelect={(f) => {
-                  setLogoFile(f);
-                  setLoadedLogo(null);
-                }}
-                onRemove={() => {
-                  setLogoFile(null);
-                  setLoadedLogo(null);
-                }}
-              />
-            </div>
-
-            {/* Save brand kit — mirrors /create's footer toggle. The logo
-                section's flex-1 absorbs the slack and pushes this to the
-                bottom, so no mt-auto (it would otherwise eat the slack and
-                stop the logo zone from growing). */}
-            <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-hairline)] pt-2">
-              <span className="text-xs font-semibold text-foreground/70">
-                {dict.flows.saveAsDefault}
-              </span>
-              <Toggle
-                ariaLabel={dict.flows.saveAsDefault}
-                value={saveBrandKit}
-                onChange={setSaveBrandKit}
-              />
-            </div>
-          </div>
-          </div>
-
-          {/* Next only (`.btn-gradient` CTA); back-travel via the rail.
-              Gated on a file being picked - extraction may continue
-              across steps (the Generate CTA carries its loading). */}
-          {step < 1 && (
-            <div className="flex w-full justify-end sm:w-[430px] desk:hidden">
-              <PillButton
-                variant="primary"
-                onClick={() => setStep(1)}
-                disabled={stage === "idle" || overCap}
-              >
-                {dict.flows.wizard.next}
-              </PillButton>
-            </div>
-          )}
-        </div>
-
-        {/* Desktop (desk:) shows every card at once, so Generate is always there. */}
-        {(
-        <div className={`${step === 1 ? "flex" : "hidden desk:flex"} justify-center`}>
-          <GenerateSplitButton
-            guest={guest}
-            autoStart={autoStart}
-            onGenerate={guest ? () => void openGuestSignup() : handleGenerate}
-            quality={quality}
-            onQualityChange={setQuality}
-            slideCount={extracted?.pageCount ?? undefined}
-            imagesMode={imagesMode}
-            disabled={generateDisabled}
-            loading={generateLoading}
-            label={generateLabel}
-            loadingLabel={generateLoadingLabel}
+        {/* ═══════════════════════════════════════════════════════
+            STEP 2 · DESIGN - redesign the deck in a template's look
+            (2026-10-05), full width like /create. Automatic (the default)
+            keeps the classic enhance.
+            ═══════════════════════════════════════════════════════ */}
+        <section
+          className={`${step === 1 ? "flex" : "hidden"} w-full max-w-[1400px] flex-col gap-4`}
+        >
+          {templateId ? (
+            <p className="mx-auto max-w-xl text-center text-xs leading-5 text-foreground/55">
+              {dict.flows.design.templateNoteEnhance}
+            </p>
+          ) : null}
+          <TemplatePickerGrid
+            wide
+            onGuestSelect={guest ? (tpl) => setTemplateId(tpl.id) : undefined}
+            selectedId={templateId}
+            onSelect={(picked) => setTemplateId(picked.template.id)}
+            onClear={() => setTemplateId(null)}
+            disabled={stage === "submitting"}
           />
-        </div>
-        )}
+        </section>
+
+        {/* STEP 3 · BRAND (shared with every creation tool), then Create. */}
+        <BrandStep
+          visible={step === 2}
+          kitOptions={kitOptions}
+          onPickKit={handlePickKit}
+          colors={colors}
+          minPalette={MIN_PALETTE}
+          maxPalette={MAX_PALETTE}
+          onAutoColors={() => {
+            setColorsAuto(true);
+            setColors([]);
+          }}
+          onUpdateColor={updateColor}
+          onRemoveColor={removeColor}
+          onAddColor={addColor}
+          onPickPreset={pickPalette}
+          brandFont={brandFont}
+          onBrandFont={setBrandFont}
+          sampleText={extracted?.language === "en" ? HEADING_SAMPLE_LATIN : HEADING_SAMPLE_AR}
+          logoFile={logoFile}
+          logoPreviewUrl={loadedLogo?.displayUrl ?? null}
+          onLogoSelect={(f) => {
+            setLogoFile(f);
+            setLoadedLogo(null);
+          }}
+          onLogoRemove={() => {
+            setLogoFile(null);
+            setLoadedLogo(null);
+          }}
+          saveBrandKit={saveBrandKit}
+          onSaveBrandKit={setSaveBrandKit}
+          disabled={stage === "submitting"}
+        />
+
+        <WizardBar
+          step={step}
+          lastStep={ENHANCE_LAST_STEP}
+          onStep={goToStep}
+          nextDisabled={step === 0 && !hasSource}
+          busy={stage === "submitting"}
+          // Extraction keeps running after step 1; this explains a disabled
+          // Create the user can no longer see the cause of.
+          status={stage === "extracting" ? dict.flows.wizard.extracting : null}
+          generate={
+            <GenerateSplitButton
+              guest={guest}
+              autoStart={autoStart}
+              onGenerate={guest ? () => void openGuestSignup() : handleGenerate}
+              quality={quality}
+              onQualityChange={setQuality}
+              slideCount={extracted?.pageCount ?? undefined}
+              imagesMode={imagesMode}
+              disabled={generateDisabled}
+              loading={generateLoading}
+              label={generateLabel}
+              loadingLabel={generateLoadingLabel}
+            />
+          }
+        />
 
         <p
           className="min-h-5 text-center text-sm text-red-400"

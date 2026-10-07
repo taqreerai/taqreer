@@ -1,0 +1,260 @@
+"use client";
+
+// The shared creation wizard (2026-10-06, owner direction: every creation
+// tool - /create, /enhance, then /mimic, /social, /datasheet - should feel
+// like ONE process). Extracted from /create's 4-step redesign:
+//   - WizardHead: title + subtitle, the step rail, the step's one-line hint
+//     and an optional slot under it (e.g. the "Or try" row);
+//   - BrandStep: the Brand step (colours + named colour templates on one
+//     side; font, logo, "save as default" on the other; saved kits on top);
+//   - WizardBar: the sticky Back / Next bar whose last step holds Generate.
+// Each tool keeps its own state and puts its own content into the steps;
+// tools skip the steps they have no use for (owner answer 2026-10-06).
+
+import type { ReactNode } from "react";
+import { useDict } from "@/components/i18n/LocaleProvider";
+import { WizardStepRail } from "@/components/create/WizardChrome";
+import { PillButton } from "@/components/create/PillButton";
+import { InlinePaletteSwatch, Toggle } from "@/components/create/controls";
+import { PalettePresetPicker } from "@/components/brand/PalettePresetPicker";
+import { BrandFontPicker } from "@/components/brand/BrandFontPicker";
+import { LogoRow } from "@/components/brand/LogoRow";
+import {
+  BrandKitDropdown,
+  type BrandKitOption,
+} from "@/components/brand/BrandKitDropdown";
+import type { BrandFontState } from "@/lib/brand/fonts";
+
+/** Scroll the page back to the top on a step change (page scroll lives on
+ *  <body> in the app shell, on the window elsewhere, so both). */
+export function scrollWizardTop() {
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  document.body.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+export function WizardHead({
+  title,
+  subtitle,
+  steps,
+  hints,
+  step,
+  onStep,
+  reachable,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  steps: string[];
+  hints: string[];
+  step: number;
+  onStep: (next: number) => void;
+  // Highest step the rail may jump to (the tool's own gate).
+  reachable: number;
+  // Shown under the hint (e.g. the "Or try" row on step 1).
+  children?: ReactNode;
+}) {
+  return (
+    <>
+      <header className="text-center">
+        <h1 className="tq-h1">{title}</h1>
+        <p className="tq-subhead mt-2">{subtitle}</p>
+      </header>
+      <WizardStepRail steps={steps} active={step} onJump={onStep} reachable={reachable} />
+      <p className="-mt-2 max-w-xl text-center text-sm text-[var(--tq-text-muted)]">
+        {hints[step]}
+      </p>
+      {children}
+    </>
+  );
+}
+
+/**
+ * Back on the start side, Next (or the tool's Generate button on the last
+ * step) on the end side. Sticky so it stays in reach on the long Design grid
+ * (`.tq-wizard-bar` switches the content panel to `overflow: clip` so sticky
+ * works, globals.css); logical flex only, so RTL mirrors free.
+ */
+export function WizardBar({
+  step,
+  lastStep,
+  onStep,
+  nextDisabled,
+  busy,
+  status,
+  generate,
+}: {
+  step: number;
+  lastStep: number;
+  onStep: (next: number) => void;
+  nextDisabled: boolean;
+  // Submitting: Back is disabled too.
+  busy: boolean;
+  // A short status in the middle (e.g. "extracting your file..."), shown
+  // after step 1 so a disabled Generate explains itself.
+  status?: string | null;
+  generate: ReactNode;
+}) {
+  const t = useDict().flows;
+  return (
+    <div className="tq-wizard-bar sticky bottom-4 z-40 flex w-full max-w-3xl items-center justify-between gap-3 rounded-full border border-[var(--tq-border-hairline)] bg-[var(--tq-surface)] p-2 shadow-lg">
+      {step > 0 ? (
+        <PillButton variant="secondary" onClick={() => onStep(step - 1)} disabled={busy}>
+          {t.wizard.back}
+        </PillButton>
+      ) : (
+        <span />
+      )}
+      {status && step > 0 ? (
+        <span className="hidden items-center gap-2 text-xs text-[var(--tq-text-muted)] sm:flex">
+          <span className="spinner h-3.5 w-3.5 rounded-full border-2 border-foreground/30 border-t-foreground" />
+          {status}
+        </span>
+      ) : null}
+      {step < lastStep ? (
+        <PillButton
+          variant="primary"
+          onClick={() => onStep(step + 1)}
+          disabled={busy || nextDisabled}
+        >
+          {t.wizard.next}
+        </PillButton>
+      ) : (
+        generate
+      )}
+    </div>
+  );
+}
+
+/** The Brand step: all optional. */
+export function BrandStep({
+  visible,
+  kitOptions,
+  onPickKit,
+  colors,
+  minPalette,
+  maxPalette,
+  onAutoColors,
+  onUpdateColor,
+  onRemoveColor,
+  onAddColor,
+  onPickPreset,
+  brandFont,
+  onBrandFont,
+  sampleText,
+  logoFile,
+  logoPreviewUrl,
+  onLogoSelect,
+  onLogoRemove,
+  saveBrandKit,
+  onSaveBrandKit,
+  disabled = false,
+}: {
+  visible: boolean;
+  kitOptions: BrandKitOption[];
+  onPickKit: (id: string) => void;
+  colors: string[];
+  minPalette: number;
+  maxPalette: number;
+  // "Auto": no palette, the AI picks one for the content.
+  onAutoColors: () => void;
+  onUpdateColor: (index: number, next: string) => void;
+  onRemoveColor: (index: number) => void;
+  onAddColor: () => void;
+  onPickPreset: (colors: string[]) => void;
+  brandFont: BrandFontState;
+  onBrandFont: (next: BrandFontState) => void;
+  sampleText: string;
+  logoFile: File | null;
+  logoPreviewUrl: string | null;
+  onLogoSelect: (file: File) => void;
+  onLogoRemove: () => void;
+  saveBrandKit: boolean;
+  onSaveBrandKit: (next: boolean) => void;
+  disabled?: boolean;
+}) {
+  const t = useDict().flows;
+  return (
+    <section className={`${visible ? "flex" : "hidden"} w-full max-w-5xl flex-col gap-4`}>
+      {kitOptions.length > 0 ? (
+        // z-30 keeps the saved-kit menu above the cards below it.
+        <div className="relative z-30 flex justify-end">
+          <BrandKitDropdown kits={kitOptions} onSelect={onPickKit} />
+        </div>
+      ) : null}
+      <div className="grid w-full gap-4 desk:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        {/* Colours: Auto / custom swatches, then the named colour templates. */}
+        <div className="surface-card flex flex-col gap-3 rounded-2xl p-4 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-semibold text-foreground/80">{t.colors}</span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {/* Auto pill: active when no colours are picked; in manual mode
+                  it is the way back to Auto. */}
+              <button
+                type="button"
+                onClick={onAutoColors}
+                disabled={colors.length === 0}
+                aria-pressed={colors.length === 0}
+                title={t.autoColorsHint}
+                className={`flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-[11px] font-medium transition-colors ${
+                  colors.length === 0
+                    ? "border-foreground/40 text-foreground"
+                    : "border-dashed border-foreground/20 text-foreground/60 hover:border-foreground/40 hover:text-foreground"
+                }`}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 13 }}>
+                  auto_awesome
+                </span>
+                {t.autoColors}
+              </button>
+              {colors.map((color, index) => (
+                <InlinePaletteSwatch
+                  key={index}
+                  value={color}
+                  index={index}
+                  removable={colors.length > minPalette}
+                  onChange={(next) => onUpdateColor(index, next)}
+                  onRemove={() => onRemoveColor(index)}
+                />
+              ))}
+              {colors.length < maxPalette ? (
+                <button
+                  type="button"
+                  onClick={onAddColor}
+                  aria-label={t.addColor}
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-dashed border-foreground/20 text-foreground/60 transition-colors hover:border-foreground/40 hover:text-foreground"
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+                    add
+                  </span>
+                </button>
+              ) : null}
+            </div>
+          </div>
+          <span className="text-xs font-medium text-foreground/55">{t.design.colorTemplates}</span>
+          <PalettePresetPicker wide colors={colors} onPick={onPickPreset} disabled={disabled} />
+        </div>
+
+        <div className="flex flex-col gap-4">
+          {/* One brand font: a Google family (Claude varies weights) OR up to
+              5 uploaded families (Claude pairs). */}
+          <div className="surface-card rounded-2xl p-4 sm:p-5">
+            <BrandFontPicker value={brandFont} onChange={onBrandFont} sampleText={sampleText} />
+          </div>
+          <div className="surface-card flex flex-col gap-2 rounded-2xl p-4 sm:p-5">
+            <span className="text-sm font-semibold text-foreground/80">{t.logo}</span>
+            <LogoRow
+              file={logoFile}
+              previewUrl={logoPreviewUrl}
+              onSelect={onLogoSelect}
+              onRemove={onLogoRemove}
+            />
+          </div>
+          <div className="surface-card flex items-center justify-between gap-2 rounded-2xl px-4 py-3 sm:px-5">
+            <span className="text-sm font-semibold text-foreground/80">{t.saveAsDefault}</span>
+            <Toggle ariaLabel={t.saveAsDefault} value={saveBrandKit} onChange={onSaveBrandKit} />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}

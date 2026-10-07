@@ -179,6 +179,10 @@ Name templates by stage ("درس المرحلة الابتدائية"), Arabic f
     datasheet on it. Owner answers: SKIP steps a tool doesn't need (not always 4); mimic
     stays its own page (its Design step = upload your reference deck); ship the current
     batch first. Open each tool to visitors in the same pass (enhance already is).
+    **Done: shared parts in `components/create/wizard.tsx` (WizardHead, BrandStep,
+    WizardBar); /create and /enhance run on them (enhance = 3 steps: your deck +
+    instructions + AI photos / templates full width / brand + Create). Next: mimic,
+    social, datasheet.**
     Mapping: enhance = file+instructions / templates / brand / AI photos; mimic =
     content / reference upload / brand / settings; social = topic+product photo /
     social styles / brand / format+count+photos; datasheet = spreadsheet / deck styles /
