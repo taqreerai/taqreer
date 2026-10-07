@@ -70,6 +70,24 @@ export function EmbeddedCheckout({
     adaptivePricing: { allowed: boolean };
   };
   const [options, setOptions] = useState<ProviderOptions | null>(null);
+  // Stripe.js itself failed to load (blocked by an extension / network, or no
+  // publishable key): without this the form sat on "loading" forever, because
+  // the provider never reports a rejected stripe promise (2026-10-07).
+  const [stripeFailed, setStripeFailed] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    getStripe(locale).then(
+      (s) => {
+        if (alive && !s) setStripeFailed(true);
+      },
+      () => {
+        if (alive) setStripeFailed(true);
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, [locale]);
   useEffect(() => {
     // SSR-safe init the rule can't model: the Stripe appearance reads computed
     // CSS tokens from `document` (undefined on the server), so options must be
@@ -115,6 +133,7 @@ export function EmbeddedCheckout({
     return () => observer.disconnect();
   }, []);
 
+  if (stripeFailed) return <CheckoutErrorCard />;
   if (!options) return null;
 
   return (
@@ -133,6 +152,26 @@ export function EmbeddedCheckout({
   );
 }
 
+// The checkout's own failure card: shown when the session, Stripe.js or the
+// form could not start. Leads to the full /plans page, which has its own
+// checkout, so the user is never stranded.
+export function CheckoutErrorCard() {
+  const dict = useDict();
+  const { locale } = useLocale();
+  const t = dict.checkout;
+  return (
+    <div className="surface-card rounded-2xl p-8 text-center">
+      <p className="mb-6 text-sm text-muted">{t.error}</p>
+      <Link
+        href={localizedHref("/plans", locale)}
+        className="btn-pill px-6 py-2.5 text-sm no-underline"
+      >
+        {t.back}
+      </Link>
+    </div>
+  );
+}
+
 function CheckoutForm({
   isTopup,
   isYearly,
@@ -144,7 +183,6 @@ function CheckoutForm({
 }) {
   const allowPromo = isYearly;
   const dict = useDict();
-  const { locale } = useLocale();
   const t = dict.checkout;
   const state = useCheckoutElements();
   const [paying, setPaying] = useState(false);
@@ -164,17 +202,7 @@ function CheckoutForm({
     );
   }
   if (state.type === "error") {
-    return (
-      <div className="surface-card rounded-2xl p-8 text-center">
-        <p className="mb-6 text-sm text-muted">{t.error}</p>
-        <Link
-          href={localizedHref("/plans", locale)}
-          className="btn-pill px-6 py-2.5 text-sm no-underline"
-        >
-          {t.back}
-        </Link>
-      </div>
-    );
+    return <CheckoutErrorCard />;
   }
 
   const { checkout } = state;

@@ -11,6 +11,7 @@ import { useRouter } from "next/navigation";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { EmbeddedCheckout } from "@/components/billing/EmbeddedCheckout";
+import { CheckoutBoundary } from "@/components/billing/CheckoutBoundary";
 
 export function CheckoutClient({
   lookupKey,
@@ -52,7 +53,9 @@ export function CheckoutClient({
         </h1>
         <p className="mb-8 mt-2 text-sm text-muted">{t.subtitle}</p>
 
-        <EmbeddedCheckout lookupKey={lookupKey} />
+        <CheckoutBoundary where="checkout-page">
+          <EmbeddedCheckout lookupKey={lookupKey} />
+        </CheckoutBoundary>
       </div>
     </div>
   );

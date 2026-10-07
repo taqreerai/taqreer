@@ -36,17 +36,44 @@ function computedColor(value: string): string {
 // Resolve `token` to a plain opaque sRGB string. When the token has
 // alpha, it is composited over `behindToken` (default: the card
 // surface the form sits on) so the result matches what the eye sees.
+//
+// NEVER throws (2026-10-07): the canvas read-back is blocked or randomised by
+// browser privacy features and extensions (canvas fingerprint protection), and
+// this runs inside an effect the moment the checkout opens, where a throw
+// replaced the whole page with the global error screen. Any failure, or a
+// blanked read-back, falls back to a fixed colour for the active theme.
+const FALLBACK_COLORS: Record<string, { dark: string; light: string }> = {
+  "--tq-border-hairline": { dark: "rgb(52, 52, 56)", light: "rgb(222, 222, 226)" },
+  "--tq-overlay-soft": { dark: "rgb(36, 36, 40)", light: "rgb(244, 244, 246)" },
+  "--tq-purple": { dark: "rgb(0, 87, 255)", light: "rgb(0, 87, 255)" },
+  "--tq-card": { dark: "rgb(24, 24, 27)", light: "rgb(255, 255, 255)" },
+  "--tq-text-primary": { dark: "rgb(255, 255, 255)", light: "rgb(10, 10, 10)" },
+  "--tq-text-muted": { dark: "rgb(161, 161, 170)", light: "rgb(100, 100, 108)" },
+};
+
+function fallbackColor(token: string): string {
+  const light = document.documentElement.classList.contains("light");
+  const pair = FALLBACK_COLORS[token];
+  return pair ? (light ? pair.light : pair.dark) : light ? "rgb(10, 10, 10)" : "rgb(255, 255, 255)";
+}
+
 function resolveColor(token: string, behindToken = "--tq-card"): string {
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 1;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return computedColor(`var(${token})`);
-  ctx.fillStyle = computedColor(`var(${behindToken})`);
-  ctx.fillRect(0, 0, 1, 1);
-  ctx.fillStyle = computedColor(`var(${token})`);
-  ctx.fillRect(0, 0, 1, 1);
-  const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
-  return `rgb(${r}, ${g}, ${b})`;
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 1;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return fallbackColor(token);
+    ctx.fillStyle = computedColor(`var(${behindToken})`);
+    ctx.fillRect(0, 0, 1, 1);
+    ctx.fillStyle = computedColor(`var(${token})`);
+    ctx.fillRect(0, 0, 1, 1);
+    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+    // Fingerprint protection can return a blank (fully transparent) canvas.
+    if (a === 0) return fallbackColor(token);
+    return `rgb(${r}, ${g}, ${b})`;
+  } catch {
+    return fallbackColor(token);
+  }
 }
 
 export function checkoutAppearance(): Appearance {

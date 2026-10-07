@@ -26,6 +26,13 @@ export function getStripe(locale: "ar" | "en" = "en"): Promise<Stripe | null> {
     }
     promise = loadStripe(key, { locale });
     promises[locale] = promise;
+    // A failed load (Stripe.js blocked by an extension / network, a flaky
+    // connection) must not be cached: the next attempt ("try again") loads it
+    // afresh. The caller still gets the original rejection to handle.
+    const cached = promise;
+    cached.catch(() => {
+      if (promises[locale] === cached) delete promises[locale];
+    });
   }
   return promise;
 }

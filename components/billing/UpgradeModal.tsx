@@ -21,6 +21,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { BillingSection } from "@/components/billing/BillingSection";
 import { EmbeddedCheckout } from "@/components/billing/EmbeddedCheckout";
+import { CheckoutBoundary } from "@/components/billing/CheckoutBoundary";
 import { planLabel, type KnownPlan } from "@/lib/plan";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 
@@ -182,15 +183,19 @@ export function UpgradeModal({
                     </button>
                   </div>
                 ) : lookupKey ? (
-                  <EmbeddedCheckout
-                    lookupKey={lookupKey}
-                    onSuccess={() => {
-                      setDone(true);
-                      onSuccess?.();
-                    }}
-                  />
+                  <CheckoutBoundary where="upgrade-modal-checkout">
+                    <EmbeddedCheckout
+                      lookupKey={lookupKey}
+                      onSuccess={() => {
+                        setDone(true);
+                        onSuccess?.();
+                      }}
+                    />
+                  </CheckoutBoundary>
                 ) : (
-                  <BillingSection variant="modal" minTier={requiredTier} onBuy={(key) => setLookupKey(key)} />
+                  <CheckoutBoundary where="upgrade-modal-plans">
+                    <BillingSection variant="modal" minTier={requiredTier} onBuy={(key) => setLookupKey(key)} />
+                  </CheckoutBoundary>
                 )}
               </div>
             </motion.div>
