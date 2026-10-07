@@ -38,7 +38,7 @@ import {
   type MimicTemplateUse,
 } from "@/lib/mimic/template-seed";
 import type { PickerTemplate } from "@/app/api/templates/route";
-import { useFitCount } from "@/components/create/useFitCount";
+import { FIT_MAX_ROWS, useFitCount } from "@/components/create/useFitCount";
 
 export type PickedTemplate = { template: PickerTemplate; use: MimicTemplateUse };
 
@@ -202,7 +202,7 @@ export function TemplatePickerGrid({
     />
   ));
 
-  const { boxRef: fitBoxRef, gridRef: fitGridRef, count: fitCount } = useFitCount(wide && fit, list.length + 1);
+  const { boxRef: fitBoxRef, gridRef: fitGridRef, count: fitCount } = useFitCount(wide && fit, list.length + 1, FIT_MAX_ROWS);
   const allTiles = [noneTile, ...(templates === null ? skeletons : list.map((tpl) => tile(tpl)))];
   const expandModal = (
     <PickerExpandModal open={expanded} title={t.allTemplates} onClose={() => setExpanded(false)}>

@@ -21,7 +21,7 @@ import { DECK_STYLES, STYLE_SECTORS, type DeckStyleKey, type StyleSector } from 
 import { SocialStyleThumb, StyleThumb, type SocialThumbKey } from "@/components/create/StyleThumb";
 import { StyleInfoButton } from "@/components/create/StyleInfoButton";
 import { PickerExpandButton, PickerExpandModal } from "@/components/create/PickerExpandModal";
-import { useFitCount } from "@/components/create/useFitCount";
+import { FIT_MAX_ROWS, useFitCount } from "@/components/create/useFitCount";
 
 // Deck styles: the shared list (lib/design-styles.ts). `label` is the prompt
 // anchor stored on the brief; the visible name comes from the dictionary.
@@ -354,7 +354,7 @@ export function DesignStyleGrid({
     })),
   ];
   const tiles = allTiles.filter((tl) => inSector(tl.key, sector));
-  const { boxRef: fitBoxRef, gridRef: fitGridRef, count: fitCount } = useFitCount(wide && fit, tiles.length);
+  const { boxRef: fitBoxRef, gridRef: fitGridRef, count: fitCount } = useFitCount(wide && fit, tiles.length, FIT_MAX_ROWS);
 
   const tile = (tl: (typeof allTiles)[number], big: boolean) => {
     const active = value === tl.value;
