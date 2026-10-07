@@ -273,6 +273,45 @@ export function SlideEditor({
     scaleRef.current = totalZoom;
     panRef.current = { x: panX, y: panY };
   }, [totalZoom, panX, panY]);
+
+  // First-open reveal. The studio's first render has both rails collapsed (so SSR
+  // and the client agree) and opens them right after mount, so for a frame or two
+  // the artboard is fit to the wide canvas, then re-fits: a visible jump. Keep the
+  // iframe invisible until the workspace box has held still for 2 frames AND the
+  // applied fit was computed for that exact box, then fade it in once. Later slide
+  // switches never hide it. A 1.5s cap reveals regardless (a box that never settles
+  // must not leave a blank canvas).
+  const viewportRef = useRef(viewport);
+  useLayoutEffect(() => {
+    viewportRef.current = viewport;
+  }, [viewport]);
+  const [revealed, setRevealed] = useState(false);
+  useEffect(() => {
+    if (revealed || !editorDoc) return;
+    const el = wrapRef.current;
+    if (!el) return;
+    const started = performance.now();
+    let raf = 0;
+    let last = "";
+    let still = 0;
+    const check = () => {
+      const r = el.getBoundingClientRect();
+      const key = `${Math.round(r.width)}x${Math.round(r.height)}`;
+      still = key === last ? still + 1 : 0;
+      last = key;
+      const v = viewportRef.current;
+      const fitCurrent =
+        Math.round(v.w) === Math.round(r.width) && Math.round(v.h) === Math.round(r.height);
+      if ((still >= 2 && fitCurrent) || performance.now() - started > 1500) {
+        setRevealed(true);
+        return;
+      }
+      raf = requestAnimationFrame(check);
+    };
+    raf = requestAnimationFrame(check);
+    return () => cancelAnimationFrame(raf);
+  }, [editorDoc, revealed]);
+
   const srcDoc = useMemo(() => {
     const vars = themeToCssVars(theme) as Record<string, string>;
     const rootVars = Object.entries(vars).map(([k, v]) => `${k}:${v}`).join(";");
@@ -1196,6 +1235,9 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
           // transparent too, so only the opaque artboard paints; the workspace margins
           // reveal the page texture.
           background: "transparent",
+          // Hidden until the first fit has settled (first-open reveal, above).
+          opacity: revealed ? 1 : 0,
+          transition: "opacity 120ms ease",
         }}
       />
       {/* Moveable lives INSIDE the iframe (portal → editorDoc.body): one document,
