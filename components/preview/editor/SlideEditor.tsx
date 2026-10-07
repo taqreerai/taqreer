@@ -263,7 +263,13 @@ export function SlideEditor({
   // current values → no flash), wire() on iframe load, and the raw-pointer drag math.
   const scaleRef = useRef(totalZoom);
   const panRef = useRef({ x: panX, y: panY });
-  useEffect(() => {
+  // LAYOUT effect, not passive: wire() reads these refs on the iframe's `load`,
+  // and a load task can run between a commit's layout and passive effects. With
+  // a passive sync, a load landing in that gap wrote the PREVIOUS fit over the
+  // fresh one the CSS-var push below had just applied (first open: the rails
+  // expand while the deck fonts load, so the artboard kept the collapsed-rails
+  // zoom and was clipped on the right until a refresh).
+  useLayoutEffect(() => {
     scaleRef.current = totalZoom;
     panRef.current = { x: panX, y: panY };
   }, [totalZoom, panX, panY]);
@@ -903,13 +909,15 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
   // Push the live pan/zoom (fit + user zoom + pan) into the iframe's CSS vars on every
   // viewport/zoom change — recomputes the #tqe-scene transform WITHOUT reloading the
   // document (no flash). The srcDoc baked the current values, so first paint is right.
+  // `editorDoc` re-runs it once the loaded document is wired, so the live state has
+  // the final say over whatever the load path applied.
   useLayoutEffect(() => {
     const root = iframeRef.current?.contentDocument?.documentElement;
     if (!root) return;
     root.style.setProperty("--tqe-zoom", String(totalZoom));
     root.style.setProperty("--tqe-pan-x", `${panX}px`);
     root.style.setProperty("--tqe-pan-y", `${panY}px`);
-  }, [totalZoom, panX, panY, srcDoc]);
+  }, [totalZoom, panX, panY, srcDoc, editorDoc]);
 
   // Reposition the selection box(es) whenever the controlled `selected` set
   // changes — ONE `.tqe-sel` box per selected element. The pool grows/shrinks to
