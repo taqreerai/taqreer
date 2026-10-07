@@ -96,6 +96,10 @@ import {
 // is refused (rasterizing hundreds of pages for a 5-slide preview).
 const FREE_TRIAL_MAX_PAGES = 100;
 
+// Wizard: your deck, design, brand + Create (2026-10-06). The resume after a
+// guest sign-up jumps here, where Create lives (it presses itself there).
+const ENHANCE_LAST_STEP = 2;
+
 const POLL_INTERVAL_MS = 2_500;
 const POLL_TIMEOUT_MS = 5 * 60 * 1_000; // 5 min ceiling
 const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024;
@@ -807,7 +811,7 @@ export default function EnhanceContentPage() {
       setImagesMode(!!d.imagesMode);
       // Starts the upload + analysis, now signed in.
       if (draft.files.content) validateAndSetFile(draft.files.content);
-      setStep(mode === "generate" ? 1 : Math.min(1, Math.max(0, d.step)));
+      setStep(mode === "generate" ? ENHANCE_LAST_STEP : Math.min(ENHANCE_LAST_STEP, Math.max(0, d.step)));
       void clearGuestDraft("enhance");
       posthog.capture("create_guest_resumed", { flow: "enhance", mode, hasFile: !!draft.files.content });
       if (mode === "generate" && draft.files.content) setAutoStart(true);
@@ -1050,7 +1054,6 @@ export default function EnhanceContentPage() {
   // Three steps (tools skip what they don't need): the deck file +
   // instructions + AI photos, the template, the brand. Slide size and count
   // come from the file, so enhance has no settings step.
-  const ENHANCE_LAST_STEP = 2;
   const stepTitles = [
     dict.flows.enhance.originalFile,
     dict.flows.design.card,

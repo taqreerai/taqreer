@@ -160,12 +160,15 @@ const MIMIC_IMG_ADDENDUM = `MIMIC IMAGES: images mode is ON for this mimic. Stud
   • SUBJECT / SCENE / MOOD only: never request text, letters, numbers, logos, signage, charts, or UI inside the image (stripped server-side); keep it trademark-safe (no real brand / person / team / character names). Stats, data, and charts stay CSS + inline SVG. When text sits on a generated image, add ONE scrim layer for legibility.`;
 
 // Enhance with images on (2026-10-05): the source slides' photos become
-// generated-image boxes that recreate their subject (Claude cannot reuse the
+// generated-image boxes about the same subject (Claude cannot reuse the
 // original pixels), and a slide with no photo gets one only when its content
-// genuinely benefits. Charts, logos, diagrams and screenshots are never turned
+// genuinely benefits. 2026-10-07 (owner direction): a NEW, better picture of
+// that subject, not a near-copy (decks whose photos were already AI-made got
+// the same images back); the user's own real photos go to the photo slot. Charts, logos, diagrams and screenshots are never turned
 // into photos. Same box contract + safety rails as MIMIC_IMG_ADDENDUM.
 const ENHANCE_IMG_ADDENDUM = `ENHANCE IMAGES: images mode is ON for this redesign. This overrides the "PHOTOS → styled placeholder" rule in the user message.
-  • Where a SOURCE slide shows a photograph or illustration, keep imagery on the matching redesigned slide: reserve a generated-image box (an in-well data-genimage slot, or a photo background/panel) whose prompt RECREATES that image's subject, scene and mood as closely as you can describe it, so the original's meaning survives the redesign.
+  • Where a SOURCE slide shows a generic photograph or illustration, keep imagery on the matching redesigned slide: reserve a generated-image box (an in-well data-genimage slot, or a photo background/panel) whose prompt keeps the SAME SUBJECT and meaning (what the picture is about) but describes a NEW, better image: a fresh composition, camera angle, lighting and setting that suit the redesign's style and palette and read as a clear upgrade. Never describe the original's framing, layout or colours; the result must not look like a copy of the source image.
+  • Photos of the user's OWN real things (their product, team, premises, event, or specific real people and places) are NOT regenerated: use the PHOTO SLOT from the user message so the user can put the original back.
   • Where a source slide has NO photo, add one only when the slide's content clearly benefits (a cover, a section divider, a story or people-focused slide). Text-dense, data, chart, table and agenda slides stay photo-free. Never more than one photo per slide unless the source slide had more.
   • NEVER turn logos, brand marks, charts, graphs, diagrams, tables, maps or software screenshots into generated photos: those keep the placeholder handling from the user message.
   • Photos never displace content: every fact from the slide's exact-text block still appears. Keep one consistent medium and mood across the deck.
