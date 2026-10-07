@@ -1,4 +1,4 @@
-# Handoff: cloud to desktop (updated 2026-10-07)
+# Handoff: cloud to desktop (updated 2026-10-08)
 
 Read with `CLAUDE.md` (conventions + the "Cloud sessions" rules) and `CONTEXT.md` (full
 system reference). This is the working state between sessions. Update it when a task
@@ -6,7 +6,9 @@ lands or a new one starts.
 
 ## State
 
-- **Live (2026-10-07): `main` = `e6bcf86`.** Everything in "Batch on dev, 2026-10-06"
+- **Live (2026-10-08): `main` = `41b9d2d`** (PR #208): everything below marked "NOT live
+  yet" / "NOT committed yet" in the 2026-10-07 section is now live.
+- Earlier: `e6bcf86`. Everything in "Batch on dev, 2026-10-06"
   below is live too (deployed 2026-10-07), plus the Oct 7 items in the next section.
 - **Checkout crash fixed (2026-10-07, `759a4ba` + `e6bcf86`):** Stripe's checkout threw
   "fonts should be used in elements()" (Sentry TAQREER-13) and the page fell to the
