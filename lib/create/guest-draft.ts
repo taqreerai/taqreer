@@ -21,8 +21,8 @@ export const GUEST_SAVE_EVENT = "taqreer:guest-save-draft";
 
 // The flows a visitor can set up before signing up. The value is also the
 // route segment ("/create", "/enhance").
-export type GuestFlow = "create" | "enhance";
-export const GUEST_FLOWS: readonly GuestFlow[] = ["create", "enhance"];
+export type GuestFlow = "create" | "enhance" | "mimic";
+export const GUEST_FLOWS: readonly GuestFlow[] = ["create", "enhance", "mimic"];
 
 const settingsKey = (flow: GuestFlow) => `tq.${flow}GuestDraft.v1`;
 const dbName = (flow: GuestFlow) => `tq-${flow}-guest`;
@@ -70,8 +70,26 @@ export type EnhanceGuestSettings = {
   imagesMode: boolean;
 };
 
+// /mimic's setup (content file -> `content`, reference deck -> `design`).
+export type MimicGuestSettings = {
+  step: number;
+  contentText: string;
+  colorSource: "reference" | "custom";
+  colors: string[];
+  fontMode: "google" | "upload";
+  googleFamily: string | null;
+  uploadedFonts: { name: string; weights: number[] }[];
+  slideSize: string;
+  slideCountMode: string;
+  slideCountValue: number;
+  imagesMode: boolean;
+  instructions: string;
+};
+
 export type GuestDraftFiles = {
   content: File | null;
+  // /mimic's reference deck.
+  design?: File | null;
   logo: File | null;
   // keyed `<family>:<face>`
   fonts: Record<string, File>;
@@ -177,6 +195,7 @@ async function writeFiles(flow: GuestFlow, files: GuestDraftFiles): Promise<void
       const store = tx.objectStore(STORE);
       store.clear();
       if (files.content) store.put(files.content, "content");
+      if (files.design) store.put(files.design, "design");
       if (files.logo) store.put(files.logo, "logo");
       for (const [key, file] of Object.entries(files.fonts)) {
         store.put(file, `font:${key}`);
@@ -192,7 +211,7 @@ async function writeFiles(flow: GuestFlow, files: GuestDraftFiles): Promise<void
 }
 
 async function readFiles(flow: GuestFlow): Promise<GuestDraftFiles> {
-  const out: GuestDraftFiles = { content: null, logo: null, fonts: {} };
+  const out: GuestDraftFiles = { content: null, design: null, logo: null, fonts: {} };
   const db = await openDb(flow);
   if (!db) return out;
   await new Promise<void>((resolve) => {
@@ -206,6 +225,7 @@ async function readFiles(flow: GuestFlow): Promise<GuestDraftFiles> {
         const value = cursor.value;
         if (value instanceof File) {
           if (key === "content") out.content = value;
+          else if (key === "design") out.design = value;
           else if (key === "logo") out.logo = value;
           else if (key.startsWith("font:")) out.fonts[key.slice(5)] = value;
         }

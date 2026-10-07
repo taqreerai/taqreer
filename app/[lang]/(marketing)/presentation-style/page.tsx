@@ -65,10 +65,9 @@ export default async function PresentationStylePage(props: {
   const locale = resolve(lang);
   const dict = await getDictionary(locale);
   const t = dict.presentationStyle;
-  // Free CTA (2026-10-06): this page is the mimic ("your own template")
-  // spoke, and that flow still needs an account, so sign up and land
-  // straight in it (/create is the only flow open to visitors).
-  const ctaHref = `${localizedHref("/signup", locale)}?next=${encodeURIComponent(localizedHref("/mimic", locale))}`;
+  // Free CTA: /mimic is open to visitors (2026-10-06); they sign up at its
+  // Create button.
+  const ctaHref = localizedHref("/mimic", locale);
 
   return (
     <div className="pb-8">

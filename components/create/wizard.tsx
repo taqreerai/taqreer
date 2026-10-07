@@ -232,6 +232,8 @@ export function BrandStep({
   saveBrandKit,
   onSaveBrandKit,
   disabled = false,
+  autoLabel,
+  autoHint,
 }: {
   visible: boolean;
   kitOptions: BrandKitOption[];
@@ -255,6 +257,10 @@ export function BrandStep({
   saveBrandKit: boolean;
   onSaveBrandKit: (next: boolean) => void;
   disabled?: boolean;
+  // The "no palette" pill's label + tooltip (default "Auto"; mimic reads
+  // its colours off the reference deck instead).
+  autoLabel?: string;
+  autoHint?: string;
 }) {
   const t = useDict().flows;
   return (
@@ -278,7 +284,7 @@ export function BrandStep({
                 onClick={onAutoColors}
                 disabled={colors.length === 0}
                 aria-pressed={colors.length === 0}
-                title={t.autoColorsHint}
+                title={autoHint ?? t.autoColorsHint}
                 className={`flex h-7 shrink-0 items-center gap-1 rounded-md border px-2 text-[11px] font-medium transition-colors ${
                   colors.length === 0
                     ? "border-foreground/40 text-foreground"
@@ -288,7 +294,7 @@ export function BrandStep({
                 <span className="material-symbols-outlined" style={{ fontSize: 13 }}>
                   auto_awesome
                 </span>
-                {t.autoColors}
+                {autoLabel ?? t.autoColors}
               </button>
               {colors.map((color, index) => (
                 <InlinePaletteSwatch
