@@ -21,7 +21,7 @@ import {
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { getStripe } from "@/lib/billing/stripe-client";
-import { checkoutAppearance, CHECKOUT_FONTS } from "@/lib/billing/appearance";
+import { checkoutAppearance } from "@/lib/billing/appearance";
 import { pollPurchaseSettled } from "@/lib/billing/poll-purchase";
 
 export function EmbeddedCheckout({
@@ -66,7 +66,13 @@ export function EmbeddedCheckout({
   // there).
   type ProviderOptions = {
     clientSecret: Promise<string>;
-    elementsOptions: { appearance: ReturnType<typeof checkoutAppearance>; fonts: typeof CHECKOUT_FONTS };
+    // NO `fonts` here (2026-10-07, Sentry TAQREER-13): Stripe.js forwards the
+    // checkout SDK's fonts to every element it creates, and the Currency
+    // Selector now rejects them ("Invalid value for currencySelector.update():
+    // fonts should be used in elements() instead"), throwing as the form
+    // opens and blocking the purchase. The form uses the appearance's system
+    // font stack instead of Cairo.
+    elementsOptions: { appearance: ReturnType<typeof checkoutAppearance> };
     adaptivePricing: { allowed: boolean };
   };
   const [options, setOptions] = useState<ProviderOptions | null>(null);
@@ -99,7 +105,6 @@ export function EmbeddedCheckout({
       clientSecret: fetchClientSecret(),
       elementsOptions: {
         appearance: checkoutAppearance(),
-        fonts: CHECKOUT_FONTS,
       },
       // Required for the Currency Selector Element (SAR/USD localized
       // prices).
@@ -120,7 +125,6 @@ export function EmbeddedCheckout({
               ...prev,
               elementsOptions: {
                 appearance: checkoutAppearance(),
-                fonts: CHECKOUT_FONTS,
               },
             }
           : prev,

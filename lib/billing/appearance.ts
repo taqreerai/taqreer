@@ -90,7 +90,9 @@ export function checkoutAppearance(): Appearance {
       colorTextSecondary: resolveColor("--tq-text-muted"),
       colorTextPlaceholder: resolveColor("--tq-text-muted"),
       colorDanger: "rgb(220, 38, 38)",
-      fontFamily: "Cairo, sans-serif",
+      // Cairo loads only where fonts can be passed (ManageBilling's
+      // elements()); the checkout falls back to good system Arabic faces.
+      fontFamily: "Cairo, 'Segoe UI', Tahoma, system-ui, sans-serif",
       // Breathing room between rows (user direction 2026-06-12).
       spacingGridRow: "20px",
       // Resting surface radius (blocks, tabs, dropdown panels) - the
