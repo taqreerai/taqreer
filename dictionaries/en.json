@@ -216,7 +216,7 @@
   },
   "aiPresentations": {
     "meta": {
-      "title": "PowerPoint AI: AI Presentation Maker (Arabic & English) | taqreer.ai",
+      "title": "AI PowerPoint Design: Presentation Maker (Arabic & English) | taqreer.ai",
       "description": "Design a complete presentation with AI, in Arabic and English. Write a brief or upload a file, apply your brand, and get a fully designed deck you can edit and export to PowerPoint."
     },
     "breadcrumb": "AI Presentations",
@@ -385,7 +385,7 @@
     "breadcrumb": "Redesign",
     "hero": {
       "eyebrow": "Enhance",
-      "title": "Redesign PowerPoint with AI",
+      "title": "Redesign your existing deck with AI",
       "subtitle": "Upload an existing deck in PDF or PowerPoint, and taqreer.ai redesigns it with your brand while keeping your text exactly as it is, in Arabic and English.",
       "cta": "Try it free"
     },
@@ -407,7 +407,7 @@
       { "q": "How do I redesign a presentation with AI?", "a": "Upload your deck in PDF or PowerPoint, choose your brand, and the AI redesigns every slide while keeping your content, in minutes." },
       { "q": "Which file formats are supported?", "a": "taqreer.ai supports uploading decks in PDF and PowerPoint (PPTX)." },
       { "q": "Does it keep my text and images?", "a": "Your text stays word for word. For pictures, the new design marks each picture's spot, and you upload your original into it with one click in the editor, or turn on smart photos to generate new ones that fit each slide." },
-      { "q": "Can I export to PowerPoint?", "a": "Yes. You export the redesigned deck as an editable PPTX for PowerPoint on every plan, with the Arabic formatting preserved." }
+      { "q": "Can I edit the PowerPoint after the redesign?", "a": "Yes. You edit every slide right in the editor, then export the deck as an editable PPTX for PowerPoint on every plan, with the Arabic formatting preserved." }
     ],
     "article": {
       "title": "Professional PowerPoint design for your existing deck",

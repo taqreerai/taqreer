@@ -38,7 +38,7 @@ const ROUTES: {
   { path: "presentation-templates", changeFrequency: "weekly", priority: 0.8, lastModified: "2026-07-06" },
   { path: "free-stock-images", changeFrequency: "daily", priority: 0.7, lastModified: "2026-07-16" },
   { path: "pricing", changeFrequency: "monthly", priority: 0.8, lastModified: "2026-07-01" },
-  { path: "ai-presentations", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-07-01" },
+  { path: "ai-presentations", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-10-07" },
   { path: "social-media-posts", changeFrequency: "weekly", priority: 0.9, lastModified: "2026-07-21" },
   { path: "redesign", changeFrequency: "weekly", priority: 0.8, lastModified: "2026-10-07" },
   { path: "presentation-style", changeFrequency: "weekly", priority: 0.8, lastModified: "2026-07-01" },
