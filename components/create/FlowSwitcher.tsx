@@ -18,7 +18,8 @@ const FLOWS = [
   { icon: "auto_fix_high", key: "enhance", path: "/enhance" },
   { icon: "content_copy", key: "mimic", path: "/mimic" },
   { icon: "tag", key: "social", path: "/social" },
-  { icon: "dataset", key: "fromData", path: "/datasheet" },
+  // /datasheet is left out on purpose (2026-10-06): an untested, unlisted
+  // tool with no search demand; spreadsheets are meant to come to /create.
 ] as const;
 
 export function FlowSwitcher() {
