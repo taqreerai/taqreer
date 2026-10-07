@@ -33,6 +33,7 @@
 // runtime image for this to work in production.
 
 import { MissingToolError } from "@/lib/extract/missing-tool";
+import { pathToFileURL } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
@@ -111,7 +112,11 @@ async function officeToPdf(
     const expectedOutPath = path.join(outDir, "input.pdf");
 
     const args = [
-      `-env:UserInstallation=file://${profileDir}`,
+      // pathToFileURL, not "file://" + path (2026-10-07): on Windows the
+      // old form gave a backslash URL LibreOffice can't use (it failed with
+      // "libpng error: Write Error"); this yields file:///C:/Users/... there
+      // and the same file:///tmp/... as before on Linux.
+      `-env:UserInstallation=${pathToFileURL(profileDir).href}`,
       "--headless",
       "--norestore",
       "--nologo",
