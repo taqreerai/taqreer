@@ -34,11 +34,15 @@ export function SocialFormatFields({
   onPlatform,
   format,
   onFormat,
+  twoColumns = false,
 }: {
   platform: SocialPlatform;
   onPlatform: (p: SocialPlatform) => void;
   format: SlideFormat;
   onFormat: (f: SlideFormat) => void;
+  // Ratio tiles two per row (/social's settings card, 2026-10-07: keeps the
+  // card inside the shortest viewport-fit stage).
+  twoColumns?: boolean;
 }) {
   const dict = useDict();
   const ratios = ratiosForPlatform(platform);
@@ -82,7 +86,7 @@ export function SocialFormatFields({
         <span className="block text-xs font-semibold text-foreground/70">
           {dict.flows.social.ratio}
         </span>
-        <div className="grid grid-cols-1 gap-2">
+        <div className={`grid gap-2 ${twoColumns ? "grid-cols-2" : "grid-cols-1"}`}>
           {ratios.map((r) => {
             const active = r.format === format;
             return (

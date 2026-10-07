@@ -1,4 +1,4 @@
-# Handoff: cloud to desktop (updated 2026-10-06)
+# Handoff: cloud to desktop (updated 2026-10-07)
 
 Read with `CLAUDE.md` (conventions + the "Cloud sessions" rules) and `CONTEXT.md` (full
 system reference). This is the working state between sessions. Update it when a task
@@ -6,6 +6,13 @@ lands or a new one starts.
 
 ## State
 
+- **Live (2026-10-07): `main` = `e6bcf86`.** Everything in "Batch on dev, 2026-10-06"
+  below is live too (deployed 2026-10-07), plus the Oct 7 items in the next section.
+- **Checkout crash fixed (2026-10-07, `759a4ba` + `e6bcf86`):** Stripe's checkout threw
+  "fonts should be used in elements()" (Sentry TAQREER-13) and the page fell to the
+  global error screen. Fonts are no longer passed to the checkout; `CheckoutBoundary`
+  and per-group `error.tsx` keep any future crash inside the card / the app frame.
+  Mark TAQREER-13 resolved once a live checkout loads.
 - **`main` = commit `4c419db`** (pushed 2026-10-05 by deploy.sh). It contains the whole
   2026-10-05/06 cloud batch (34 commits from `claude/awesome-cannon-uay51e`, listed
   below), now merged into `dev`. Confirm on taqreer.ai/ar: the "جرّب مجانا" button with
@@ -17,13 +24,61 @@ lands or a new one starts.
   after the fact.
 - The owner works on Windows (Git Bash), is not a developer: give plain steps.
 
-## Batch on dev, 2026-10-06 desktop session (PR dev -> main, NOT live yet)
+## 2026-10-07: every creation tool is a 2-step wizard
 
-- **/create redesign:** a 4-step wizard on every screen size (Content, Design, Brand,
-  Output + Generate), full width, sticky Back / Next bar (`.tq-wizard-bar`; the panel
-  switches to `overflow: clip` only on pages that carry it). Templates: big grid, hover
-  flips through the slides, eye button opens a preview window (`/api/templates` now
-  sends `thumbnails` + `slideCount`). "Or try" row (`FlowSwitcher`) on step 1.
+- **/create (live, `3d23809` `53a62e8` `e76e2af`):** 2 steps instead of 4, each one wide
+  card + one narrow card (`WizardStage` / `SplitStep` / `WizardCard` / `DesignCard` /
+  `BrandCard` in `components/create/wizard.tsx`). Step 1 = content + presentation
+  settings, step 2 = design + brand, Generate on step 2. No step rail, no hint line, no
+  "Or try" row; Next reads "التالي: الشكل". On desktop (`stage:` variant, >= 1180px wide
+  and >= 640px tall) the page is exactly one viewport (`.tq-wizard-fit` in globals.css):
+  the page never scrolls; colour templates show the rows that fit + "عرض الكل" (template
+  and style grids scroll again since the follow-up below). Phones and short windows scroll, the sticky bar keeps Next on
+  screen. Brand card: font, logo, colours, "save as default" at the bottom. Slide size =
+  two picture tiles (`SlideSizeFields big`). "قالبي" tag removed from template tiles.
+- **Studio (live, `2b98d46` `be305fa`):** first open no longer clips the slide; it stays
+  hidden until its size settles, then fades in.
+- **Enhance, mimic, social on the same layout (on dev, NOT live yet):**
+  - enhance: 1 = your deck (wide) + instructions and AI photos (narrow); 2 = templates /
+    styles + brand.
+  - mimic: 1 = your content (wide) + size, count, AI photos, instructions (narrow);
+    2 = design reference (wide; template mode shows the locked template) + brand (Auto =
+    the reference's colours, via `BrandCard autoLabel/autoHint`). Next needs content
+    only; Create still waits for the reference.
+  - social: 1 = topic, product photo, persistent element (wide) + platform / size,
+    count, AI photos (narrow; ratio tiles 2 per row, `SocialFormatFields twoColumns`);
+    2 = social styles (`SocialStyleGrid fit`, 2 rows then "عرض الكل") + brand.
+  - mimic's instructions box sits under the reference deck on step 2 (the settings card
+    did not fit 1280x640 with it).
+  - Guest drafts saved with the old step numbers clamp to the new last step.
+- **Tool switcher on all four wizards (on dev, NOT live yet):** `FlowSwitcher` (Create /
+  Enhance / Your own template / Social, current one marked) via `WizardHead tool=`,
+  under the title, right above the cards (owner pick; the top-bar row looked cramped).
+  Style `.tool-tabs` / `.tool-tab` in globals.css: the design-tabs track, current tool
+  = raised surface chip with a blue icon (not a blue fill, so it never competes with
+  Create). Under 720px tall the subhead hides and the column gaps tighten
+  (`stage-tight:`); phones show icons only for the other tools.
+- **Template and style grids scroll again (owner direction 2026-10-07):** on a desktop
+  stage the template / style / social-style grids render every tile and scroll inside
+  the Design card (`useFitCount` returns null for a scrolling box). Colour templates
+  keep the no-scroll rows + "عرض الكل". Phones still cap at 4 rows + "Show all".
+- **8 more social styles (on dev, NOT live yet, owner request 2026-10-07):** Quote Card,
+  Text Post, Heritage Pattern, Luxury Noir, Tech Glow, Doodle Notes, Scrapbook, Step by
+  Step (19 tiles with Auto). Each = `SOCIAL_STYLES` entry (DesignStylePicker), an
+  illustrated `SocialStyleThumb` case, `socialDescs` in both dictionaries and a
+  directive in `DESIGN_STYLE_DIRECTIVES` (deck-generate). Labels differ from the deck
+  styles on purpose. Prompt-pipeline edit (static text only): run `/security-review`.
+  Not yet tested: a real generation with each new style.
+- **Now unused (delete or reuse, owner to decide):** `DesignStep` and `BrandStep` in
+  `wizard.tsx`, `WizardHead`'s rail / hints props, the `flows.wizard.hints.*` strings.
+
+## Batch on dev, 2026-10-06 desktop session (live since 2026-10-07)
+
+- **/create redesign (superseded by the 2-step wizard above):** a 4-step wizard, full
+  width, sticky Back / Next bar (`.tq-wizard-bar`; the panel switches to
+  `overflow: clip` only on pages that carry it). Templates: big grid, hover flips
+  through the slides, eye button opens a preview window (`/api/templates` now sends
+  `thumbnails` + `slideCount`).
 - **Visitors before sign-up (lazy registration):** `/create` and `/enhance` live in the
   new `app/[lang]/(open)` group (NOT `(studio)`: that is the deck studio + public
   viewer and keeps its own layout) (guest frame `GuestTopBar` when signed out, the normal
@@ -176,13 +231,14 @@ Name templates by stage ("درس المرحلة الابتدائية"), Arabic f
 000. **Excel / CSV upload in /create (decided 2026-10-06, owner).** The separate
     /datasheet tool has no search demand (OpenSEO, Saudi Arabia: "تحويل اكسل الى
     بوربوينت" unmeasurable; "رسم بياني" 2,900 is graph-paper / school intent; US
-    "excel to powerpoint" 170). It stays unlisted (not in the sidebar, dashboard or
-    the "Or try" row). Plan: let /create's upload accept .xlsx/.csv and reuse the
+    "excel to powerpoint" 170). It stays unlisted (not in the sidebar or dashboard). Plan: let /create's upload accept .xlsx/.csv and reuse the
     datasheet parser (/api/datasheet/parse, source kind "data") so a spreadsheet
     makes a chart deck inside the main tool. Check first that deck-generate handles
     it cleanly. Retiring /datasheet is a separate decision.
 
-00. **Unify every creation tool on the /create wizard (decided 2026-10-06, owner).**
+00. **Unify every creation tool on the /create wizard (decided 2026-10-06, owner).
+    Since 2026-10-07 all four run the 2-step layout (see the top section); the 3 / 4
+    step mappings below are history.**
     Extract the shared shell from `/create` (header + rail + hint, full width, Design
     grids, Brand step, sticky bar, visitor sign-up) and rebuild enhance, mimic, social,
     datasheet on it. Owner answers: SKIP steps a tool doesn't need (not always 4); mimic

@@ -68,7 +68,7 @@ export function TemplatePickerGrid({
   wide?: boolean;
   // With `wide`: a grid inside a fixed-height card (/create's Design card):
   // columns follow the CARD width, and on a viewport-fit stage only the rows
-  // that fit render (no scroll), the rest behind "Show all".
+  // scroll inside the card; elsewhere 4 rows, the rest behind "Show all".
   fit?: boolean;
 }) {
   const dict = useDict();
@@ -217,11 +217,12 @@ export function TemplatePickerGrid({
     <div className={`@container flex flex-col gap-1.5 ${fit ? "stage:h-full stage:min-h-0" : ""}`}>
       {wide && fit ? (
         <>
-          {/* Viewport-fit: whole rows that fit the card, no scroll; the rest
-              behind "Show all" (useFitCount). */}
+          {/* Viewport-fit: every tile, scrolling inside the card (owner
+              direction 2026-10-07); phones / short viewports cap at 4 rows,
+              the rest behind "Show all" (useFitCount). */}
           <div
             ref={fitBoxRef}
-            className="p-0.5 stage:min-h-0 stage:flex-1 stage:overflow-hidden"
+            className="p-0.5 stage:min-h-0 stage:flex-1 stage:overflow-y-auto stage:overscroll-contain"
           >
             <div
               ref={fitGridRef}

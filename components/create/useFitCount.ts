@@ -5,7 +5,9 @@
 // guessed: the grid's resolved column count, its tallest tile and row gap.
 //
 // - Height-bound box (`overflow: hidden`, set by the `stage:` variant): the
-//   rows that fit its height, capped at `maxRows`.
+//   rows that fit its height, capped at `maxRows` (the colour templates).
+// - Height-bound box that scrolls (`overflow-y: auto`, the template and style
+//   grids): null = every tile renders, the box scrolls.
 // - Box that grows with its content (phones, short viewports): `maxRows` rows,
 //   so a long list never runs on forever (owner direction 2026-10-07: 4 rows).
 //   No `maxRows` there = null = every tile renders.
@@ -32,7 +34,15 @@ export function useFitCount(enabled: boolean, total: number, maxRows?: number) {
       // count until it shows again (the ResizeObserver fires then).
       if (gs.gridTemplateColumns === "none" || box.clientWidth === 0) return;
       const cols = gs.gridTemplateColumns.split(" ").filter(Boolean).length || 1;
-      if (getComputedStyle(box).overflowY !== "hidden") {
+      const overflowY = getComputedStyle(box).overflowY;
+      // A box that scrolls (the design grids on a viewport-fit stage, owner
+      // direction 2026-10-07: templates and styles scroll, colours don't):
+      // every tile renders and the box scrolls.
+      if (overflowY === "auto" || overflowY === "scroll") {
+        setCount(null);
+        return;
+      }
+      if (overflowY !== "hidden") {
         setCount(maxRows ? maxRows * cols : null);
         return;
       }

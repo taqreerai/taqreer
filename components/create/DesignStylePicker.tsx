@@ -90,6 +90,18 @@ const SOCIAL_STYLES: ReadonlyArray<{ label: string; key: SocialStyleKey }> = [
   // directives instead of the landscape 12-column / page-number ones.
   { label: "Swiss Grid", key: "swiss" },
   { label: "Corporate Data", key: "corporate" },
+  // More looks (owner request 2026-10-07): quote and text-post formats,
+  // Gulf heritage, premium, tech, hand-made, collage and how-to carousels.
+  // Labels differ from the deck set ("Heritage / Geometric" etc.) so each
+  // carries its own portrait-tuned directive.
+  { label: "Quote Card", key: "quote" },
+  { label: "Text Post", key: "textpost" },
+  { label: "Heritage Pattern", key: "heritage" },
+  { label: "Luxury Noir", key: "luxury" },
+  { label: "Tech Glow", key: "techglow" },
+  { label: "Doodle Notes", key: "doodle" },
+  { label: "Scrapbook", key: "scrapbook" },
+  { label: "Step by Step", key: "steps" },
 ];
 type SocialStyleKey =
   | "boldtype"
@@ -101,7 +113,15 @@ type SocialStyleKey =
   | "retro"
   | "pop3d"
   | "swiss"
-  | "corporate";
+  | "corporate"
+  | "quote"
+  | "textpost"
+  | "heritage"
+  | "luxury"
+  | "techglow"
+  | "doodle"
+  | "scrapbook"
+  | "steps";
 
 
 export function DesignStylePicker({
@@ -324,7 +344,7 @@ export function DesignStyleGrid({
   wide?: boolean;
   // With `wide`: a grid inside a fixed-height card (/create's Design card):
   // columns follow the CARD width, and on a viewport-fit stage only the rows
-  // that fit render (no scroll), the rest behind "Show all".
+  // scroll inside the card; elsewhere 4 rows, the rest behind "Show all".
   fit?: boolean;
 }) {
   const dict = useDict();
@@ -400,14 +420,14 @@ export function DesignStyleGrid({
   );
 
   if (wide && fit) {
-    // Viewport-fit: whole rows that fit the card, no scroll; the rest behind
-    // "Show all" (useFitCount).
+    // Viewport-fit: every tile, scrolling inside the card (owner direction
+    // 2026-10-07); phones / short viewports cap at 4 rows + "Show all".
     return (
       <div className="@container flex flex-col gap-3 stage:h-full stage:min-h-0">
         <SectorChips value={sector} onChange={setSector} />
         <div
           ref={fitBoxRef}
-          className="p-0.5 stage:min-h-0 stage:flex-1 stage:overflow-hidden"
+          className="p-0.5 stage:min-h-0 stage:flex-1 stage:overflow-y-auto stage:overscroll-contain"
         >
           <div
             ref={fitGridRef}
@@ -457,10 +477,15 @@ export function SocialStyleGrid({
   value,
   onChange,
   disabled = false,
+  fit = false,
 }: {
   value: string | null;
   onChange: (next: string | null) => void;
   disabled?: boolean;
+  // Inside a fixed-height wizard card (2026-10-07, /create's two-step
+  // layout): columns follow the card width and only the whole rows that fit
+  // render, the rest behind "Show all". Same as DesignStyleGrid's `fit`.
+  fit?: boolean;
 }) {
   const dict = useDict();
   const { dir } = useLocale();
@@ -470,29 +495,60 @@ export function SocialStyleGrid({
     { key: "auto", name: t.auto, desc: t.autoDesc, value: null },
     ...SOCIAL_STYLES.map((s) => ({ key: s.key, name: s.label, desc: descs[s.key] ?? "", value: s.label })),
   ];
+  const [expanded, setExpanded] = useState(false);
+  const { boxRef: fitBoxRef, gridRef: fitGridRef, count: fitCount } = useFitCount(fit, tiles.length, FIT_MAX_ROWS);
+
+  const tile = (tl: (typeof tiles)[number], inModal: boolean) => {
+    const active = value === tl.value;
+    return (
+      <button
+        key={tl.key}
+        type="button"
+        disabled={disabled}
+        onClick={() => {
+          onChange(tl.value);
+          if (inModal) setExpanded(false);
+        }}
+        aria-pressed={active}
+        className={`pick-tile flex w-full flex-col gap-1.5 rounded-xl p-2 text-start disabled:cursor-not-allowed disabled:opacity-50 ${
+          active ? "is-active" : ""
+        }`}
+      >
+        <div className="mx-auto w-3/4">
+          <SocialStyleThumb k={tl.key} title={t.thumbTitle} dir={dir} />
+        </div>
+        <span className="truncate text-[13px] font-medium text-foreground/85">{tl.name}</span>
+        <span className="-mt-1 text-[11px] leading-4 text-foreground/55">{tl.desc}</span>
+      </button>
+    );
+  };
+
+  if (fit) {
+    return (
+      <div className="@container flex flex-col gap-3 stage:h-full stage:min-h-0">
+        <div ref={fitBoxRef} className="p-0.5 stage:min-h-0 stage:flex-1 stage:overflow-y-auto stage:overscroll-contain">
+          <div
+            ref={fitGridRef}
+            className="grid auto-rows-max grid-cols-3 gap-3 @min-[28rem]:grid-cols-4 @min-[38rem]:grid-cols-5 @min-[52rem]:grid-cols-6"
+          >
+            {tiles.slice(0, fitCount ?? undefined).map((tl) => tile(tl, false))}
+          </div>
+        </div>
+        {fitCount != null && tiles.length > fitCount ? (
+          <PickerExpandButton onClick={() => setExpanded(true)} disabled={disabled} />
+        ) : null}
+        <PickerExpandModal open={expanded} title={t.allStyles} onClose={() => setExpanded(false)}>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+            {tiles.map((tl) => tile(tl, true))}
+          </div>
+        </PickerExpandModal>
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 xl:grid-cols-6">
-      {tiles.map((tl) => {
-        const active = value === tl.value;
-        return (
-          <button
-            key={tl.key}
-            type="button"
-            disabled={disabled}
-            onClick={() => onChange(tl.value)}
-            aria-pressed={active}
-            className={`pick-tile flex w-full flex-col gap-1.5 rounded-xl p-2 text-start disabled:cursor-not-allowed disabled:opacity-50 ${
-              active ? "is-active" : ""
-            }`}
-          >
-            <div className="mx-auto w-3/4">
-              <SocialStyleThumb k={tl.key} title={t.thumbTitle} dir={dir} />
-            </div>
-            <span className="truncate text-[13px] font-medium text-foreground/85">{tl.name}</span>
-            <span className="-mt-1 text-[11px] leading-4 text-foreground/55">{tl.desc}</span>
-          </button>
-        );
-      })}
+      {tiles.map((tl) => tile(tl, false))}
     </div>
   );
 }

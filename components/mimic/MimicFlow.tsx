@@ -30,7 +30,15 @@ import { localizedExtractError } from "@/lib/extract/error-codes";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { Tooltip } from "@/components/common/Tooltip";
 import { AIImagesPanel } from "@/components/brand/AIImagesPanel";
-import { BrandStep, WizardBar, WizardHead, scrollWizardTop } from "@/components/create/wizard";
+import {
+  BrandCard,
+  SplitStep,
+  WizardBar,
+  WizardCard,
+  WizardHead,
+  WizardStage,
+  scrollWizardTop,
+} from "@/components/create/wizard";
 import posthog from "posthog-js";
 import { useIsGuest } from "@/components/app/GuestContext";
 import { GuestSignupDialog } from "@/components/create/GuestSignupDialog";
@@ -160,6 +168,11 @@ function fewWords(s: string, max = 3): string {
   const parts = s.trim().split(/\s+/).filter(Boolean);
   return parts.length <= max ? s.trim() : `${parts.slice(0, max).join(" ")}…`;
 }
+
+
+// Last wizard step (2026-10-07: two steps, Create on the second). The resume
+// after a guest sign-up jumps here.
+const MIMIC_LAST_STEP = 1;
 
 export default function MimicFlow({
   mode = "standalone",
@@ -376,9 +389,9 @@ export default function MimicFlow({
   };
 
   // ─── Submit-level state ────────────────────────────────────────
-  // Wizard step: 0 Content + design reference, 1 Brand, 2 Slide size +
-  // count, AI images, instructions + Generate. Cards stay MOUNTED (single-cell
-  // grid, `invisible` when inactive) so heights stay constant and both
+  // Wizard step (2026-10-07, /create's two-step layout): 0 content + settings
+  // (size, count, AI images), 1 design reference + instructions + brand +
+  // Generate. Both steps stay MOUNTED (hidden when inactive) so both
   // extraction pipelines keep their live DOM across steps. Template mode
   // (/use-template) walks the same steps with the reference preset.
   const [step, setStep] = useState(0);
@@ -756,7 +769,7 @@ export default function MimicFlow({
       // Starts both uploads + analyses, now signed in.
       if (draft.files.content) setContentFromInput(draft.files.content);
       if (draft.files.design) setDesignFromInput(draft.files.design);
-      setStep(mode === "generate" ? 3 : Math.min(3, Math.max(0, d.step)));
+      setStep(mode === "generate" ? MIMIC_LAST_STEP : Math.min(MIMIC_LAST_STEP, Math.max(0, d.step)));
       void clearGuestDraft("mimic");
       posthog.capture("create_guest_resumed", { flow: "mimic", mode, hasFile: !!draft.files.content });
       if (mode === "generate" && draft.files.design) setAutoStart(true);
@@ -966,34 +979,22 @@ export default function MimicFlow({
       ? dict.flows.analyzing
       : dict.flows.generate.creating;
 
-  // ─── Wizard chrome (2026-10-06: the shared /create wizard) ─────
-  // Four steps: your content, the design reference (template mode: the
-  // chosen template, locked), the brand, then size / count / AI photos /
-  // instructions and Create.
-  const MIMIC_LAST_STEP = 3;
-  const stepTitles = [
-    dict.flows.mimic.contentTitle,
-    dict.flows.mimic.referenceTitle,
-    dict.flows.brandCard,
-    dict.flows.mimic.stepSettings,
-  ];
-  const stepHints = [
-    dict.flows.wizard.hints.mimicContent,
-    isTemplate ? dict.flows.wizard.hints.mimicTemplate : dict.flows.wizard.hints.mimicReference,
-    dict.flows.wizard.hints.brand,
-    dict.flows.wizard.hints.output,
-  ];
-  // Content gates step 2, a picked reference gates the rest (it may still
-  // be extracting; Create waits for it).
-  const hasReference = isTemplate || designStage !== "idle";
-  const reachable = !contentReady ? 0 : hasReference ? MIMIC_LAST_STEP : 1;
+  // ─── Wizard chrome (2026-10-07: /create's two-step layout) ─────
+  // Step 1: your content (wide) + size / count / AI photos (narrow).
+  // Step 2: the design reference + instructions (wide; template mode: the
+  // chosen template, locked) + brand (narrow), then Create.
+  const stepTitles = [dict.flows.mimic.contentTitle, dict.flows.mimic.referenceTitle];
+  // Content gates step 2; Create itself waits for the reference.
+  const reachable = contentReady ? MIMIC_LAST_STEP : 0;
   const goToStep = (next: number) => {
     setStep(Math.max(0, Math.min(MIMIC_LAST_STEP, next)));
     scrollWizardTop();
   };
 
   return (
-    <div className="page-container flex w-full justify-center" dir={dir}>
+    // `.tq-wizard-fit`: on a desktop viewport the page is exactly one viewport
+    // tall and the stage takes the leftover height (globals.css).
+    <div className="page-container tq-wizard-fit flex w-full justify-center" dir={dir}>
       <GuestSignupDialog
         flow="mimic"
         open={guestSignupOpen}
@@ -1021,27 +1022,30 @@ export default function MimicFlow({
         className="hidden"
         onChange={(event) => setDesignFromInput(event.target.files?.[0])}
       />
-      <div className="mt-[4vh] flex w-full flex-col items-center gap-5 px-4 desk:px-8">
+      <div className="mt-[4vh] flex w-full flex-col items-center gap-5 px-4 desk:px-8 stage:mt-0 stage:min-h-0 stage-tight:gap-3">
         {/* Upfront plan notice when this flow isn't in the user's plan. */}
         <LockedFlowBanner flow="mimic" />
         <WizardHead
+          tool="mimic"
           title={isTemplate ? dict.flows.mimic.titleTemplate : dict.flows.mimic.title}
           subtitle={isTemplate ? dict.flows.mimic.subtitleTemplate : dict.flows.mimic.subtitle}
           steps={stepTitles}
-          hints={stepHints}
           step={step}
           onStep={goToStep}
           reachable={reachable}
+          rail={false}
         />
 
+        <WizardStage>
+
         {/* ═══════════════════════════════════════════════════════
-            STEP 1 · YOUR CONTENT - text XOR a file. Shakes when an
-            over-cap file is rejected.
+            STEP 1 · YOUR CONTENT (wide: text XOR a file; shakes when an
+            over-cap file is rejected) + SETTINGS (narrow: size, count,
+            AI photos).
             ═══════════════════════════════════════════════════════ */}
-        <motion.section
-          animate={contentCardShake}
-          className={`${step === 0 ? "flex" : "hidden"} surface-card w-full max-w-3xl flex-col gap-3 rounded-2xl p-4 sm:p-6`}
-        >
+        <SplitStep visible={step === 0} label={dict.flows.mimic.contentTitle}>
+          <motion.div animate={contentCardShake} className="flex min-h-0 min-w-0 flex-col [&>*]:flex-1">
+            <WizardCard title={dict.flows.mimic.contentTitle}>
               <textarea
                 value={contentText}
                 onChange={(event) => {
@@ -1056,7 +1060,7 @@ export default function MimicFlow({
                 // /api/projects (brief-limits.ts).
                 maxLength={MAX_CONTENT_TEXT_CHARS}
                 disabled={submitting || !!contentFile}
-                className="input-dark min-h-[220px] resize-y leading-6 disabled:cursor-not-allowed disabled:opacity-50"
+                className="input-dark min-h-[220px] resize-y leading-6 disabled:cursor-not-allowed disabled:opacity-50 stage:min-h-0 stage:flex-1 stage:resize-none"
               />
               {/* Dimmed + `inert` (not unmounted) while the textarea is in
                   use, so the card height stays constant and the dropzone
@@ -1089,99 +1093,14 @@ export default function MimicFlow({
                   horizontal
                 />
               </div>
-        </motion.section>
+            </WizardCard>
+          </motion.div>
 
-        {/* ═══════════════════════════════════════════════════════
-            STEP 2 · DESIGN REFERENCE - the deck whose look we copy.
-            ═══════════════════════════════════════════════════════ */}
-        <section
-          className={`${step === 1 ? "flex" : "hidden"} surface-card w-full max-w-3xl flex-col gap-3 rounded-2xl p-4 sm:p-6`}
-        >
-          {isTemplate ? (
-            // Template mode: the reference is the chosen template (locked,
-            // no upload).
-            <div className="flex min-h-[120px] w-full items-center gap-4 rounded-xl border border-dashed border-foreground/20 bg-overlay-soft p-5 text-start">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--tq-surface)]">
-                <span className="material-symbols-outlined text-emerald-300" style={{ fontSize: 22 }}>
-                  check_circle
-                </span>
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-base font-semibold text-foreground">
-                  {templateSeed!.title?.trim() || dict.flows.mimic.templateReady}
-                </p>
-                <p className="mt-0.5 truncate text-sm text-foreground/60">
-                  {dict.flows.mimic.templateSelected}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex h-[280px] flex-col">
-              <FileDropzone
-                file={designFile}
-                stage={designStage}
-                submitting={submitting}
-                dragging={designDragging}
-                setDragging={setDesignDragging}
-                onOpen={() => designInputRef.current?.click()}
-                onDrop={(f) => setDesignFromInput(f)}
-                onRemove={removeDesignFile}
-                emptyIcon="auto_awesome"
-                emptyTitle={dict.flows.mimic.referenceDrop}
-              />
-            </div>
-          )}
-          <p className="text-xs leading-5 text-foreground/55">{dict.flows.mimic.referenceHint}</p>
-        </section>
-
-        {/* STEP 3 · BRAND (shared). "Auto" here = the reference deck's own
-            colours (colorSource "reference"); any pick switches to custom. */}
-        <BrandStep
-          visible={step === 2}
-          kitOptions={kitOptions}
-          onPickKit={handlePickKit}
-          colors={colorSource === "custom" ? colors : []}
-          minPalette={MIN_PALETTE}
-          maxPalette={MAX_PALETTE}
-          onAutoColors={() => setColorSource("reference")}
-          onUpdateColor={updateColor}
-          onRemoveColor={removeColor}
-          onAddColor={() => {
-            if (colorSource === "reference") setColorSource("custom");
-            else addColor();
-          }}
-          onPickPreset={(next) => {
-            setColors(next);
-            setColorSource("custom");
-          }}
-          brandFont={brandFont}
-          onBrandFont={setBrandFont}
-          sampleText={contentExtracted?.language === "en" ? HEADING_SAMPLE_LATIN : HEADING_SAMPLE_AR}
-          logoFile={logoFile}
-          logoPreviewUrl={loadedLogo?.displayUrl ?? null}
-          onLogoSelect={(f) => {
-            setLogoFile(f);
-            setLoadedLogo(null);
-          }}
-          onLogoRemove={() => {
-            setLogoFile(null);
-            setLoadedLogo(null);
-          }}
-          saveBrandKit={saveBrandKit}
-          onSaveBrandKit={setSaveBrandKit}
-          disabled={submitting}
-          autoLabel={dict.flows.mimic.colorsReference}
-          autoHint={dict.flows.mimic.colorsReferenceHint}
-        />
-
-        {/* ═══════════════════════════════════════════════════════
-            STEP 4 · SETTINGS - size, count, AI photos, instructions.
-            ═══════════════════════════════════════════════════════ */}
-        <section
-          className={`${step === 3 ? "flex" : "hidden"} surface-card w-full max-w-2xl flex-col gap-4 rounded-2xl p-4 sm:p-6`}
-        >
-          <SlideSizeFields slideSize={slideSize} onSlideSize={setSlideSize} />
-          <div className="border-t border-[var(--tq-border-hairline)] pt-4">
+          <WizardCard title={dict.flows.mimic.stepSettings}>
+          <div className="stage:min-h-0 stage:flex-1">
+            <SlideSizeFields slideSize={slideSize} onSlideSize={setSlideSize} big />
+          </div>
+          <div className="border-t border-[var(--tq-border-hairline)] pt-4 stage:pt-3 stage-tight:pt-2">
             <div className="flex min-h-[24px] items-center justify-between gap-2">
               <span className="text-sm font-semibold text-foreground/80">
                 {dict.flows.slideCount}
@@ -1221,12 +1140,58 @@ export default function MimicFlow({
               </motion.div>
             </div>
           </div>
-          <div className="border-t border-[var(--tq-border-hairline)] pt-4">
+          <div className="border-t border-[var(--tq-border-hairline)] pt-4 stage:pt-3 stage-tight:pt-2">
             <AIImagesPanel value={imagesMode} onChange={setImagesMode} disabled={submitting} />
           </div>
+          </WizardCard>
+        </SplitStep>
+
+        {/* ═══════════════════════════════════════════════════════
+            STEP 2 · DESIGN REFERENCE (wide: the deck whose look we copy,
+            optional instructions) + BRAND (narrow; "Auto" = the reference deck's own colours,
+            colorSource "reference"; any pick switches to custom).
+            ═══════════════════════════════════════════════════════ */}
+        <SplitStep visible={step === 1} label={dict.flows.mimic.referenceTitle}>
+          <WizardCard title={dict.flows.mimic.referenceTitle}>
+          {isTemplate ? (
+            // Template mode: the reference is the chosen template (locked,
+            // no upload).
+            <div className="flex min-h-[120px] w-full items-center gap-4 rounded-xl border border-dashed border-foreground/20 bg-overlay-soft p-5 text-start">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--tq-surface)]">
+                <span className="material-symbols-outlined text-emerald-300" style={{ fontSize: 22 }}>
+                  check_circle
+                </span>
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-base font-semibold text-foreground">
+                  {templateSeed!.title?.trim() || dict.flows.mimic.templateReady}
+                </p>
+                <p className="mt-0.5 truncate text-sm text-foreground/60">
+                  {dict.flows.mimic.templateSelected}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex h-[280px] flex-col stage:h-auto stage:min-h-0 stage:flex-1">
+              <FileDropzone
+                file={designFile}
+                stage={designStage}
+                submitting={submitting}
+                dragging={designDragging}
+                setDragging={setDesignDragging}
+                onOpen={() => designInputRef.current?.click()}
+                onDrop={(f) => setDesignFromInput(f)}
+                onRemove={removeDesignFile}
+                emptyIcon="auto_awesome"
+                emptyTitle={dict.flows.mimic.referenceDrop}
+              />
+            </div>
+          )}
+          <p className="text-xs leading-5 text-foreground/55">{dict.flows.mimic.referenceHint}</p>
           {/* Optional free-text design instructions forwarded to the model
-              (payload.enhance.instructions). */}
-          <div className="border-t border-[var(--tq-border-hairline)] pt-4">
+              (payload.enhance.instructions). Here, beside the look being
+              copied, so the settings card fits the shortest stage. */}
+          <div className="border-t border-[var(--tq-border-hairline)] pt-4 stage:pt-3 stage-tight:pt-2">
             <label
               htmlFor="mimic-instructions"
               className="mb-2 block text-sm font-semibold text-foreground/80"
@@ -1239,18 +1204,58 @@ export default function MimicFlow({
               onChange={(event) => setInstructions(event.target.value)}
               placeholder={dict.flows.instructionsPlaceholder}
               maxLength={MAX_ENHANCE_INSTRUCTIONS_CHARS}
-              rows={3}
+              rows={2}
               disabled={submitting}
               className="input-dark w-full resize-none text-sm leading-6 disabled:cursor-not-allowed disabled:opacity-50"
             />
           </div>
-        </section>
+          </WizardCard>
+        <BrandCard
+          kitOptions={kitOptions}
+          onPickKit={handlePickKit}
+          colors={colorSource === "custom" ? colors : []}
+          minPalette={MIN_PALETTE}
+          maxPalette={MAX_PALETTE}
+          onAutoColors={() => setColorSource("reference")}
+          onUpdateColor={updateColor}
+          onRemoveColor={removeColor}
+          onAddColor={() => {
+            if (colorSource === "reference") setColorSource("custom");
+            else addColor();
+          }}
+          onPickPreset={(next) => {
+            setColors(next);
+            setColorSource("custom");
+          }}
+          brandFont={brandFont}
+          onBrandFont={setBrandFont}
+          sampleText={contentExtracted?.language === "en" ? HEADING_SAMPLE_LATIN : HEADING_SAMPLE_AR}
+          logoFile={logoFile}
+          logoPreviewUrl={loadedLogo?.displayUrl ?? null}
+          onLogoSelect={(f) => {
+            setLogoFile(f);
+            setLoadedLogo(null);
+          }}
+          onLogoRemove={() => {
+            setLogoFile(null);
+            setLoadedLogo(null);
+          }}
+          saveBrandKit={saveBrandKit}
+          onSaveBrandKit={setSaveBrandKit}
+          disabled={submitting}
+          autoLabel={dict.flows.mimic.colorsReference}
+          autoHint={dict.flows.mimic.colorsReferenceHint}
+        />
+        </SplitStep>
+        </WizardStage>
 
         <WizardBar
           step={step}
           lastStep={MIMIC_LAST_STEP}
           onStep={goToStep}
-          nextDisabled={step === 0 ? !contentReady : step === 1 ? !hasReference : false}
+          nextDisabled={step === 0 && !contentReady}
+          nextLabel={dict.flows.wizard.nextLook}
+          wide
           busy={submitting}
           // An upload may still be analysing after its step; this explains
           // a disabled Create.
@@ -1273,13 +1278,13 @@ export default function MimicFlow({
           }
         />
 
-        <p
-          className="min-h-5 text-center text-sm text-red-400"
-          role={error ? "alert" : undefined}
-          aria-live={error ? "polite" : undefined}
-        >
-          {error || " "}
-        </p>
+        {/* Rendered only with an error: an empty reserved line would cost the
+            viewport-fit stage its height on every visit. */}
+        {error ? (
+          <p className="text-center text-sm text-red-400" role="alert" aria-live="polite">
+            {error}
+          </p>
+        ) : null}
       </div>
     </div>
   );

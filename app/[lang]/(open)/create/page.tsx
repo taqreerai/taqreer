@@ -1057,8 +1057,9 @@ export default function CreatePage() {
           void handleGenerate(slides);
         }}
       />
-      <div className="mt-[4vh] flex w-full flex-col items-center gap-5 px-4 desk:px-8 stage:mt-0 stage:min-h-0">
+      <div className="mt-[4vh] flex w-full flex-col items-center gap-5 px-4 desk:px-8 stage:mt-0 stage:min-h-0 stage-tight:gap-3">
         <WizardHead
+          tool="create"
           title={t.create.title}
           subtitle={t.create.subtitle}
           steps={stepTitles}

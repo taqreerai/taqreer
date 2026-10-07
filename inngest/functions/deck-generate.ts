@@ -398,6 +398,25 @@ const DESIGN_STYLE_DIRECTIVES: Record<string, string> = {
     "Swiss precision on a portrait card: everything snaps to a small, consistent column set with generous margins and one strong alignment axis running down the reading edge. Hierarchy comes from weight and scale only, never decoration; keep large calm gaps and let one brand colour act as a rule or a single filled block. The alignment IS the design. Imagery: clean, geometric, evenly lit.",
   "Corporate Data":
     "A clear, trustworthy data card: ONE takeaway per card, led by a single hero figure or a compact chart (a short bar set, one line, or one ring), with a brief supporting label. Neutral ground, brand colour reserved for the figure that matters. Type stays large enough to read at thumbnail size in a feed. Imagery: minimal or none, let the number lead.",
+  // More social looks (owner request 2026-10-07). Labels are deliberately not
+  // the deck ones ("Heritage / Geometric", "Luxury / Dark", ...): these are
+  // tuned for portrait feed cards.
+  "Quote Card":
+    "A quote-led card: one short, striking line from the content set large in the brand font, a big decorative quotation mark in a brand colour, and a small attribution line only when the content names a source (never invent one). Calm solid or softly tinted ground and generous space. Imagery: rarely; let the words lead.",
+  "Text Post":
+    "A personal text-post look: the message sits inside a clean rounded card with a small circular avatar mark (the logo if given, otherwise a plain brand-colour circle), a short name line and the text at a comfortable reading size, on a light or brand-tinted ground. Conversational and direct. Never copy any real platform's interface, icons or logo. Imagery: none.",
+  "Heritage Pattern":
+    "Gulf and Islamic heritage for the feed: an eight-point star or interlaced geometric pattern (inline SVG) as a border band or corner ornament, a pointed-arch frame around the image or headline, rich warm brand tones with a gold-like accent when the palette has a warm light colour. Arabic is never letter-spaced. Suits Ramadan, Eid, national days and cultural posts. Imagery: traditional architecture, lanterns, textiles and crafted textures in warm light; never religious figures, never sacred text as decoration.",
+  "Luxury Noir":
+    "Quiet luxury on a near-black ground: thin hairline frames, wide margins, small widely tracked Latin labels (Arabic untouched) and an elegant light-weight headline. One focal element per card, no bright fills, no heavy shadows. Imagery: premium product, interior or hospitality photography in low-key light with rich shadows.",
+  "Tech Glow":
+    "Dark futuristic tech: soft glowing gradient orbs from the brand colours behind a frosted-glass card (semi-transparent light fill, 1px light border, rounded corners) that holds the text, plus one thin glowing accent line. Crisp headline, small spaced Latin labels only. Imagery: abstract 3D renders and light trails in cool tones, no screens with text.",
+  "Doodle Notes":
+    "A friendly hand-made notebook post: an off-white paper ground with faint ruled lines, hand-drawn inline SVG doodles (wobbly underlines, circled words, arrows, small stars) and a highlighter mark behind the key words in a light brand tint. All text stays in the brand font, never fake handwriting. Imagery: pencil, ink or watercolour illustration, never photos.",
+  "Scrapbook":
+    "A layered scrapbook collage: cut-out photo frames with white borders, a few slightly tilted, paper-tape strips on their corners, sticker labels and a stacked note card holding the text. Text never sits on a tilted element. Warm and playful. Imagery: candid lifestyle or travel photos with a warm film look.",
+  "Step by Step":
+    "A clear how-to carousel: each card carries one numbered step, with a big step number in a brand-colour badge, a short bold step title and one line of explanation, plus a simple line icon (inline SVG). Keep the same layout card to card so the series reads as a set; the first card states the promise, the last card sums up. Imagery: minimal, icons carry the visuals.",
 };
 
 function ruleLines(rules: Rules, keepSourcePagination = false): string[] {

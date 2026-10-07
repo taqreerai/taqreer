@@ -14,6 +14,8 @@
 import { useState, type ReactNode } from "react";
 import { useDict } from "@/components/i18n/LocaleProvider";
 import { WizardStepRail } from "@/components/create/WizardChrome";
+import { FlowSwitcher } from "@/components/create/FlowSwitcher";
+import type { GuestFlow } from "@/lib/create/guest-draft";
 import { PillButton } from "@/components/create/PillButton";
 import { InlinePaletteSwatch, Toggle } from "@/components/create/controls";
 import { PalettePresetPicker } from "@/components/brand/PalettePresetPicker";
@@ -48,8 +50,12 @@ export function WizardHead({
   onStep,
   reachable,
   rail = true,
+  tool,
   children,
 }: {
+  // The tool this page is: shows the tool switcher above the title with it
+  // marked (2026-10-07). Omit for no switcher.
+  tool?: GuestFlow;
   title: string;
   subtitle: string;
   steps: string[];
@@ -62,7 +68,7 @@ export function WizardHead({
   // false = no step rail (/create's 2-step wizard, 2026-10-07: the bar's
   // "Next: ..." label carries the orientation instead).
   rail?: boolean;
-  // Shown under the hint (e.g. the "Or try" row on step 1).
+  // Shown under the hint.
   children?: ReactNode;
 }) {
   return (
@@ -71,8 +77,15 @@ export function WizardHead({
         <h1 className="tq-h1">{title}</h1>
         {/* No rail = the viewport-fit wizard: the gap below already
             separates the title block, so the subhead's own margin goes. */}
-        <p className={`tq-subhead mt-2 ${rail ? "" : "stage:mb-0"}`}>{subtitle}</p>
+        {/* The shortest stages (under 720px tall) drop the one-line
+            subhead: with the switcher row the cards need the height. */}
+        <p className={`tq-subhead mt-2 ${rail ? "" : "stage:mb-0"} ${tool ? "stage-tight:hidden" : ""}`}>
+          {subtitle}
+        </p>
       </header>
+      {/* Tool switcher: under the title, right above the cards (owner
+          direction 2026-10-07). */}
+      {tool ? <FlowSwitcher current={tool} /> : null}
       {rail ? (
         <WizardStepRail steps={steps} active={step} onJump={onStep} reachable={reachable} />
       ) : null}
@@ -415,8 +428,8 @@ export function PaletteRow({
 // narrow card at the end. On a desktop viewport (`stage:` variant) the page is
 // exactly one viewport tall (`.tq-wizard-fit`, globals.css) and both steps
 // fill the same leftover height between the title and the bar: nothing moves
-// between steps, nothing scrolls (page or card); the design grid shows the
-// rows that fit, the rest behind "Show all". Phones and short viewports stack
+// between steps, the page never scrolls; the template / style grids scroll
+// inside their card, the colour templates show the rows that fit + "Show all". Phones and short viewports stack
 // at natural height and the page scrolls.
 
 /** The box both steps render into: the viewport's leftover height, capped
@@ -474,7 +487,7 @@ export function WizardCard({
 
 /**
  * The Design card: Templates | Styles tabs in the title row, the picked
- * grid below (the rows that fit, the rest in "Show all"; no scroll). Same
+ * grid below (scrolls inside the card on a viewport-fit stage). Same
  * handlers as DesignStep.
  */
 export function DesignCard({
@@ -579,6 +592,8 @@ export function BrandCard({
   saveBrandKit,
   onSaveBrandKit,
   disabled = false,
+  autoLabel,
+  autoHint,
 }: {
   kitOptions: BrandKitOption[];
   onPickKit: (id: string) => void;
@@ -600,6 +615,9 @@ export function BrandCard({
   saveBrandKit: boolean;
   onSaveBrandKit: (next: boolean) => void;
   disabled?: boolean;
+  // What "Auto" means in this tool (mimic: the reference deck's colours).
+  autoLabel?: string;
+  autoHint?: string;
 }) {
   const t = useDict().flows;
   const [palettesOpen, setPalettesOpen] = useState(false);
@@ -645,6 +663,8 @@ export function BrandCard({
           onUpdateColor={onUpdateColor}
           onRemoveColor={onRemoveColor}
           onAddColor={onAddColor}
+          autoLabel={autoLabel}
+          autoHint={autoHint}
           end={
             // Wrapper: the button's own `self-end` is made for columns.
             <span className="flex">

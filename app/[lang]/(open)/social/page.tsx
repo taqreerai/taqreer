@@ -24,7 +24,15 @@ import { PersistentRow } from "@/components/brand/PersistentRow";
 import { type BrandKitOption, } from "@/components/brand/BrandKitDropdown";
 import { InlineStepper, type SlideCountMode } from "@/components/create/OutputCards";
 import { SocialStyleGrid } from "@/components/create/DesignStylePicker";
-import { BrandStep, WizardBar, WizardHead, scrollWizardTop } from "@/components/create/wizard";
+import {
+  BrandCard,
+  SplitStep,
+  WizardBar,
+  WizardCard,
+  WizardHead,
+  WizardStage,
+  scrollWizardTop,
+} from "@/components/create/wizard";
 import posthog from "posthog-js";
 import { useIsGuest } from "@/components/app/GuestContext";
 import { GuestSignupDialog } from "@/components/create/GuestSignupDialog";
@@ -106,8 +114,9 @@ function fewWords(s: string, max = 3): string {
 }
 
 
-// Wizard: content, style, brand, settings + Create (2026-10-06).
-const SOCIAL_LAST_STEP = 3;
+// Wizard (2026-10-07, /create's two-step layout): content + post settings,
+// then style + brand + Create.
+const SOCIAL_LAST_STEP = 1;
 
 export default function SocialPage() {
   const dict = useDict();
@@ -590,21 +599,11 @@ export default function SocialPage() {
     };
   }, [guest]);
 
-  // ─── Wizard chrome (2026-10-06: the shared /create wizard) ─────
-  // Four steps: the topic (+ product photo), the social style, the brand,
-  // then platform / size / count / AI photos and Create.
-  const stepTitles = [
-    dict.flows.social.contentCard,
-    dict.flows.design.card,
-    dict.flows.brandCard,
-    dict.flows.social.settingsCard,
-  ];
-  const stepHints = [
-    dict.flows.wizard.hints.socialContent,
-    dict.flows.wizard.hints.socialDesign,
-    dict.flows.wizard.hints.brand,
-    dict.flows.wizard.hints.socialSettings,
-  ];
+  // ─── Wizard chrome (2026-10-07: /create's two-step layout) ─────
+  // Step 1: the topic + product photo + persistent element (wide) and
+  // platform / size / count / AI photos (narrow). Step 2: the social style (wide)
+  // + brand (narrow), then Create.
+  const stepTitles = [dict.flows.social.contentCard, dict.flows.design.card];
   const hasTopic = topic.trim().length > 0;
   const goToStep = (next: number) => {
     setStep(Math.max(0, Math.min(SOCIAL_LAST_STEP, next)));
@@ -612,7 +611,9 @@ export default function SocialPage() {
   };
 
   return (
-    <div className="page-container flex w-full justify-center" dir={dir}>
+    // `.tq-wizard-fit`: on a desktop viewport the page is exactly one viewport
+    // tall and the stage takes the leftover height (globals.css).
+    <div className="page-container tq-wizard-fit flex w-full justify-center" dir={dir}>
       <GuestSignupDialog
         flow="social"
         open={guestSignupOpen}
@@ -639,38 +640,40 @@ export default function SocialPage() {
         }}
         onClose={() => setProductUpgradeOpen(false)}
       />
-      <div className="mt-[4vh] flex w-full flex-col items-center gap-5 px-4 desk:px-8">
+      <div className="mt-[4vh] flex w-full flex-col items-center gap-5 px-4 desk:px-8 stage:mt-0 stage:min-h-0 stage-tight:gap-3">
         {/* Upfront plan notice when this flow isn't in the user's plan. */}
         <LockedFlowBanner flow="social" />
         <WizardHead
+          tool="social"
           title={dict.flows.social.title}
           subtitle={dict.flows.social.subtitle}
           steps={stepTitles}
-          hints={stepHints}
           step={step}
           onStep={goToStep}
           reachable={hasTopic ? SOCIAL_LAST_STEP : 0}
+          rail={false}
         />
 
+        <WizardStage>
+
         {/* ═══════════════════════════════════════════════════════
-            STEP 1 · CONTENT - the topic, an optional product photo and the
-            persistent element.
+            STEP 1 · CONTENT (wide: the topic, an optional product photo,
+            the persistent element) + POST SETTINGS (narrow: platform /
+            size, count, AI photos).
             ═══════════════════════════════════════════════════════ */}
-        <section
-          className={`${step === 0 ? "flex" : "hidden"} surface-card w-full max-w-3xl flex-col gap-4 rounded-2xl p-4 sm:p-6`}
-        >
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-semibold text-foreground/80">
-                {dict.flows.language}
-              </span>
+        <SplitStep visible={step === 0} label={dict.flows.social.contentCard}>
+          <WizardCard
+            title={dict.flows.social.contentCard}
+            end={
               <SegmentedToggle
                 options={LANGUAGE_OPTIONS}
                 value={language}
                 onChange={setLanguage}
                 ariaLabel={dict.flows.language}
               />
-            </div>
+            }
+          >
+            {/* Grows to fill the card on a viewport-fit stage. */}
             <textarea
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
@@ -680,9 +683,8 @@ export default function SocialPage() {
               maxLength={MAX_CONTENT_TEXT_CHARS}
               rows={6}
               disabled={submitting}
-              className="input-dark min-h-[180px] resize-y text-sm leading-6 disabled:cursor-not-allowed disabled:opacity-50"
+              className="input-dark min-h-[180px] resize-y text-sm leading-6 disabled:cursor-not-allowed disabled:opacity-50 stage:min-h-0 stage:flex-1 stage:resize-none"
             />
-          </div>
           {/* Product photo: the post is designed around it. Muted when the
               user turned AI photos back off (the photo won't be sent). */}
           <ProductPhotoRow
@@ -695,68 +697,26 @@ export default function SocialPage() {
             onRemove={() => setProductPhoto(null)}
             onLocked={() => setProductUpgradeOpen(true)}
           />
-          <div className="border-t border-[var(--tq-border-hairline)] pt-4">
-            <PersistentRow
-              text={persistentText}
-              language={language}
-              onText={setPersistentText}
-            />
-          </div>
-        </section>
+            {/* Persistent element: here, not in the settings card, so the
+                settings fit the shortest viewport-fit stage (1280x640). */}
+            <div className="border-t border-[var(--tq-border-hairline)] pt-4 stage:pt-3 stage-tight:pt-2">
+              <PersistentRow
+                text={persistentText}
+                language={language}
+                onText={setPersistentText}
+              />
+            </div>
+          </WizardCard>
 
-        {/* ═══════════════════════════════════════════════════════
-            STEP 2 · DESIGN - the social style, full width.
-            ═══════════════════════════════════════════════════════ */}
-        <section
-          className={`${step === 1 ? "flex" : "hidden"} w-full max-w-[1400px] flex-col gap-4`}
-        >
-          <SocialStyleGrid value={designStyle} onChange={setDesignStyle} disabled={submitting} />
-        </section>
-
-        {/* STEP 3 · BRAND (shared with every creation tool). */}
-        <BrandStep
-          visible={step === 2}
-          kitOptions={kitOptions}
-          onPickKit={handlePickKit}
-          colors={colors}
-          minPalette={MIN_PALETTE}
-          maxPalette={MAX_PALETTE}
-          onAutoColors={() => setColors([])}
-          onUpdateColor={updateColor}
-          onRemoveColor={removeColor}
-          onAddColor={addColor}
-          onPickPreset={setColors}
-          brandFont={brandFont}
-          onBrandFont={setBrandFont}
-          sampleText={language === "en" ? HEADING_SAMPLE_LATIN : HEADING_SAMPLE_AR}
-          logoFile={logoFile}
-          logoPreviewUrl={loadedLogo?.displayUrl ?? null}
-          onLogoSelect={(f) => {
-            setLogoFile(f);
-            setLoadedLogo(null);
-          }}
-          onLogoRemove={() => {
-            setLogoFile(null);
-            setLoadedLogo(null);
-          }}
-          saveBrandKit={saveBrandKit}
-          onSaveBrandKit={setSaveBrandKit}
-          disabled={submitting}
-        />
-
-        {/* ═══════════════════════════════════════════════════════
-            STEP 4 · SETTINGS - platform + size, count, AI photos.
-            ═══════════════════════════════════════════════════════ */}
-        <section
-          className={`${step === 3 ? "flex" : "hidden"} surface-card w-full max-w-2xl flex-col gap-4 rounded-2xl p-4 sm:p-6`}
-        >
+          <WizardCard title={dict.flows.social.settingsCard}>
           <SocialFormatFields
             platform={platform}
             onPlatform={setPlatform}
             format={format}
             onFormat={setFormat}
+            twoColumns
           />
-          <div className="border-t border-[var(--tq-border-hairline)] pt-4">
+          <div className="border-t border-[var(--tq-border-hairline)] pt-4 stage:pt-3 stage-tight:pt-2">
             <div className="flex min-h-[24px] items-center justify-between gap-2">
               <span className="text-sm font-semibold text-foreground/80">
                 {dict.flows.social.count}
@@ -795,16 +755,65 @@ export default function SocialPage() {
               </motion.div>
             </div>
           </div>
-          <div className="border-t border-[var(--tq-border-hairline)] pt-4">
+          <div className="border-t border-[var(--tq-border-hairline)] pt-4 stage:pt-3 stage-tight:pt-2">
             <AIImagesPanel value={imagesMode} onChange={setImagesMode} disabled={submitting} />
           </div>
-        </section>
+          </WizardCard>
+        </SplitStep>
+
+        {/* ═══════════════════════════════════════════════════════
+            STEP 2 · DESIGN (wide: the social style) + BRAND (narrow),
+            then Create.
+            ═══════════════════════════════════════════════════════ */}
+        <SplitStep visible={step === 1} label={dict.flows.design.card}>
+          <WizardCard title={dict.flows.design.card}>
+            <div className="flex min-h-0 flex-1 flex-col">
+              <SocialStyleGrid
+                fit
+                value={designStyle}
+                onChange={setDesignStyle}
+                disabled={submitting}
+              />
+            </div>
+          </WizardCard>
+        <BrandCard
+          kitOptions={kitOptions}
+          onPickKit={handlePickKit}
+          colors={colors}
+          minPalette={MIN_PALETTE}
+          maxPalette={MAX_PALETTE}
+          onAutoColors={() => setColors([])}
+          onUpdateColor={updateColor}
+          onRemoveColor={removeColor}
+          onAddColor={addColor}
+          onPickPreset={setColors}
+          brandFont={brandFont}
+          onBrandFont={setBrandFont}
+          sampleText={language === "en" ? HEADING_SAMPLE_LATIN : HEADING_SAMPLE_AR}
+          logoFile={logoFile}
+          logoPreviewUrl={loadedLogo?.displayUrl ?? null}
+          onLogoSelect={(f) => {
+            setLogoFile(f);
+            setLoadedLogo(null);
+          }}
+          onLogoRemove={() => {
+            setLogoFile(null);
+            setLoadedLogo(null);
+          }}
+          saveBrandKit={saveBrandKit}
+          onSaveBrandKit={setSaveBrandKit}
+          disabled={submitting}
+        />
+        </SplitStep>
+        </WizardStage>
 
         <WizardBar
           step={step}
           lastStep={SOCIAL_LAST_STEP}
           onStep={goToStep}
           nextDisabled={step === 0 && !hasTopic}
+          nextLabel={dict.flows.wizard.nextLook}
+          wide
           busy={submitting}
           generate={
             <GenerateSplitButton
@@ -822,13 +831,13 @@ export default function SocialPage() {
           }
         />
 
-        <p
-          className="min-h-5 text-center text-sm text-red-400"
-          role={error ? "alert" : undefined}
-          aria-live={error ? "polite" : undefined}
-        >
-          {error || " "}
-        </p>
+        {/* Rendered only with an error: an empty reserved line would cost the
+            viewport-fit stage its height on every visit. */}
+        {error ? (
+          <p className="text-center text-sm text-red-400" role="alert" aria-live="polite">
+            {error}
+          </p>
+        ) : null}
       </div>
     </div>
   );

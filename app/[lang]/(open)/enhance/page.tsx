@@ -67,7 +67,16 @@ import { TEASER_VISIBLE_COUNT } from "@/lib/credits/cost";
 import posthog from "posthog-js";
 import { useIsGuest } from "@/components/app/GuestContext";
 import { GuestSignupDialog } from "@/components/create/GuestSignupDialog";
-import { BrandStep, DesignStep, WizardBar, WizardHead, scrollWizardTop } from "@/components/create/wizard";
+import {
+  BrandCard,
+  DesignCard,
+  SplitStep,
+  WizardBar,
+  WizardCard,
+  WizardHead,
+  WizardStage,
+  scrollWizardTop,
+} from "@/components/create/wizard";
 import {
   GUEST_SAVE_EVENT,
   clearGuestDraft,
@@ -96,9 +105,10 @@ import {
 // is refused (rasterizing hundreds of pages for a 5-slide preview).
 const FREE_TRIAL_MAX_PAGES = 100;
 
-// Wizard: your deck, design, brand + Create (2026-10-06). The resume after a
-// guest sign-up jumps here, where Create lives (it presses itself there).
-const ENHANCE_LAST_STEP = 2;
+// Wizard (2026-10-07, /create's two-step layout): your deck + settings, then
+// design + brand + Create. The resume after a guest sign-up jumps to the last
+// step, where Create lives (it presses itself there).
+const ENHANCE_LAST_STEP = 1;
 
 const POLL_INTERVAL_MS = 2_500;
 const POLL_TIMEOUT_MS = 5 * 60 * 1_000; // 5 min ceiling
@@ -1050,20 +1060,11 @@ export default function EnhanceContentPage() {
     stage === "extracting" ? `${prepPercent}%` : dict.flows.generate.creating;
 
 
-  // ─── Wizard chrome (2026-10-06: the shared /create wizard) ─────
-  // Three steps (tools skip what they don't need): the deck file +
-  // instructions + AI photos, the template, the brand. Slide size and count
-  // come from the file, so enhance has no settings step.
-  const stepTitles = [
-    dict.flows.enhance.originalFile,
-    dict.flows.design.card,
-    dict.flows.brandCard,
-  ];
-  const stepHints = [
-    dict.flows.wizard.hints.enhanceFile,
-    dict.flows.wizard.hints.enhanceDesign,
-    dict.flows.wizard.hints.enhanceBrand,
-  ];
+  // ─── Wizard chrome (2026-10-07: /create's two-step layout) ─────
+  // Step 1: the deck file (wide) + instructions and AI photos (narrow).
+  // Step 2: templates / styles (wide) + brand (narrow), then Create. Slide
+  // size and count come from the file, so there is no size / count control.
+  const stepTitles = [dict.flows.enhance.originalFile, dict.flows.design.card];
   const hasSource = stage !== "idle" && !overCap;
   const goToStep = (next: number) => {
     setStep(Math.max(0, Math.min(ENHANCE_LAST_STEP, next)));
@@ -1071,7 +1072,9 @@ export default function EnhanceContentPage() {
   };
 
   return (
-    <div className="page-container flex w-full justify-center" dir={dir}>
+    // `.tq-wizard-fit`: on a desktop viewport the page is exactly one viewport
+    // tall and the stage takes the leftover height (globals.css).
+    <div className="page-container tq-wizard-fit flex w-full justify-center" dir={dir}>
       <GuestSignupDialog
         flow="enhance"
         open={guestSignupOpen}
@@ -1084,28 +1087,29 @@ export default function EnhanceContentPage() {
         onClose={() => setCreditGate(null)}
         allowReduce={false}
       />
-      <div className="mt-[4vh] flex w-full flex-col items-center gap-5 px-4 desk:px-8">
+      <div className="mt-[4vh] flex w-full flex-col items-center gap-5 px-4 desk:px-8 stage:mt-0 stage:min-h-0 stage-tight:gap-3">
         {/* Upfront plan notice when this flow isn't in the user's plan. */}
         <LockedFlowBanner flow="enhance" />
         <WizardHead
+          tool="enhance"
           title={dict.flows.enhance.title}
           subtitle={dict.flows.enhance.subtitle}
           steps={stepTitles}
-          hints={stepHints}
           step={step}
           onStep={goToStep}
-          // Every step is one click away once a usable file is picked.
           reachable={hasSource ? ENHANCE_LAST_STEP : 0}
+          rail={false}
         />
 
+        <WizardStage>
+
         {/* ═══════════════════════════════════════════════════════
-            STEP 1 · YOUR DECK - the file, optional instructions and the
-            AI photos switch. Shakes when an over-cap file is rejected.
+            STEP 1 · YOUR DECK (wide, shakes when an over-cap file is
+            rejected) + SETTINGS (narrow: instructions, AI photos).
             ═══════════════════════════════════════════════════════ */}
-        <motion.section
-          animate={cardShake}
-          className={`${step === 0 ? "flex" : "hidden"} surface-card w-full max-w-3xl flex-col gap-4 rounded-2xl p-4 sm:p-6`}
-        >
+        <SplitStep visible={step === 0} label={dict.flows.enhance.originalFile}>
+          <motion.div animate={cardShake} className="flex min-h-0 min-w-0 flex-col [&>*]:flex-1">
+          <WizardCard title={dict.flows.enhance.originalFile}>
             <input
               ref={fileInputRef}
               type="file"
@@ -1129,7 +1133,7 @@ export default function EnhanceContentPage() {
                 container makes the dropzone consume all remaining
                 vertical space inside the card (CARD_MIN_H = 387 px
                 pins the card at /create + /mimic's baseline). */}
-            <div className="flex flex-1 flex-col gap-2">
+            <div className="flex flex-1 flex-col gap-2 stage:min-h-0">
               <Tooltip
                 label={overCapMessage}
                 placement="top"
@@ -1156,7 +1160,7 @@ export default function EnhanceContentPage() {
                   }}
                   disabled={stage === "extracting" || stage === "submitting"}
                   aria-describedby={overCap ? rejectReasonId : undefined}
-                  className={`flex h-full min-h-[240px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-4 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                  className={`flex h-full min-h-[240px] w-full flex-col stage:min-h-0 items-center justify-center gap-2 rounded-xl border border-dashed p-4 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                     dragging
                       ? "border-foreground/40 bg-foreground/[0.04]"
                       : "border-foreground/20 bg-overlay-soft hover:border-foreground/30"
@@ -1286,18 +1290,18 @@ export default function EnhanceContentPage() {
               </Tooltip>
             </div>
 
-            {/* Free-text design instructions — optional steering for the
+          </WizardCard>
+          </motion.div>
+
+          <WizardCard title={dict.flows.outputCard}>
+            {/* Free-text design instructions: optional steering for the
                 model (e.g. "keep the original slide order, modern icons").
-                Fixed-height textarea BELOW the dropzone: the dropzone's
-                flex-1 absorbs the delta so the card keeps its min-h-[440px]
-                outer height (user direction 2026-08-30 — the field must
-                not change the card height). The placeholder carries
-                concrete examples so users discover they can steer the
-                design at all. */}
-            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
+                Grows into the card's spare height on a viewport-fit stage;
+                the placeholder carries examples so users discover it. */}
+            <div className="flex flex-col stage:min-h-0 stage:flex-1">
               <label
                 htmlFor="enhance-instructions"
-                className="mb-2 block text-xs font-semibold text-foreground/70"
+                className="mb-2 block text-sm font-semibold text-foreground/80"
               >
                 {dict.flows.instructionsLabel}
               </label>
@@ -1307,27 +1311,29 @@ export default function EnhanceContentPage() {
                 onChange={(event) => setInstructions(event.target.value)}
                 placeholder={dict.flows.instructionsPlaceholder}
                 maxLength={MAX_ENHANCE_INSTRUCTIONS_CHARS}
-                rows={2}
+                rows={4}
                 disabled={stage === "submitting"}
-                className="input-dark w-full resize-none text-sm leading-6 disabled:cursor-not-allowed disabled:opacity-50"
+                className="input-dark w-full resize-none text-sm leading-6 disabled:cursor-not-allowed disabled:opacity-50 stage:min-h-0 stage:flex-1"
               />
             </div>
 
-            <div className="border-t border-[var(--tq-border-hairline)] pt-3">
+            <div className="border-t border-[var(--tq-border-hairline)] pt-4 stage:pt-3 stage-tight:pt-2">
               <AIImagesPanel
                 value={imagesMode}
                 onChange={setImagesMode}
                 disabled={stage === "submitting"}
               />
             </div>
+          </WizardCard>
+        </SplitStep>
 
-        </motion.section>
-
-        {/* STEP 2 · DESIGN - a template (redesign in its look, 2026-10-05) OR
-            a design style (2026-10-06), shared with /create. Automatic (no
-            pick) keeps the classic enhance. */}
-        <DesignStep
-          visible={step === 1}
+        {/* ═══════════════════════════════════════════════════════
+            STEP 2 · DESIGN (wide: a template, redesign in its look, OR a
+            design style; no pick keeps the classic enhance) + BRAND
+            (narrow), then Create.
+            ═══════════════════════════════════════════════════════ */}
+        <SplitStep visible={step === 1} label={dict.flows.design.card}>
+        <DesignCard
           tab={lookTab}
           onTab={setLookTab}
           templateId={templateId}
@@ -1349,10 +1355,7 @@ export default function EnhanceContentPage() {
           templateNote={dict.flows.design.templateNoteEnhance}
           disabled={stage === "submitting"}
         />
-
-        {/* STEP 3 · BRAND (shared with every creation tool), then Create. */}
-        <BrandStep
-          visible={step === 2}
+        <BrandCard
           kitOptions={kitOptions}
           onPickKit={handlePickKit}
           colors={colors}
@@ -1383,12 +1386,16 @@ export default function EnhanceContentPage() {
           onSaveBrandKit={setSaveBrandKit}
           disabled={stage === "submitting"}
         />
+        </SplitStep>
+        </WizardStage>
 
         <WizardBar
           step={step}
           lastStep={ENHANCE_LAST_STEP}
           onStep={goToStep}
           nextDisabled={step === 0 && !hasSource}
+          nextLabel={dict.flows.wizard.nextLook}
+          wide
           busy={stage === "submitting"}
           // Extraction keeps running after step 1; this explains a disabled
           // Create the user can no longer see the cause of.
@@ -1410,13 +1417,13 @@ export default function EnhanceContentPage() {
           }
         />
 
-        <p
-          className="min-h-5 text-center text-sm text-red-400"
-          role={error ? "alert" : undefined}
-          aria-live={error ? "polite" : undefined}
-        >
-          {error || " "}
-        </p>
+        {/* Rendered only with an error: an empty reserved line would cost the
+            viewport-fit stage its height on every visit. */}
+        {error ? (
+          <p className="text-center text-sm text-red-400" role="alert" aria-live="polite">
+            {error}
+          </p>
+        ) : null}
       </div>
     </div>
   );

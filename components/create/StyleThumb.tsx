@@ -524,7 +524,15 @@ export type SocialThumbKey =
   | "retro"
   | "pop3d"
   | "swiss"
-  | "corporate";
+  | "corporate"
+  | "quote"
+  | "textpost"
+  | "heritage"
+  | "luxury"
+  | "techglow"
+  | "doodle"
+  | "scrapbook"
+  | "steps";
 
 export function SocialStyleThumb({
   k,
@@ -692,6 +700,132 @@ function renderSocial(k: SocialThumbKey, title: string): ReactNode {
             [48, "#14B8A6"],
           ].map(([h, c], i) => (
             <B key={i} bottom="10%" s={`${8 + i * 21}%`} w="15%" h={`${h}%`} c={c as string} />
+          ))}
+        </>
+      );
+    case "quote":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FFF7ED" />
+          <T top="6%" s="8%" c="#EA580C" size={34} weight={900} style={{ fontFamily: "Georgia, 'Times New Roman', serif", direction: "ltr" }}>&ldquo;</T>
+          <T top="44%" s="8%" c="#431407" size={13}>{title}</T>
+          <L top="62%" s="8%" w="56%" c="#43140733" />
+          <B bottom="12%" s="8%" w="10%" h="1px" c="#EA580C" />
+          <L bottom="8.5%" s="22%" w="26%" c="#43140777" />
+        </>
+      );
+    case "textpost":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#E0F2FE" />
+          <B top="16%" s="8%" e="8%" h="64%" c="#FFFFFF" r={8} style={{ boxShadow: "0 4px 12px #0F172A1f" }} />
+          <B top="22%" s="14%" w="13%" h="10.4%" c="#0284C7" r="50%" />
+          <L top="24%" s="31%" w="30%" c="#0F172A99" />
+          <L top="29%" s="31%" w="18%" c="#0F172A44" />
+          <T top="42%" s="14%" c="#0F172A" size={10}>{title}</T>
+          <L top="57%" s="14%" w="60%" c="#0F172A44" />
+          <L top="63%" s="14%" w="42%" c="#0F172A44" />
+          <L top="72%" s="14%" w="20%" c="#0284C766" />
+        </>
+      );
+    case "heritage":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#0F3D3E" />
+          <B top="4%" s="4%" e="4%" bottom="4%" c="transparent" style={{ border: "1px solid #E9C46A88" }} />
+          <B top="16%" s="24%" w="52%" h="44%" c="#E9C46A" r="50% 50% 0 0" />
+          <B top="20%" s="28%" w="44%" h="40%" c="radial-gradient(circle at 50% 30%,#1F6F6B,#0B2E2F 75%)" r="50% 50% 0 0" />
+          <Star size="13%" color="#E9C46A" style={{ top: "33%", insetInlineStart: "43.5%" }} />
+          <Star size="11%" color="#E9C46A" style={{ top: "7%", insetInlineStart: "7%" }} />
+          <Star size="11%" color="#E9C46A" style={{ top: "7%", insetInlineEnd: "7%" }} />
+          <T bottom="17%" s="10%" c="#F4E3B5" size={12}>{title}</T>
+          <L bottom="10%" s="10%" w="30%" c="#E9C46A88" />
+        </>
+      );
+    case "luxury":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#0D0D0D" />
+          <B top="5%" s="6%" e="6%" bottom="5%" c="transparent" style={{ border: "1px solid #C9A96E" }} />
+          <B top="14%" s="20%" w="60%" h="40%" c="radial-gradient(circle at 45% 35%,#5a4a32,#141414 70%)" />
+          <T top="60%" s="14%" c="#C9A96E" size={4} weight={500} style={{ letterSpacing: "0.3em", direction: "ltr" }}>PRIVATE</T>
+          <T top="67%" s="14%" c="#F5EFE3" size={12} weight={300}>{title}</T>
+          <B bottom="12%" s="14%" w="14%" h="1px" c="#C9A96E" />
+        </>
+      );
+    case "techglow":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#0A0F2C" />
+          <B top="-12%" e="-20%" w="80%" h="60%" c="radial-gradient(circle,#7B5CFFcc,transparent 65%)" />
+          <B bottom="-14%" s="-22%" w="80%" h="60%" c="radial-gradient(circle,#00D1FFaa,transparent 65%)" />
+          <B top="22%" s="8%" e="8%" h="56%" c="rgba(255,255,255,0.08)" r={8} style={{ border: "1px solid rgba(255,255,255,0.22)", backdropFilter: "blur(2px)" }} />
+          <T top="32%" s="14%" c="#E6F1FF" size={12}>{title}</T>
+          <L top="52%" s="14%" w="50%" c="#E6F1FF55" />
+          <B top="62%" s="14%" w="34%" h="1.2%" c="linear-gradient(90deg,#00D1FF,#7B5CFF)" r={999} />
+          <L bottom="8%" s="8%" w="22%" c="#E6F1FF44" />
+        </>
+      );
+    case "doodle":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FFFDF5" />
+          {[18, 30, 42, 54, 66, 78, 90].map((t) => (
+            <B key={t} top={`${t}%`} s="0" w="100%" h="1px" c="#93C5FD55" />
+          ))}
+          <B top="22%" s="7%" w="62%" h="10%" c="#FDE04788" r={3} style={{ transform: "rotate(-2deg)" }} />
+          <T top="20%" s="9%" c="#1F2937" size={13}>{title}</T>
+          <svg viewBox="0 0 100 20" className="absolute" style={{ top: "36%", insetInlineStart: "8%", width: "52%" }}>
+            <path d="M2 12 C 20 4, 40 18, 60 9 S 90 6, 98 11" fill="none" stroke="#EF4444" strokeWidth="2.5" strokeLinecap="round" />
+          </svg>
+          <B top="56%" s="9%" w="16%" h="12.8%" c="transparent" r="50%" style={{ border: "2px solid #2563EB" }} />
+          <L top="61%" s="30%" w="40%" c="#1F293766" />
+          <L top="72%" s="30%" w="28%" c="#1F293744" />
+          <svg viewBox="0 0 20 20" className="absolute" style={{ bottom: "8%", insetInlineEnd: "10%", width: "12%" }}>
+            <path d="M10 1 L12.5 7.5 L19 8 L14 12.5 L15.5 19 L10 15.5 L4.5 19 L6 12.5 L1 8 L7.5 7.5 Z" fill="none" stroke="#F59E0B" strokeWidth="1.5" strokeLinejoin="round" />
+          </svg>
+        </>
+      );
+    case "scrapbook":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#F3EDE2" />
+          <B top="10%" s="10%" w="50%" h="38%" c="linear-gradient(135deg,#F4A261,#E76F51)" style={{ border: "3px solid #fff", boxShadow: "0 3px 8px rgba(0,0,0,0.18)", transform: "rotate(-5deg)" }} />
+          <B top="26%" e="8%" w="40%" h="32%" c="linear-gradient(135deg,#7FB7BE,#3D5A80)" style={{ border: "3px solid #fff", boxShadow: "0 3px 8px rgba(0,0,0,0.18)", transform: "rotate(6deg)" }} />
+          <B top="7%" s="26%" w="18%" h="6%" c="#F6D365cc" style={{ transform: "rotate(-8deg)" }} />
+          <B top="23%" e="20%" w="16%" h="6%" c="#F6D365cc" style={{ transform: "rotate(10deg)" }} />
+          <B bottom="10%" s="8%" e="8%" h="24%" c="#FFFFFF" r={4} style={{ boxShadow: "0 2px 5px rgba(0,0,0,0.12)" }} />
+          <T bottom="23%" s="13%" c="#2D2A26" size={11}>{title}</T>
+          <L bottom="15%" s="13%" w="40%" c="#2D2A2666" />
+        </>
+      );
+    case "steps":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#F0FDF4" />
+          <T top="8%" s="8%" c="#14532D" size={12}>{title}</T>
+          {[0, 1, 2].map((i) => (
+            <div key={i}>
+              <div
+                className="absolute flex items-center justify-center"
+                style={{
+                  top: `${30 + i * 22}%`,
+                  insetInlineStart: "8%",
+                  width: "16%",
+                  height: "12.8%",
+                  borderRadius: "50%",
+                  background: i === 0 ? "#16A34A" : "#BBF7D0",
+                  color: i === 0 ? "#fff" : "#14532D",
+                  fontSize: "7cqw",
+                  fontWeight: 900,
+                  lineHeight: 1,
+                }}
+              >
+                {i + 1}
+              </div>
+              <L top={`${32 + i * 22}%`} s="30%" w={`${46 - i * 8}%`} c="#14532D88" />
+              <L top={`${38 + i * 22}%`} s="30%" w={`${32 - i * 4}%`} c="#14532D44" />
+            </div>
           ))}
         </>
       );

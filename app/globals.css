@@ -2371,6 +2371,63 @@ body:has(.tq-support-toolbar) .support-fab-anchor {
   background: var(--tq-brand-blue);
   color: #fff;
 }
+/* Tool switcher under every creation wizard's title (Create / Enhance / Your
+   own template / Social, 2026-10-07): the same soft segmented track as the
+   design tabs, but the current tool is a raised surface chip rather than a
+   blue fill, so it never competes with the blue Create button below. */
+.tool-tabs {
+  display: inline-flex;
+  max-width: 100%;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--tq-overlay-soft);
+  border: 1px solid var(--tq-border-hairline);
+}
+.tool-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding-inline: 12px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--tq-text-muted);
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.tool-tab:hover:not(.is-active) {
+  color: var(--tq-text-primary);
+}
+.tool-tab.is-active {
+  background: var(--tq-surface);
+  color: var(--tq-text-primary);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12), 0 0 0 1px var(--tq-border-hairline);
+}
+.tool-tab.is-active .material-symbols-outlined {
+  color: var(--tq-brand-blue);
+}
+/* Viewport-fit stage: a compact 36px row (3px track padding + 28px tabs +
+   the 1px border), so the cards keep their height. */
+@media (width >= 73.75rem) and (height >= 40rem) {
+  .tool-tabs {
+    padding: 3px;
+  }
+  .tool-tab {
+    height: 28px;
+  }
+}
+/* Phones: the other tools show their icon only (the name stays in the
+   tooltip + accessible name), so the row never wraps or scrolls. */
+@media (width < 40rem) {
+  .tool-tab:not(.is-active) {
+    padding-inline: 10px;
+  }
+  .tool-tab:not(.is-active) .tool-tab-label {
+    display: none;
+  }
+}
 /* Comparison pages ("A vs B"): the same segmented tabs with one column per
    tab, the winning side's soft blue frame, and the round "vs" badge. */
 .design-tabs.compare-tabs {
