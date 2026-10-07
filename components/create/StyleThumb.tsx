@@ -506,3 +506,194 @@ function render(k: DeckStyleKey | "auto", title: string, dir: "rtl" | "ltr"): Re
       );
   }
 }
+
+// ── Social post thumbnails (2026-10-06) ─────────────────────────────
+// The /social styles drawn the same way as the deck thumbnails above (owner
+// direction: the old grey wireframes read as too technical): each style is a
+// small 4:5 post in its OWN colour mood with a sample headline. Preview
+// content only; the generated post uses the user's brand palette.
+
+export type SocialThumbKey =
+  | "auto"
+  | "boldtype"
+  | "editorial"
+  | "grainy"
+  | "brutalist"
+  | "minimal"
+  | "photo"
+  | "retro"
+  | "pop3d"
+  | "swiss"
+  | "corporate";
+
+export function SocialStyleThumb({
+  k,
+  title,
+  dir,
+}: {
+  k: SocialThumbKey;
+  title: string;
+  dir: "rtl" | "ltr";
+}) {
+  return (
+    <div
+      dir={dir}
+      className="relative w-full overflow-hidden rounded-md border border-[var(--tq-border-hairline)]"
+      style={{ aspectRatio: "4/5", containerType: "inline-size" }}
+      aria-hidden
+    >
+      {renderSocial(k, title)}
+    </div>
+  );
+}
+
+// A rounded "@handle" pill, the little social signature most posts carry.
+function Handle({ c, bottom = "6%" }: { c: string; bottom?: string }) {
+  return <L bottom={bottom} s="8%" w="26%" c={c} />;
+}
+
+function renderSocial(k: SocialThumbKey, title: string): ReactNode {
+  switch (k) {
+    case "auto":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="linear-gradient(160deg,#3b82f6,#8b5cf6 55%,#ec4899)" />
+          <div className="absolute inset-0 flex items-center justify-center text-white">
+            <span className="material-symbols-outlined" style={{ fontSize: "22cqw" }}>
+              auto_awesome
+            </span>
+          </div>
+        </>
+      );
+    case "boldtype":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FFD60A" />
+          <T top="26%" s="8%" c="#111" size={17} weight={900}>{title}</T>
+          <B top="58%" s="8%" w="44%" h="4%" c="#111" />
+          <Handle c="#11111166" />
+        </>
+      );
+    case "editorial":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#F5EFE6" />
+          <B top="7%" s="8%" w="22%" h="4%" c="#C2410C" r={2} />
+          <T top="14%" s="8%" c="#1C1917" size={13} style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}>{title}</T>
+          <B top="40%" s="8%" e="8%" h="42%" c="linear-gradient(180deg,#FDBA74,#FB7185 55%,#7C2D12)" r={4} />
+          <B top="62%" s="40%" w="24%" h="20%" c="#7C2D12cc" r="50% 50% 0 0" />
+          <L bottom="7%" s="8%" w="46%" c="#1C191766" />
+        </>
+      );
+    case "grainy":
+      return (
+        <>
+          <B
+            top="0"
+            s="0"
+            w="100%"
+            h="100%"
+            c="radial-gradient(90% 70% at 25% 20%,#F472B6,transparent 60%),radial-gradient(90% 80% at 85% 85%,#F97316,transparent 60%),#6D28D9"
+          />
+          <div
+            className="absolute inset-0"
+            style={{ backgroundImage: "radial-gradient(#ffffff 0.6px, transparent 0.6px)", backgroundSize: "4px 4px", opacity: 0.25 }}
+          />
+          <T bottom="20%" s="8%" c="#fff" size={13}>{title}</T>
+          <L bottom="12%" s="8%" w="40%" c="#ffffffaa" />
+        </>
+      );
+    case "brutalist":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#F4F4F0" />
+          <B top="10%" s="9%" w="78%" h="30%" c="#C6F432" style={{ border: "1.5px solid #111", boxShadow: "4px 4px 0 #111" }} />
+          <T top="17%" s="14%" c="#111" size={12} weight={900}>{title}</T>
+          <B top="52%" s="9%" w="44%" h="26%" c="#FF5CA8" style={{ border: "1.5px solid #111", boxShadow: "4px 4px 0 #111" }} />
+          <B top="52%" e="9%" w="22%" h="26%" c="#fff" style={{ border: "1.5px solid #111", boxShadow: "4px 4px 0 #111" }} />
+          <Handle c="#11111188" />
+        </>
+      );
+    case "minimal":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FAFAF7" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-[5cqw]">
+            <span style={{ color: "#1F2937", fontSize: "11cqw", fontWeight: 700, lineHeight: 1 }}>{title}</span>
+            <span style={{ width: "22cqw", height: "1px", background: "#1F293766" }} />
+            <span style={{ width: "4cqw", height: "4cqw", borderRadius: 999, background: "#0EA5E9" }} />
+          </div>
+        </>
+      );
+    case "photo":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="linear-gradient(180deg,#38BDF8,#FDE68A 58%,#F59E0B)" />
+          <B top="22%" e="18%" w="20%" h="16%" c="#FFF7D6" r="50%" />
+          <B bottom="0" s="-10%" w="80%" h="46%" c="#14532D" r="60% 60% 0 0" />
+          <B bottom="0" e="-14%" w="74%" h="38%" c="#166534" r="60% 60% 0 0" />
+          <B top="0" s="0" w="100%" h="100%" c="linear-gradient(to top,#000000cc,transparent 55%)" />
+          <T bottom="18%" s="8%" c="#fff" size={13}>{title}</T>
+          <L bottom="10%" s="8%" w="38%" c="#ffffffaa" />
+        </>
+      );
+    case "retro":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FDF0D5" />
+          <B top="16%" s="20%" w="60%" h="48%" c="#E76F51" r="50% 50% 0 0" />
+          {[30, 40, 50].map((t) => (
+            <B key={t} top={`${t}%`} s="18%" w="64%" h="3%" c="#FDF0D5" />
+          ))}
+          <B top="64%" s="8%" e="8%" h="2%" c="#264653" />
+          <T bottom="16%" s="8%" c="#264653" size={13}>{title}</T>
+          <div
+            className="absolute"
+            style={{ top: "4%", insetInlineEnd: "4%", width: "22%", height: "18%", backgroundImage: "radial-gradient(#2A9D8F 1px, transparent 1px)", backgroundSize: "5px 5px" }}
+          />
+        </>
+      );
+    case "pop3d":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#EDE9FE" />
+          <B top="8%" e="8%" w="30%" h="24%" c="radial-gradient(circle at 35% 30%,#C4B5FD,#7C3AED)" r="50%" />
+          <B top="30%" s="6%" w="22%" h="18%" c="radial-gradient(circle at 35% 30%,#FDE68A,#F59E0B)" r="50%" />
+          <B bottom="12%" s="8%" e="8%" h="34%" c="#fff" r={10} style={{ boxShadow: "0 6px 14px #7C3AED33" }} />
+          <T bottom="30%" s="14%" c="#3B0764" size={11}>{title}</T>
+          <L bottom="20%" s="14%" w="40%" c="#7C3AED66" />
+        </>
+      );
+    case "swiss":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FFFFFF" />
+          {[33, 66].map((x) => (
+            <B key={x} top="5%" bottom="5%" s={`${x}%`} w="1px" c="#11111126" />
+          ))}
+          <T top="8%" s="8%" c="#111" size={12}>{title}</T>
+          <B top="40%" s="8%" w="28%" h="24%" c="#E63B2E" />
+          <L top="44%" s="42%" w="40%" c="#11111166" />
+          <L top="52%" s="42%" w="30%" c="#11111144" />
+          <T bottom="6%" e="8%" c="#111" size={6} weight={700}>01</T>
+        </>
+      );
+    case "corporate":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FFFFFF" />
+          <B top="0" s="0" w="100%" h="20%" c="#1E3A5F" />
+          <T top="6%" s="8%" c="#fff" size={9}>{title}</T>
+          <T top="26%" s="8%" c="#14B8A6" size={16} weight={900} style={{ direction: "ltr" }}>+24%</T>
+          {[
+            [24, "#CBD5E1"],
+            [36, "#CBD5E1"],
+            [30, "#CBD5E1"],
+            [48, "#14B8A6"],
+          ].map(([h, c], i) => (
+            <B key={i} bottom="10%" s={`${8 + i * 21}%`} w="15%" h={`${h}%`} c={c as string} />
+          ))}
+        </>
+      );
+  }
+}

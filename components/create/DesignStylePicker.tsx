@@ -18,7 +18,7 @@ import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { useState } from "react";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 import { DECK_STYLES, STYLE_SECTORS, type DeckStyleKey, type StyleSector } from "@/lib/design-styles";
-import { StyleThumb } from "@/components/create/StyleThumb";
+import { SocialStyleThumb, StyleThumb, type SocialThumbKey } from "@/components/create/StyleThumb";
 import { StyleInfoButton } from "@/components/create/StyleInfoButton";
 import { PickerExpandButton, PickerExpandModal } from "@/components/create/PickerExpandModal";
 
@@ -102,140 +102,6 @@ type SocialStyleKey =
   | "swiss"
   | "corporate";
 
-// ── Social mini-card colours ────────────────────────────────────
-// `bar` = muted block; accent = var(--tq-purple). (Deck styles use the
-// illustrated StyleThumb instead.)
-const BAR = "var(--tq-text-muted)";
-const BAR_SOFT = "color-mix(in srgb, var(--tq-text-muted) 45%, transparent)";
-const ACCENT = "var(--tq-purple)";
-
-// ── Portrait social-card previews ───────────────────────────────
-// Same CSS-block language as StyleMini, but a 4:5 portrait card so the
-// swatch reads as a phone-feed post. Keys → SOCIAL_STYLES.
-function SocialStyleMini({
-  k,
-  big = false,
-  boldSample = "خط",
-}: {
-  k: SocialStyleKey | "auto";
-  big?: boolean;
-  boldSample?: string;
-}) {
-  const base =
-    "relative w-full overflow-hidden rounded-md border border-[var(--tq-border-hairline)] bg-[var(--tq-surface)]";
-  const abs = (s: React.CSSProperties): React.CSSProperties => ({
-    position: "absolute",
-    ...s,
-  });
-  // A faint dot texture (halftone/grain hint) as a CSS background-image.
-  const HALFTONE =
-    "radial-gradient(var(--tq-text-muted) 0.8px, transparent 0.8px)";
-  return (
-    <div className={base} style={{ aspectRatio: "4/5" }} dir="ltr">
-      {k === "boldtype" && (
-        <div
-          className="flex h-full w-full items-center justify-center font-black text-foreground"
-          style={{ fontSize: big ? 40 : 15, lineHeight: 1 }}
-        >
-          {boldSample}
-        </div>
-      )}
-      {k === "editorial" && (
-        <>
-          <div style={abs({ top: "8%", left: "10%", width: "26%", height: "3%", background: ACCENT })} />
-          <div style={abs({ top: "14%", left: "10%", width: "70%", height: "9%", background: BAR })} />
-          <div style={abs({ top: "26%", left: "10%", width: "52%", height: "5%", background: BAR_SOFT })} />
-          <div style={abs({ top: "40%", left: "10%", right: "10%", height: "38%", background: BAR_SOFT })} />
-          <div style={abs({ bottom: "8%", left: "10%", width: "44%", height: "4%", background: BAR_SOFT })} />
-        </>
-      )}
-      {k === "grainy" && (
-        <>
-          <div
-            style={abs({
-              inset: 0,
-              background:
-                "radial-gradient(120% 90% at 30% 20%, color-mix(in srgb, var(--tq-purple) 70%, transparent), transparent 60%), radial-gradient(120% 90% at 80% 90%, color-mix(in srgb, var(--tq-blue, var(--tq-purple)) 65%, transparent), transparent 55%), var(--tq-surface)",
-            })}
-          />
-          <div style={abs({ inset: 0, backgroundImage: HALFTONE, backgroundSize: "5px 5px", opacity: 0.35 })} />
-          <div style={abs({ bottom: "20%", left: "16%", width: "56%", height: "7%", borderRadius: 999, background: "#fff" })} />
-          <div style={abs({ bottom: "12%", left: "16%", width: "34%", height: "4%", borderRadius: 999, background: "rgba(255,255,255,0.7)" })} />
-        </>
-      )}
-      {k === "brutalist" && (
-        <>
-          <div style={abs({ top: "12%", left: "12%", width: "50%", height: "24%", background: ACCENT, boxShadow: `${big ? 5 : 3}px ${big ? 5 : 3}px 0 var(--tq-text-primary)`, border: `${big ? 2 : 1.5}px solid var(--tq-text-primary)` })} />
-          <div style={abs({ bottom: "14%", left: "12%", width: "70%", height: "16%", background: "var(--tq-surface)", boxShadow: `${big ? 5 : 3}px ${big ? 5 : 3}px 0 var(--tq-text-primary)`, border: `${big ? 2 : 1.5}px solid var(--tq-text-primary)` })} />
-        </>
-      )}
-      {k === "minimal" && (
-        <>
-          <div style={abs({ top: "46%", left: "24%", width: "52%", height: "6%", background: BAR })} />
-          <div style={abs({ top: "58%", left: "44%", width: "12%", height: "2.5%", background: ACCENT })} />
-        </>
-      )}
-      {k === "photo" && (
-        <>
-          <div style={abs({ inset: 0, background: "color-mix(in srgb, var(--tq-purple) 45%, black)" })} />
-          <div style={abs({ inset: 0, background: "linear-gradient(to top, rgba(0,0,0,0.85), transparent 55%)" })} />
-          <div style={abs({ bottom: "14%", left: "10%", width: "62%", height: "7%", background: "#fff" })} />
-          <div style={abs({ bottom: "7%", left: "10%", width: "38%", height: "4%", background: "rgba(255,255,255,0.7)" })} />
-        </>
-      )}
-      {k === "retro" && (
-        <>
-          <div style={abs({ inset: 0, background: "color-mix(in srgb, var(--tq-purple) 22%, var(--tq-surface))" })} />
-          <div style={abs({ inset: 0, backgroundImage: HALFTONE, backgroundSize: "4px 4px", opacity: 0.5 })} />
-          <div style={abs({ inset: "9%", border: `${big ? 2 : 1.5}px solid var(--tq-text-primary)` })} />
-          <div style={abs({ top: "42%", left: "20%", width: "60%", height: "8%", background: ACCENT })} />
-        </>
-      )}
-      {k === "pop3d" && (
-        <>
-          <div style={abs({ top: "12%", left: "14%", width: "34%", aspectRatio: "1", borderRadius: "50%", background: ACCENT, boxShadow: "0 6px 12px rgba(0,0,0,0.25)" })} />
-          <div style={abs({ bottom: "14%", left: "12%", right: "12%", height: "34%", borderRadius: 18, background: BAR_SOFT, boxShadow: "0 6px 14px rgba(0,0,0,0.18)" })} />
-          <div style={abs({ bottom: "22%", left: "18%", width: "40%", height: "5%", borderRadius: 999, background: BAR })} />
-        </>
-      )}
-      {k === "swiss" && (
-        <>
-          {/* Column rules + blocks snapped to them: alignment IS the design. */}
-          <div style={abs({ top: 0, bottom: 0, left: "25%", width: 1, background: BAR_SOFT })} />
-          <div style={abs({ top: 0, bottom: 0, left: "50%", width: 1, background: BAR_SOFT })} />
-          <div style={abs({ top: 0, bottom: 0, left: "75%", width: 1, background: BAR_SOFT })} />
-          <div style={abs({ top: "12%", left: "10%", width: "40%", height: "7%", background: ACCENT })} />
-          <div style={abs({ top: "25%", left: "10%", width: "65%", height: "5%", background: BAR })} />
-          <div style={abs({ top: "35%", left: "10%", width: "40%", height: "3%", background: BAR_SOFT })} />
-          <div style={abs({ bottom: "14%", left: "52%", right: "10%", height: "28%", background: BAR_SOFT })} />
-        </>
-      )}
-      {k === "corporate" && (
-        <>
-          <div style={abs({ top: "10%", left: "10%", width: "62%", height: "6%", background: BAR })} />
-          <div style={abs({ top: "20%", left: "10%", width: "38%", height: "3%", background: BAR_SOFT })} />
-          {/* A small bar set on a baseline: one figure leads the card. */}
-          <div style={abs({ bottom: "22%", left: "14%", width: "12%", height: "24%", background: BAR_SOFT })} />
-          <div style={abs({ bottom: "22%", left: "31%", width: "12%", height: "38%", background: ACCENT })} />
-          <div style={abs({ bottom: "22%", left: "48%", width: "12%", height: "30%", background: BAR_SOFT })} />
-          <div style={abs({ bottom: "22%", left: "65%", width: "12%", height: "46%", background: BAR_SOFT })} />
-          <div style={abs({ bottom: "20%", left: "10%", right: "10%", height: 1, background: BAR })} />
-        </>
-      )}
-      {k === "auto" && (
-        <div className="flex h-full w-full items-center justify-center text-muted">
-          <span
-            className="material-symbols-outlined"
-            style={{ fontSize: big ? 22 : 14 }}
-            aria-hidden
-          >
-            auto_awesome
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function DesignStylePicker({
   value,
@@ -263,13 +129,9 @@ export function DesignStylePicker({
   const nameOf = (st: { label: string; key: string }) =>
     isSocial ? st.label : (names[st.key] ?? st.label);
   const info: Record<string, { does: string; best: string }> = t.info;
-  const renderMini = (key: string, opts: { big?: boolean }) =>
+  const renderMini = (key: string) =>
     isSocial ? (
-      <SocialStyleMini
-        k={key as SocialStyleKey | "auto"}
-        big={opts.big}
-        boldSample={t.socialBoldSample}
-      />
+      <SocialStyleThumb k={key as SocialThumbKey} title={t.thumbTitle} dir={dir} />
     ) : (
       <StyleThumb k={key as DeckStyleKey | "auto"} title={t.thumbTitle} dir={dir} />
     );
@@ -300,7 +162,7 @@ export function DesignStylePicker({
         className="flex w-full items-center gap-3 rounded-xl border border-[var(--tq-border-hairline)] bg-[var(--tq-card)] p-2 text-start transition-colors hover:border-[var(--tq-purple)] disabled:cursor-not-allowed disabled:opacity-50"
       >
         <div className={`${isSocial ? "w-10" : "w-14"} shrink-0`}>
-          {renderMini(current?.key ?? "auto", {})}
+          {renderMini(current?.key ?? "auto")}
         </div>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[13px] font-semibold text-foreground">
@@ -390,7 +252,7 @@ export function DesignStylePicker({
                               }`}
                             >
                               <div className={isSocial ? "mx-auto w-3/5" : undefined}>
-                                {renderMini(s.key, { big: true })}
+                                {renderMini(s.key)}
                               </div>
                               <p className="mt-2 text-[12px] font-semibold text-foreground">
                                 {nameOf(s)}
@@ -422,7 +284,7 @@ export function DesignStylePicker({
                           }`}
                         >
                           <div className={isSocial ? "mx-auto w-3/5" : undefined}>
-                            {renderMini("auto", { big: true })}
+                            {renderMini("auto")}
                           </div>
                           <p className="mt-2 text-[12px] font-semibold text-foreground">{t.auto}</p>
                           <p className="text-[11px] text-muted">{t.autoDesc}</p>
@@ -565,6 +427,7 @@ export function SocialStyleGrid({
   disabled?: boolean;
 }) {
   const dict = useDict();
+  const { dir } = useLocale();
   const t = dict.flows.stylePicker;
   const descs: Record<string, string> = t.socialDescs;
   const tiles: ReadonlyArray<{ key: SocialStyleKey | "auto"; name: string; desc: string; value: string | null }> = [
@@ -587,7 +450,7 @@ export function SocialStyleGrid({
             }`}
           >
             <div className="mx-auto w-3/4">
-              <SocialStyleMini k={tl.key} big boldSample={t.socialBoldSample} />
+              <SocialStyleThumb k={tl.key} title={t.thumbTitle} dir={dir} />
             </div>
             <span className="truncate text-[13px] font-medium text-foreground/85">{tl.name}</span>
             <span className="-mt-1 text-[11px] leading-4 text-foreground/55">{tl.desc}</span>
