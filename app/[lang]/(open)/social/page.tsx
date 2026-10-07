@@ -15,7 +15,12 @@ import {
   type CreditGatePayload,
 } from "@/components/credits/CreditGateDialog";
 import { useSlideCap, useCreditBalance } from "@/lib/credits/store";
-import { displaySlideEstimate, slideCapForFlow } from "@/lib/credits/cost";
+import {
+  displaySlideEstimate,
+  slideCapForFlow,
+  SOCIAL_MIN_POSTS,
+  SOCIAL_TEASER_VISIBLE,
+} from "@/lib/credits/cost";
 import { isImagesLocked, IMAGES_GATE_TIER } from "@/lib/images/images-gating";
 import { planLabel } from "@/lib/plan";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
@@ -578,7 +583,9 @@ export default function SocialPage() {
       if (d.slideCountMode === "auto" || d.slideCountMode === "custom") {
         setSlideCountMode(d.slideCountMode);
       }
-      if (typeof d.slideCountValue === "number") setSlideCountValue(d.slideCountValue);
+      if (typeof d.slideCountValue === "number") {
+        setSlideCountValue(Math.max(SOCIAL_MIN_POSTS, d.slideCountValue));
+      }
       setDesignStyle(d.designStyle ?? null);
       setImagesMode(!!d.imagesMode);
       setColors(Array.isArray(d.colors) ? d.colors.slice(0, MAX_PALETTE) : []);
@@ -746,7 +753,7 @@ export default function SocialPage() {
                       <InlineStepper
                         value={slideCountValue}
                         onChange={setSlideCountValue}
-                        min={1}
+                        min={SOCIAL_MIN_POSTS}
                         max={slideCap}
                       />
                     </motion.div>
@@ -824,6 +831,8 @@ export default function SocialPage() {
               onQualityChange={setQuality}
               slideCount={estimated.slides}
               slideCountUpTo={estimated.upTo}
+              teaserVisible={SOCIAL_TEASER_VISIBLE}
+              posts
               imagesMode={imagesMode}
               disabled={generateDisabled}
               loading={submitting}

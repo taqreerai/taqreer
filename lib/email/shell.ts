@@ -50,6 +50,9 @@ export type EmailShellParams = {
   buttonLabel?: string;
   buttonHref?: string; // may be a real URL or a Go var like "{{ .ConfirmationURL }}"
   extraHtml?: string; // inserted between the button and the footer (templates / summary / fields)
+  // One-time code box between the sub line and the button (confirm-signup,
+  // 2026-10-07): label + the code, e.g. a Go var "{{ .Token }}". Trusted.
+  code?: { labelHtml: string; value: string };
   footerNoteHtml?: string;
   // Hidden inbox-preview line.
   preheader?: string;
@@ -93,6 +96,16 @@ export function renderEmailBody(p: EmailShellParams): string {
 
   const extra = p.extraHtml ?? "";
 
+  const codeBox = p.code
+    ? `
+              <p style="margin:36px 0 10px;font-size:13px;line-height:1.6;color:#b4b4b4;">${p.code.labelHtml}</p>
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
+                <tr>
+                  <td align="center" dir="ltr" style="padding:14px 28px;border:1px solid rgba(255,255,255,0.18);border-radius:14px;background:#1b1b1b;font-family:'Courier New',Courier,monospace;font-size:30px;font-weight:600;letter-spacing:8px;color:#ffffff;">${p.code.value}</td>
+                </tr>
+              </table>`
+    : "";
+
   const footerNote = p.footerNoteHtml
     ? `<p style="margin:0 0 18px;font-size:12px;line-height:1.7;color:rgba(255,255,255,0.55);">${p.footerNoteHtml}</p>`
     : "";
@@ -111,7 +124,7 @@ export function renderEmailBody(p: EmailShellParams): string {
                 ${p.eyebrowHtml ?? ""}
                 <h1 style="margin:0;font-size:${p.lang === "ar" ? "30px" : "26px"};font-weight:400;letter-spacing:-0.01em;color:#ffffff;line-height:1.3;">${p.title}</h1>
                 <p style="margin:20px auto 0;max-width:384px;font-size:15px;font-weight:400;line-height:1.75;color:#b4b4b4;">${p.subHtml}</p>
-                ${button}
+                ${codeBox}${button}
                 ${extra}
               </td>
             </tr>

@@ -1,26 +1,24 @@
 "use client";
 
-// The sign-up window a signed-out visitor sees on /create's Create button
-// (2026-10-06, owner direction). The draft is already saved (the page saves
-// before opening this), so both paths come back to /<flow>?resume=generate,
-// where the page restores the setup and presses Create by itself. Same
-// dialog shell as SlideCapUpsellDialog (modal-dim + surface-modal, Esc and
-// outside-click close, focus trap, scroll lock). Google signs in right here;
-// email goes through the normal /signup page (confirmation link included).
+// The sign-up window a signed-out visitor sees on a creation tool's Create
+// button (2026-10-06, owner direction). The draft is already saved (the page
+// saves before opening this). Since 2026-10-07 it is the /signup page itself:
+// the same SignupForm (Google, email, name + password, then the emailed code)
+// inside the same `.auth-modal` panel with the same legal fine print, so the
+// two never drift apart. The whole sign-up happens here, without leaving the
+// tool; on finish a full load of /<flow>?resume=generate restores the setup
+// and presses Create by itself. Esc and outside-click close, focus trap,
+// scroll lock.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
-import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton";
-import {
-  guestLoginHref,
-  guestSignupHref,
-  resumePath,
-  type GuestFlow,
-} from "@/lib/create/guest-draft";
+import { SignupForm } from "@/components/auth/SignupForm";
+import { localizedHref } from "@/lib/i18n/navigation";
+import { guestLoginHref, resumePath, type GuestFlow } from "@/lib/create/guest-draft";
 
 export function GuestSignupDialog({
   flow,
@@ -34,9 +32,8 @@ export function GuestSignupDialog({
   const dict = useDict();
   const { dir, locale } = useLocale();
   const t = dict.flows.guest;
+  const legal = dict.auth.legal;
   const panelRef = useRef<HTMLDivElement>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   useFocusTrap(panelRef, open);
 
   useEffect(() => {
@@ -54,6 +51,8 @@ export function GuestSignupDialog({
   }, [open, onClose]);
 
   if (typeof window === "undefined") return null;
+
+  const next = resumePath(flow, locale, "generate");
 
   return createPortal(
     <AnimatePresence>
@@ -74,79 +73,62 @@ export function GuestSignupDialog({
               dir={dir}
               role="dialog"
               aria-modal="true"
-              aria-labelledby="guest-signup-title"
+              aria-label={t.title}
               initial={{ opacity: 0, scale: 0.96, y: 12 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 12 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
-              className="surface-modal pointer-events-auto relative flex w-[min(100vw-24px,420px)] flex-col items-center gap-4 rounded-2xl px-6 pb-6 pt-8 text-center"
+              // Same panel as the /signup page (auth layout): `.auth-modal`
+              // surface, max-w-sm, rounded-3xl, p-7. Scrolls inside on a short
+              // screen (step 2 carries the password checklist + captcha).
+              className="auth-modal surface-modal pointer-events-auto relative max-h-[calc(100dvh-32px)] w-full max-w-sm overflow-y-auto rounded-3xl p-7"
             >
               <button
                 type="button"
                 onClick={onClose}
                 aria-label={dict.common.close}
-                className="absolute end-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-foreground/60 transition-colors hover:bg-foreground/10 hover:text-foreground"
+                className="absolute end-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full text-foreground/60 transition-colors hover:bg-foreground/10 hover:text-foreground"
               >
                 <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
                   close
                 </span>
               </button>
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--tq-brand-blue)]/15 text-[var(--tq-brand-blue)]">
-                <span className="material-symbols-outlined" style={{ fontSize: 26 }} aria-hidden>
-                  auto_awesome
-                </span>
-              </span>
-              <div className="flex flex-col gap-1.5">
-                <h2 id="guest-signup-title" className="text-lg font-semibold text-foreground">
-                  {t.title}
-                </h2>
-                <p className="text-sm leading-6 text-foreground/65">{t.body}</p>
-              </div>
 
-              <div className="flex w-full flex-col gap-2.5">
-                <GoogleAuthButton
-                  nextUrl={resumePath(flow, locale, "generate")}
-                  disabled={busy}
-                  onBusyChange={setBusy}
-                  onError={setError}
-                />
-                <div className="flex items-center gap-2 text-[11px] text-foreground/40">
-                  <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
-                  <span>{dict.flows.or}</span>
-                  <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
-                </div>
+              <SignupForm
+                nextUrl={next}
+                templateId={null}
+                loginHref={guestLoginHref(flow, locale, "generate")}
+                googleNextUrl={next}
+                hardRedirect
+                title={t.title}
+                subtitle={flow === "social" ? t.bodySocial : t.body}
+                note={
+                  <p className="flex items-center gap-1.5 text-xs text-muted">
+                    <span className="material-symbols-outlined text-[14px] text-[var(--tq-status-ok-text)]" aria-hidden>
+                      check_circle
+                    </span>
+                    {t.saved}
+                  </p>
+                }
+              />
+
+              {/* Fine print, as on the /signup page (auth layout). */}
+              <p className="mt-6 text-center text-xs text-muted">
+                {legal.prefix}
                 <Link
-                  href={guestSignupHref(flow, locale, "generate")}
-                  className="btn-gradient flex h-11 items-center justify-center gap-2 text-sm font-medium"
-                  style={{ borderRadius: 9999 }}
+                  href={localizedHref("/terms", locale)}
+                  className="underline transition-colors hover:text-foreground"
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: 18 }} aria-hidden>
-                    mail
-                  </span>
-                  {t.email}
+                  {legal.terms}
                 </Link>
-              </div>
-
-              {error ? (
-                <p className="text-xs text-red-400" role="alert">
-                  {error}
-                </p>
-              ) : null}
-
-              <p className="flex items-center gap-1.5 text-xs text-foreground/50">
-                <span className="material-symbols-outlined" style={{ fontSize: 14 }} aria-hidden>
-                  check_circle
-                </span>
-                {t.saved}
-              </p>
-              <p className="text-xs text-foreground/60">
-                {t.haveAccount}{" "}
+                {legal.and}
                 <Link
-                  href={guestLoginHref(flow, locale, "generate")}
-                  className="font-semibold text-[var(--tq-brand-blue)] hover:underline"
+                  href={localizedHref("/privacy", locale)}
+                  className="underline transition-colors hover:text-foreground"
                 >
-                  {t.login}
+                  {legal.privacy}
                 </Link>
+                .
               </p>
             </motion.div>
           </div>

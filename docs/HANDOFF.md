@@ -69,6 +69,35 @@ lands or a new one starts.
   directive in `DESIGN_STYLE_DIRECTIVES` (deck-generate). Labels differ from the deck
   styles on purpose. Prompt-pipeline edit (static text only): run `/security-review`.
   Not yet tested: a real generation with each new style.
+- **Email sign-up keeps the visitor's work (2026-10-07, NOT committed yet):** the
+  confirm-signup email always linked to /dashboard, so a visitor who signed up at
+  Create lost their setup (and on another device the draft isn't there at all).
+  - The confirm screen on /signup now takes the emailed 6-digit code
+    (`verifyOtp({ email, token, type: "email" })`) and continues in the same tab
+    to `next` (e.g. /create?resume=generate). It also polls the session every 4s
+    and on focus, so confirming via the link in another tab moves this tab on.
+  - The email shows `{{ .Token }}`; its button link is unchanged. The return
+    target travels as the account's `resume_to` metadata (set by the /signup form),
+    read by `/confirm` for type=email through `safeNextPath` (shared in
+    `lib/auth/safe-next.ts` with /callback). A first try put `{{ .RedirectTo }}` in
+    the link; the nested URL sent the email to junk in Outlook, so it was dropped.
+  - Supabase's code length is 6 to 10 digits (no 4). Set "Email OTP Length" to 6.
+  - The creation tools' sign-up window IS the /signup form now (`components/auth/
+    SignupForm.tsx`, shared with the page): same `.auth-modal` panel, copy, steps and
+    fine print, with the tool's own heading ("first 5 slides" / "first 3 posts") and
+    the "setup is saved" line. The whole sign-up, code included, happens in the window;
+    it finishes with a full load of /<flow>?resume=generate. A "fastest, no
+    confirmation email" hint sits under Google on both. The code screen keeps the
+    "check your junk folder" line (Outlook junks our auth mail; owner chose to leave it).
+  - **Owner step:** paste the new body from `docs/auth-emails/PASTE-INTO-SUPABASE.md`
+    (section 1) into Supabase, Authentication -> Emails -> Confirm signup, BEFORE
+    deploying (the old site ignores the new parts, so pasting first is safe).
+- **Social: at least 5 posts, free shows 3 (2026-10-07, NOT committed yet):**
+  `SOCIAL_MIN_POSTS` 5 and `SOCIAL_TEASER_VISIBLE` 3 in `lib/credits/cost.ts`
+  (`teaserVisibleForFlow`). The route clamps a social count to >= 5, plans the teaser
+  with 3 visible (held and charged) and the rest locked; auto social briefs carry
+  `slideCountMin` ("Author AT LEAST 5 slides"). Stepper min 5; the free-trial pop-up
+  says posts on /social.
 - **Now unused (delete or reuse, owner to decide):** `DesignStep` and `BrandStep` in
   `wizard.tsx`, `WizardHead`'s rail / hints props, the `flows.wizard.hints.*` strings.
 

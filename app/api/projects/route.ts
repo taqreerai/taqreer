@@ -33,7 +33,8 @@ import { preflightGenerate } from "@/lib/credits/preflight";
 import type { Flow as CreditFlow, SlideEstimateInput } from "@/lib/credits/cost";
 import {
   TEASER_DEFAULT_TOTAL,
-  TEASER_VISIBLE_COUNT,
+  SOCIAL_MIN_POSTS,
+  teaserVisibleForFlow,
   estimateSlides,
   slideCapForFlow,
 } from "@/lib/credits/cost";
@@ -723,7 +724,11 @@ export async function POST(request: Request) {
   // preflight as an UNKNOWN estimate, which holds the hard ceiling
   // (tier cap ∧ affordable credits) and briefs the model with
   // slideCountMode "ceiling" below.
-  const resolvedSlideCount = payload.slideCount ?? null;
+  // Social carousels have a floor of SOCIAL_MIN_POSTS posts (2026-10-07).
+  const resolvedSlideCount =
+    projectType === "social" && typeof payload.slideCount === "number" && payload.slideCount > 0
+      ? Math.max(SOCIAL_MIN_POSTS, payload.slideCount)
+      : payload.slideCount ?? null;
 
   const contentLanguage = resolveLanguage(payload.language);
   const contentDirection = directionForLanguage(contentLanguage);
@@ -890,8 +895,8 @@ export async function POST(request: Request) {
             ? "datasheet"
             : "create";
   let slideInput: SlideEstimateInput;
-  if (typeof payload.slideCount === "number" && payload.slideCount > 0) {
-    slideInput = { kind: "fixed", count: payload.slideCount };
+  if (typeof resolvedSlideCount === "number" && resolvedSlideCount > 0) {
+    slideInput = { kind: "fixed", count: resolvedSlideCount };
   } else if (validatedSource?.kind === "enhance") {
     // 1:1 rebuild - the source page count IS the count. PPTX ships
     // verbatim per-slide text so the length is exact; text-less PDFs
@@ -928,6 +933,8 @@ export async function POST(request: Request) {
   await ensureFresh();
   const isFreeTrial =
     dbUser.role !== "admin" && normalizePlan(dbUser.plan) === "free";
+  // Visible part of a teaser: 5 slides, 3 posts for social (2026-10-07).
+  const teaserVisible = teaserVisibleForFlow(creditFlow);
   let teaserPlannedTotal = 0;
   if (isFreeTrial) {
     const est = estimateSlides(slideInput);
@@ -937,10 +944,10 @@ export async function POST(request: Request) {
       est.slides ?? TEASER_DEFAULT_TOTAL,
       slideCapForFlow(creditFlow, getTier("free").slideCap),
     );
-    if (wanted > TEASER_VISIBLE_COUNT) teaserPlannedTotal = wanted;
+    if (wanted > teaserVisible) teaserPlannedTotal = wanted;
   }
   const isTeaser = teaserPlannedTotal > 0;
-  const teaserLockedCount = isTeaser ? teaserPlannedTotal - TEASER_VISIBLE_COUNT : 0;
+  const teaserLockedCount = isTeaser ? teaserPlannedTotal - teaserVisible : 0;
 
   const preflight = await preflightGenerate({
     userId: dbUser.id,
@@ -948,7 +955,7 @@ export async function POST(request: Request) {
     flow: creditFlow,
     preset: quality,
     // Teaser: hold (and so charge) only the visible slides.
-    slideInput: isTeaser ? { kind: "fixed", count: TEASER_VISIBLE_COUNT } : slideInput,
+    slideInput: isTeaser ? { kind: "fixed", count: teaserVisible } : slideInput,
     // Images-mode decks hold (and settle) a per-image surcharge on top
     // of the slide cost - 2026-07 repricing; images were free before.
     imagesMode: payload.imagesMode === true,
@@ -985,7 +992,7 @@ export async function POST(request: Request) {
   // estimate-driven source flows now author at the quoted size instead
   // of the prompt's free-running default.
   const cappedSlideCount = isTeaser
-    ? TEASER_VISIBLE_COUNT
+    ? teaserVisible
     : preflight.exact
       ? resolvedSlideCount
       : preflight.holdSlides;
@@ -1015,6 +1022,8 @@ export async function POST(request: Request) {
     // the matching directive after the Brief JSON). The stream's slide-cap
     // abort at holdSlides stays the hard enforcement either way.
     slideCountMode: preflight.exact ? "exact" : "ceiling",
+    // Social: the auto ("ceiling") length never goes under the floor.
+    ...(creditFlow === "social" ? { slideCountMin: SOCIAL_MIN_POSTS } : {}),
     // Free plan: the badge corner the generator must keep clear
     // (deck-generate buildFreeBrandingBlock). Absent for paid / admin.
     ...(!isFreeTrial

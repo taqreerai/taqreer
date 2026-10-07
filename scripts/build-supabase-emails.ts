@@ -24,6 +24,8 @@ type Lang = "ar" | "en";
 type Copy = {
   title: string;
   sub: string;
+  // Label over the one-time code box (templates with `code`).
+  codeLabel?: string;
   button?: string;
   footer?: string;
   preheader?: string;
@@ -35,23 +37,30 @@ type Tpl = {
   // When set, the action button links to OUR /confirm route (token-hash verify
   // on taqreer.ai) instead of Supabase's *.supabase.co ConfirmationURL.
   verify?: { type: "email" | "recovery" | "email_change"; next: string };
+  // Show the one-time code ({{ .Token }}) above the button (confirm-signup,
+  // 2026-10-07): the user types it on the sign-up page, in the tab that holds
+  // their work, even when the email is read on another device.
+  code?: boolean;
 };
 
 const TEMPLATES: Tpl[] = [
   {
     name: "confirm-signup",
     verify: { type: "email", next: "/dashboard" },
+    code: true,
     ar: {
-      preheader: "خطوة أخيرة لتفعيل حسابك في taqreer.ai.",
+      preheader: "رمز التأكيد لتفعيل حسابك في taqreer.ai.",
       title: "أكّد بريدك الإلكتروني",
-      sub: "بقيت خطوة واحدة لتفعيل حسابك. اضغط الزر أدناه لتأكيد بريدك الإلكتروني والبدء في إنشاء عروضك على taqreer.ai.",
+      sub: "بقيت خطوة واحدة لتفعيل حسابك. أدخل الرمز أدناه في صفحة التسجيل لتكمل من حيث توقفت، أو اضغط زر التأكيد.",
+      codeLabel: "رمز التأكيد",
       button: "تأكيد البريد الإلكتروني",
       footer: "إذا لم تنشئ هذا الحساب، يمكنك تجاهل هذه الرسالة بأمان.",
     },
     en: {
-      preheader: "One last step to activate your account.",
+      preheader: "Your code to activate your taqreer.ai account.",
       title: "Activate your account",
-      sub: "Thanks for joining taqreer.ai. Confirm your email to activate your account and start building presentations.",
+      sub: "Thanks for joining taqreer.ai. Enter the code below on the sign-up page to pick up where you left off, or press the button.",
+      codeLabel: "Your confirmation code",
       button: "Confirm email",
       footer: "If you didn't create this account, you can safely ignore this email.",
     },
@@ -138,6 +147,7 @@ function paramsFor(t: Tpl, lang: Lang, assetBase?: string): EmailShellParams {
         ? `{{ .SiteURL }}/confirm?token_hash={{ .TokenHash }}&amp;type=${t.verify.type}&amp;next=${encodeURIComponent(`/${lang}${t.verify.next}`)}`
         : "{{ .ConfirmationURL }}"
       : undefined,
+    code: t.code && c.codeLabel ? { labelHtml: c.codeLabel, value: "{{ .Token }}" } : undefined,
     footerNoteHtml: c.footer,
     preheader: c.preheader,
     assetBase,

@@ -35,7 +35,7 @@ Arabic is the explicit branch; English is the default. Flat dark background (no 
   </head>
   <body style="margin:0;padding:0;background:#111111;">
 {{ if eq .Data.lang "ar" }}
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#111111;">خطوة أخيرة لتفعيل حسابك في taqreer.ai.</div>
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#111111;">رمز التأكيد لتفعيل حسابك في taqreer.ai.</div>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="background:#111111;">
       <tr>
         <td align="center" style="padding:0;">
@@ -48,12 +48,18 @@ Arabic is the explicit branch; English is the default. Flat dark background (no 
                 <img src="https://taqreer.ai/email/icon-box.png" width="62" height="62" alt="taqreer.ai" style="display:block;width:62px;height:62px;margin:0 auto 48px;" />
                 
                 <h1 style="margin:0;font-size:30px;font-weight:400;letter-spacing:-0.01em;color:#ffffff;line-height:1.3;">أكّد بريدك الإلكتروني</h1>
-                <p style="margin:20px auto 0;max-width:384px;font-size:15px;font-weight:400;line-height:1.75;color:#b4b4b4;">بقيت خطوة واحدة لتفعيل حسابك. اضغط الزر أدناه لتأكيد بريدك الإلكتروني والبدء في إنشاء عروضك على taqreer.ai.</p>
+                <p style="margin:20px auto 0;max-width:384px;font-size:15px;font-weight:400;line-height:1.75;color:#b4b4b4;">بقيت خطوة واحدة لتفعيل حسابك. أدخل الرمز أدناه في صفحة التسجيل لتكمل من حيث توقفت، أو اضغط زر التأكيد.</p>
                 
+              <p style="margin:36px 0 10px;font-size:13px;line-height:1.6;color:#b4b4b4;">رمز التأكيد</p>
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
+                <tr>
+                  <td align="center" dir="ltr" style="padding:14px 28px;border:1px solid rgba(255,255,255,0.18);border-radius:14px;background:#1b1b1b;font-family:'Courier New',Courier,monospace;font-size:30px;font-weight:600;letter-spacing:8px;color:#ffffff;">{{ .Token }}</td>
+                </tr>
+              </table>
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:44px auto 0;">
                 <tr>
                   <td align="center" bgcolor="#0057FF" style="background:#0057FF;border-radius:999px;">
-                    <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 36px;font-size:15px;font-weight:500;color:#ffffff;text-decoration:none;">تأكيد البريد الإلكتروني</a>
+                    <a href="{{ .SiteURL }}/confirm?token_hash={{ .TokenHash }}&amp;type=email&amp;next=%2Far%2Fdashboard" style="display:inline-block;padding:14px 36px;font-size:15px;font-weight:500;color:#ffffff;text-decoration:none;">تأكيد البريد الإلكتروني</a>
                   </td>
                 </tr>
               </table>
@@ -71,7 +77,7 @@ Arabic is the explicit branch; English is the default. Flat dark background (no 
       </tr>
     </table>
 {{ else }}
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#111111;">One last step to activate your account.</div>
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#111111;">Your code to activate your taqreer.ai account.</div>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#111111" style="background:#111111;">
       <tr>
         <td align="center" style="padding:0;">
@@ -84,12 +90,18 @@ Arabic is the explicit branch; English is the default. Flat dark background (no 
                 <img src="https://taqreer.ai/email/icon-box.png" width="62" height="62" alt="taqreer.ai" style="display:block;width:62px;height:62px;margin:0 auto 48px;" />
                 
                 <h1 style="margin:0;font-size:26px;font-weight:400;letter-spacing:-0.01em;color:#ffffff;line-height:1.3;">Activate your account</h1>
-                <p style="margin:20px auto 0;max-width:384px;font-size:15px;font-weight:400;line-height:1.75;color:#b4b4b4;">Thanks for joining taqreer.ai. Confirm your email to activate your account and start building presentations.</p>
+                <p style="margin:20px auto 0;max-width:384px;font-size:15px;font-weight:400;line-height:1.75;color:#b4b4b4;">Thanks for joining taqreer.ai. Enter the code below on the sign-up page to pick up where you left off, or press the button.</p>
                 
+              <p style="margin:36px 0 10px;font-size:13px;line-height:1.6;color:#b4b4b4;">Your confirmation code</p>
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:0 auto;">
+                <tr>
+                  <td align="center" dir="ltr" style="padding:14px 28px;border:1px solid rgba(255,255,255,0.18);border-radius:14px;background:#1b1b1b;font-family:'Courier New',Courier,monospace;font-size:30px;font-weight:600;letter-spacing:8px;color:#ffffff;">{{ .Token }}</td>
+                </tr>
+              </table>
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:44px auto 0;">
                 <tr>
                   <td align="center" bgcolor="#0057FF" style="background:#0057FF;border-radius:999px;">
-                    <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 36px;font-size:15px;font-weight:500;color:#ffffff;text-decoration:none;">Confirm email</a>
+                    <a href="{{ .SiteURL }}/confirm?token_hash={{ .TokenHash }}&amp;type=email&amp;next=%2Fen%2Fdashboard" style="display:inline-block;padding:14px 36px;font-size:15px;font-weight:500;color:#ffffff;text-decoration:none;">Confirm email</a>
                   </td>
                 </tr>
               </table>

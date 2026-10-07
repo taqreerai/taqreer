@@ -94,6 +94,8 @@ export function GenerateSplitButton({
   // the shown maximum still equals the held maximum (price == charge
   // parity; the settle refunds down to the authored count).
   slideCountUpTo = false,
+  teaserVisible = TEASER_VISIBLE_COUNT,
+  posts = false,
   // Images-mode deck: the per-preset estimate carries the per-image
   // surcharge, mirroring the server quote (preflight) so the shown
   // number stays the held number (price == charge parity).
@@ -118,6 +120,10 @@ export function GenerateSplitButton({
   onQualityChange: (next: Quality) => void;
   slideCount?: number | null;
   slideCountUpTo?: boolean;
+  // Slides / posts a free teaser builds (social: 3, 2026-10-07).
+  teaserVisible?: number;
+  // Social: the free-trial pop-up speaks of posts.
+  posts?: boolean;
   imagesMode?: boolean;
   disabled?: boolean;
   loading?: boolean;
@@ -400,7 +406,7 @@ export function GenerateSplitButton({
                 TIER_ORDER.indexOf(userPlan) < TIER_ORDER.indexOf(gateTier);
               const affordable = credits
                 ? (teaserPriced
-                    ? rowCost(Math.min(rowSlides, TEASER_VISIBLE_COUNT))
+                    ? rowCost(Math.min(rowSlides, teaserVisible))
                     : cost) <= credits.balance.total
                 : true;
               const active = effectiveQuality === preset.key;
@@ -502,7 +508,8 @@ export function GenerateSplitButton({
           canonical dialog shell + the design-system button primitives. */}
       <SlideCapUpsellDialog
         open={showSlideCapUpsell}
-        cap={TEASER_VISIBLE_COUNT}
+        cap={teaserVisible}
+        posts={posts}
         max={SYSTEM_SLIDE_CAP}
         // Dismiss (X / Esc / outside-click): cancel, don't generate.
         onClose={() => setShowSlideCapUpsell(false)}

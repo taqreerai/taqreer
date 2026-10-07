@@ -113,6 +113,16 @@ export const TEASER_LOCKED_COUNT = 5;
 // the flow has no estimate of its own.
 export const TEASER_VISIBLE_COUNT = 5;
 export const TEASER_DEFAULT_TOTAL = 10;
+// Social (owner direction 2026-10-07): a carousel has at least
+// SOCIAL_MIN_POSTS posts, and a free one builds only the first
+// SOCIAL_TEASER_VISIBLE posts; the rest are locked until the user pays.
+export const SOCIAL_MIN_POSTS = 5;
+export const SOCIAL_TEASER_VISIBLE = 3;
+
+/** How many slides / posts a free teaser builds for this flow. */
+export function teaserVisibleForFlow(flow: Flow): number {
+  return flow === "social" ? SOCIAL_TEASER_VISIBLE : TEASER_VISIBLE_COUNT;
+}
 
 // Top-up packs expire 12 months after purchase (§1).
 export const TOPUP_EXPIRY_MONTHS = 12;

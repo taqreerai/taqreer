@@ -1077,6 +1077,7 @@ function buildUserMessage(event: DeckGenerateEvent) {
     ...((() => {
       const brief = event.brief as {
         slideCountMode?: string;
+        slideCountMin?: number;
         teaser?: { plannedTotal?: number; lockedCount?: number } | null;
       } | null;
       const teaser = brief?.teaser;
@@ -1106,6 +1107,10 @@ function buildUserMessage(event: DeckGenerateEvent) {
         return [
           ``,
           `SLIDE COUNT (auto): the Brief's slideCount is a MAXIMUM, not a target — the user left the deck length to YOU. Author the count the content actually calls for; honor any explicit structure in the content (numbered slides, sections, an outline) — up to that maximum. Never pad, stretch, or split content just to approach the maximum.`,
+          // Social floor (2026-10-07): a carousel has at least N posts.
+          ...(typeof brief.slideCountMin === "number" && brief.slideCountMin > 1
+            ? [`Author AT LEAST ${brief.slideCountMin} slides.`]
+            : []),
         ];
       }
       return [];

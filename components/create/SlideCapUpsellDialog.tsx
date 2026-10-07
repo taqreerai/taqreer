@@ -25,6 +25,7 @@ export function SlideCapUpsellDialog({
   onUpgrade,
   cap,
   max,
+  posts = false,
 }: {
   open: boolean;
   // Dismiss WITHOUT proceeding — the X, Esc, and outside-click. Cancels the
@@ -38,6 +39,8 @@ export function SlideCapUpsellDialog({
   // The free tier's slide cap (from config) and the system max (upgrade target).
   cap: number;
   max: number;
+  // Social carousel: the copy says posts, not slides (2026-10-07).
+  posts?: boolean;
 }) {
   const dict = useDict();
   const { dir } = useLocale();
@@ -68,7 +71,7 @@ export function SlideCapUpsellDialog({
   if (typeof window === "undefined") return null;
 
   // Latin numerals only, even inside Arabic copy (String(number) is 0-9).
-  const body = t.body
+  const body = (posts ? t.bodyPosts : t.body)
     .replace("{cap}", String(cap))
     .replace("{max}", String(max));
 
@@ -136,7 +139,7 @@ export function SlideCapUpsellDialog({
                   onClick={onContinue}
                   className="btn-pill px-5 py-2 text-sm"
                 >
-                  {t.continue.replace("{cap}", String(cap))}
+                  {(posts ? t.continuePosts : t.continue).replace("{cap}", String(cap))}
                 </button>
                 <button
                   type="button"
