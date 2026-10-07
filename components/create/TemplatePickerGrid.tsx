@@ -38,6 +38,7 @@ import {
   type MimicTemplateUse,
 } from "@/lib/mimic/template-seed";
 import type { PickerTemplate } from "@/app/api/templates/route";
+import { useFitCount } from "@/components/create/useFitCount";
 
 export type PickedTemplate = { template: PickerTemplate; use: MimicTemplateUse };
 
@@ -54,6 +55,7 @@ export function TemplatePickerGrid({
   onClear,
   disabled = false,
   wide = false,
+  fit = false,
   onGuestSelect,
 }: {
   selectedId: string | null;
@@ -64,6 +66,10 @@ export function TemplatePickerGrid({
   onClear: () => void;
   disabled?: boolean;
   wide?: boolean;
+  // With `wide`: a grid inside a fixed-height card (/create's Design card):
+  // columns follow the CARD width, and on a viewport-fit stage only the rows
+  // that fit render (no scroll), the rest behind "Show all".
+  fit?: boolean;
 }) {
   const dict = useDict();
   const { locale } = useLocale();
@@ -160,6 +166,7 @@ export function TemplatePickerGrid({
 
   const noneTile = (
     <button
+      key="none"
       type="button"
       disabled={disabled}
       onClick={() => {
@@ -196,9 +203,40 @@ export function TemplatePickerGrid({
     />
   ));
 
+  const { boxRef: fitBoxRef, gridRef: fitGridRef, count: fitCount } = useFitCount(wide && fit, list.length + 1);
+  const allTiles = [noneTile, ...(templates === null ? skeletons : list.map((tpl) => tile(tpl)))];
+  const expandModal = (
+    <PickerExpandModal open={expanded} title={t.allTemplates} onClose={() => setExpanded(false)}>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+        {noneTile}
+        {list.map((tpl) => tile(tpl, true))}
+      </div>
+    </PickerExpandModal>
+  );
+
   return (
-    <div className="@container flex flex-col gap-1.5">
-      {wide ? (
+    <div className={`@container flex flex-col gap-1.5 ${fit ? "stage:h-full stage:min-h-0" : ""}`}>
+      {wide && fit ? (
+        <>
+          {/* Viewport-fit: whole rows that fit the card, no scroll; the rest
+              behind "Show all" (useFitCount). */}
+          <div
+            ref={fitBoxRef}
+            className="p-0.5 stage:min-h-0 stage:flex-1 stage:overflow-hidden"
+          >
+            <div
+              ref={fitGridRef}
+              className="grid auto-rows-max grid-cols-2 gap-3 @min-[32rem]:grid-cols-3 @min-[52rem]:grid-cols-4"
+            >
+              {allTiles.slice(0, fitCount ?? undefined)}
+            </div>
+          </div>
+          {fitCount != null && allTiles.length > fitCount ? (
+            <PickerExpandButton onClick={() => setExpanded(true)} disabled={disabled} />
+          ) : null}
+          {expandModal}
+        </>
+      ) : wide ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 2xl:grid-cols-5">
           {noneTile}
           {templates === null ? skeletons : list.map((tpl) => tile(tpl))}
@@ -216,16 +254,7 @@ export function TemplatePickerGrid({
           {list.length > 5 ? (
             <PickerExpandButton onClick={() => setExpanded(true)} disabled={disabled} />
           ) : null}
-          <PickerExpandModal
-            open={expanded}
-            title={t.allTemplates}
-            onClose={() => setExpanded(false)}
-          >
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-              {noneTile}
-              {list.map((tpl) => tile(tpl, true))}
-            </div>
-          </PickerExpandModal>
+          {expandModal}
         </>
       )}
       {error || (templates && list.length === 0) ? (

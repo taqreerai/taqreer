@@ -21,6 +21,7 @@ import { DECK_STYLES, STYLE_SECTORS, type DeckStyleKey, type StyleSector } from 
 import { SocialStyleThumb, StyleThumb, type SocialThumbKey } from "@/components/create/StyleThumb";
 import { StyleInfoButton } from "@/components/create/StyleInfoButton";
 import { PickerExpandButton, PickerExpandModal } from "@/components/create/PickerExpandModal";
+import { useFitCount } from "@/components/create/useFitCount";
 
 // Deck styles: the shared list (lib/design-styles.ts). `label` is the prompt
 // anchor stored on the brief; the visible name comes from the dictionary.
@@ -313,6 +314,7 @@ export function DesignStyleGrid({
   onChange,
   disabled = false,
   wide = false,
+  fit = false,
 }: {
   value: string | null;
   onChange: (next: string | null) => void;
@@ -320,6 +322,10 @@ export function DesignStyleGrid({
   // Full-width grid for /create's own Design step (2026-10-06): big tiles
   // with the one-line description, no inner scroll and no "Show all" modal.
   wide?: boolean;
+  // With `wide`: a grid inside a fixed-height card (/create's Design card):
+  // columns follow the CARD width, and on a viewport-fit stage only the rows
+  // that fit render (no scroll), the rest behind "Show all".
+  fit?: boolean;
 }) {
   const dict = useDict();
   const { dir } = useLocale();
@@ -348,6 +354,7 @@ export function DesignStyleGrid({
     })),
   ];
   const tiles = allTiles.filter((tl) => inSector(tl.key, sector));
+  const { boxRef: fitBoxRef, gridRef: fitGridRef, count: fitCount } = useFitCount(wide && fit, tiles.length);
 
   const tile = (tl: (typeof allTiles)[number], big: boolean) => {
     const active = value === tl.value;
@@ -358,7 +365,7 @@ export function DesignStyleGrid({
           disabled={disabled}
           onClick={() => {
             onChange(tl.value);
-            if (big && !wide) setExpanded(false);
+            if (big && (!wide || fit)) setExpanded(false);
           }}
           aria-pressed={active}
           className={`pick-tile flex w-full flex-col gap-1.5 rounded-lg p-1.5 text-start disabled:cursor-not-allowed disabled:opacity-50 ${
@@ -381,6 +388,42 @@ export function DesignStyleGrid({
     );
   };
 
+  const expandModal = (
+    <PickerExpandModal open={expanded} title={t.allStyles} onClose={() => setExpanded(false)}>
+      <div className="mb-3">
+        <SectorChips value={sector} onChange={setSector} />
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+        {tiles.map((tl) => tile(tl, true))}
+      </div>
+    </PickerExpandModal>
+  );
+
+  if (wide && fit) {
+    // Viewport-fit: whole rows that fit the card, no scroll; the rest behind
+    // "Show all" (useFitCount).
+    return (
+      <div className="@container flex flex-col gap-3 stage:h-full stage:min-h-0">
+        <SectorChips value={sector} onChange={setSector} />
+        <div
+          ref={fitBoxRef}
+          className="p-0.5 stage:min-h-0 stage:flex-1 stage:overflow-hidden"
+        >
+          <div
+            ref={fitGridRef}
+            className="grid auto-rows-max grid-cols-2 gap-3 @min-[32rem]:grid-cols-3 @min-[52rem]:grid-cols-4"
+          >
+            {tiles.slice(0, fitCount ?? undefined).map((tl) => tile(tl, true))}
+          </div>
+        </div>
+        {fitCount != null && tiles.length > fitCount ? (
+          <PickerExpandButton onClick={() => setExpanded(true)} disabled={disabled} />
+        ) : null}
+        {expandModal}
+      </div>
+    );
+  }
+
   if (wide) {
     return (
       <div className="flex flex-col gap-3">
@@ -399,14 +442,7 @@ export function DesignStyleGrid({
         {tiles.map((tl) => tile(tl, false))}
       </div>
       <PickerExpandButton onClick={() => setExpanded(true)} disabled={disabled} />
-      <PickerExpandModal open={expanded} title={t.allStyles} onClose={() => setExpanded(false)}>
-        <div className="mb-3">
-          <SectorChips value={sector} onChange={setSector} />
-        </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-          {tiles.map((tl) => tile(tl, true))}
-        </div>
-      </PickerExpandModal>
+      {expandModal}
     </div>
   );
 }

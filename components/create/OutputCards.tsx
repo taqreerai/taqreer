@@ -418,6 +418,55 @@ function SizeChoice({
   );
 }
 
+// Big variant (/create's settings card, 2026-10-07): a tall `.pick-tile` with
+// a real slide frame at the chosen ratio, so the size reads as a picture and
+// the tiles can absorb the card's spare height on a viewport-fit stage. The
+// frame scales with the tile (h-full inside a flex-1 box, capped by max-h).
+function BigSizeChoice({
+  active,
+  onClick,
+  label,
+  sub,
+  ratio,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  sub: string;
+  ratio: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`pick-tile flex h-full min-h-0 flex-col items-center gap-2 rounded-xl p-3 ${active ? "is-active" : ""}`}
+    >
+      <span className="flex min-h-0 w-full flex-1 items-center justify-center">
+        <span
+          aria-hidden
+          className={`block h-full max-h-24 max-w-full rounded-md border ${
+            active
+              ? "border-[var(--tq-blue)] bg-[var(--tq-blue)]/15"
+              : "border-foreground/30 bg-foreground/10"
+          }`}
+          style={{ aspectRatio: ratio }}
+        />
+      </span>
+      <span className="flex flex-col items-center leading-tight">
+        <span
+          className={`text-xs font-semibold ${active ? "text-[var(--tq-blue)]" : "text-foreground/70"}`}
+        >
+          {label}
+        </span>
+        <span className={`text-[10px] ${active ? "text-foreground/70" : "text-foreground/40"}`}>
+          {sub}
+        </span>
+      </span>
+    </button>
+  );
+}
+
 // ─── SlideSizeFields — moved INTO the file-upload card on step 1
 // ───────────────────────────────────────────────────────────────
 // 2026-05-19: slide size pickers were extracted from CanvasCard so
@@ -447,14 +496,47 @@ export function SlideSizeFields({
   // vertical band the card can't afford. /create keeps its label
   // since the field shares space with other section headers.
   hideLabel = false,
+  // Tall picture tiles (BigSizeChoice) that fill the parent's height on a
+  // viewport-fit stage (/create's settings card); a fixed height elsewhere.
+  big = false,
 }: {
   slideSize: SlideSize;
   onSlideSize: (v: SlideSize) => void;
   stacked?: boolean;
   label?: string;
   hideLabel?: boolean;
+  big?: boolean;
 }) {
   const dict = useDict();
+  if (big) {
+    return (
+      <div className="flex flex-col gap-2 stage:h-full stage:min-h-0">
+        {/* The tiles name their ratio themselves, so the shortest viewports
+            drop the label to keep the tiles a usable size. */}
+        {hideLabel ? null : (
+          <div className="stage-tight:hidden">
+            <SectionLabel>{label ?? dict.flows.output.slideSize}</SectionLabel>
+          </div>
+        )}
+        <div className="grid h-32 grid-cols-2 gap-3 stage:h-auto stage:min-h-24 stage:flex-1 stage-tight:min-h-20">
+          <BigSizeChoice
+            active={slideSize === "16:9"}
+            onClick={() => onSlideSize("16:9")}
+            label="16:9"
+            sub={dict.flows.output.landscape}
+            ratio="16 / 9"
+          />
+          <BigSizeChoice
+            active={slideSize === "9:16"}
+            onClick={() => onSlideSize("9:16")}
+            label="9:16"
+            sub={dict.flows.output.portrait}
+            ratio="9 / 16"
+          />
+        </div>
+      </div>
+    );
+  }
   const cols = stacked ? "grid grid-cols-1 gap-2" : "grid grid-cols-2 gap-2";
   return (
     <div className="space-y-2">

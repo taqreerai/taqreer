@@ -772,6 +772,17 @@ textarea.input-dark {
   --breakpoint-desk: 73.75rem;
 }
 
+/* `stage:` - the viewport-fit creation wizard (/create, 2026-10-07 owner
+   direction: the whole step, Next included, visible on any desktop viewport
+   with no page scroll and no scrolling inside cards). Active from the `desk`
+   width (73.75rem) on a viewport tall enough for the compact cards (40rem);
+   below that the cards keep their natural height and the page scrolls. */
+@custom-variant stage (@media (width >= 73.75rem) and (height >= 40rem));
+/* `stage-tight:` - the same stage on the shortest viewports it covers
+   (under 45rem): card spacing trims one step so the brand card's colour row
+   still fits whole. */
+@custom-variant stage-tight (@media (width >= 73.75rem) and (height >= 40rem) and (height < 45rem));
+
 @theme inline {
   /* Blue scale (names kept for back-compat — e.g. `selection:bg-brand-purple-500`
      in the root layout; values are blue so the selection highlight reads blue). */
@@ -2418,6 +2429,17 @@ body:has(.tq-support-toolbar) .support-fab-anchor {
   overscroll-behavior: contain;
   padding: 2px;
 }
+/* Colour templates with no scroll (/create's Brand card, 2026-10-07): big
+   named tiles, 4 per row, up to 3 rows (the picker renders that many, fewer
+   rows when the card is short - measured by useFitCount); the rest in "Show
+   all". */
+.palette-fit {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-content: start;
+  gap: 0.5rem;
+  padding: 2px;
+}
 
 /* Toolbar help trigger (2026-10-01): brand-blue fill so it stands out from
    the muted sibling icons. Opens the help popover, never WhatsApp directly. */
@@ -2690,6 +2712,35 @@ body:has(.tq-support-toolbar) .support-fab-anchor {
    behaviour. */
 .tq-content-panel:has(.tq-wizard-bar) {
   overflow: clip;
+}
+/* Viewport-fit wizard (`stage:` variant above, same media query): a page
+   carrying `.tq-wizard-fit` turns the panel into exactly one viewport and
+   hands the leftover height down the chain (panel > content wrapper > page),
+   so the wizard's stage can flex into it. The two bars (guest / app) are
+   absolutely positioned, so they take no part in this column. */
+@media (width >= 73.75rem) and (height >= 40rem) {
+  /* The panel's 8px top margin otherwise collapses through <main>, pushing
+     the min-h-screen shell 8px below the fold (an 8px page scroll). */
+  main:has(.tq-wizard-fit) {
+    display: flow-root;
+  }
+  .tq-content-panel:has(.tq-wizard-fit) {
+    height: calc(100vh - 16px);
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .tq-content-panel:has(.tq-wizard-fit) > :has(> .tq-wizard-fit) {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .tq-wizard-fit {
+    flex: 1;
+    min-height: 0;
+  }
 }
 
 /* Flat gray panel — every page except home + the 4 creation flows. */

@@ -100,8 +100,16 @@ import { useDefaultQuality } from "@/lib/credits/use-default-quality";
 import posthog from "posthog-js";
 import { useIsGuest } from "@/components/app/GuestContext";
 import { GuestSignupDialog } from "@/components/create/GuestSignupDialog";
-import { FlowSwitcher } from "@/components/create/FlowSwitcher";
-import { BrandStep, DesignStep, WizardBar, WizardHead, scrollWizardTop } from "@/components/create/wizard";
+import {
+  BrandCard,
+  DesignCard,
+  SplitStep,
+  WizardBar,
+  WizardCard,
+  WizardHead,
+  WizardStage,
+  scrollWizardTop,
+} from "@/components/create/wizard";
 import type { PickerTemplate } from "@/app/api/templates/route";
 import {
   GUEST_SAVE_EVENT,
@@ -140,7 +148,11 @@ const DEFAULT_PALETTE = ["#000000", "#FFFFFF"];
 // Wizard steps (2026-10-06 redesign, owner direction: the three side-by-side
 // cards read as crammed): 0 Content, 1 Design, 2 Brand, 3 Output + Generate,
 // one focused screen per step on every screen size.
-const LAST_STEP = 3;
+const LAST_STEP = 1;
+// A settings row under the slide-size tiles: hairline above, one step tighter
+// on the viewport-fit stage (and tighter again on its shortest viewports).
+const SETTINGS_ROW =
+  "border-t border-[var(--tq-border-hairline)] pt-4 stage:pt-3 stage-tight:pt-2";
 
 // SLIDE_COUNT_OPTIONS + LANGUAGE_OPTIONS are built inside the component so their
 // labels can come from the active-locale dictionary.
@@ -1020,13 +1032,8 @@ export default function CreatePage() {
   };
 
   // ─── Wizard chrome (2026-10-06 redesign) ───────────────────────
-  const stepTitles = [t.contentCard, t.design.card, t.brandCard, t.outputCard];
-  const stepHints = [
-    t.wizard.hints.content,
-    t.wizard.hints.design,
-    t.wizard.hints.brand,
-    t.wizard.hints.output,
-  ];
+  // Two steps (2026-10-07): content + settings, then design + brand.
+  const stepTitles = [t.contentCard, t.design.card];
   const hasContent = hasText || hasFile;
   const goToStep = (next: number) => {
     setStep(Math.max(0, Math.min(LAST_STEP, next)));
@@ -1034,7 +1041,9 @@ export default function CreatePage() {
   };
 
   return (
-    <div className="page-container flex w-full justify-center">
+    // `.tq-wizard-fit`: on a desktop viewport the page is exactly one viewport
+    // tall and the stage takes the leftover height (globals.css).
+    <div className="page-container tq-wizard-fit flex w-full justify-center">
       <GuestSignupDialog
         flow="create"
         open={guestSignupOpen}
@@ -1048,225 +1057,222 @@ export default function CreatePage() {
           void handleGenerate(slides);
         }}
       />
-      <div className="mt-[4vh] flex w-full flex-col items-center gap-5 px-4 desk:px-8">
+      <div className="mt-[4vh] flex w-full flex-col items-center gap-5 px-4 desk:px-8 stage:mt-0 stage:min-h-0">
         <WizardHead
           title={t.create.title}
           subtitle={t.create.subtitle}
           steps={stepTitles}
-          hints={stepHints}
           step={step}
           onStep={goToStep}
-          // Every step is one click away once there is content (the only
-          // hard gate); before that only step 1.
           reachable={hasContent ? LAST_STEP : 0}
-        >
-          {/* The other flows, one click away, on the first step only. */}
-          {step === 0 ? <FlowSwitcher /> : null}
-        </WizardHead>
-
-        {/* ═══════════════════════════════════════════════════════
-            STEP 1 · CONTENT
-            ═══════════════════════════════════════════════════════ */}
-        <section
-          className={`${step === 0 ? "flex" : "hidden"} surface-card w-full max-w-3xl flex-col gap-4 rounded-2xl p-4 sm:p-6`}
-        >
-          <input
-            ref={contentInputRef}
-            type="file"
-            accept=".pdf,.pptx,.ppt,.docx"
-            className="hidden"
-            onChange={(event) => setContentFromInput(event.target.files?.[0])}
-          />
-
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-semibold text-foreground/80">
-                {t.language}
-              </span>
-              <SegmentedToggle
-                options={LANGUAGE_OPTIONS}
-                value={language}
-                onChange={setLanguage}
-                ariaLabel={t.contentLanguageAria}
-              />
-            </div>
-            <textarea
-              value={contentText}
-              onChange={(event) => {
-                const next = event.target.value;
-                setContentText(next);
-                if (next.length > 0 && contentFile) removeContentFile();
-              }}
-              placeholder={t.contentPlaceholder}
-              rows={8}
-              dir={language === "en" ? "ltr" : "rtl"}
-              // Mirrors the server's content.text 400 cap in /api/projects
-              // (brief-limits.ts) so the limit is felt here, not as a
-              // failed submit.
-              maxLength={MAX_CONTENT_TEXT_CHARS}
-              disabled={submitting || hasFile}
-              className="input-dark min-h-[220px] resize-y text-sm leading-6 disabled:cursor-not-allowed disabled:opacity-50"
-            />
-          </div>
-
-          {/* Dropzone - dimmed + `inert` while text is typed (also pulls the
-              button out of the tab order). Mirrors /mimic's dropzone. */}
-          <div
-            className={`flex flex-col gap-2.5 transition-opacity duration-200 ${
-              hasText ? "opacity-40" : ""
-            }`}
-            inert={hasText}
-          >
-            <div className="flex items-center gap-2 text-[11px] text-foreground/40">
-              <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
-              <span>{t.or}</span>
-              <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
-            </div>
-            <ContentDropzone
-              file={contentFile}
-              submitting={submitting}
-              dragging={contentDragging}
-              setDragging={setContentDragging}
-              onOpen={() => contentInputRef.current?.click()}
-              onDrop={(f) => setContentFromInput(f)}
-              onRemove={removeContentFile}
-            />
-          </div>
-
-          {/* Persistent footer element (Claude places it on every slide). */}
-          <div className="border-t border-[var(--tq-border-hairline)] pt-4">
-            <PersistentRow
-              text={persistentText}
-              language={language}
-              onText={setPersistentText}
-            />
-          </div>
-        </section>
-
-        {/* STEP 2 · DESIGN - a template OR a design style (shared). */}
-        <DesignStep
-          visible={step === 1}
-          tab={lookTab}
-          onTab={setLookTab}
-          templateId={template?.id ?? null}
-          onPickTemplate={pickTemplate}
-          onGuestPickTemplate={guest ? pickGuestTemplate : undefined}
-          onClearTemplate={() => setTemplate(null)}
-          designStyle={designStyle}
-          onDesignStyle={onDesignStyle}
-          templateNote={t.design.templateNote}
-          disabled={submitting}
+          rail={false}
         />
 
-        {/* STEP 3 · BRAND (shared with every creation tool). */}
-        <BrandStep
-          visible={step === 2}
-          kitOptions={kitOptions}
-          onPickKit={handlePickKit}
-          colors={colors}
-          minPalette={MIN_PALETTE}
-          maxPalette={MAX_PALETTE}
-          onAutoColors={() => setColors([])}
-          onUpdateColor={updateColor}
-          onRemoveColor={removeColor}
-          onAddColor={addColor}
-          onPickPreset={setColors}
-          brandFont={brandFont}
-          onBrandFont={setBrandFont}
-          sampleText={language === "en" ? HEADING_SAMPLE_LATIN : HEADING_SAMPLE_AR}
-          logoFile={logoFile}
-          logoPreviewUrl={loadedLogo?.displayUrl ?? null}
-          onLogoSelect={(f) => {
-            setLogoFile(f);
-            setLoadedLogo(null);
-          }}
-          onLogoRemove={() => {
-            setLogoFile(null);
-            setLoadedLogo(null);
-          }}
-          saveBrandKit={saveBrandKit}
-          onSaveBrandKit={setSaveBrandKit}
-          disabled={submitting}
-        />
-
-        {/* ═══════════════════════════════════════════════════════
-            STEP 4 · OUTPUT SETTINGS, then Generate in the bar below.
-            ═══════════════════════════════════════════════════════ */}
-        <section
-          className={`${step === 3 ? "flex" : "hidden"} surface-card w-full max-w-2xl flex-col gap-4 rounded-2xl p-4 sm:p-6`}
-        >
-          <SlideSizeFields slideSize={slideSize} onSlideSize={setSlideSize} />
-
-          <div className="border-t border-[var(--tq-border-hairline)] pt-4">
-            <div className="flex min-h-[24px] items-center justify-between gap-2">
-              <span className="text-sm font-semibold text-foreground/80">
-                {t.slideCount}
-              </span>
-              {/* `layout` on the parent FLIPs the toggle when the stepper
-                  appears; the inner motion.div only animates its own
-                  width + opacity (a fixed 66 px avoids the auto-width
-                  snap) and absorbs the gap on exit. */}
-              <motion.div
-                layout
-                transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                className="flex items-center gap-1.5"
-              >
+        <WizardStage>
+          {/* ═══════════════════════════════════════════════════════
+              STEP 1 · CONTENT (wide) + PRESENTATION SETTINGS (narrow)
+              ═══════════════════════════════════════════════════════ */}
+          <SplitStep visible={step === 0} label={t.contentCard}>
+            <WizardCard
+              title={t.contentCard}
+              end={
                 <SegmentedToggle
-                  options={SLIDE_COUNT_OPTIONS}
-                  value={slideCountMode}
-                  onChange={setSlideCountMode}
-                  ariaLabel={t.slideCount}
+                  options={LANGUAGE_OPTIONS}
+                  value={language}
+                  onChange={setLanguage}
+                  ariaLabel={t.contentLanguageAria}
                 />
-                <AnimatePresence initial={false}>
-                  {slideCountMode === "custom" ? (
-                    <motion.div
-                      key="slide-count-stepper"
-                      initial={{ width: 0, opacity: 0, marginInlineStart: -6 }}
-                      animate={{ width: 66, opacity: 1, marginInlineStart: 0 }}
-                      exit={{ width: 0, opacity: 0, marginInlineStart: -6 }}
-                      transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                      style={{ overflow: "hidden" }}
-                    >
-                      <InlineStepper
-                        value={slideCountValue}
-                        onChange={setSlideCountValue}
-                        min={1}
-                        max={slideCap}
-                      />
-                    </motion.div>
-                  ) : null}
-                </AnimatePresence>
-              </motion.div>
-            </div>
-          </div>
+              }
+            >
+              <input
+                ref={contentInputRef}
+                type="file"
+                accept=".pdf,.pptx,.ppt,.docx"
+                className="hidden"
+                onChange={(event) => setContentFromInput(event.target.files?.[0])}
+              />
+              {/* Grows to fill the card on a viewport-fit stage; a
+                  comfortable fixed minimum on phones / short viewports. */}
+              <textarea
+                value={contentText}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  setContentText(next);
+                  if (next.length > 0 && contentFile) removeContentFile();
+                }}
+                placeholder={t.contentPlaceholder}
+                rows={8}
+                dir={language === "en" ? "ltr" : "rtl"}
+                // Mirrors the server's content.text 400 cap in /api/projects
+                // (brief-limits.ts) so the limit is felt here, not as a
+                // failed submit.
+                maxLength={MAX_CONTENT_TEXT_CHARS}
+                disabled={submitting || hasFile}
+                className="input-dark min-h-[220px] resize-y text-sm leading-6 disabled:cursor-not-allowed disabled:opacity-50 stage:min-h-0 stage:flex-1 stage:resize-none"
+              />
 
-          <div className="flex items-center justify-between gap-2 border-t border-[var(--tq-border-hairline)] pt-4">
-            <span className="text-sm font-semibold text-foreground/80">
-              {t.slideNumbering}
-            </span>
-            <Toggle
-              ariaLabel={t.slideNumbering}
-              value={pagination}
-              onChange={setPagination}
-            />
-          </div>
+              {/* Dropzone - dimmed + `inert` while text is typed (also pulls the
+                  button out of the tab order). Mirrors /mimic's dropzone. */}
+              <div
+                className={`flex flex-col gap-2.5 transition-opacity duration-200 ${
+                  hasText ? "opacity-40" : ""
+                }`}
+                inert={hasText}
+              >
+                <div className="flex items-center gap-2 text-[11px] text-foreground/40">
+                  <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
+                  <span>{t.or}</span>
+                  <div className="h-px flex-1 bg-[var(--tq-border-hairline)]" />
+                </div>
+                <ContentDropzone
+                  file={contentFile}
+                  submitting={submitting}
+                  dragging={contentDragging}
+                  setDragging={setContentDragging}
+                  onOpen={() => contentInputRef.current?.click()}
+                  onDrop={(f) => setContentFromInput(f)}
+                  onRemove={removeContentFile}
+                />
+              </div>
+            </WizardCard>
 
-          {/* AI images: Plus+ gated inside the panel itself; free users get
-              the crown + UpgradeModal. */}
-          <div className="border-t border-[var(--tq-border-hairline)] pt-4">
-            <AIImagesPanel
-              value={imagesMode}
-              onChange={setImagesMode}
+            <WizardCard title={t.outputCard}>
+              {/* Slide size as two picture tiles that take the card's spare
+                  height; the other settings are compact rows below. */}
+              <div className="stage:min-h-0 stage:flex-1">
+                <SlideSizeFields slideSize={slideSize} onSlideSize={setSlideSize} big />
+              </div>
+
+              <div className={SETTINGS_ROW}>
+                <div className="flex min-h-[24px] items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-foreground/80">
+                    {t.slideCount}
+                  </span>
+                  {/* `layout` on the parent FLIPs the toggle when the stepper
+                      appears; the inner motion.div only animates its own
+                      width + opacity (a fixed 66 px avoids the auto-width
+                      snap) and absorbs the gap on exit. */}
+                  <motion.div
+                    layout
+                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                    className="flex items-center gap-1.5"
+                  >
+                    <SegmentedToggle
+                      options={SLIDE_COUNT_OPTIONS}
+                      value={slideCountMode}
+                      onChange={setSlideCountMode}
+                      ariaLabel={t.slideCount}
+                    />
+                    <AnimatePresence initial={false}>
+                      {slideCountMode === "custom" ? (
+                        <motion.div
+                          key="slide-count-stepper"
+                          initial={{ width: 0, opacity: 0, marginInlineStart: -6 }}
+                          animate={{ width: 66, opacity: 1, marginInlineStart: 0 }}
+                          exit={{ width: 0, opacity: 0, marginInlineStart: -6 }}
+                          transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                          style={{ overflow: "hidden" }}
+                        >
+                          <InlineStepper
+                            value={slideCountValue}
+                            onChange={setSlideCountValue}
+                            min={1}
+                            max={slideCap}
+                          />
+                        </motion.div>
+                      ) : null}
+                    </AnimatePresence>
+                  </motion.div>
+                </div>
+              </div>
+
+              <div className={`flex items-center justify-between gap-2 ${SETTINGS_ROW}`}>
+                <span className="text-sm font-semibold text-foreground/80">
+                  {t.slideNumbering}
+                </span>
+                <Toggle
+                  ariaLabel={t.slideNumbering}
+                  value={pagination}
+                  onChange={setPagination}
+                />
+              </div>
+
+              {/* AI images: Plus+ gated inside the panel itself; free users get
+                  the crown + UpgradeModal. */}
+              <div className={SETTINGS_ROW}>
+                <AIImagesPanel
+                  value={imagesMode}
+                  onChange={setImagesMode}
+                  disabled={submitting}
+                />
+              </div>
+
+              {/* Persistent element (Claude places it on every slide): a deck
+                  setting, so it lives here rather than with the content. */}
+              <div className={SETTINGS_ROW}>
+                <PersistentRow
+                  text={persistentText}
+                  language={language}
+                  onText={setPersistentText}
+                />
+              </div>
+            </WizardCard>
+          </SplitStep>
+
+          {/* ═══════════════════════════════════════════════════════
+              STEP 2 · DESIGN (wide) + BRAND (narrow), then Generate.
+              ═══════════════════════════════════════════════════════ */}
+          <SplitStep visible={step === 1} label={t.design.card}>
+            <DesignCard
+              tab={lookTab}
+              onTab={setLookTab}
+              templateId={template?.id ?? null}
+              onPickTemplate={pickTemplate}
+              onGuestPickTemplate={guest ? pickGuestTemplate : undefined}
+              onClearTemplate={() => setTemplate(null)}
+              designStyle={designStyle}
+              onDesignStyle={onDesignStyle}
+              templateNote={t.design.templateNote}
               disabled={submitting}
             />
-          </div>
-        </section>
+            <BrandCard
+              kitOptions={kitOptions}
+              onPickKit={handlePickKit}
+              colors={colors}
+              minPalette={MIN_PALETTE}
+              maxPalette={MAX_PALETTE}
+              onAutoColors={() => setColors([])}
+              onUpdateColor={updateColor}
+              onRemoveColor={removeColor}
+              onAddColor={addColor}
+              onPickPreset={setColors}
+              brandFont={brandFont}
+              onBrandFont={setBrandFont}
+              sampleText={language === "en" ? HEADING_SAMPLE_LATIN : HEADING_SAMPLE_AR}
+              logoFile={logoFile}
+              logoPreviewUrl={loadedLogo?.displayUrl ?? null}
+              onLogoSelect={(f) => {
+                setLogoFile(f);
+                setLoadedLogo(null);
+              }}
+              onLogoRemove={() => {
+                setLogoFile(null);
+                setLoadedLogo(null);
+              }}
+              saveBrandKit={saveBrandKit}
+              onSaveBrandKit={setSaveBrandKit}
+              disabled={submitting}
+            />
+          </SplitStep>
+        </WizardStage>
 
         <WizardBar
           step={step}
           lastStep={LAST_STEP}
           onStep={goToStep}
           nextDisabled={step === 0 && !hasContent}
+          nextLabel={t.wizard.nextLook}
+          wide
           busy={submitting}
           // The file poll keeps running after step 1; this explains a
           // disabled Generate the user can no longer see the cause of.
@@ -1287,13 +1293,13 @@ export default function CreatePage() {
           }
         />
 
-        <p
-          className="min-h-5 text-center text-sm text-red-400"
-          role={error ? "alert" : undefined}
-          aria-live={error ? "polite" : undefined}
-        >
-          {error || " "}
-        </p>
+        {/* Rendered only with an error: an empty reserved line would cost the
+            viewport-fit stage 40px on every visit. */}
+        {error ? (
+          <p className="text-center text-sm text-red-400" role="alert" aria-live="polite">
+            {error}
+          </p>
+        ) : null}
       </div>
     </div>
   );

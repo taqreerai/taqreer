@@ -4,6 +4,7 @@
 // the studio's deck-colours menu. Each preset renders as its five colour
 // roles in one strip (lib/brand/palette-presets.ts).
 
+import type { Ref } from "react";
 import { useLocale } from "@/components/i18n/LocaleProvider";
 import {
   PALETTE_PRESETS,
@@ -37,17 +38,26 @@ export function PalettePresetGrid({
   labels = false,
   disabled = false,
   className = "grid grid-cols-6 gap-1.5",
+  limit,
+  gridRef,
+  stripClassName,
 }: {
   activeId: string | null;
   onPick: (preset: PalettePreset) => void;
   labels?: boolean;
   disabled?: boolean;
   className?: string;
+  // Render only the first `limit` presets (whole rows that fit, useFitCount).
+  limit?: number;
+  gridRef?: Ref<HTMLDivElement>;
+  // Strip height override (e.g. the big unnamed tiles of /create's Brand
+  // card); default h-6 with labels, h-4 without.
+  stripClassName?: string;
 }) {
   const { locale } = useLocale();
   return (
-    <div className={className}>
-      {PALETTE_PRESETS.map((p) => {
+    <div ref={gridRef} className={className}>
+      {PALETTE_PRESETS.slice(0, limit).map((p) => {
         const name = locale === "en" ? p.name.en : p.name.ar;
         return (
           <button
@@ -62,7 +72,7 @@ export function PalettePresetGrid({
               activeId === p.id ? "is-active" : ""
             }`}
           >
-            <PaletteStrip colors={p.colors} className={labels ? "h-6" : "h-4"} />
+            <PaletteStrip colors={p.colors} className={stripClassName ?? (labels ? "h-6" : "h-4")} />
             {labels ? (
               <span className="truncate px-0.5 text-[11px] font-medium text-foreground/80">
                 {name}
