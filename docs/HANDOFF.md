@@ -43,6 +43,18 @@ lands or a new one starts.
   instead); deck-generate sends only the first 5 page images on a teaser run and text up
   to the planned total (`inngest/functions/deck-generate.ts`), so long files cost the
   same as short ones. Mimic keeps its block (it sends the whole file as one document).
+- **Enhance photo slots:** enhance never keeps the user's own pictures (asset
+  extraction removed 2026-05-25), so a source photo / map / screenshot becomes a
+  `<div data-photoslot>` placeholder; the studio shows "Upload your picture" on it
+  (`PhotoSlotOverlay`). With AI photos on, maps / screenshots / real places are never
+  generated. Older decks have plain placeholders (no button). Next: bring the user's
+  real pictures back in enhance (pending item).
+- **Free badge placement:** `pickBadgeCorner` (lib/export/free-branding) measures the
+  slide's text + pictures and moves the badge to a free corner (default bottom corner,
+  other bottom, then top). Used by the studio overlay, the PDF / PNG export (run in
+  headless Chrome from its source text, with a `__name` stand-in) and the editable
+  PPTX (picture + link shape). Plus a prompt line: the reserved corner overrides a
+  source layout's footer.
 - **Local sign-up testing:** local uses the LIVE Supabase auth. Add
   `http://localhost:3000/**` to Supabase Redirect URLs, use a fresh private window per
   test account (one signup grant per browser, 3 per IP per day), comment out

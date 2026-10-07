@@ -16,7 +16,7 @@
 // cover 5-25 slides at canvas-native res; longer decks would benefit
 // from the async path planned for step 15.5 + concurrency.
 
-import { BRANDED_CLOSING_SLIDE } from "@/lib/export/free-branding";
+import { BRANDED_CLOSING_SLIDE, freeBadgePlacementScript } from "@/lib/export/free-branding";
 import { NextResponse } from "next/server";
 import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 import JSZip from "jszip";
@@ -222,6 +222,17 @@ export async function POST(
       ).fonts;
       return docFonts?.ready ?? Promise.resolve();
     });
+    // Free plan: move each slide's badge to a corner the slide's own content
+    // leaves free (lib/export/free-branding pickBadgeCorner), now that the
+    // fonts have settled and the text has its final size.
+    if (freeBranding) {
+      await page.evaluate(
+        freeBadgePlacementScript(manifest.language === "en" ? "en" : "ar", {
+          width: canvasW,
+          height: canvasH,
+        }),
+      );
+    }
 
     // Sequential, not parallel — Chrome's compositor serialises page.
     // screenshot anyway, and the bbox lookup needs the page to be

@@ -35,6 +35,7 @@ import {
 } from "@/lib/schema/slide";
 import { hydrateManifestImages } from "@/lib/images/hydrate-manifest";
 import { buildHtmlDocumentServer } from "@/lib/export/html-document-server";
+import { freeBadgePlacementScript } from "@/lib/export/free-branding";
 import { exporterHasPaidExports } from "@/lib/export/export-entitlement";
 import { EXPORT_GATE_TIER } from "@/lib/export/export-gating";
 
@@ -220,6 +221,17 @@ export async function POST(
       ).fonts;
       return docFonts?.ready ?? Promise.resolve();
     });
+    // Free plan: move each slide's badge to a corner the slide's own content
+    // leaves free (lib/export/free-branding pickBadgeCorner), now that the
+    // fonts have settled and the text has its final size.
+    if (freeBranding) {
+      await page.evaluate(
+        freeBadgePlacementScript(manifest.language === "en" ? "en" : "ar", {
+          width: canvasW,
+          height: canvasH,
+        }),
+      );
+    }
     // Belt-and-braces: ensure the layout has settled at least one
     // animation frame after fonts are ready. Some Chrome builds
     // queue layout work post-font-load that page.pdf would

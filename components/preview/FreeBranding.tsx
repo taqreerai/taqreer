@@ -20,6 +20,10 @@ import {
   watermarkHtml,
   type BrandLang,
   type SlideDims,
+  pickBadgeCorner,
+  watermarkBox,
+  watermarkSide,
+  type BadgeCorner,
 } from "@/lib/export/free-branding";
 
 const CAIRO_LINK_ID = "tq-branding-cairo";
@@ -93,15 +97,42 @@ export function FreeWatermarkLayer({
   lang,
   dims,
   cover = false,
+  getSlide,
 }: {
   lang: BrandLang;
   dims: SlideDims;
-  // Slide 1: the larger badge with the slogan.
+  // Slide 1 (the cover): no badge.
   cover?: boolean;
+  // The rendered slide to keep clear of (edit mode: the editor iframe's
+  // <section>). Without it the layer looks for the viewer's SlideRenderer
+  // next to it.
+  getSlide?: () => Element | null;
 }) {
   useCairo();
   const { open, popover, title } = useUpsell();
   const layerRef = useRef<HTMLDivElement>(null);
+  // Collision-aware corner (2026-10-06): re-checked a few times a second so
+  // an edit that moves text into the badge's corner moves the badge away.
+  const [corner, setCorner] = useState<BadgeCorner | undefined>(undefined);
+  const dimsW = dims.width;
+  const dimsH = dims.height;
+  useEffect(() => {
+    if (cover) return;
+    const box = watermarkBox({ width: dimsW, height: dimsH });
+    const side = watermarkSide(lang);
+    const check = () => {
+      const slide =
+        getSlide?.() ??
+        layerRef.current?.parentElement?.querySelector("[data-slide-id]") ??
+        null;
+      if (!slide) return;
+      const next = pickBadgeCorner(slide, box, side);
+      setCorner((prev) => (prev && prev.h === next.h && prev.v === next.v ? prev : next));
+    };
+    check();
+    const id = window.setInterval(check, 600);
+    return () => window.clearInterval(id);
+  }, [cover, dimsW, dimsH, lang, getSlide]);
   // Hit-test the badge by POSITION in a capture-phase listener (2026-10-03):
   // in the editor, overlays painted after this layer (selection / drag
   // surfaces) can swallow a plain click even though the badge is visible, so
@@ -138,7 +169,7 @@ export function FreeWatermarkLayer({
         className="tq-free-wm pointer-events-none absolute inset-0 z-30"
         title={title}
       >
-        <ScaledSlideHtml html={watermarkHtml(lang, dims, { cover })} dims={dims} />
+        <ScaledSlideHtml html={watermarkHtml(lang, dims, { cover, corner })} dims={dims} />
       </div>
       {popover}
     </>

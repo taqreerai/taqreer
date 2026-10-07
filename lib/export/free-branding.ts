@@ -62,6 +62,146 @@ export function watermarkSide(lang: BrandLang): "left" | "right" {
   return lang === "en" ? "right" : "left";
 }
 
+/** Which slide corner the badge sits in. */
+export type BadgeCorner = { h: "left" | "right"; v: "top" | "bottom" };
+
+/** The default corner: bottom, on the language's reading-end side. */
+export function defaultBadgeCorner(lang: BrandLang): BadgeCorner {
+  return { h: watermarkSide(lang), v: "bottom" };
+}
+
+/**
+ * The badge's footprint as fractions of the slide (conservative: the PPTX
+ * picture's width, a little wider than the drawn pill) plus its margin.
+ */
+export function watermarkBox(dims: SlideDims) {
+  const base = watermarkGeometry(dims);
+  const h = Math.round(base.height * 0.8);
+  const w = Math.round(h * 5.8);
+  return {
+    w: w / dims.width,
+    h: h / dims.height,
+    mx: base.margin / dims.width,
+    my: base.margin / dims.height,
+  };
+}
+
+/**
+ * Collision-aware corner (2026-10-06, owner direction: the badge covered a
+ * slide's own footer). Measures where the slide's visible text and pictures
+ * actually are and returns the first free corner in this order: the default
+ * bottom corner, the other bottom corner, then the two top corners; when all
+ * four are busy, the least covered one. Large background pictures (over half
+ * the slide) don't count, the badge may sit on those.
+ *
+ * SELF-CONTAINED on purpose (no imports, no outer references, plain loops):
+ * the server PDF / PNG exports run it inside headless Chrome from its source
+ * text (freeBadgePlacementScript). `slide` may live in another document (the
+ * studio editor iframe); everything is measured in its own viewport.
+ */
+export function pickBadgeCorner(
+  slide: Element,
+  box: { w: number; h: number; mx: number; my: number },
+  preferred: "left" | "right",
+): BadgeCorner {
+  const other: "left" | "right" = preferred === "left" ? "right" : "left";
+  const fallback: BadgeCorner = { h: preferred, v: "bottom" };
+  const sr = slide.getBoundingClientRect();
+  if (!sr.width || !sr.height) return fallback;
+  const doc = slide.ownerDocument;
+  const win = doc.defaultView;
+  if (!win) return fallback;
+  const rects: number[][] = [];
+  const add = (r: DOMRect | DOMRectReadOnly, isPicture: boolean) => {
+    if (r.width < 1 || r.height < 1) return;
+    const w = r.width / sr.width;
+    const h = r.height / sr.height;
+    if (isPicture && w * h > 0.5) return;
+    rects.push([(r.left - sr.left) / sr.width, (r.top - sr.top) / sr.height, w, h]);
+  };
+  const visit = (el: Element) => {
+    if (el.hasAttribute("data-tq-badge") || el.hasAttribute("data-tq-watermark")) return;
+    const cs = win.getComputedStyle(el);
+    if (cs.display === "none" || cs.visibility === "hidden" || Number(cs.opacity) === 0) return;
+    const tag = el.tagName.toLowerCase();
+    if (tag === "img" || tag === "svg" || tag === "canvas" || tag === "video" || tag === "picture") {
+      add(el.getBoundingClientRect(), true);
+      return;
+    }
+    const kids = el.childNodes;
+    for (let i = 0; i < kids.length; i++) {
+      const n = kids[i];
+      if (n.nodeType === 3) {
+        if ((n.textContent || "").trim()) {
+          const range = doc.createRange();
+          range.selectNodeContents(n);
+          const list = range.getClientRects();
+          for (let j = 0; j < list.length; j++) add(list[j], false);
+        }
+      } else if (n.nodeType === 1) {
+        visit(n as Element);
+      }
+    }
+  };
+  visit(slide);
+  const candidates: BadgeCorner[] = [
+    { h: preferred, v: "bottom" },
+    { h: other, v: "bottom" },
+    { h: preferred, v: "top" },
+    { h: other, v: "top" },
+  ];
+  // A little breathing room around the badge counts as covered too.
+  const padX = box.mx * 0.5;
+  const padY = box.my * 0.5;
+  let best = fallback;
+  let bestArea = Infinity;
+  for (let c = 0; c < candidates.length; c++) {
+    const cand = candidates[c];
+    const x0 = (cand.h === "left" ? box.mx : 1 - box.mx - box.w) - padX;
+    const y0 = (cand.v === "top" ? box.my : 1 - box.my - box.h) - padY;
+    const x1 = x0 + box.w + padX * 2;
+    const y1 = y0 + box.h + padY * 2;
+    let area = 0;
+    for (let k = 0; k < rects.length; k++) {
+      const r = rects[k];
+      const ix = Math.min(x1, r[0] + r[2]) - Math.max(x0, r[0]);
+      const iy = Math.min(y1, r[1] + r[3]) - Math.max(y0, r[1]);
+      if (ix > 0 && iy > 0) area += ix * iy;
+    }
+    if (area === 0) return cand;
+    if (area < bestArea) {
+      bestArea = area;
+      best = cand;
+    }
+  }
+  return best;
+}
+
+/**
+ * Script for the server PDF / PNG exports (run with page.evaluate after the
+ * fonts settle): moves every slide's badge to its free corner.
+ */
+export function freeBadgePlacementScript(lang: BrandLang, dims: SlideDims): string {
+  const box = JSON.stringify(watermarkBox(dims));
+  const side = JSON.stringify(watermarkSide(lang));
+  const m = watermarkGeometry(dims).margin;
+  // Some bundlers wrap inner functions in a __name(fn, "name") helper that
+  // only exists in the bundle; the stand-in keeps the source text runnable.
+  return `(() => {
+  const __name = (fn) => fn;
+  const pick = ${pickBadgeCorner.toString()};
+  const slides = document.querySelectorAll(".hx-slide");
+  for (let i = 0; i < slides.length; i++) {
+    const badge = slides[i].querySelector("[data-tq-badge]");
+    if (!badge) continue;
+    const c = pick(slides[i], ${box}, ${side});
+    badge.style.left = ""; badge.style.right = ""; badge.style.top = ""; badge.style.bottom = "";
+    badge.style[c.h] = "${m}px";
+    badge.style[c.v] = "${m}px";
+  }
+})()`;
+}
+
 /** Badge geometry in slide pixels, proportional to the slide's short side. */
 export function watermarkGeometry(dims: SlideDims) {
   const unit = Math.min(dims.width, dims.height);
@@ -100,7 +240,7 @@ export function wordmarkSvg(width: number, fill: string = BRAND.text): string {
 export function watermarkHtml(
   lang: BrandLang,
   dims: SlideDims,
-  opts: { cover?: boolean } = {},
+  opts: { cover?: boolean; corner?: BadgeCorner } = {},
 ): string {
   // No mark on the cover (2026-10-04): the slide people care most about.
   if (opts.cover) return "";
@@ -118,8 +258,8 @@ export function watermarkHtml(
     gap: Math.round(base.gap * k),
     fontSize: Math.round(base.fontSize * k),
   };
-  const side = watermarkSide(lang);
-  return `<div data-tq-badge dir="ltr" style="position:absolute;${side}:${g.margin}px;bottom:${g.margin}px;height:${g.height}px;display:flex;align-items:center;gap:${g.gap}px;padding:0 ${g.padX}px 0 ${Math.round(g.padX * 0.55)}px;border-radius:${g.height}px;background:rgba(10,10,10,0.6);opacity:${WATERMARK_OPACITY};font-family:'Cairo',sans-serif;font-size:${g.fontSize}px;line-height:1;white-space:nowrap;color:${BRAND.text};z-index:2147483646">${barsIconSvg(g.icon)}<span style="font-weight:600">${esc(WATERMARK_TEXT)}</span><span style="font-weight:800;margin-inline-start:-${Math.round(g.gap * 0.6)}px">${esc(WATERMARK_BRAND)}</span></div>`;
+  const corner = opts.corner ?? defaultBadgeCorner(lang);
+  return `<div data-tq-badge dir="ltr" style="position:absolute;${corner.h}:${g.margin}px;${corner.v}:${g.margin}px;height:${g.height}px;display:flex;align-items:center;gap:${g.gap}px;padding:0 ${g.padX}px 0 ${Math.round(g.padX * 0.55)}px;border-radius:${g.height}px;background:rgba(10,10,10,0.6);opacity:${WATERMARK_OPACITY};font-family:'Cairo',sans-serif;font-size:${g.fontSize}px;line-height:1;white-space:nowrap;color:${BRAND.text};z-index:2147483646">${barsIconSvg(g.icon)}<span style="font-weight:600">${esc(WATERMARK_TEXT)}</span><span style="font-weight:800;margin-inline-start:-${Math.round(g.gap * 0.6)}px">${esc(WATERMARK_BRAND)}</span></div>`;
 }
 
 /** Closing-slide geometry in slide pixels. */
@@ -151,6 +291,7 @@ export function closingSlideHtml(lang: BrandLang, dims: SlideDims): string {
 export function watermarkImage(
   lang: BrandLang,
   dims: SlideDims,
+  corner: BadgeCorner = defaultBadgeCorner(lang),
 ): { src: string; x: number; y: number; width: number; height: number } {
   const base = watermarkGeometry(dims);
   const h = Math.round(base.height * 0.8);
@@ -168,11 +309,11 @@ export function watermarkImage(
     `<text x="${textX}" y="${Math.round(h / 2)}" dominant-baseline="central" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" fill="#FFFFFF">` +
     `<tspan font-weight="600">${esc(WATERMARK_TEXT)} </tspan><tspan font-weight="800">${esc(WATERMARK_BRAND)}</tspan></text>` +
     `</g></svg>`;
-  const x = watermarkSide(lang) === "left" ? base.margin : dims.width - base.margin - width;
+  const x = corner.h === "left" ? base.margin : dims.width - base.margin - width;
   return {
     src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
     x,
-    y: dims.height - base.margin - h,
+    y: corner.v === "top" ? base.margin : dims.height - base.margin - h,
     width,
     height: h,
   };

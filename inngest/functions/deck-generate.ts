@@ -1159,7 +1159,7 @@ function buildFreeBrandingBlock(brief: unknown): string[] {
   if (!fb?.corner) return [];
   return [
     ``,
-    `RESERVED CORNER: the system draws a small branding badge in the BOTTOM-${fb.corner.toUpperCase()} corner of every slide (about 360 x 70 px at 1920 x 1080 scale, plus margin; on the COVER it is wider, about 900 x 90 px, because it carries a slogan). Keep that corner EMPTY on every slide: put the slide number / pagination and any footer content elsewhere (another corner or the top), never under the badge.`,
+    `RESERVED CORNER: the system draws a small branding badge in the BOTTOM-${fb.corner.toUpperCase()} corner of every slide except the cover (about 360 x 70 px at 1920 x 1080 scale, plus margin). Keep that corner EMPTY on every slide: put the slide number / pagination and any footer content elsewhere (another corner or the top), never under the badge. This overrides a source or template layout: when redesigning an existing slide whose footer, page number or label sits in that corner, move it to the other bottom corner or the top; keep its words.`,
   ];
 }
 
@@ -1482,9 +1482,14 @@ function buildSourceTextDirective(
       ``,
       `VISUAL HANDLING — placeholders over redraws (saves time, looks honest):`,
       `  • LOGOS / BRAND MARKS — never recreate. If anything in a slide image looks like a logo, brand mark, monogram, or stylized identifier, do NOT draw it in SVG (approximations look off and bloat the output). Two options: (a) brand name is readable as text → styled text matching the weight/colour you can read; (b) otherwise → a styled placeholder <div> with a short label (the brand name if readable, else "Logo"). The user swaps it post-generation.`,
+      // 2026-10-06: the user's own pictures never reach the redesign (source
+      // asset extraction was removed 2026-05-25), so a photo placeholder is
+      // marked data-photoslot and the studio offers "Upload yours" on it.
+      // Maps, screenshots and real documents are never AI-generated.
       isImagesMode(event)
-        ? `  • PHOTOS / photographic content → images mode is ON: recreate them as generated-image boxes per ENHANCE IMAGES in the system rules; drop purely-decorative filler.`
-        : `  • PHOTOS / photographic content → styled placeholder <div> describing the subject ("Photo: portrait of CEO", "Photo: factory floor"). Use the palette for its background; drop purely-decorative filler.`,
+        ? `  • PHOTOS / photographic content → images mode is ON: recreate generic photos as generated-image boxes per ENHANCE IMAGES in the system rules; drop purely-decorative filler. MAPS, satellite imagery, SCREENSHOTS, scanned documents and photos of specific real people or places are NOT generated: use the photo slot below instead.`
+        : `  • PHOTOS / photographic content → a PHOTO SLOT (below); drop purely-decorative filler.`,
+      `  • PHOTO SLOT = a styled placeholder <div data-photoslot="<what the original shows, in the deck's language>"> with an explicit width and height matching the original picture's place in the layout, the palette for its background, and that same short description visible inside it ("Photo: portrait of CEO", "Map: route from A to B"). Exactly one element per picture, with no other content inside it besides the description. The user drops their original picture into it in the editor.`,
       `  • COMPLEX CHARTS / DIAGRAMS (multi-series charts, org/flow charts, custom illustrations) → styled placeholder block with the title + any axis labels you can read. Do not reconstruct the data graphically.`,
       `  • SIMPLE ICONS (arrows, checkmarks, stars, Lucide-style strokes) → inline <svg> in your usual clean style.`,
       `  • DECORATIVE shapes that carry no meaning → skip them. The redesign is the priority.`,

@@ -32,6 +32,7 @@ import { TeaserLockCanvas } from "@/components/preview/TeaserLockCanvas";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import { SlideEditor } from "@/components/preview/editor/SlideEditor";
 import { StylePill } from "@/components/preview/editor/StylePill";
+import { PhotoSlotOverlay, PHOTO_SLOT_SELECTOR } from "@/components/preview/editor/PhotoSlotOverlay";
 import { GenImageFailedOverlay } from "@/components/preview/editor/GenImageFailedOverlay";
 import { LayersPanel } from "@/components/preview/editor/LayersPanel";
 import { GenChatPanel } from "@/components/preview/GenChatPanel";
@@ -1861,6 +1862,35 @@ export function DeckView({
         return next;
       });
       const sec = img.closest("section") as HTMLElement | null;
+      const key = focusedSlideKeyFromRefs();
+      if (sec && key) handleSlideEdit(key, serializeSlideSection(sec));
+    },
+    [editorDoc, focusedSlideKeyFromRefs, handleSlideEdit],
+  );
+
+  // The edit-mode slide the free badge keeps clear of (FreeWatermarkLayer).
+  const getEditorSlide = useCallback(
+    () => editorDoc?.querySelector("section") ?? null,
+    [editorDoc],
+  );
+
+  // Enhance photo slot (2026-10-06) → the user's own picture: an <img> fills
+  // the slot edge to edge, the slot's description + marker go, and the slide
+  // saves. The slot keeps its own size, radius and position.
+  const handleUploadForPhotoSlot = useCallback(
+    (index: number, url: string) => {
+      if (!editorDoc) return;
+      const slot = editorDoc.querySelectorAll<HTMLElement>(PHOTO_SLOT_SELECTOR)[index];
+      if (!slot) return;
+      const img = editorDoc.createElement("img");
+      img.setAttribute("src", url);
+      img.setAttribute("alt", slot.getAttribute("data-photoslot") ?? "");
+      img.setAttribute("style", "display:block;width:100%;height:100%;object-fit:cover;");
+      slot.replaceChildren(img);
+      slot.removeAttribute("data-photoslot");
+      slot.style.padding = "0";
+      slot.style.overflow = "hidden";
+      const sec = slot.closest("section") as HTMLElement | null;
       const key = focusedSlideKeyFromRefs();
       if (sec && key) handleSlideEdit(key, serializeSlideSection(sec));
     },
@@ -5843,6 +5873,11 @@ export function DeckView({
                 onUpload={handleUploadForFailed}
               />
             ) : null}
+            {/* "Upload yours" over enhance photo slots - same gating as the
+                failed-image overlay. */}
+            {!generating && editMode && studioMode === "edit" && !commentMode && !editingDisabled && editorDoc ? (
+              <PhotoSlotOverlay editorDoc={editorDoc} onUpload={handleUploadForPhotoSlot} />
+            ) : null}
           </div>
 
 
@@ -5978,7 +6013,12 @@ export function DeckView({
                   chrome, never inside the iframe <section>, so the layers
                   panel / serialize / bake can't see it. */}
               {brandingWatermark && !brandFocusActive ? (
-                <FreeWatermarkLayer lang={brandLang} dims={brandDims} cover={focusedIndex === 0} />
+                <FreeWatermarkLayer
+                  lang={brandLang}
+                  dims={brandDims}
+                  cover={focusedIndex === 0}
+                  getSlide={getEditorSlide}
+                />
               ) : null}
             </div>
           ) : !generating && canComment && !isFocusedRegenerating ? (

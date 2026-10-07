@@ -13,7 +13,15 @@ import {
 } from "@/lib/export/bidi-postprocess";
 import { extractGradientIntents } from "@/lib/export/gradient-text";
 import { compressPptxMedia } from "@/lib/export/compress-pptx-media";
-import { watermarkGeometry, watermarkImage, watermarkSide } from "@/lib/export/free-branding";
+import {
+  defaultBadgeCorner,
+  pickBadgeCorner,
+  watermarkBox,
+  watermarkGeometry,
+  watermarkImage,
+  watermarkSide,
+  type BadgeCorner,
+} from "@/lib/export/free-branding";
 import {
   embedConvertedFontsInPptx,
   type ConvertedFont,
@@ -703,6 +711,26 @@ export async function exportManifestAsPptx(
       throw new Error("html-export: no slide nodes rendered");
     }
 
+    // Free plan, editable PPTX (2026-10-06): move each slide's watermark
+    // picture to a corner the slide's own content leaves free (the same
+    // pickBadgeCorner the studio and the server exports use), and remember
+    // it so the clickable link lands on the picture.
+    const badgeCorners: (BadgeCorner | null)[] = slideNodes.map(() => null);
+    if (freeWatermark && opts?.freeWatermark) {
+      const wmLang = opts.freeWatermark;
+      const wmDims = { width: canvasW, height: canvasH };
+      const box = watermarkBox(wmDims);
+      slideNodes.forEach((node, i) => {
+        const img = node.querySelector<HTMLElement>("[data-tq-watermark]");
+        if (!img) return;
+        const corner = pickBadgeCorner(node, box, watermarkSide(wmLang));
+        const placed = watermarkImage(wmLang, wmDims, corner);
+        img.style.left = `${placed.x}px`;
+        img.style.top = `${placed.y}px`;
+        badgeCorners[i] = corner;
+      });
+    }
+
     // Mixed-script siblings inside a flex/grid container: Claude often
     // writes <div class="row" style="display:flex"><div>Arabic<em>English</em></div></div>
     // where the Arabic is a direct text node and the English is the only
@@ -872,6 +900,7 @@ export async function exportManifestAsPptx(
           slideNodes.length,
           manifest.language === "en" ? "en" : "ar",
           { width: canvasW, height: canvasH },
+          badgeCorners,
         );
       } catch (err) {
         if (typeof console !== "undefined") {
@@ -944,9 +973,10 @@ async function addFreeFileCredits(
   slideCount: number,
   lang: "ar" | "en",
   canvas: { width: number; height: number },
+  corners: (BadgeCorner | null)[] = [],
 ): Promise<Blob> {
   const zip = await JSZip.loadAsync(blob);
-  await addWatermarkLinks(zip, slideCount, lang, canvas);
+  await addWatermarkLinks(zip, slideCount, lang, canvas, corners);
   const appPath = "docProps/app.xml";
   const app = await zip.file(appPath)?.async("string");
   if (app) {
@@ -979,6 +1009,7 @@ async function addWatermarkLinks(
   slideCount: number,
   lang: "ar" | "en",
   canvas: { width: number; height: number },
+  corners: (BadgeCorner | null)[] = [],
 ): Promise<void> {
   const pres = await zip.file("ppt/presentation.xml")?.async("string");
   const sz = pres?.match(/<p:sldSz[^>]*\bcx="(\d+)"[^>]*\bcy="(\d+)"/);
@@ -990,10 +1021,17 @@ async function addWatermarkLinks(
   const base = watermarkGeometry(canvas);
   const h = Math.round(base.height * 0.8);
   const w = Math.round(h * 5.8);
-  const x = watermarkSide(lang) === "left" ? base.margin : canvas.width - base.margin - w;
-  const y = canvas.height - base.margin - h;
+  // Per slide: the corner the picture was moved to (image-slide decks have
+  // none recorded and keep the default corner).
+  const placeFor = (n: number) => {
+    const c = corners[n - 1] ?? defaultBadgeCorner(lang);
+    return {
+      x: c.h === "left" ? base.margin : canvas.width - base.margin - w,
+      y: c.v === "top" ? base.margin : canvas.height - base.margin - h,
+    };
+  };
   const url = `https://taqreer.ai/${lang}?utm_source=pptx&amp;utm_medium=watermark`;
-  const shape =
+  const shapeAt = (x: number, y: number) =>
     `<p:sp><p:nvSpPr><p:cNvPr id="${WATERMARK_LINK_SHAPE_ID}" name="taqreer"><a:hlinkClick r:id="rIdTqLink"/></p:cNvPr><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
     `<p:spPr><a:xfrm><a:off x="${Math.round(x * emu)}" y="${Math.round(y * emu)}"/><a:ext cx="${Math.round(w * emu)}" cy="${Math.round(h * emu)}"/></a:xfrm>` +
     `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="FFFFFF"><a:alpha val="0"/></a:srgbClr></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr></p:sp>`;
@@ -1005,7 +1043,8 @@ async function addWatermarkLinks(
     const slide = await zip.file(slidePath)?.async("string");
     const rels = await zip.file(relsPath)?.async("string");
     if (!slide || !rels || !slide.includes("</p:spTree>") || rels.includes("rIdTqLink")) continue;
-    zip.file(slidePath, slide.replace("</p:spTree>", `${shape}</p:spTree>`));
+    const { x, y } = placeFor(n);
+    zip.file(slidePath, slide.replace("</p:spTree>", `${shapeAt(x, y)}</p:spTree>`));
     zip.file(relsPath, rels.replace("</Relationships>", `${rel}</Relationships>`));
   }
 }

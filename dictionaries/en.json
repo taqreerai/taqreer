@@ -2170,6 +2170,7 @@
       "regenHint": "Counts as one image",
       "generate": "Generate"
     },
+    "photoSlot": { "upload": "Upload your picture", "uploading": "Uploading…", "hint": "Put the picture from your original file here" },
     "imageFailed": {
       "title": "Image could not be generated",
       "hint": "The description may include sensitive or copyrighted content. Select the image to edit its description, or try again.",
