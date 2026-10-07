@@ -173,6 +173,15 @@ Name templates by stage ("درس المرحلة الابتدائية"), Arabic f
 
 ## Pending work (owner decides order)
 
+000. **Excel / CSV upload in /create (decided 2026-10-06, owner).** The separate
+    /datasheet tool has no search demand (OpenSEO, Saudi Arabia: "تحويل اكسل الى
+    بوربوينت" unmeasurable; "رسم بياني" 2,900 is graph-paper / school intent; US
+    "excel to powerpoint" 170). It stays unlisted (not in the sidebar, dashboard or
+    the "Or try" row). Plan: let /create's upload accept .xlsx/.csv and reuse the
+    datasheet parser (/api/datasheet/parse, source kind "data") so a spreadsheet
+    makes a chart deck inside the main tool. Check first that deck-generate handles
+    it cleanly. Retiring /datasheet is a separate decision.
+
 00. **Unify every creation tool on the /create wizard (decided 2026-10-06, owner).**
     Extract the shared shell from `/create` (header + rail + hint, full width, Design
     grids, Brand step, sticky bar, visitor sign-up) and rebuild enhance, mimic, social,
@@ -186,7 +195,7 @@ Name templates by stage ("درس المرحلة الابتدائية"), Arabic f
     "Auto" = the reference's colours / settings) and open to visitors (route group
     `(open)`, both files kept in the browser). Social done too: 4 steps (topic + product
     photo / social styles full width via `SocialStyleGrid` / brand / platform, size,
-    count, AI photos) and open to visitors. Next: datasheet.**
+    count, AI photos) and open to visitors. Datasheet NOT unified: see item 000.**
     Mapping: enhance = file+instructions / templates / brand / AI photos; mimic =
     content / reference upload / brand / settings; social = topic+product photo /
     social styles / brand / format+count+photos; datasheet = spreadsheet / deck styles /
