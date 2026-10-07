@@ -379,14 +379,14 @@
   },
   "redesign": {
     "meta": {
-      "title": "Professional PowerPoint Design with AI | taqreer.ai",
-      "description": "Upload your old presentation and taqreer.ai redesigns it with AI, keeping your content and images, applying your brand, in Arabic and English, ready to edit and export."
+      "title": "Redesign PowerPoint with AI | taqreer.ai",
+      "description": "Redesign your PowerPoint with AI: upload your old deck and taqreer.ai redesigns it in your brand, keeping your text exactly as it is. Ready to edit and export."
     },
     "breadcrumb": "Redesign",
     "hero": {
       "eyebrow": "Enhance",
-      "title": "Professional PowerPoint design with AI",
-      "subtitle": "Upload an existing deck in PDF or PowerPoint, and taqreer.ai redesigns it with your brand while keeping your content and images, in Arabic and English.",
+      "title": "Redesign PowerPoint with AI",
+      "subtitle": "Upload an existing deck in PDF or PowerPoint, and taqreer.ai redesigns it with your brand while keeping your text exactly as it is, in Arabic and English.",
       "cta": "Try it free"
     },
     "preview": {
@@ -397,7 +397,7 @@
       "title": "Why taqreer.ai",
       "subtitle": "A new design, the same content.",
       "points": [
-        { "title": "Keeps your content", "body": "taqreer.ai extracts your text and images from the file and redesigns them, without losing anything." },
+        { "title": "Keeps your content", "body": "taqreer.ai reads every slide's text from your file and redesigns it without dropping or adding anything, and marks each picture's spot so you can drop your original back in with one click." },
         { "title": "Your brand", "body": "Applies your colors, fonts, and logo to every slide automatically." },
         { "title": "Arabic-first", "body": "Full right-to-left support and Arabic fonts." },
         { "title": "Edit and export", "body": "Tweak any slide in the editor, then export to PowerPoint and PDF." }
@@ -406,12 +406,12 @@
     "faq": [
       { "q": "How do I redesign a presentation with AI?", "a": "Upload your deck in PDF or PowerPoint, choose your brand, and the AI redesigns every slide while keeping your content, in minutes." },
       { "q": "Which file formats are supported?", "a": "taqreer.ai supports uploading decks in PDF and PowerPoint (PPTX)." },
-      { "q": "Does it keep my text and images?", "a": "Yes. taqreer.ai extracts the text, images, and fonts from your file and redesigns them in a new deck without losing content." },
+      { "q": "Does it keep my text and images?", "a": "Your text stays word for word. For pictures, the new design marks each picture's spot, and you upload your original into it with one click in the editor, or turn on smart photos to generate new ones that fit each slide." },
       { "q": "Can I export to PowerPoint?", "a": "Yes. You export the redesigned deck as an editable PPTX for PowerPoint on every plan, with the Arabic formatting preserved." }
     ],
     "article": {
       "title": "Professional PowerPoint design for your existing deck",
-      "intro": "Have a deck with the content ready but a dated or cluttered design? Instead of hiring a designer or rebuilding every slide yourself, taqreer.ai redesigns your deck with AI: it keeps your text and images and gives every slide a professional design in your brand.",
+      "intro": "Have a deck with the content ready but a dated or cluttered design? Instead of hiring a designer or rebuilding every slide yourself, taqreer.ai redesigns your deck with AI: it keeps your text exactly as it is and gives every slide a professional design in your brand.",
       "sections": [
         {
           "heading": "How to redesign a PowerPoint deck",
@@ -420,7 +420,7 @@
               "steps": [
                 "Open the page to enhance an existing deck and upload your PowerPoint or PDF.",
                 "Choose your brand: your colors, fonts, and logo.",
-                "Click create, and the AI redesigns every slide while keeping its content and images.",
+                "Click create, and the AI redesigns every slide while keeping its text, then you put your original pictures back in their spots with one click.",
                 "Review and adjust the result in the [editor](/powerpoint-online), then export to PowerPoint."
               ]
             },
@@ -864,12 +864,12 @@
         { "title": "A new design for every slide", "body": "Instead of copying PDF pages as they are, the AI redesigns your content into clear, consistent slides." },
         { "title": "Fully editable", "body": "Real text and shapes in PowerPoint, not pictures of your pages, so every detail is easy to change." },
         { "title": "Arabic done right", "body": "Right-to-left text and alignment stay correct after you export to PowerPoint." },
-        { "title": "Keep an existing deck's content", "body": "Have an old deck saved as a PDF? Redesign it while keeping its text and images." }
+        { "title": "Keep an existing deck's content", "body": "Have an old deck saved as a PDF? Redesign it while keeping its text exactly as it is." }
       ]
     },
     "faq": [
       { "q": "How do I convert a PDF to PowerPoint?", "a": "Upload your PDF to taqreer.ai, choose your brand, and the AI designs a PowerPoint deck from its content that you can edit and export as PPTX." },
-      { "q": "Does it copy the PDF pages exactly?", "a": "No. taqreer.ai does not copy pages one to one. It reads the content and designs it again as presentation slides. To keep an existing deck's content and images, use Redesign a deck." },
+      { "q": "Does it copy the PDF pages exactly?", "a": "No. taqreer.ai does not copy pages one to one. It reads the content and designs it again as presentation slides. To keep an existing deck's text exactly as it is, use Redesign a deck." },
       { "q": "Does it work with Arabic PDFs?", "a": "Yes. taqreer.ai is Arabic-first and keeps right-to-left text direction in the deck." },
       { "q": "Can I edit the deck after converting?", "a": "Yes. Edit any slide in the editor, then export to PowerPoint or PDF." }
     ],
@@ -897,7 +897,7 @@
           "heading": "Convert the file or redesign the deck?",
           "blocks": [
             "If your PDF is a report, research paper, or long notes, create a new deck from it as in the steps above: the AI summarizes the content and spreads it across slides with clear headings and bullet points.",
-            "If your PDF was a presentation to begin with, such as an old deck saved as a PDF, use [Redesign a deck](/redesign): taqreer.ai keeps each slide's content and images and redesigns it to look clearer and more modern. If your content is in a Word document, try [Word to PowerPoint](/word-to-powerpoint)."
+            "If your PDF was a presentation to begin with, such as an old deck saved as a PDF, use [Redesign a deck](/redesign): taqreer.ai keeps each slide's text and redesigns it to look clearer and more modern. If your content is in a Word document, try [Word to PowerPoint](/word-to-powerpoint)."
           ]
         },
         {
@@ -1879,7 +1879,7 @@
         "auto": "Auto", "custom": "Custom", "slideNumbering": "Slide numbering"
       },
       "create": { "title": "Create a new presentation", "subtitle": "Write your content or upload a file, pick your brand identity, and we'll build a deck that matches your taste.", "cta": "Create deck", "designStyle": "Design style", "professional": "Professional", "creative": "Creative" },
-      "enhance": { "title": "Enhance your current deck", "subtitle": "Upload an existing deck and we'll redesign it with your brand identity while preserving your content.", "cta": "Enhance deck", "originalFile": "Original file", "dropTitle": "Drag your deck file here", "dropHint": "PPTX / PDF · up to 100 MB", "extractNote": "We'll extract text, images, and fonts from your file automatically.", "uploadLogoOptional": "Upload your logo (optional)" },
+      "enhance": { "title": "Enhance your current deck", "subtitle": "Upload an existing deck and we'll redesign it with your brand identity while preserving your content.", "cta": "Enhance deck", "originalFile": "Original file", "dropTitle": "Drag your deck file here", "dropHint": "PPTX / PDF · up to 100 MB", "extractNote": "We'll read your file's text, colors, and fonts automatically.", "uploadLogoOptional": "Upload your logo (optional)" },
       "mimic": { "title": "Your own template", "subtitle": "Attach a deck you like and we'll use it as the template for your new content.", "cta": "Create deck", "whatWeMimic": "Design reference", "uploadReference": "Upload the reference deck", "extractNote": "We'll extract colors, fonts, and layout from the reference.", "copyText": "Copy text" },
       "datasheet": { "title": "Create a deck from your data", "subtitle": "Turn an Excel or CSV file into a professional deck with the right charts.", "cta": "Create deck", "data": "Data", "uploadData": "Upload the data file", "dropHint": "XLSX / CSV · up to 25 MB", "table": "Table", "chartType": "Chart type", "columns": "Columns", "line": "Line" }
     }
