@@ -6,7 +6,7 @@ lands or a new one starts.
 
 ## State
 
-- **Live (2026-10-08): `main` = `6b7c61c`** (after PR #208 `41b9d2d`): everything below marked "NOT live
+- **Live (2026-10-08): `main` = `fab9ad8`** (after PR #208 `41b9d2d`): everything below marked "NOT live
   yet" / "NOT committed yet" in the 2026-10-07 section is now live.
 - Earlier: `e6bcf86`. Everything in "Batch on dev, 2026-10-06"
   below is live too (deployed 2026-10-07), plus the Oct 7 items in the next section.
@@ -110,7 +110,7 @@ lands or a new one starts.
   the fix: `scripts/fix-unlocked-saved-version.ts` was run on production 2026-10-08
   (2 of 4 unlocked decks repaired). Their dashboard thumbnails may still show the old
   version until re-rendered.
-- **Enhance file swap left Next disabled (fixed 2026-10-08, NOT committed yet):**
+- **Enhance file swap left Next disabled (fixed 2026-10-08, live in `fab9ad8`):**
   picking a second file without removing the first ran the old extraction effect's
   cleanup AFTER `validateAndSetFile` reset `pollCancelledRef`, so the new poll read
   "Cancelled" and fell back to idle silently. The cleanup now only aborts its own run,
