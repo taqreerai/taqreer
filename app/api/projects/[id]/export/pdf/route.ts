@@ -181,7 +181,9 @@ export async function POST(
   // Free-plan decks carry the quiet watermark in PDF too (free trial opened
   // PDF export to free accounts, 2026-10-05).
   const freeBranding =
-    !isPaidPlan(project.user.plan) && project.user.role !== "admin";
+    !isPaidPlan(project.user.plan) &&
+    project.user.role !== "admin" &&
+    project.purchasedAt == null;
   const html = buildHtmlDocumentServer(manifest, {
     printPageBreaks: true,
     watermark: freeBranding,

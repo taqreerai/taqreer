@@ -77,7 +77,20 @@ export async function POST(request: Request) {
     }
 
     // ─── Parse + validate ──────────────────────────────────────────
-    const formData = await request.formData();
+    // A body that arrives cut off (the browser could not read the file
+    // mid-upload, e.g. an iOS Safari file restored from a guest draft, or
+    // the connection dropped) fails to parse: tell the user to attach the
+    // file again instead of a generic 500 (2026-10-08).
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch (err) {
+      console.warn("[extract] unreadable upload body:", err instanceof Error ? err.message : err);
+      return NextResponse.json(
+        { error: "Upload interrupted: the file did not arrive complete. Attach it again." },
+        { status: 400 },
+      );
+    }
     const file = formData.get("file");
     const rawFormat = String(formData.get("format") ?? "16:9");
     const rawKind = String(formData.get("kind") ?? "enhance");

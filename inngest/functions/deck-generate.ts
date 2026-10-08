@@ -2991,6 +2991,16 @@ export const deckGenerate = inngest.createFunction(
         }
 
         if (slides.length === 0) {
+          // No slide markup at all (a refusal, or a prose reply explaining why
+          // it won't write this deck): retrying the same request only declines
+          // again and burns tokens, so fail at once with the DECLINED marker
+          // the status route turns into a "rephrase your request" screen
+          // (2026-10-08). Anything else (malformed markup) keeps retrying.
+          if (message.stop_reason === "refusal" || !rawBuffer.includes("<section")) {
+            throw new NonRetriableError(
+              `DECLINED: the model wrote no slides for this request (stop=${message.stop_reason}).`,
+            );
+          }
           throw new Error(
             `Create-HTML produced no slides (stop=${message.stop_reason}).`,
           );

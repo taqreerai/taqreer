@@ -29,6 +29,13 @@ import { SlideRenderer } from "@/components/slides/SlideRenderer";
 import { FreeWatermarkLayer, BrandedClosingSlide } from "@/components/preview/FreeBranding";
 import { BRANDED_CLOSING_SLIDE } from "@/lib/export/free-branding";
 import { TeaserLockCanvas } from "@/components/preview/TeaserLockCanvas";
+import { DeckPurchaseContext } from "@/lib/billing/deck-purchase-context";
+import {
+  DECK_UNLOCK_BRACKETS,
+  bracketForSlides,
+  teaserTotalSlides,
+} from "@/lib/billing/deck-unlock-brackets";
+import { teaserVisibleForFlow } from "@/lib/credits/cost";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import { SlideEditor } from "@/components/preview/editor/SlideEditor";
 import { StylePill } from "@/components/preview/editor/StylePill";
@@ -187,6 +194,7 @@ type Props = {
   projectTitle: string;
   presentationId: string | null;
   initialProjectStatus: string;
+  initialFailReason?: "declined" | null;
   initialVersionStatus: string | null;
   // Used by the parent page for `key` (forces remount on version change)
   // AND passed through to PreviewActionBar as `currentVersionId` so the
@@ -276,6 +284,11 @@ type Props = {
    */
   teaserLockedCount?: number;
   teaserUnlocked?: boolean;
+  /**
+   * Bought outright (one-time unlock, 2026-10-08): no free watermark on this
+   * deck, and its exports come out clean (DeckPurchaseContext).
+   */
+  deckPurchased?: boolean;
 };
 
 type DerivedStatus = "generating" | "completed" | "failed" | "cancelled";
@@ -402,6 +415,7 @@ export function DeckView({
   projectTitle,
   presentationId,
   initialProjectStatus,
+  initialFailReason = null,
   initialVersionStatus,
   initialVersionId,
   initialSavedVersionId,
@@ -415,10 +429,16 @@ export function DeckView({
   initialIsSocial = false,
   initialMainSidebarWidth = 260,
   initialActiveRegen = null,
-  brandingWatermark = false,
+  brandingWatermark: brandingWatermarkProp = false,
   teaserLockedCount = 0,
   teaserUnlocked = false,
+  deckPurchased = false,
 }: Props) {
+  // One-time unlock bought in THIS session flips the deck clean right away
+  // (the server agrees from the next load: Project.purchasedAt).
+  const [purchasedNow, setPurchasedNow] = useState(false);
+  const deckBought = deckPurchased || purchasedNow;
+  const brandingWatermark = brandingWatermarkProp && !deckBought;
   // Capability flags derived from role — passed/used wherever the
   // UI gates a mutation affordance. View-only sees the deck and
   // can export; comment can also create comments; edit/owner can
@@ -620,6 +640,8 @@ export function DeckView({
     // glitch the user flagged 2026-05-20.
   }, [setSlideVersionPointer]);
   const [projectStatus] = useState(initialProjectStatus);
+  // Declined request (the model wrote no slides): rephrase, don't retry.
+  const [failReason, setFailReason] = useState<"declined" | null>(initialFailReason);
   const [versionStatus, setVersionStatus] = useState<string | null>(initialVersionStatus);
 
   // Pinned canonical version pointer. Seeded from SSR; mutated by the
@@ -2680,6 +2702,18 @@ export function DeckView({
     }
   }, [projectId, notifyTeaserUnlockFailed]);
 
+  // One-time unlock offer for a free owner (2026-10-08): priced by the deck's
+  // planned size (free part + locked tail). null above the last bracket
+  // (subscription only) or when the deck is already bought / not a teaser.
+  const deckUnlockOffer = useMemo(() => {
+    if (!brandingWatermark || role !== "owner" || teaserLockedCount <= 0) return null;
+    const bracket = bracketForSlides(
+      teaserTotalSlides(initialIsSocial ? "social" : "create", teaserLockedCount),
+    );
+    const spec = DECK_UNLOCK_BRACKETS.find((b) => b.key === bracket);
+    return spec ? { projectId, priceCents: spec.priceCents } : null;
+  }, [brandingWatermark, role, teaserLockedCount, initialIsSocial, projectId]);
+
   // The unlock button. A free / unpaid owner opens the UpgradeModal (the unlock
   // fires on subscribe success); a paid owner / admin fires the unlock directly.
   // `brandingWatermark` is the load-time free-owner signal; the endpoint also
@@ -3655,6 +3689,7 @@ export function DeckView({
           // /missing on older in-flight runs (treated as version 0
           // → equal to our initial ref, falls through to length-only).
           streamingManifestVersion?: number | null;
+          failReason?: "declined" | null;
           streamingTheme?: unknown;
           streamingDirection?: "rtl" | "ltr" | null;
           streamingLanguage?: "ar" | "en" | null;
@@ -3785,6 +3820,7 @@ export function DeckView({
           }
         }
         if (data.status === "failed") {
+          if (data.failReason === "declined") setFailReason("declined");
           setPolledFailure(true);
           return;
         }
@@ -4743,20 +4779,31 @@ export function DeckView({
           </span>
           <h1 className="mb-2 text-[26px] font-bold text-foreground">{dict.editor.screen.createFailedTitle}</h1>
           <p className="text-muted mb-6">
-            {retryError || dict.editor.errors.designError}
+            {failReason === "declined"
+              ? dict.editor.errors.declined
+              : retryError || dict.editor.errors.designError}
           </p>
           <div className="flex flex-col justify-center gap-3 sm:flex-row">
-            <button
-              type="button"
-              onClick={handleRetry}
-              disabled={retrying}
-              className="btn-gradient inline-flex items-center justify-center gap-2 px-6 py-3 disabled:opacity-60"
-            >
-              {retrying ? (
-                <span className="spinner h-4 w-4 rounded-full border-2 border-foreground/20 border-t-white" />
-              ) : null}
-              {dict.editor.screen.tryAgain}
-            </button>
+            {failReason === "declined" ? (
+              <Link
+                href={localizedHref(initialIsSocial ? "/social" : "/create", locale)}
+                className="btn-gradient inline-flex items-center justify-center px-6 py-3 no-underline"
+              >
+                {dict.editor.errors.declinedCta}
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={handleRetry}
+                disabled={retrying}
+                className="btn-gradient inline-flex items-center justify-center gap-2 px-6 py-3 disabled:opacity-60"
+              >
+                {retrying ? (
+                  <span className="spinner h-4 w-4 rounded-full border-2 border-foreground/20 border-t-white" />
+                ) : null}
+                {dict.editor.screen.tryAgain}
+              </button>
+            )}
             <Link href={localizedHref("/dashboard", locale)} className="btn-pill px-6 py-3 text-sm no-underline">
               {dict.editor.screen.backHome}
             </Link>
@@ -4898,9 +4945,20 @@ export function DeckView({
     // slide closes — the user sees the writing icon immediately.
   const autoTotalHint =
     progress && progress.estimatedTotal > 0 ? progress.estimatedTotal : 0;
-  const slotCount = initialSlideCountAuto
+  // Teaser (free owner, still locked): the deck shows its FULL length from the
+  // start (owner direction 2026-10-08) - the built part as writing slots and
+  // the locked tail right after it (effectiveTeaserLocked below). The model
+  // declares the planned TOTAL on the cover, so cap the writing slots at the
+  // built part or the tail would show twice.
+  const teaserActive = role === "owner" && !teaserUnlockedState && teaserLockedCount > 0;
+  const teaserBuiltSlots = teaserVisibleForFlow(initialIsSocial ? "social" : "create");
+  const rawSlotCount = initialSlideCountAuto
     ? Math.max(streamingPreview.length + 1, autoTotalHint, 1)
     : placeholders.length;
+  const slotCount =
+    teaserActive && generating
+      ? Math.max(streamingPreview.length, Math.min(rawSlotCount, teaserBuiltSlots), 1)
+      : rawSlotCount;
   // Mix real streamed slides (kind:"slide") into the head of the nav row,
   // padded with placeholders for slots Claude hasn't closed yet. Auto-mode
   // tail: the LAST slot (index === streamingPreview.length) is forced to
@@ -4996,19 +5054,14 @@ export function DeckView({
         draft: bakePendingIds.has(slide.slideId),
       }));
 
-  // Teaser paywall: locked slots appended after the real slides - OWNER +
-  // viewer only (never while generating, never once unlocked). Each slot's
+  // Teaser paywall: locked slots appended after the real slides - OWNER only,
+  // never once unlocked. Shown WHILE generating too (2026-10-08), so the deck's
+  // full length is visible from the start. Each slot's
   // background is a random gradient built from the DECK's own palette under a
   // dark scrim (not a copy of any real slide). Nothing here enters slideJson,
   // so exports / bake / gallery ignore teasers by construction.
   const effectiveTeaserLocked =
-    role === "owner" &&
-    !generating &&
-    !teaserUnlockedState &&
-    teaserLockedCount > 0 &&
-    viewSlides.length > 0
-      ? teaserLockedCount
-      : 0;
+    teaserActive && (generating || viewSlides.length > 0) ? teaserLockedCount : 0;
   const teaserPalette = viewManifest?.theme.palette ?? [];
   const teaserGradients: string[] = [];
   if (effectiveTeaserLocked > 0) {
@@ -5146,6 +5199,7 @@ export function DeckView({
   );
 
   return (
+    <DeckPurchaseContext.Provider value={deckBought}>
     <GenImageProvider value={filledImages}>
     <GenImageFailedProvider value={failedImages}>
     <GenImagePendingProvider value={pendingImages}>
@@ -5256,7 +5310,7 @@ export function DeckView({
         // slot buttons use. `effectiveTeaserLocked` is already gated on owner.
         teaserLocked={effectiveTeaserLocked > 0}
         onTeaserUnlock={handleTeaserUnlock}
-        teaserUnlockBusy={teaserUnlocking}
+        teaserUnlockBusy={teaserUnlocking || generating}
         viewersBySlide={viewersBySlide}
         floating
         collapsed={slidesCollapsed}
@@ -6076,7 +6130,7 @@ export function DeckView({
               <TeaserLockCanvas
                 gradient={teaserGradientFocused}
                 onUnlock={handleTeaserUnlock}
-                unlocking={teaserUnlocking}
+                unlocking={teaserUnlocking || generating}
                 labels={{
                   cta: dict.components.creditGate.teaserUnlockCta,
                   unlocking: dict.components.creditGate.teaserUnlocking,
@@ -6163,6 +6217,7 @@ export function DeckView({
       <UpgradeModal
         open={teaserUpgradeOpen}
         requiredTier="plus"
+        deckUnlock={deckUnlockOffer}
         gateContext={{
           title: dict.components.creditGate.teaserUnlockTitle,
           body: dict.components.creditGate.teaserUnlockBody.replace(
@@ -6170,7 +6225,12 @@ export function DeckView({
             String(teaserLockedCount),
           ),
         }}
-        onSuccess={() => void fireTeaserUnlock()}
+        onSuccess={() => {
+          // Bought this deck (or subscribed): drop the watermark now and start
+          // the unlock; fireTeaserUnlock rides out the webhook lag (402 retry).
+          if (deckUnlockOffer) setPurchasedNow(true);
+          void fireTeaserUnlock();
+        }}
         onClose={() => setTeaserUpgradeOpen(false)}
       />
       {/* One-time "editing is on desktop" hint for phone owners/editors. */}
@@ -6182,5 +6242,6 @@ export function DeckView({
     </GenImagePendingProvider>
     </GenImageFailedProvider>
     </GenImageProvider>
+    </DeckPurchaseContext.Provider>
   );
 }

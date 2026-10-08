@@ -7,7 +7,10 @@
 // setup is saved in THIS browser and restored on return:
 //   - the settings as JSON in localStorage (small, synchronous), and
 //   - the files (content document, logo, uploaded font faces) in IndexedDB,
-//     which holds File/Blob values natively.
+//     stored as their BYTES (name + type + ArrayBuffer), not as File values:
+//     iOS Safari hands back a stored File whose data can no longer be read,
+//     so its upload broke mid-body and /api/extract failed to parse the form
+//     ("Failed to start extraction" right after sign-up, 2026-10-08).
 // The draft expires after DRAFT_TTL_MS and is cleared once consumed. Nothing
 // here ever leaves the browser; uploads happen after sign-in, through the
 // page's normal signed-in paths. Every storage call is wrapped: private
@@ -111,7 +114,48 @@ export type GuestDraftFiles = {
   logo: File | null;
   // keyed `<family>:<face>`
   fonts: Record<string, File>;
+  // A saved file could not be read back (older drafts that stored a File):
+  // it is left out, and the page asks the user to attach it again.
+  lost?: boolean;
 };
+
+// A file as stored in IndexedDB: plain bytes, which every browser restores.
+type StoredFile = { name: string; type: string; lastModified: number; data: ArrayBuffer };
+
+async function toStored(file: File): Promise<StoredFile | null> {
+  try {
+    return { name: file.name, type: file.type, lastModified: file.lastModified, data: await file.arrayBuffer() };
+  } catch {
+    return null;
+  }
+}
+
+function isStoredFile(v: unknown): v is StoredFile {
+  return (
+    typeof v === "object" &&
+    v !== null &&
+    typeof (v as StoredFile).name === "string" &&
+    (v as StoredFile).data instanceof ArrayBuffer
+  );
+}
+
+// A File backed by bytes in memory: legacy entries (stored as File) are read
+// now, so an unreadable one is caught here instead of mid-upload.
+async function toFile(v: unknown): Promise<File | null> {
+  try {
+    if (isStoredFile(v)) {
+      return new File([v.data], v.name, { type: v.type, lastModified: v.lastModified });
+    }
+    if (v instanceof Blob) {
+      const data = await v.arrayBuffer();
+      const name = v instanceof File ? v.name : "file";
+      return new File([data], name, { type: v.type });
+    }
+  } catch {
+    /* unreadable */
+  }
+  return null;
+}
 
 type Stored<T> = { savedAt: number; settings: T };
 
@@ -205,6 +249,18 @@ function openDb(flow: GuestFlow): Promise<IDBDatabase | null> {
 }
 
 async function writeFiles(flow: GuestFlow, files: GuestDraftFiles): Promise<void> {
+  // Read every file's bytes BEFORE the transaction (an IndexedDB transaction
+  // auto-commits across an await).
+  const entries: [string, File][] = [];
+  if (files.content) entries.push(["content", files.content]);
+  if (files.design) entries.push(["design", files.design]);
+  if (files.logo) entries.push(["logo", files.logo]);
+  for (const [key, file] of Object.entries(files.fonts)) entries.push([`font:${key}`, file]);
+  const stored: [string, StoredFile][] = [];
+  for (const [key, file] of entries) {
+    const value = await toStored(file);
+    if (value) stored.push([key, value]);
+  }
   const db = await openDb(flow);
   if (!db) return;
   await new Promise<void>((resolve) => {
@@ -212,12 +268,7 @@ async function writeFiles(flow: GuestFlow, files: GuestDraftFiles): Promise<void
       const tx = db.transaction(STORE, "readwrite");
       const store = tx.objectStore(STORE);
       store.clear();
-      if (files.content) store.put(files.content, "content");
-      if (files.design) store.put(files.design, "design");
-      if (files.logo) store.put(files.logo, "logo");
-      for (const [key, file] of Object.entries(files.fonts)) {
-        store.put(file, `font:${key}`);
-      }
+      for (const [key, value] of stored) store.put(value, key);
       tx.oncomplete = () => resolve();
       tx.onerror = () => resolve();
       tx.onabort = () => resolve(); // e.g. quota: the settings still restore
@@ -232,6 +283,9 @@ async function readFiles(flow: GuestFlow): Promise<GuestDraftFiles> {
   const out: GuestDraftFiles = { content: null, design: null, logo: null, fonts: {} };
   const db = await openDb(flow);
   if (!db) return out;
+  // Collect the raw values first; turn them into Files after the cursor
+  // finishes (reading bytes is async and would end the transaction).
+  const raw: [string, unknown][] = [];
   await new Promise<void>((resolve) => {
     try {
       const tx = db.transaction(STORE, "readonly");
@@ -239,14 +293,7 @@ async function readFiles(flow: GuestFlow): Promise<GuestDraftFiles> {
       req.onsuccess = () => {
         const cursor = req.result;
         if (!cursor) return;
-        const key = String(cursor.key);
-        const value = cursor.value;
-        if (value instanceof File) {
-          if (key === "content") out.content = value;
-          else if (key === "design") out.design = value;
-          else if (key === "logo") out.logo = value;
-          else if (key.startsWith("font:")) out.fonts[key.slice(5)] = value;
-        }
+        raw.push([String(cursor.key), cursor.value]);
         cursor.continue();
       };
       tx.oncomplete = () => resolve();
@@ -256,6 +303,17 @@ async function readFiles(flow: GuestFlow): Promise<GuestDraftFiles> {
     }
   });
   db.close();
+  for (const [key, value] of raw) {
+    const file = await toFile(value);
+    if (!file) {
+      out.lost = true;
+      continue;
+    }
+    if (key === "content") out.content = file;
+    else if (key === "design") out.design = file;
+    else if (key === "logo") out.logo = file;
+    else if (key.startsWith("font:")) out.fonts[key.slice(5)] = file;
+  }
   return out;
 }
 

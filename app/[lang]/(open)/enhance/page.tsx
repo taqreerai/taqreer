@@ -831,6 +831,13 @@ export default function EnhanceContentPage() {
       setStep(mode === "generate" ? ENHANCE_LAST_STEP : Math.min(ENHANCE_LAST_STEP, Math.max(0, d.step)));
       void clearGuestDraft("enhance");
       posthog.capture("create_guest_resumed", { flow: "enhance", mode, hasFile: !!draft.files.content });
+      if (draft.files.lost) {
+        // The saved file could not be read back: attach it again.
+        setStep(0);
+        setError(dict.flows.guestFileLost);
+        posthog.capture("create_guest_file_lost", { flow: "enhance" });
+        return;
+      }
       if (mode === "generate" && draft.files.content) setAutoStart(true);
     })();
     return () => {

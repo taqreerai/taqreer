@@ -21,6 +21,7 @@
 // on exit (try/finally). The store is a module-scoped Map so it
 // survives across the React tree without a Context provider.
 
+import { useDeckPurchased } from "@/lib/billing/deck-purchase-context";
 import { FREE_PLAN_FEATURE_LOCKS } from "@/lib/free-trial";
 import { useState, useSyncExternalStore } from "react";
 import posthog from "posthog-js";
@@ -162,7 +163,10 @@ export function useExportActions({
   // plans and admins export clean. (PPTX is gated while the plan is still
   // unknown, so null never reaches an export.)
   const credits = useCreditBalance();
-  const freeBranding = !!credits && !credits.isAdmin && credits.plan === "free";
+  // A deck bought outright (one-time unlock) exports clean too.
+  const deckPurchased = useDeckPurchased();
+  const freeBranding =
+    !!credits && !credits.isAdmin && credits.plan === "free" && !deckPurchased;
   // Free trial: Google Slides (built from the same PPTX) carries the mark too.
   const freeWatermarkOpts: { freeWatermark?: "ar" | "en" } = freeBranding
     ? { freeWatermark: manifest.language === "en" ? "en" : "ar" }

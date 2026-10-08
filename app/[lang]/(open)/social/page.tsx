@@ -600,11 +600,19 @@ export default function SocialPage() {
       setStep(mode === "generate" ? SOCIAL_LAST_STEP : Math.min(SOCIAL_LAST_STEP, Math.max(0, d.step)));
       void clearGuestDraft("social");
       posthog.capture("create_guest_resumed", { flow: "social", mode });
+      if (draft.files.lost) {
+        // The saved photo could not be read back: attach it again.
+        setStep(0);
+        setError(dict.flows.guestFileLost);
+        posthog.capture("create_guest_file_lost", { flow: "social" });
+        return;
+      }
       if (mode === "generate" && (d.topic ?? "").trim()) setAutoStart(true);
     })();
     return () => {
       aborted = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot on mount; dict is stable for this purpose
   }, [guest]);
 
   // ─── Wizard chrome (2026-10-07: /create's two-step layout) ─────

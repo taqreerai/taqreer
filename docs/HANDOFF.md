@@ -138,6 +138,45 @@ lands or a new one starts.
   Lalezar, Aref Ruqaa for social only (short text). A user pick, a brand kit font or an
   upload always wins. Mimic, template runs, the brand kit editor and datasheet keep
   Noto (`defaultBrandFont`).
+- **One-time deck unlock (2026-10-08, NOT committed yet, needs PR + security review):**
+  a free owner can buy ONE teaser deck instead of subscribing: $4.99 (up to 15
+  slides) / $5.99 (16-30) / $6.99 (31-50), by the deck's planned size (free part +
+  locked tail); above 50 = subscription only. Margins after Stripe + AI cost:
+  ~76% / ~69% / ~61% typical (Sonnet 5.5 generation + Opus 5.5 vision review).
+  - Schema: `DeckPurchase` table + `Project.purchasedAt` (migration
+    `20261008120000_deck_purchases`).
+  - `lib/billing/deck-unlock-brackets.ts` (pure), `lib/billing/deck-unlock.ts`
+    (dispatchTeaserUnlock shared with /unlock, recordDeckPurchase, refundDeckPurchase).
+  - Checkout: `{ projectId }` opens a one-time session for the caller's own still-locked
+    deck; the server picks the price. Webhook: checkout.session.completed and
+    checkout.session.async_payment_succeeded record it + start the comped unlock;
+    charge.refunded (full) brings the watermark back (slides stay).
+  - Entitlement: /unlock, studio watermark (load-project), PDF/PNG export and the
+    client PPTX export (DeckPurchaseContext) treat a bought deck like a paid one.
+  - UI: UpgradeModal shows a "just this presentation" card above the plans.
+  - Owner steps before live: run `npx tsx scripts/stripe-setup-products.ts --live`
+    (creates the 3 prices; the script now chunks lookup_keys by 10), and add
+    `checkout.session.async_payment_succeeded` + `charge.refunded` to the Stripe
+    webhook endpoint's events.
+- **Teaser shows its full length while generating + declined requests (2026-10-08, NOT
+  committed yet):** a free deck's locked slots now appear in the studio from the start
+  (writing slots capped at the built part, unlock button busy until it finishes). When
+  the model writes no slide markup at all (a refusal / prose reply, e.g. a topic it won't
+  write as framed), deck-generate throws a NonRetriable "DECLINED:" error: no retries,
+  and the failed screen (via `lib/project/fail-reason.ts`, status route + load-project
+  `failReason`) says "rephrase your request" with an Edit-the-request link instead of
+  Try again.
+- **Guest files survive sign-up on iOS Safari (2026-10-08, NOT committed yet):** a
+  visitor's attached files were kept in IndexedDB as File values; iOS Safari restores
+  them unreadable, so the post-sign-up upload broke mid-body and /api/extract 500'd
+  ("Failed to parse body as FormData", user samamamrash, iPhone iOS 18.7). The draft
+  now stores bytes (`lib/create/guest-draft.ts`); an older unreadable entry sets
+  `files.lost` and the flow returns to step 1 with "attach it again" (no auto-start).
+  /api/extract answers a cut-off body with a 400 "Upload interrupted"; that and the
+  catch-all "Failed to start extraction" are now localized (`lib/extract/error-codes.ts`).
+- **Local Stripe gotcha seen again (2026-10-08):** a dev server started with the Windows
+  user env `STRIPE_SECRET_KEY` (another test account) creates sessions the pk_test form
+  can't open ("تعذر بدء الدفع"). Restart the preview server; owner to delete that env var.
 - **Now unused (delete or reuse, owner to decide):** `DesignStep` and `BrandStep` in
   `wizard.tsx`, `WizardHead`'s rail / hints props, the `flows.wizard.hints.*` strings.
 

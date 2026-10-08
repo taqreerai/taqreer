@@ -20,6 +20,7 @@
 //   charge.refunded                 → (logged; manual refund handling
 //                                      lands with the admin panel)
 
+import { recordDeckPurchase, refundDeckPurchase } from "@/lib/billing/deck-unlock";
 import { rewardInviterOnFirstPayment } from "@/lib/referral";
 import { NextResponse } from "next/server";
 import type Stripe from "stripe";
@@ -136,7 +137,34 @@ export async function POST(request: Request) {
         );
         if (!prismaUserId || !grant) break;
 
-        if (grant.kind === "topup") {
+        if (grant.kind === "deck_unlock") {
+          // One-time unlock of ONE deck (2026-10-08): record it, drop the
+          // deck's watermark and start the comped unlock (idempotent on the
+          // session id; the deck must be the buyer's).
+          const projectId =
+            (session.metadata as Record<string, string>)?.projectId ?? null;
+          if (projectId) {
+            const res = await recordDeckPurchase({
+              prismaUserId,
+              projectId,
+              bracket: grant.bracket,
+              sessionId: session.id,
+              paymentStatus: session.payment_status ?? null,
+              paymentIntentId:
+                typeof session.payment_intent === "string"
+                  ? session.payment_intent
+                  : session.payment_intent?.id ?? null,
+              amountCents: session.amount_total ?? null,
+              currency: session.currency ?? null,
+            });
+            if (!res.recorded) {
+              console.error("[stripe] deck purchase not recorded", {
+                sessionId: session.id,
+                reason: res.reason,
+              });
+            }
+          }
+        } else if (grant.kind === "topup") {
           const result = await grantTopup({
             userId: prismaUserId,
             credits: grant.credits,
@@ -208,11 +236,37 @@ export async function POST(request: Request) {
             plan: grant.kind === "subscription" ? grant.plan : undefined,
             cadence: grant.kind === "subscription" ? grant.cadence : undefined,
             credits: grant.kind === "topup" ? grant.credits : undefined,
+            bracket: grant.kind === "deck_unlock" ? grant.bracket : undefined,
             amount:
               session.amount_total != null
                 ? session.amount_total / 100
                 : undefined,
             currency: session.currency ?? undefined,
+          });
+        }
+        break;
+      }
+
+      case "checkout.session.async_payment_succeeded": {
+        // A delayed payment method confirmed after checkout completed (the
+        // completed event arrived with payment_status "unpaid"). Only deck
+        // unlocks need it today: record + unlock once the money is in.
+        const session = event.data.object as Stripe.Checkout.Session;
+        const meta = (session.metadata ?? {}) as Record<string, string>;
+        const grant = parseGrantMetadata(meta);
+        if (grant?.kind === "deck_unlock" && meta.prismaUserId && meta.projectId) {
+          await recordDeckPurchase({
+            prismaUserId: meta.prismaUserId,
+            projectId: meta.projectId,
+            bracket: grant.bracket,
+            sessionId: session.id,
+            paymentStatus: session.payment_status ?? null,
+            paymentIntentId:
+              typeof session.payment_intent === "string"
+                ? session.payment_intent
+                : session.payment_intent?.id ?? null,
+            amountCents: session.amount_total ?? null,
+            currency: session.currency ?? null,
           });
         }
         break;
@@ -401,12 +455,19 @@ export async function POST(request: Request) {
         break;
       }
 
-      case "charge.refunded":
-        // Manual refunds (support-initiated) clawing back granted
-        // credits land with the admin panel (billing plan §9). Logged
-        // only for now so the event is recorded as handled.
+      case "charge.refunded": {
+        // A refunded one-time deck unlock: the deck's watermark returns (the
+        // unlocked slides stay). Credit claw-backs for top-ups / plans land
+        // with the admin panel (billing plan §9); logged only.
+        const charge = event.data.object as Stripe.Charge;
+        const pi =
+          typeof charge.payment_intent === "string"
+            ? charge.payment_intent
+            : charge.payment_intent?.id ?? null;
+        if (pi && charge.refunded) await refundDeckPurchase(pi);
         console.info("[stripe] charge.refunded received", { id: event.id });
         break;
+      }
 
       case "price.created":
       case "price.updated":

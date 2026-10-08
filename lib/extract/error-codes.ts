@@ -14,6 +14,10 @@
 //   conversion_failed — lib/extract/pptx-to-pdf.ts's LibreOffice
 //                       errors ("LibreOffice ... produced no PDF" /
 //                       "LibreOffice conversion failed").
+//   upload_interrupted — POST /api/extract when the multipart body
+//                       arrived cut off ("Upload interrupted").
+//   start_failed      — POST /api/extract's catch-all / enqueue
+//                       failure ("Failed to start extraction").
 // Changing wording at any of those sites means updating the pattern
 // here in the same pass.
 //
@@ -22,7 +26,9 @@
 export type ExtractErrorCode =
   | "file_too_large"
   | "pdf_encrypted"
-  | "conversion_failed";
+  | "conversion_failed"
+  | "upload_interrupted"
+  | "start_failed";
 
 export function classifyExtractError(
   message: string | null | undefined,
@@ -41,6 +47,8 @@ export function classifyExtractError(
   if (/LibreOffice (conversion failed|ran but produced no PDF)/i.test(message)) {
     return "conversion_failed";
   }
+  if (/^Upload interrupted/i.test(message)) return "upload_interrupted";
+  if (/^Failed to start extraction/i.test(message)) return "start_failed";
   return null;
 }
 
@@ -54,6 +62,8 @@ export function localizedExtractError(
     fileTooLarge: string;
     pdfEncrypted: string;
     conversionFailed: string;
+    uploadInterrupted: string;
+    startFailed: string;
   },
   message: string,
 ): string {
@@ -64,6 +74,10 @@ export function localizedExtractError(
       return errors.pdfEncrypted;
     case "conversion_failed":
       return errors.conversionFailed;
+    case "upload_interrupted":
+      return errors.uploadInterrupted;
+    case "start_failed":
+      return errors.startFailed;
     default:
       return message;
   }

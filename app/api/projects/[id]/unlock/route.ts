@@ -17,14 +17,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
-import { sendInngestEventWithRetry, tierForUser } from "@/lib/inngest-helpers";
-import { toJson } from "@/lib/api/regen-helpers";
 import { isPaidPlan } from "@/lib/plan";
-
-// Lowest Opus preset every paid tier affords (plus+ all unlock opus-fast).
-// Matches the pinned regen preset. The unlocked tail is crafted on Opus even
-// for a Plus subscriber, which is the upsell the tease promises.
-const UNLOCK_PRESET = "opus-fast";
+import { dispatchTeaserUnlock } from "@/lib/billing/deck-unlock";
 
 export async function POST(
   _request: Request,
@@ -40,109 +34,29 @@ export async function POST(
   if (access.role !== "owner") {
     return NextResponse.json({ error: "Only the owner can unlock" }, { status: 403 });
   }
-
   const project = await prisma.project.findUnique({
     where: { id },
     select: {
-      id: true,
-      teaserLockedCount: true,
-      teaserUnlockedAt: true,
-      user: { select: { id: true, plan: true, role: true } },
-      presentation: { select: { id: true, currentVersionId: true } },
+      purchasedAt: true,
+      user: { select: { plan: true, role: true } },
     },
   });
-  if (
-    !project ||
-    !project.presentation ||
-    !project.presentation.currentVersionId
-  ) {
+  if (!project) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
-  const presentation = project.presentation;
-  const sourceVersionId = presentation.currentVersionId!;
-
-  // Not a teaser, or already unlocked → nothing to do. Idempotent: a double
-  // click (or a reload-then-click) is a no-op, not a second generation.
-  if (project.teaserLockedCount <= 0 || project.teaserUnlockedAt != null) {
-    return NextResponse.json({ ok: true, alreadyUnlocked: true });
-  }
-
-  // Paid gate on the OWNER (admins comped). A free owner gets a 402 so the
-  // studio opens the UpgradeModal; the client re-fires this endpoint after a
-  // successful subscribe.
-  const ownerPaid =
-    isPaidPlan(project.user.plan) || project.user.role === "admin";
-  if (!ownerPaid) {
+  // Entitlement: a paid owner, an admin (comped), or a one-time purchase of
+  // THIS deck. A free owner who hasn't bought it gets a 402 so the studio
+  // opens the unlock window.
+  const entitled =
+    isPaidPlan(project.user.plan) ||
+    project.user.role === "admin" ||
+    project.purchasedAt != null;
+  if (!entitled) {
     return NextResponse.json({ error: "upgrade_required" }, { status: 402 });
   }
-
-  // Don't double-dispatch: if an unlock job is already in flight (e.g. a
-  // reload-then-click before the first finished), report success and let the
-  // running job land.
-  const inFlight = await prisma.job.findFirst({
-    where: {
-      projectId: id,
-      type: "deck.unlock",
-      status: { in: ["queued", "processing", "running"] },
-    },
-    select: { id: true },
-  });
-  if (inFlight) {
-    return NextResponse.json({ ok: true, alreadyRunning: true });
+  const result = await dispatchTeaserUnlock(id, access.user.prismaId);
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
   }
-
-  let jobId: string | null = null;
-  try {
-    const job = await prisma.job.create({
-      data: {
-        project: { connect: { id: project.id } },
-        type: "deck.unlock",
-        status: "queued",
-        inputJson: toJson({
-          sourceVersionId,
-          lockedCount: project.teaserLockedCount,
-          quality: UNLOCK_PRESET,
-        }),
-        quality: UNLOCK_PRESET,
-      },
-    });
-    jobId = job.id;
-    await sendInngestEventWithRetry({
-      name: "deck.unlock.requested",
-      // Deterministic id so two concurrent unlock POSTs (which can both slip
-      // past the non-transactional in-flight guard above) dedup to ONE run -
-      // Inngest drops duplicate events by id, preventing a duplicate comped
-      // Opus generation. A second telemetry Job row is harmless. Keyed by the
-      // source version so a later legitimate unlock of a new version isn't
-      // wrongly deduped.
-      id: `deck-unlock:${project.id}:${sourceVersionId}`,
-      data: {
-        projectId: project.id,
-        presentationId: presentation.id,
-        sourceVersionId,
-        lockedCount: project.teaserLockedCount,
-        quality: UNLOCK_PRESET,
-        jobId: job.id,
-        actorPrismaUserId: access.user.prismaId,
-        // Processing priority follows the OWNER's tier (they own the deck).
-        tier: await tierForUser(project.user.id),
-      },
-    });
-  } catch (error) {
-    // Best-effort rollback of the telemetry job so a retry is clean.
-    if (jobId) {
-      await prisma.job
-        .delete({ where: { id: jobId } })
-        .catch(() => undefined);
-    }
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error ? error.message : "Failed to dispatch unlock",
-      },
-      { status: 500 },
-    );
-  }
-
-  return NextResponse.json({ ok: true });
+  return NextResponse.json(result);
 }

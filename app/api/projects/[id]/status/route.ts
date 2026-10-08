@@ -1,3 +1,4 @@
+import { generationFailReason } from "@/lib/project/fail-reason";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
@@ -380,5 +381,8 @@ export async function GET(
     // so DeckView clears the teasers in place.
     teaserLockedCount: project.teaserLockedCount,
     teaserUnlocked: project.teaserUnlockedAt != null,
+    // Failed: why, when the user can act on it (a declined request).
+    failReason:
+      inferredStatus === "failed" ? await generationFailReason(id) : null,
   });
 }

@@ -22,7 +22,7 @@ export const LEGAL_META = {
   address: "5830 E 2nd St, Ste 7000, Casper, WY 82609, USA",
   contactEmail: "support@taqreer.ai",
   // Update on publish if the live date differs.
-  effectiveDate: "2026-06-13",
+  effectiveDate: "2026-10-08",
 } as const;
 
 // A block is a paragraph (string) or a bulleted list ({ list }).
@@ -143,6 +143,9 @@ const TERMS_EN: LegalDoc = {
         `By purchasing a subscription you authorize us to charge your payment ` +
           `method on a recurring basis until you cancel. See our Refund Policy for ` +
           `cancellations and refunds.`,
+        `You may also buy a one-time unlock of a single presentation. It is a ` +
+          `single payment, not a subscription, applies only to that presentation, ` +
+          `and is non-refundable once the payment is completed.`,
       ],
     },
     {
@@ -301,6 +304,8 @@ const TERMS_AR: LegalDoc = {
           `ضريبة القيمة المضافة) وتعرض عند الدفع بحسب موقعك، وأنت مسؤول عنها.`,
         `بشرائك اشتراكا فإنك تفوضنا بخصم المبلغ من وسيلة الدفع بشكل متكرر حتى ` +
           `تلغيه. راجع سياسة الاسترداد للإلغاء والاسترداد.`,
+        `يمكنك أيضا شراء فتح عرض واحد بدفعة واحدة. وهي دفعة لمرة واحدة وليست ` +
+          `اشتراكا، وتخص ذلك العرض وحده، وغير قابلة للاسترداد بعد إتمام الدفع.`,
       ],
     },
     {
@@ -635,8 +640,8 @@ const PRIVACY_AR: LegalDoc = {
 const REFUND_EN: LegalDoc = {
   title: "Refund Policy",
   intro:
-    `This Refund Policy explains how cancellations and refunds work for paid plans ` +
-    `and credits on ${BRAND}. It forms part of our Terms & Conditions.`,
+    `This Refund Policy explains how cancellations and refunds work for paid plans, ` +
+    `credits and one-time presentation unlocks on ${BRAND}. It forms part of our Terms & Conditions.`,
   sections: [
     {
       heading: "1. Subscriptions",
@@ -657,7 +662,16 @@ const REFUND_EN: LegalDoc = {
       ],
     },
     {
-      heading: "3. Billing Errors",
+      heading: "3. One-Time Presentation Unlocks",
+      blocks: [
+        `A one-time unlock of a single presentation is non-refundable once the ` +
+          `payment is completed. The remaining slides are generated as soon as you ` +
+          `pay, so the purchase is fulfilled immediately. It is not a subscription ` +
+          `and does not renew.`,
+      ],
+    },
+    {
+      heading: "4. Billing Errors",
       blocks: [
         `If you are charged in error, for example a duplicate charge or a charge ` +
           `after a confirmed cancellation, contact us at ${MAIL} and we will ` +
@@ -666,7 +680,7 @@ const REFUND_EN: LegalDoc = {
       ],
     },
     {
-      heading: "4. Service Failures",
+      heading: "5. Service Failures",
       blocks: [
         `Our credit system automatically releases the hold for a generation that ` +
           `fails before it produces output, so you are not charged credits for a ` +
@@ -675,14 +689,14 @@ const REFUND_EN: LegalDoc = {
       ],
     },
     {
-      heading: "5. Your Statutory Rights",
+      heading: "6. Your Statutory Rights",
       blocks: [
         `Nothing in this Policy limits any non-waivable refund or consumer-protection ` +
           `rights you may have under the law of your country of residence.`,
       ],
     },
     {
-      heading: "6. How to Request",
+      heading: "7. How to Request",
       blocks: [
         `To ask about a charge or request a refund, email ${MAIL} from the address on ` +
           `your account with your account details and the transaction in question.`,
@@ -695,6 +709,7 @@ const REFUND_AR: LegalDoc = {
   title: "سياسة الاسترداد",
   intro:
     `توضح سياسة الاسترداد هذه كيفية عمل الإلغاء والاسترداد للباقات المدفوعة والنقاط ` +
+    `وفتح العروض بدفعة واحدة ` +
     `في ${BRAND}، وهي جزء من الشروط والأحكام. النسخة الإنجليزية هي الملزمة عند أي ` +
     `تعارض.`,
   sections: [
@@ -716,7 +731,15 @@ const REFUND_AR: LegalDoc = {
       ],
     },
     {
-      heading: "3. أخطاء الفوترة",
+      heading: "3. فتح عرض واحد بدفعة واحدة",
+      blocks: [
+        `فتح عرض واحد بدفعة واحدة غير قابل للاسترداد بعد إتمام الدفع، إذ نبدأ ` +
+          `بتصميم بقية الشرائح فور الدفع فيكتمل الشراء مباشرة. وهو ليس اشتراكا ولا ` +
+          `يتجدد.`,
+      ],
+    },
+    {
+      heading: "4. أخطاء الفوترة",
       blocks: [
         `إذا خصم منك مبلغ بالخطأ، مثل خصم مكرر أو خصم بعد إلغاء مؤكد، فتواصل معنا ` +
           `على ${MAIL} وسنحقق ونصحح أخطاء الفوترة الحقيقية، بما في ذلك رد المبالغ ` +
@@ -724,7 +747,7 @@ const REFUND_AR: LegalDoc = {
       ],
     },
     {
-      heading: "4. إخفاق الخدمة",
+      heading: "5. إخفاق الخدمة",
       blocks: [
         `يحرر نظام النقاط لدينا تلقائيا الحجز الخاص بأي عملية إنشاء تفشل قبل أن ` +
           `تنتج مخرجات، فلا تخصم منك نقاط مقابل عملية فاشلة. وإذا رأيت أنه خصمت نقاط ` +
@@ -732,14 +755,14 @@ const REFUND_AR: LegalDoc = {
       ],
     },
     {
-      heading: "5. حقوقك النظامية",
+      heading: "6. حقوقك النظامية",
       blocks: [
         `لا يحد أي بند في هذه السياسة من أي حقوق استرداد أو حماية للمستهلك غير قابلة ` +
           `للتنازل قد تكفلها لك قوانين بلد إقامتك.`,
       ],
     },
     {
-      heading: "6. كيفية الطلب",
+      heading: "7. كيفية الطلب",
       blocks: [
         `للاستفسار عن خصم أو طلب استرداد، راسلنا على ${MAIL} من البريد المسجل في ` +
           `حسابك مع بيانات حسابك والمعاملة المعنية.`,

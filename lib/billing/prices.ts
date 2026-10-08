@@ -16,6 +16,11 @@
 
 import { TIERS, TOPUP_PACKS } from "@/lib/credits/cost";
 import { KNOWN_PLANS, type KnownPlan } from "@/lib/plan";
+import {
+  DECK_UNLOCK_BRACKETS,
+  deckUnlockLookupKey,
+  type DeckUnlockBracket,
+} from "@/lib/billing/deck-unlock-brackets";
 
 export type BillingCadence = "monthly" | "yearly";
 
@@ -23,7 +28,10 @@ export type BillingCadence = "monthly" | "yearly";
 // shape the webhook resolves from price.metadata.
 export type PriceGrant =
   | { kind: "subscription"; plan: KnownPlan; cadence: BillingCadence }
-  | { kind: "topup"; credits: number };
+  | { kind: "topup"; credits: number }
+  // One-time unlock of ONE teaser deck (2026-10-08). The deck's id rides the
+  // Checkout Session metadata (projectId), never the price.
+  | { kind: "deck_unlock"; bracket: DeckUnlockBracket };
 
 export type PriceSpec = {
   lookupKey: string;
@@ -89,6 +97,15 @@ export const BILLING_CATALOG: readonly PriceSpec[] = [
       },
     ];
   }),
+  // One-time deck unlocks - $4.99 / $5.99 / $6.99 by deck size.
+  ...DECK_UNLOCK_BRACKETS.map((b): PriceSpec => ({
+    lookupKey: deckUnlockLookupKey(b.key),
+    productKey: deckUnlockLookupKey(b.key),
+    productName: `Taqreer presentation unlock (up to ${b.maxSlides} slides)`,
+    amount: b.priceCents,
+    currency: "usd",
+    grant: { kind: "deck_unlock", bracket: b.key },
+  })),
   // Top-up packs - one-time.
   ...TOPUP_PACKS.map((pack): PriceSpec => ({
     lookupKey: `topup_${pack.key}`,
@@ -107,9 +124,13 @@ export function specByLookupKey(lookupKey: string): PriceSpec | undefined {
 // Flatten a grant to string metadata (Stripe metadata values are
 // strings). The webhook reverses this via parseGrantMetadata.
 export function grantToMetadata(grant: PriceGrant): Record<string, string> {
-  return grant.kind === "subscription"
-    ? { grantKind: "subscription", plan: grant.plan, cadence: grant.cadence }
-    : { grantKind: "topup", credits: String(grant.credits) };
+  if (grant.kind === "subscription") {
+    return { grantKind: "subscription", plan: grant.plan, cadence: grant.cadence };
+  }
+  if (grant.kind === "deck_unlock") {
+    return { grantKind: "deck_unlock", bracket: grant.bracket };
+  }
+  return { grantKind: "topup", credits: String(grant.credits) };
 }
 
 export function parseGrantMetadata(
@@ -124,6 +145,13 @@ export function parseGrantMetadata(
       (cadence === "monthly" || cadence === "yearly")
     ) {
       return { kind: "subscription", plan: plan as KnownPlan, cadence };
+    }
+    return null;
+  }
+  if (metadata.grantKind === "deck_unlock") {
+    const bracket = metadata.bracket;
+    if (DECK_UNLOCK_BRACKETS.some((b) => b.key === bracket)) {
+      return { kind: "deck_unlock", bracket: bracket as DeckUnlockBracket };
     }
     return null;
   }

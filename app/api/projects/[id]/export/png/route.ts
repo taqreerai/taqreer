@@ -172,7 +172,9 @@ export async function POST(
   // the free plan (admins exempt). Opt-in flag - the bake + thumbnail
   // pipelines share this builder and must stay watermark-free.
   const freeBranding =
-    !isPaidPlan(project.user.plan) && project.user.role !== "admin";
+    !isPaidPlan(project.user.plan) &&
+    project.user.role !== "admin" &&
+    project.purchasedAt == null;
   const html = buildHtmlDocumentServer(manifest, { watermark: freeBranding });
   // Free plan: the branded closing slide (tq-branded-closing) is captured as
   // the last PNG, after the deck's own slides.

@@ -6,6 +6,7 @@
 // future schema add (new column on Project / Presentation / Version) needs one
 // edit, not a copy per surface.
 
+import { generationFailReason } from "@/lib/project/fail-reason";
 import { prisma } from "@/lib/prisma";
 import {
   SlideManifestSchema,
@@ -50,6 +51,8 @@ export type InitialState = {
   projectTitle: string;
   presentationId: string | null;
   initialProjectStatus: string;
+  // Failed generations: why, when the user can act on it ("declined").
+  initialFailReason: "declined" | null;
   initialVersionStatus: string | null;
   initialVersionId: string | null;
   // Pinned canonical version (set by Save Project). Null when
@@ -102,6 +105,8 @@ export type InitialState = {
    * the viewer's) so upgrading removes it from all the owner's decks.
    */
   brandingWatermark: boolean;
+  // Bought outright (one-time unlock, 2026-10-08): no watermark on this deck.
+  deckPurchased: boolean;
   /**
    * Teaser paywall (free-tier conversion). `teaserLockedCount` is the
    * number of locked slots this deck was created with (0 for paid/admin
@@ -446,6 +451,8 @@ export async function loadProject(
       // InitialState.teaserLockedCount / teaserUnlocked).
       teaserLockedCount: true,
       teaserUnlockedAt: true,
+      // One-time unlock purchase: a bought deck carries no free watermark.
+      purchasedAt: true,
       presentation: {
         select: {
           id: true,
@@ -492,6 +499,8 @@ export async function loadProject(
     projectTitle: project.title,
     presentationId: project.presentation?.id ?? null,
     initialProjectStatus: project.status,
+    initialFailReason:
+      project.status === "failed" ? await generationFailReason(projectId) : null,
     initialVersionStatus: version?.status ?? null,
     initialVersionId: version?.id ?? null,
     initialSavedVersionId: project.presentation?.savedVersionId ?? null,
@@ -507,7 +516,10 @@ export async function loadProject(
     initialIsSocial: project.type === "social",
     initialActiveRegen,
     brandingWatermark:
-      !isPaidPlan(project.user.plan) && project.user.role !== "admin",
+      !isPaidPlan(project.user.plan) &&
+      project.user.role !== "admin" &&
+      project.purchasedAt == null,
+    deckPurchased: project.purchasedAt != null,
     teaserLockedCount: project.teaserLockedCount,
     teaserUnlocked: project.teaserUnlockedAt != null,
   };

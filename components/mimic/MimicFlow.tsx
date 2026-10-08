@@ -772,6 +772,13 @@ export default function MimicFlow({
       setStep(mode === "generate" ? MIMIC_LAST_STEP : Math.min(MIMIC_LAST_STEP, Math.max(0, d.step)));
       void clearGuestDraft("mimic");
       posthog.capture("create_guest_resumed", { flow: "mimic", mode, hasFile: !!draft.files.content });
+      if (draft.files.lost) {
+        // A saved file could not be read back: attach it again.
+        setStep(0);
+        setError(dict.flows.guestFileLost);
+        posthog.capture("create_guest_file_lost", { flow: "mimic" });
+        return;
+      }
       if (mode === "generate" && draft.files.design) setAutoStart(true);
     })();
     return () => {

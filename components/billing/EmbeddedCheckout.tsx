@@ -29,9 +29,13 @@ export function EmbeddedCheckout({
   // Modal mode: confirm with redirect:'if_required' and report success
   // to the caller instead of bouncing through /checkout/return.
   onSuccess,
+  // One-time unlock of THIS deck (2026-10-08): the server picks the price
+  // from the deck's size, so the session is opened by deck, not price.
+  projectId,
 }: {
   lookupKey: string;
   onSuccess?: () => void;
+  projectId?: string;
 }) {
   const { locale } = useLocale();
   const router = useRouter();
@@ -48,7 +52,7 @@ export function EmbeddedCheckout({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "same-origin",
-      body: JSON.stringify({ lookupKey, surface }),
+      body: JSON.stringify(projectId ? { projectId, surface } : { lookupKey, surface }),
     });
     if (res.status === 401) {
       router.push(localizedHref("/login", locale));
@@ -58,7 +62,7 @@ export function EmbeddedCheckout({
     const data = (await res.json()) as { clientSecret?: string };
     if (!data.clientSecret) throw new Error("no client secret");
     return data.clientSecret;
-  }, [lookupKey, locale, router, surface]);
+  }, [lookupKey, projectId, locale, router, surface]);
 
   // Provider options are init-only and the appearance reads computed
   // CSS tokens from `document`, so build them AFTER mount (client
@@ -143,7 +147,8 @@ export function EmbeddedCheckout({
   return (
     <CheckoutElementsProvider stripe={getStripe(locale)} options={options}>
       <CheckoutForm
-        isTopup={lookupKey.startsWith("topup_")}
+        // One-time (no "/ month"): top-ups and deck unlocks.
+        isTopup={lookupKey.startsWith("topup_") || !!projectId}
         // Yearly session: the session total is the ANNUAL charge, so the
         // amount + CTA label "/ year" instead of "/ month" - and promo
         // codes are enabled (mirror of the server's allow_promotion_codes

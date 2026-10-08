@@ -81,12 +81,19 @@ async function main() {
     console.log(`product + ${key} -> ${created.id}`);
   }
 
-  // Resolve each Price by lookup_key.
-  const existingPrices = await stripe.prices.list({
-    active: true,
-    limit: 100,
-    lookup_keys: BILLING_CATALOG.map((s) => s.lookupKey),
-  });
+  // Resolve each Price by lookup_key. Stripe allows at most 10 lookup_keys
+  // per list call (the catalog outgrew that with the deck unlocks,
+  // 2026-10-08), so fetch in chunks.
+  const allKeys = BILLING_CATALOG.map((s) => s.lookupKey);
+  const existingPrices = { data: [] as Awaited<ReturnType<typeof stripe.prices.list>>["data"] };
+  for (let i = 0; i < allKeys.length; i += 10) {
+    const page = await stripe.prices.list({
+      active: true,
+      limit: 100,
+      lookup_keys: allKeys.slice(i, i + 10),
+    });
+    existingPrices.data.push(...page.data);
+  }
   for (const spec of BILLING_CATALOG) {
     const productId = productIdByKey.get(spec.productKey);
     const current = existingPrices.data.find((p) => p.lookup_key === spec.lookupKey);

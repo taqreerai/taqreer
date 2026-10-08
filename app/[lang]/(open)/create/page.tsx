@@ -820,6 +820,14 @@ export default function CreatePage() {
         // changed them after picking).
         setColors(Array.isArray(d.colors) ? d.colors.slice(0, MAX_PALETTE) : []);
       }
+      if (draft.files.lost) {
+        // The saved file could not be read back: no auto-start; back to
+        // the content step to attach it again.
+        setStep(0);
+        setError(t.guestFileLost);
+        posthog.capture("create_guest_file_lost", { flow: "create" });
+        return;
+      }
       if (mode === "generate") setAutoStart(true);
     })();
     return () => {

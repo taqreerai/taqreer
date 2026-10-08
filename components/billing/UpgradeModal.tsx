@@ -42,7 +42,12 @@ export function UpgradeModal({
   // shown). The teaser paywall uses it to auto-fire the comped unlock right
   // after subscribe. Existing callers omit it - the modal behaves as before.
   onSuccess,
+  // One-time unlock of THIS deck (2026-10-08): a card above the plans
+  // ("just this presentation, one payment, nothing renews"). Its checkout
+  // is opened by deck; the server prices it by the deck's size.
+  deckUnlock = null,
 }: {
+  deckUnlock?: { projectId: string; priceCents: number } | null;
   open: boolean;
   onClose: () => void;
   requiredTier?: KnownPlan | null;
@@ -125,7 +130,9 @@ export function UpgradeModal({
                     {done
                       ? t.successTitle
                       : lookupKey
-                        ? t.checkoutTitle
+                        ? lookupKey === DECK_UNLOCK_KEY
+                          ? t.deckUnlockTitle
+                          : t.checkoutTitle
                         : gateContext
                           ? gateContext.title
                           : t.title}
@@ -173,7 +180,9 @@ export function UpgradeModal({
                     >
                       check_circle
                     </span>
-                    <p className="text-sm text-muted">{t.successBody}</p>
+                    <p className="text-sm text-muted">
+                      {lookupKey === DECK_UNLOCK_KEY ? t.deckUnlockSuccess : t.successBody}
+                    </p>
                     <button
                       type="button"
                       onClick={onClose}
@@ -186,6 +195,9 @@ export function UpgradeModal({
                   <CheckoutBoundary where="upgrade-modal-checkout">
                     <EmbeddedCheckout
                       lookupKey={lookupKey}
+                      projectId={
+                        lookupKey === DECK_UNLOCK_KEY ? deckUnlock?.projectId : undefined
+                      }
                       onSuccess={() => {
                         setDone(true);
                         onSuccess?.();
@@ -194,6 +206,12 @@ export function UpgradeModal({
                   </CheckoutBoundary>
                 ) : (
                   <CheckoutBoundary where="upgrade-modal-plans">
+                    {deckUnlock ? (
+                      <DeckUnlockOffer
+                        priceCents={deckUnlock.priceCents}
+                        onBuy={() => setLookupKey(DECK_UNLOCK_KEY)}
+                      />
+                    ) : null}
                     <BillingSection variant="modal" minTier={requiredTier} onBuy={(key) => setLookupKey(key)} />
                   </CheckoutBoundary>
                 )}
@@ -204,5 +222,53 @@ export function UpgradeModal({
       ) : null}
     </AnimatePresence>,
     document.body,
+  );
+}
+
+// Sentinel "price" for the one-time deck unlock step (the real price is
+// chosen server-side from the deck).
+const DECK_UNLOCK_KEY = "deck_unlock";
+
+function formatUsd(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+/** "Just this presentation": one payment, no subscription, nothing renews. */
+function DeckUnlockOffer({ priceCents, onBuy }: { priceCents: number; onBuy: () => void }) {
+  const t = useDict().components.upgradeModal;
+  const price = formatUsd(priceCents);
+  return (
+    <div className="mb-6 flex flex-col gap-4">
+      <div className="surface-card flex flex-col gap-4 rounded-2xl border-2 border-[var(--tq-brand-blue)] p-5 md:flex-row md:items-center md:justify-between md:p-6">
+        <div className="flex min-w-0 flex-col gap-2">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h4 className="text-lg font-bold text-foreground">{t.deckUnlockTitle}</h4>
+            <span className="text-2xl font-bold text-foreground" dir="ltr">
+              {price}
+            </span>
+          </div>
+          <p className="text-sm font-medium text-[var(--tq-brand-blue)]">{t.deckUnlockOnce}</p>
+          <ul className="flex flex-col gap-1.5 text-sm text-muted">
+            {t.deckUnlockPoints.map((point: string) => (
+              <li key={point} className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[16px] text-[var(--tq-status-ok-dot)]" aria-hidden>
+                  check
+                </span>
+                {point}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="flex shrink-0 flex-col items-center gap-1.5">
+          <button type="button" onClick={onBuy} className="btn-gradient px-6 py-3 text-sm">
+            {t.deckUnlockCta.replace("{price}", price)}
+          </button>
+          {/* One-time unlocks are non-refundable (owner decision 2026-10-08;
+              Refund Policy section 3), so say so before the payment. */}
+          <p className="text-xs text-muted">{t.deckUnlockNoRefund}</p>
+        </div>
+      </div>
+      <p className="text-center text-sm font-semibold text-foreground">{t.deckUnlockOr}</p>
+    </div>
   );
 }
