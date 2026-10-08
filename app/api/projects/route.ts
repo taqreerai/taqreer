@@ -32,8 +32,9 @@ import { detectImageRegion } from "@/lib/geo/image-region";
 import { preflightGenerate } from "@/lib/credits/preflight";
 import type { Flow as CreditFlow, SlideEstimateInput } from "@/lib/credits/cost";
 import {
-  TEASER_DEFAULT_TOTAL,
+  SOCIAL_AUTO_AIM,
   SOCIAL_MIN_POSTS,
+  teaserDefaultTotalForFlow,
   teaserVisibleForFlow,
   estimateSlides,
   slideCapForFlow,
@@ -941,7 +942,7 @@ export async function POST(request: Request) {
     // The flow's own cap (social carousels stop at 20) bounds the plan, so
     // the comped unlock never writes more than a paid user could create.
     const wanted = Math.min(
-      est.slides ?? TEASER_DEFAULT_TOTAL,
+      est.slides ?? teaserDefaultTotalForFlow(creditFlow),
       slideCapForFlow(creditFlow, getTier("free").slideCap),
     );
     if (wanted > teaserVisible) teaserPlannedTotal = wanted;
@@ -1023,7 +1024,9 @@ export async function POST(request: Request) {
     // abort at holdSlides stays the hard enforcement either way.
     slideCountMode: preflight.exact ? "exact" : "ceiling",
     // Social: the auto ("ceiling") length never goes under the floor.
-    ...(creditFlow === "social" ? { slideCountMin: SOCIAL_MIN_POSTS } : {}),
+    ...(creditFlow === "social"
+      ? { slideCountMin: SOCIAL_MIN_POSTS, slideCountAim: SOCIAL_AUTO_AIM }
+      : {}),
     // Free plan: the badge corner the generator must keep clear
     // (deck-generate buildFreeBrandingBlock). Absent for paid / admin.
     ...(!isFreeTrial

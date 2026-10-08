@@ -118,10 +118,21 @@ export const TEASER_DEFAULT_TOTAL = 10;
 // SOCIAL_TEASER_VISIBLE posts; the rest are locked until the user pays.
 export const SOCIAL_MIN_POSTS = 5;
 export const SOCIAL_TEASER_VISIBLE = 3;
+// Auto social length (owner decision 2026-10-08): about 7 posts (a cover,
+// ~5 content cards, a closing card); the model aims for SOCIAL_AUTO_AIM and
+// goes longer only when the content clearly lists more points. A free auto
+// carousel plans SOCIAL_TEASER_DEFAULT_TOTAL (3 built + 4 locked).
+export const SOCIAL_AUTO_AIM = { min: 6, max: 8 } as const;
+export const SOCIAL_TEASER_DEFAULT_TOTAL = 7;
 
 /** How many slides / posts a free teaser builds for this flow. */
 export function teaserVisibleForFlow(flow: Flow): number {
   return flow === "social" ? SOCIAL_TEASER_VISIBLE : TEASER_VISIBLE_COUNT;
+}
+
+/** The planned length of a free auto deck / carousel for this flow. */
+export function teaserDefaultTotalForFlow(flow: Flow): number {
+  return flow === "social" ? SOCIAL_TEASER_DEFAULT_TOTAL : TEASER_DEFAULT_TOTAL;
 }
 
 // Top-up packs expire 12 months after purchase (§1).

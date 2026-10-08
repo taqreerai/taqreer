@@ -100,6 +100,15 @@ lands or a new one starts.
   with 3 visible (held and charged) and the rest locked; auto social briefs carry
   `slideCountMin` ("Author AT LEAST 5 slides"). Stepper min 5; the free-trial pop-up
   says posts on /social.
+  2026-10-08: auto social aims for 6 to 8 posts (`SOCIAL_AUTO_AIM`, brief
+  `slideCountAim`), longer only when the content lists more points; a free auto
+  carousel plans 7 (`SOCIAL_TEASER_DEFAULT_TOTAL`: 3 built + 4 locked) instead of 10.
+- **Unlocked decks exported only the free slides (fixed 2026-10-08, NOT committed yet):**
+  the first generation auto-saves the teaser version as `savedVersionId`; deck-unlock
+  moved only `currentVersionId`, and PNG / PDF export, thumbnails and the library read
+  `savedVersionId` first. deck-unlock now moves the saved pin too. Decks unlocked before
+  the fix: run `scripts/fix-unlocked-saved-version.ts` (dry run, then `--apply`)
+  against production once.
 - **Now unused (delete or reuse, owner to decide):** `DesignStep` and `BrandStep` in
   `wizard.tsx`, `WizardHead`'s rail / hints props, the `flows.wizard.hints.*` strings.
 
@@ -267,27 +276,18 @@ Name templates by stage ("درس المرحلة الابتدائية"), Arabic f
     makes a chart deck inside the main tool. Check first that deck-generate handles
     it cleanly. Retiring /datasheet is a separate decision.
 
-00. **Unify every creation tool on the /create wizard (decided 2026-10-06, owner).
-    Since 2026-10-07 all four run the 2-step layout (see the top section); the 3 / 4
-    step mappings below are history.**
-    Extract the shared shell from `/create` (header + rail + hint, full width, Design
-    grids, Brand step, sticky bar, visitor sign-up) and rebuild enhance, mimic, social,
-    datasheet on it. Owner answers: SKIP steps a tool doesn't need (not always 4); mimic
-    stays its own page (its Design step = upload your reference deck); ship the current
-    batch first. Open each tool to visitors in the same pass (enhance already is).
-    **Done: shared parts in `components/create/wizard.tsx` (WizardHead, BrandStep,
-    WizardBar); /create and /enhance run on them (enhance = 3 steps: your deck +
-    instructions + AI photos / templates OR styles full width (shared DesignStep) /
-    brand + Create). Mimic done too: 4 steps (content / reference upload / brand,
-    "Auto" = the reference's colours / settings) and open to visitors (route group
-    `(open)`, both files kept in the browser). Social done too: 4 steps (topic + product
-    photo / social styles full width via `SocialStyleGrid` / brand / platform, size,
-    count, AI photos) and open to visitors. Datasheet NOT unified: see item 000.**
-    Mapping: enhance = file+instructions / templates / brand / AI photos; mimic =
-    content / reference upload / brand / settings; social = topic+product photo /
-    social styles / brand / format+count+photos; datasheet = spreadsheet / deck styles /
-    brand / size+count+numbering. Enhance stays templates-only (generator has no
-    enhance + design-style support yet).
+00. **Raised 2026-10-07, not started:**
+    - **Login redirect loop (permanent fix).** A stale auth cookie for a deleted user
+      loops: proxy.ts trusts `getSession()` (cookie only) while the layouts use
+      `getUser()` (verified), so they disagree and bounce. Clearing cookies fixed it for
+      the owner; real users can hit it too. Auth change: PR + security review.
+    - **Outlook junks our auth emails** (SPF/DKIM/DMARC all pass, SCL 5). Fix the
+      `send.taqreer.ai` MX (points to smtp.google.com; Resend wants
+      `feedback-smtp.eu-west-1.amazonses.com`, priority 10) so the Return-Path aligns;
+      optionally drop the hidden preheader + Google Fonts import from
+      `lib/email/shell.ts`. Owner chose to leave it for now (junk-folder hint shown).
+    - **GA4 shows zero organic visits** while Search Console has ~96 clicks / 28 days:
+      check the GA4 setup / consent handling.
 
 0. **Education push (decided 2026-10-04).** Research in
    `docs/seo-research-education-2026-10-04.md`: per-subject pages do NOT pay off (all 25

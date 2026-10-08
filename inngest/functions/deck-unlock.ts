@@ -339,9 +339,22 @@ export const deckUnlock = inngest.createFunction(
             where: { id: version.id },
             data: { slideJson: newManifest as never, status: "completed" },
           });
+          // The saved pin moves too (2026-10-08): the first generation
+          // auto-saved the teaser version, and the PNG / PDF exports, the
+          // dashboard thumbnail and the library all read savedVersionId
+          // first, so leaving it behind exported only the visible slides.
+          // Unlocking is a whole-deck action the owner asked for. Left null
+          // when nothing was ever saved (readers then use currentVersionId).
+          const pres = await tx.presentation.findUnique({
+            where: { id: presentationId },
+            select: { savedVersionId: true },
+          });
           await tx.presentation.update({
             where: { id: presentationId },
-            data: { currentVersionId: version.id },
+            data: {
+              currentVersionId: version.id,
+              ...(pres?.savedVersionId ? { savedVersionId: version.id } : {}),
+            },
           });
           // teaserUnlockedAt flips here: the viewer's unlock poll swaps the
           // 10-slide manifest in and drops the locked slots.

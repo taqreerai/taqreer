@@ -95,6 +95,7 @@ export function GenerateSplitButton({
   // parity; the settle refunds down to the authored count).
   slideCountUpTo = false,
   teaserVisible = TEASER_VISIBLE_COUNT,
+  teaserDefaultTotal = TEASER_DEFAULT_TOTAL,
   posts = false,
   // Images-mode deck: the per-preset estimate carries the per-image
   // surcharge, mirroring the server quote (preflight) so the shown
@@ -122,6 +123,8 @@ export function GenerateSplitButton({
   slideCountUpTo?: boolean;
   // Slides / posts a free teaser builds (social: 3, 2026-10-07).
   teaserVisible?: number;
+  // Planned length of a free auto run (social: 7, 2026-10-08).
+  teaserDefaultTotal?: number;
   // Social: the free-trial pop-up speaks of posts.
   posts?: boolean;
   imagesMode?: boolean;
@@ -178,7 +181,7 @@ export function GenerateSplitButton({
   const teaserPriced = !!credits && !credits.isAdmin && credits.plan === "free";
   const requestedSlides =
     teaserPriced && slideCountUpTo
-      ? TEASER_DEFAULT_TOTAL
+      ? teaserDefaultTotal
       : slideCount && slideCount > 0
         ? slideCount
         : 8;

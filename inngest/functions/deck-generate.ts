@@ -1078,6 +1078,7 @@ function buildUserMessage(event: DeckGenerateEvent) {
       const brief = event.brief as {
         slideCountMode?: string;
         slideCountMin?: number;
+        slideCountAim?: { min?: number; max?: number };
         teaser?: { plannedTotal?: number; lockedCount?: number } | null;
       } | null;
       const teaser = brief?.teaser;
@@ -1110,6 +1111,14 @@ function buildUserMessage(event: DeckGenerateEvent) {
           // Social floor (2026-10-07): a carousel has at least N posts.
           ...(typeof brief.slideCountMin === "number" && brief.slideCountMin > 1
             ? [`Author AT LEAST ${brief.slideCountMin} slides.`]
+            : []),
+          // Social sweet spot (2026-10-08): about 7 posts unless the content
+          // clearly enumerates more points.
+          ...(typeof brief.slideCountAim?.min === "number" &&
+          typeof brief.slideCountAim?.max === "number"
+            ? [
+                `Aim for ${brief.slideCountAim.min} to ${brief.slideCountAim.max} slides (a cover, the content cards, a closing card); go longer only when the content clearly lists more points (e.g. "10 tips").`,
+              ]
             : []),
         ];
       }

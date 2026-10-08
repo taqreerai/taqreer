@@ -19,6 +19,7 @@ import {
   displaySlideEstimate,
   slideCapForFlow,
   SOCIAL_MIN_POSTS,
+  SOCIAL_TEASER_DEFAULT_TOTAL,
   SOCIAL_TEASER_VISIBLE,
 } from "@/lib/credits/cost";
 import { isImagesLocked, IMAGES_GATE_TIER } from "@/lib/images/images-gating";
@@ -832,6 +833,7 @@ export default function SocialPage() {
               slideCount={estimated.slides}
               slideCountUpTo={estimated.upTo}
               teaserVisible={SOCIAL_TEASER_VISIBLE}
+              teaserDefaultTotal={SOCIAL_TEASER_DEFAULT_TOTAL}
               posts
               imagesMode={imagesMode}
               disabled={generateDisabled}
