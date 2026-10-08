@@ -259,14 +259,9 @@ function DeckUnlockOffer({ priceCents, onBuy }: { priceCents: number; onBuy: () 
             ))}
           </ul>
         </div>
-        <div className="flex shrink-0 flex-col items-center gap-1.5">
-          <button type="button" onClick={onBuy} className="btn-gradient px-6 py-3 text-sm">
-            {t.deckUnlockCta.replace("{price}", price)}
-          </button>
-          {/* One-time unlocks are non-refundable (owner decision 2026-10-08;
-              Refund Policy section 3), so say so before the payment. */}
-          <p className="text-xs text-muted">{t.deckUnlockNoRefund}</p>
-        </div>
+        <button type="button" onClick={onBuy} className="btn-gradient shrink-0 px-6 py-3 text-sm">
+          {t.deckUnlockCta.replace("{price}", price)}
+        </button>
       </div>
       <p className="text-center text-sm font-semibold text-foreground">{t.deckUnlockOr}</p>
     </div>
