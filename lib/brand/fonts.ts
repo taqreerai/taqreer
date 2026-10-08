@@ -165,7 +165,16 @@ export type BrandFontState = {
 // designs match in mixed text.
 export const DEFAULT_GOOGLE_FAMILY = "Noto Sans Arabic";
 
+// The creation tools start on AUTO (2026-10-08): no family picked, so the
+// server chooses one from its tested list by design style / topic
+// (lib/brand/auto-font.ts). A brand kit or the user's own pick replaces it.
 export function emptyBrandFont(): BrandFontState {
+  return { mode: "google", googleFamily: null, uploaded: [] };
+}
+
+// Places with no Auto (brand kit editor, datasheet, mimic which copies a
+// reference design): start on the plain default family.
+export function defaultBrandFont(): BrandFontState {
   return { mode: "google", googleFamily: DEFAULT_GOOGLE_FAMILY, uploaded: [] };
 }
 

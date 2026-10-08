@@ -30,7 +30,7 @@ import {
   InlinePaletteSwatch,
 } from "@/components/create/controls";
 import {
-  emptyBrandFont,
+  defaultBrandFont,
   googleFontUrl,
   HEADING_SAMPLE_AR,
   type BrandFontState,
@@ -72,7 +72,7 @@ export default function NewBrandKitPage() {
   const [colors, setColors] = useState<string[]>(DEFAULT_PALETTE);
   // Single brand font — one Google family (Claude varies weights) OR up
   // to 5 uploaded families (Claude pairs). Mirrors /create's picker.
-  const [brandFont, setBrandFont] = useState<BrandFontState>(emptyBrandFont());
+  const [brandFont, setBrandFont] = useState<BrandFontState>(defaultBrandFont());
   const [logoFile, setLogoFile] = useState<File | null>(null);
 
   // ─── Submit state ──────────────────────────────────────────────

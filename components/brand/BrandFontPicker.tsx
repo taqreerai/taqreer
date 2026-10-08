@@ -33,7 +33,10 @@ export function BrandFontPicker({
   sampleSizeClass = "text-sm",
   compact = false,
   tall = false,
+  allowAuto = false,
 }: {
+  // Offer "Auto" (no family = the server picks, 2026-10-08).
+  allowAuto?: boolean;
   // One row (2026-10-02, /create Design step): label + the Google combobox
   // + a small upload button; uploaded families show as chips under it.
   compact?: boolean;
@@ -133,6 +136,7 @@ export function BrandFontPicker({
           <div className="min-w-0 flex-1">
             <GoogleFontSlot
               selected={value.googleFamily}
+              autoOption={allowAuto}
               sampleText={sampleText}
               sampleSizeClass={sampleSizeClass}
               onSelect={(family) =>
@@ -184,6 +188,7 @@ export function BrandFontPicker({
 
       <GoogleFontSlot
         selected={value.googleFamily}
+        autoOption={allowAuto}
         sampleText={sampleText}
         sampleSizeClass={sampleSizeClass}
         onSelect={(family) =>

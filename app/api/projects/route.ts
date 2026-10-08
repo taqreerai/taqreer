@@ -31,6 +31,7 @@ import {
 import { detectImageRegion } from "@/lib/geo/image-region";
 import { preflightGenerate } from "@/lib/credits/preflight";
 import type { Flow as CreditFlow, SlideEstimateInput } from "@/lib/credits/cost";
+import { pickAutoFont } from "@/lib/brand/auto-font";
 import {
   SOCIAL_AUTO_AIM,
   SOCIAL_MIN_POSTS,
@@ -646,9 +647,9 @@ export async function POST(request: Request) {
         uploaded?: IncomingUploadedFamily[];
       }
     | undefined;
-  const font = readBriefFont(
-    incomingFonts?.font ?? incomingFonts?.heading ?? incomingFonts?.body,
-  );
+  const fontSlot =
+    incomingFonts?.font ?? incomingFonts?.heading ?? incomingFonts?.body;
+  let font = readBriefFont(fontSlot);
   // Uploaded brand fonts (the "Claude pairs" path): forward EVERY family with
   // ALL its weight faces (capped) so deck-generate can attach each weight file
   // to whichever role Claude assigns. Names go to Claude; storageUrls stay
@@ -670,6 +671,25 @@ export async function POST(request: Request) {
         ),
     }))
     .filter((fam) => fam.faces.length > 0);
+
+  // Auto font (2026-10-08): no Google pick and no upload = the font picker's
+  // "Auto". Resolved from the design style (or a quick topic pick) for
+  // create / enhance / social; mimic and template runs copy an existing
+  // design, so they keep the plain default.
+  const rawSourceKind = (payload.source as { kind?: unknown } | null | undefined)?.kind;
+  const autoFontEligible =
+    projectType === "social" ||
+    (rawSourceKind !== "mimic" && !(typeof payload.templateId === "string" && payload.templateId));
+  if (!fontSlot?.name?.trim() && uploadedFonts.length === 0 && autoFontEligible) {
+    const rawStyle = (payload.rules as { designStyle?: unknown } | null | undefined)?.designStyle;
+    const picked = await pickAutoFont({
+      designStyle: typeof rawStyle === "string" ? rawStyle : null,
+      social: projectType === "social",
+      title,
+      text: payload.content?.type === "text" ? (payload.content.text ?? "") : "",
+    });
+    font = { name: picked.name, storageUrl: null, url: picked.url };
+  }
 
   // AUTHORIZE every font storageUrl (heading / body / every uploaded face)
   // before it reaches the brief. At generation time deck-generate SIGNS these

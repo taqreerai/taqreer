@@ -54,6 +54,9 @@ export function GoogleFontSlot({
   // Compact rows (BrandFontPicker compact) render <FontInstallHint> under the
   // WHOLE row instead, so the label + upload button stay on one aligned line.
   hideInstallHint = false,
+  // An "Auto" row on top of the list (creation tools, 2026-10-08): null
+  // `selected` reads as Auto and the server picks the family.
+  autoOption = false,
 }: {
   // `label` was previously passed but never rendered — combobox doesn't
   // own its own heading. Card-level <h3> sits above the slot in the
@@ -67,6 +70,7 @@ export function GoogleFontSlot({
   compact?: boolean;
   dropUp?: boolean;
   hideInstallHint?: boolean;
+  autoOption?: boolean;
 }) {
   const dict = useDict();
   const [open, setOpen] = useState(false);
@@ -110,7 +114,7 @@ export function GoogleFontSlot({
     link.href = previewCss2Url(filtered.map((font) => font.family));
   }, [open, filtered]);
 
-  const inputValue = open ? query : selected ?? "";
+  const inputValue = open ? query : selected ?? (autoOption ? dict.flows.brand.fontAuto : "");
   const showPlaceholder = !inputValue;
 
   return (
@@ -182,6 +186,36 @@ export function GoogleFontSlot({
             maxHeight: 240,
           }}
         >
+          {autoOption && !query ? (
+            <button
+              type="button"
+              onClick={() => {
+                onSelect(null);
+                setOpen(false);
+                setQuery("");
+              }}
+              className={`mb-1 flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-2 text-start text-sm transition-colors ${
+                selected === null
+                  ? "text-foreground"
+                  : "border-transparent text-foreground/70 hover:bg-foreground/5"
+              }`}
+              style={
+                selected === null
+                  ? { borderColor: "var(--tq-text-primary)", background: "var(--tq-surface)" }
+                  : undefined
+              }
+            >
+              <span className="flex min-w-0 flex-col">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <span className="material-symbols-outlined" style={{ fontSize: 15 }} aria-hidden>
+                    auto_awesome
+                  </span>
+                  {dict.flows.brand.fontAuto}
+                </span>
+                <span className="text-[11px] text-foreground/50">{dict.flows.brand.fontAutoHint}</span>
+              </span>
+            </button>
+          ) : null}
           {filtered.length === 0 ? (
             <p className="px-3 py-2 text-xs text-foreground/40">{dict.flows.brand.noResults}</p>
           ) : (

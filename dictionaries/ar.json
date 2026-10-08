@@ -1638,7 +1638,7 @@
       "referenceHint": "عرض يعجبك شكله، ننقل تخطيطه وأسلوبه ونطبق عليه ألوانك وخطك.",
       "referenceDrop": "ارفع العرض المرجعي"
     },
-    "brand": {
+    "brand": { "fontAuto": "تلقائي", "fontAutoHint": "نختار الخط الأنسب لنمط التصميم ومحتواك",
       "svgLogo": "شعار SVG",
       "svgOnly": "SVG فقط",
       "svgLogoOnly": "شعار SVG فقط",

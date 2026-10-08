@@ -80,7 +80,7 @@ import {
   type LanguageCode,
 } from "@/components/create/controls";
 import {
-  emptyBrandFont,
+  defaultBrandFont,
   googleFontUrl,
   HEADING_SAMPLE_AR,
   HEADING_SAMPLE_LATIN,
@@ -193,7 +193,7 @@ export default function DatasheetPage() {
   // Single brand font — one Google family (Claude varies weights) OR up
   // to 5 uploaded families (Claude pairs). Replaces the old heading +
   // body two-slot UI; mirrors /create's BrandFontPicker model.
-  const [brandFont, setBrandFont] = useState<BrandFontState>(emptyBrandFont());
+  const [brandFont, setBrandFont] = useState<BrandFontState>(defaultBrandFont());
   const [logoFile, setLogoFile] = useState<File | null>(null);
   // Pre-loaded logo from brand kit / default kit. See /create's
   // companion state for the rationale.

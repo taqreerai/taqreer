@@ -1638,7 +1638,7 @@
       "referenceHint": "A deck whose look you like. We copy its layout and style, then apply your colors and font.",
       "referenceDrop": "Upload the reference deck"
     },
-    "brand": {
+    "brand": { "fontAuto": "Auto", "fontAutoHint": "We pick the font that best fits your style and content",
       "svgLogo": "SVG logo",
       "svgOnly": "SVG only",
       "svgLogoOnly": "SVG logo only",

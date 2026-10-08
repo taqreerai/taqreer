@@ -130,6 +130,14 @@ lands or a new one starts.
   format only, so a 4:5 carousel's unlocked posts were written as DECK slides (the bag
   test: posts 1-3 fine, 4-10 deck-like). All jobs now use `frameKindFor` (project type
   social, or a social format), same as generation.
+- **Auto font (2026-10-08, NOT committed yet):** the font picker on create / enhance /
+  social starts on "تلقائي" (googleFamily null). `/api/projects` resolves it with
+  `pickAutoFont` (lib/brand/auto-font.ts): design style -> family (instant), else a
+  3 s Haiku pick by topic, else Noto Sans Arabic. List (owner-approved): Noto Sans
+  Arabic, Cairo, Noto Naskh Arabic, Markazi Text, Lemonada for every flow; Reem Kufi,
+  Lalezar, Aref Ruqaa for social only (short text). A user pick, a brand kit font or an
+  upload always wins. Mimic, template runs, the brand kit editor and datasheet keep
+  Noto (`defaultBrandFont`).
 - **Now unused (delete or reuse, owner to decide):** `DesignStep` and `BrandStep` in
   `wizard.tsx`, `WizardHead`'s rail / hints props, the `flows.wizard.hints.*` strings.
 

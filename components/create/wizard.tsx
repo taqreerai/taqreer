@@ -325,7 +325,7 @@ export function BrandStep({
           {/* One brand font: a Google family (Claude varies weights) OR up to
               5 uploaded families (Claude pairs). */}
           <div className="surface-card rounded-2xl p-4 sm:p-5">
-            <BrandFontPicker value={brandFont} onChange={onBrandFont} sampleText={sampleText} />
+            <BrandFontPicker value={brandFont} onChange={onBrandFont} sampleText={sampleText} allowAuto />
           </div>
           <div className="surface-card flex flex-col gap-2 rounded-2xl p-4 sm:p-5">
             <span className="text-sm font-semibold text-foreground/80">{t.logo}</span>
@@ -594,6 +594,7 @@ export function BrandCard({
   disabled = false,
   autoLabel,
   autoHint,
+  fontAuto = true,
 }: {
   kitOptions: BrandKitOption[];
   onPickKit: (id: string) => void;
@@ -618,6 +619,8 @@ export function BrandCard({
   // What "Auto" means in this tool (mimic: the reference deck's colours).
   autoLabel?: string;
   autoHint?: string;
+  // Offer the font "Auto" (off for mimic, which copies a reference design).
+  fontAuto?: boolean;
 }) {
   const t = useDict().flows;
   const [palettesOpen, setPalettesOpen] = useState(false);
@@ -637,6 +640,7 @@ export function BrandCard({
           sampleText={sampleText}
           compact
           tall
+          allowAuto={fontAuto}
         />
       </div>
       {/* Label and the compact slot share one row (saves a line). */}
