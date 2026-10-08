@@ -104,6 +104,7 @@ import {
 import { appendGenChat } from "@/lib/deck/genchat-store";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 import { stripTextDashes } from "@/lib/deck/strip-dashes";
+import { frameKindFor } from "@/lib/deck/frame-kind";
 
 const SETCONTENT_TIMEOUT_MS = 60_000;
 // A slide whose frozen render differs from its flow render by more than this
@@ -204,6 +205,16 @@ export const deckFreezeBake = inngest.createFunction(
     }
     const pendingIds = pending.map((s) => s.slideId);
     const dims = dimensionsForFormat(manifest.format);
+    // The review's system prompt must equal generation's (shared cache, same
+    // persona): social carousels at any ratio use the social playbook.
+    const projectType = await step.run("load-project-type", async () => {
+      const { prisma } = await import("@/lib/prisma");
+      const p = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { type: true },
+      });
+      return p?.type ?? null;
+    });
 
     // ─── Step 2: observe (render + measure + photograph) and revise ──
     // ── GENCHAT (backend-transparency feed) ── the bake continues the
@@ -448,7 +459,7 @@ export const deckFreezeBake = inngest.createFunction(
                     canvas: dims,
                     language: manifest.language === "en" ? "en" : "ar",
                     imagesMode,
-                    kind: manifest.format === "3:4" ? "social" : "deck",
+                    kind: frameKindFor(projectType, manifest.format),
                   }),
                   cache_control: { type: "ephemeral" },
                 },

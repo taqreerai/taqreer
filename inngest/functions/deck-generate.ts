@@ -16,7 +16,6 @@ import {
   SLIDE_FORMATS,
   SLIDE_ROLE_VALUES,
   GENCHAT_MAX,
-  isSocialFormat,
   type GenChatEntry,
   type SlideFormat,
   type SlideManifest,
@@ -68,6 +67,7 @@ import {
   uploadFileToAnthropic,
   deleteFileFromAnthropic,
 } from "@/lib/anthropic/files";
+import { frameKindFor } from "@/lib/deck/frame-kind";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -1060,7 +1060,9 @@ function buildUserMessage(event: DeckGenerateEvent) {
           ``,
           `PRODUCT PHOTO - the user uploaded a photo of THEIR product and this post is designed AROUND it. The system hands the actual photo to the image generator for every box you mark as a product shot, so never describe or reinvent the product itself:
 - The HERO visual (the post's main image) MUST be a product shot. Mark it by adding data-gensource="product" to an in-well <img data-genimage> box, or by declaring the section background with data-bg-source="product" next to its data-bg-prompt.
-- Mark ADDITIONAL boxes as product shots only where the composition genuinely calls for the product again (a lifestyle scene, a detail crop). Every unmarked box follows the normal image rules.
+- The CLOSING call-to-action card MUST show the product too (mark its visual the same way): the card that asks people to buy never shows anything else.
+- Mark ADDITIONAL boxes as product shots wherever the product belongs in the picture (a lifestyle scene, a detail crop, a styling idea). An UNMARKED box never shows any product or any other item of the same kind as the user's (no other bags, bottles, garments, devices...): it shows only surfaces, textures, props, places or hands that set the scene. When a card is about using or styling the product, mark its visual as a product shot.
+- Every claim about the product (what it is, its material, how it is used, carried, worn or cared for) must match what the photo and the brief show; never treat it as a different kind of item.
 - For product-marked boxes, the prompt (data-genimage / data-bg-prompt) describes the SCENE AROUND the product: surface, environment, props, lighting, camera angle, mood. Never re-describe, rename, or restyle the product, and still no text inside the image.
 - On portrait canvases (4:5, 9:16) prefer an in-well hero or a band panel for the product shot rather than a full-bleed background.`,
         ]
@@ -2306,10 +2308,7 @@ export const deckGenerate = inngest.createFunction(
             // Drive the social persona off the FLOW, not just the ratio: a social
             // post at 16:9 (X/LinkedIn landscape) is not a social-format but still
             // needs the social persona. isSocialFormat stays for the legacy 3:4.
-            kind:
-              data.type === "social" || isSocialFormat(slideFormat)
-                ? "social"
-                : "deck",
+            kind: frameKindFor(data.type, slideFormat),
           }),
           paletteAuto ? AUTO_PALETTE_ADDENDUM : null,
           paletteReference ? REFERENCE_PALETTE_ADDENDUM : null,

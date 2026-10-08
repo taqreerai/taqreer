@@ -116,6 +116,20 @@ lands or a new one starts.
   "Cancelled" and fell back to idle silently. The cleanup now only aborts its own run,
   and a superseded run no longer touches the stage. Seen with a visitor whose first
   file was over 100 pages. Mimic / create use the abort signal only (not affected).
+- **Carousel playbook for every social post (2026-10-08, NOT committed yet):**
+  `SOCIAL_PLAYBOOK` in `lib/deck/frame.ts` (social persona only): pick the format from
+  the topic (tips, how-to, product, myth/fact or before/after, story, insight,
+  announcement), hook card 1 (8 words), card 2 delivers alone, one idea per card
+  (8-word headline, ~25 words), one layout across the series, one CTA last, no deck
+  habits (chapter dividers, agenda, thank-you, "01 / 07"), no invented facts / numbers
+  / testimonials, stay on the subject (images never show another item of the same
+  kind; use and care fit the real item). The user's explicit input always wins. Social
+  replaces the deck 50-90 word budget with a card-fit rule. Product photo: the CTA card
+  shows the product; unmarked boxes show no product of the same kind.
+  Found with it: unlock / partial regen / bake keyed the social persona off the 3:4
+  format only, so a 4:5 carousel's unlocked posts were written as DECK slides (the bag
+  test: posts 1-3 fine, 4-10 deck-like). All jobs now use `frameKindFor` (project type
+  social, or a social format), same as generation.
 - **Now unused (delete or reuse, owner to decide):** `DesignStep` and `BrandStep` in
   `wizard.tsx`, `WizardHead`'s rail / hints props, the `flows.wizard.hints.*` strings.
 

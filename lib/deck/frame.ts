@@ -48,7 +48,29 @@ export function frameGeometry(canvas: FrameCanvas) {
   };
 }
 
+// Social carousel playbook (owner direction 2026-10-08): how high-performing
+// carousels are built, applied to EVERY social post, with the user's own text
+// always winning where it is explicit. Replaces the deck text budget for
+// social (decks want 50-90 words a slide; a feed card is read in seconds).
+const SOCIAL_PLAYBOOK = `CAROUSEL PLAYBOOK - build every carousel the way top-performing feed carousels are built, shaped by THIS brief. ‼️ The user's own input wins: when the brief states a count, an order, the points to cover, a tone, an offer or a call to action, follow it exactly; this playbook fills only what the user left open.
 
+1. PICK THE FORMAT from the topic (and the product photo, if any), then build to it:
+   - Tips / list ("5 ways to..."): hook, one tip per card, recap, CTA.
+   - How-to / steps: hook with the end result, one numbered step per card in order, the result, CTA.
+   - Product or offer showcase: hook on the main benefit, then the product's real features and uses (one per card), who it is for, the offer only if the user gave one, CTA.
+   - Myth vs fact, mistakes vs fixes, before / after, this vs that: hook, one pair per card in a repeated split layout, takeaway, CTA.
+   - Story / case: hook on the outcome, problem, turning point, result, lesson, CTA.
+   - Insight / data: hook with the key finding, one point per card, what it means, CTA.
+   - Announcement / event: hook with the news, what, when and where (only details the user gave), why it matters, CTA.
+2. CARD 1 IS THE HOOK: it alone decides whether anyone swipes. One bold promise, question, number or tension in at most 8 words, set very large, with one strong visual and a quiet swipe cue. Never a plain title like "About our product".
+3. CARD 2 DELIVERS AT ONCE: feeds re-show a carousel starting from card 2, so it must stand alone and give real value immediately (the first tip, the core benefit), never an intro or a table of contents.
+4. ONE IDEA PER CARD: a short headline (at most 8 words) and at most about 25 words of supporting text, so each card is read in 3 seconds on a phone. Type stays large: the main text on a body card is never smaller than one twenty-fifth of the card width. Never the deck habit of dense cards.
+5. A SERIES, NOT SEPARATE POSTS: keep one layout system and type scale across the body cards (same headline position, same number badge for lists and steps) so the swipe feels continuous; change emphasis, not structure. Number the cards only when the content is a list or steps.
+6. KEEP THEM SWIPING: each body card should earn the next (an open question, "next:", a progression); never resolve everything early.
+7. THE LAST CARD IS ONE CALL TO ACTION that fits the format: save for later, share, follow, comment, send a message, or shop / order for a product. One action, said plainly. Use the user's own contact, handle, link or price only when the brief gives it; never invent one. A short recap card before it is welcome for lists and steps.
+8. NO DECK HABITS: no chapter or section divider cards ("Part 2", "Chapter two"), no agenda, no "Thank you" card, no page numbers like "01 / 07".
+9. TRUTHFUL CONTENT: never invent facts the user did not give: no statistics, percentages, durations, counts, prices, discounts, awards, certifications, guarantees, customer quotes or testimonials, and no "our customers say". Without real numbers, use qualitative wording. A quote card needs a quote from the brief.
+10. STAY ON THE SUBJECT: every card and every image is about the user's actual subject. Images show that subject, its use, its details or its setting, never a different item of the same kind (another product, another place) and never unrelated decoration. Facts about use, care and materials must suit what the subject really is (a bag is carried and stored, not washed or worn; suede is brushed, not washed). When the brief does not say, stay general rather than guess.`;
 
 // ── the frame prompt ────────────────────────────────────────────────────────
 // Parameterized variant of SYSTEM_PROMPT_CREATE_HTML for frame decks. Proven
@@ -114,7 +136,14 @@ BACKGROUND KINDS - "color" only for this deck: a flat or gradient ground via dat
    - data-bg="band-top" or "band-bottom": well = ${wellW}x${bandWellH}px (the band takes the other edge)`
     : `   - well = ${wellW}x${wellH}px`;
 
-  return `${social ? `You are an elite social media designer. Design an original carousel of ${canvas.width}x${canvas.height} ${orient} cards for a social feed, fresh for this brief, as one HTML fragment. Open with a hook that stops the scroll.` : `You are a world-class presentation designer. Design a complete, ORIGINAL slide deck - your own visual system, fresh for this brief - as one HTML fragment. Bespoke and editorial, never a generic template.`}
+  // Deck text budget; social uses the playbook's own (rule 4) instead.
+  const textBudget = social
+    ? `- ‼️ CARD FIT - every card must FIT its well on the first try at the playbook's sizes (rule 4). When the source has more than fits, SUMMARIZE: keep the strongest points and cut the rest. Never shrink fonts or squeeze spacing to cram text in. Before closing each card, estimate its height (each text line is roughly font-size x line-height, plus padding and gaps) against the well; if it would not fit, cut words until it does.`
+    : `- ‼️ TEXT BUDGET - every slide must feel COMPLETE and still FIT on the first try. Content slides: aim for 50 to 90 words in total (subtitle, cards, bullets, captions and footers all count), enough substance that the slide is worth reading, never a near-empty slide. Cover, section, quote and closing slides stay short. Headline: at most 12 words. Cards, bullets or rows: at most 6, each at most 18 words, and never a list of one (use 3 or more items, or no list at all). When the source has more than fits, SUMMARIZE: keep the strongest points and cut the rest. Never shrink fonts below a comfortable reading size or squeeze spacing to cram text in. Before closing each slide, estimate its height (each text line is roughly font-size x line-height, plus padding and gaps) against the well; if it would not fit, cut words until it does.`;
+
+  return `${social ? `You are an elite social media designer. Design an original carousel of ${canvas.width}x${canvas.height} ${orient} cards for a social feed, fresh for this brief, as one HTML fragment. Open with a hook that stops the scroll.
+
+${SOCIAL_PLAYBOOK}` : `You are a world-class presentation designer. Design a complete, ORIGINAL slide deck - your own visual system, fresh for this brief - as one HTML fragment. Bespoke and editorial, never a generic template.`}
 
 THE FRAME IS SYSTEM-OWNED. Each slide has two layers; you author only what is declared here:
 1. BACKGROUND - you DECLARE it per slide via section attributes (below); the system renders it. You never draw backgrounds or edge-to-edge imagery yourself.
@@ -139,7 +168,7 @@ ${imageBlocks}
 - Slides are TOP-LEVEL siblings - never nest a <section>. Exactly one .well per section, nothing else inside the section.
 - There is NO wrapper element around your output: never write CSS through an imagined container (e.g. \`.deck x\`, \`.wrapper x\` - those selectors match NOTHING). Base styles go on .well or your own classes.
 - ‼️ Design the well in FLOW ONLY: flex and grid (display:flex/grid, flex-direction, gap, padding, margin, flex:1, aspect-ratio, align-items/justify-content). NEVER position:absolute/relative offsets, NEVER left/top, NEVER transforms, NEVER negative margins inside the well - the layout must be pure document flow, so nothing can ever overlap. Give .well itself display:flex;flex-direction:column (or grid) filling its box; distribute space with gap, flex:1, and auto margins. Px font sizes and fixed px sizes for images/cards are fine. Plan each slide so content FITS its well without overflowing.
-- ‼️ TEXT BUDGET - every slide must feel COMPLETE and still FIT on the first try. Content slides: aim for 50 to 90 words in total (subtitle, cards, bullets, captions and footers all count), enough substance that the slide is worth reading, never a near-empty slide. Cover, section, quote and closing slides stay short. Headline: at most 12 words. Cards, bullets or rows: at most 6, each at most 18 words, and never a list of one (use 3 or more items, or no list at all). When the source has more than fits, SUMMARIZE: keep the strongest points and cut the rest. Never shrink fonts below a comfortable reading size or squeeze spacing to cram text in. Before closing each slide, estimate its height (each text line is roughly font-size x line-height, plus padding and gaps) against the well; if it would not fit, cut words until it does.
+${textBudget}
 - ‼️ FILL THE SLIDE - the text budget limits WORDS, not presence. Compose so the content occupies most of the well (roughly 75 to 90 percent of its height), with no large dead zones: size the headline, body and cards up to the space (bigger type, taller cards, more generous padding) instead of leaving small blocks floating in an empty slide. Every card is filled by its content: no card that is mostly empty space; when a card's text is short, make the card smaller or give it a supporting element (a large number, an icon, a short accent line). Small labels, eyebrows and card numbers must contrast strongly with the surface they sit on, never the same or a near colour as their background.
 - ‼️ PEER ALIGNMENT - cards, columns or steps that sit side by side are peers: their matching parts must line up across the row. Align each peer's content to the TOP (justify-content:flex-start), never vertically centre the content of peers whose text lengths differ; every peer's icon, title, divider and first line of body starts at the same height. Give the peers the same structure (same element order, same title size), and when one is shorter, let the extra space fall at its BOTTOM (or push a closing element down with margin-top:auto), never split above and below.
 - Write every repeated item (list rows, cards, steps, table cells) out IN FULL as elements. There is NO template engine: never use a JS loop, \`.map()\`, \`+\` concatenation, or \`\${…}\`.

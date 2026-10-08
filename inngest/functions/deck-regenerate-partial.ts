@@ -49,6 +49,7 @@ import { appendGenChatEntries } from "@/lib/deck/genchat-store";
 import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 import { fanOutNotification } from "@/lib/notifications/server";
 import { stripTextDashes } from "@/lib/deck/strip-dashes";
+import { frameKindFor } from "@/lib/deck/frame-kind";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -763,6 +764,15 @@ export const deckRegeneratePartial = inngest.createFunction(
     const isFrameDeck = source.slides.some((s) =>
       s.html.includes("data-tq-frame"),
     );
+    const regenProjectType = isFrameDeck
+      ? await step.run("load-project-type", async () => {
+          const p = await prisma.project.findUnique({
+            where: { id: projectId },
+            select: { type: true },
+          });
+          return p?.type ?? null;
+        })
+      : null;
     const frameRegenSystemPrompt = isFrameDeck
       ? frameSystemPrompt({
           canvas: SLIDE_DIMENSIONS[sourceFormat],
@@ -770,7 +780,7 @@ export const deckRegeneratePartial = inngest.createFunction(
           imagesMode: source.slides.some((s) =>
             s.html.includes("data-genimage"),
           ),
-          kind: sourceFormat === "3:4" ? "social" : "deck",
+          kind: frameKindFor(regenProjectType, sourceFormat),
         })
       : null;
     const frameCtx = isFrameDeck

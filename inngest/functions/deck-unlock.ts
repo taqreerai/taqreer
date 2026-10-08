@@ -48,6 +48,7 @@ import {
   collectSeedableGenImages,
   neutralizeGenImages,
 } from "@/lib/images/slide-images";
+import { frameKindFor } from "@/lib/deck/frame-kind";
 
 function getClient(): Anthropic {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -152,6 +153,14 @@ export const deckUnlock = inngest.createFunction(
 
     const format: SlideFormat = manifest.format ?? "16:9";
     const dims = SLIDE_DIMENSIONS[format];
+    // Social carousels (any ratio) keep the social playbook for the tail.
+    const projectType = await step.run("load-project-type", async () => {
+      const p = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { type: true },
+      });
+      return p?.type ?? null;
+    });
     const visibleCount = manifest.slides.length;
     const total = visibleCount + lockedCount;
 
@@ -186,7 +195,7 @@ export const deckUnlock = inngest.createFunction(
       canvas: dims,
       language: manifest.language === "en" ? "en" : "ar",
       imagesMode: isImagesDeck,
-      kind: format === "3:4" ? "social" : "deck",
+      kind: frameKindFor(projectType, format),
     });
     const briefText = source.rawBrief
       ? // 40k chars (was 6k, 2026-10-05): the teaser now covers every flow,
