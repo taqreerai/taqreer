@@ -110,6 +110,12 @@ lands or a new one starts.
   the fix: `scripts/fix-unlocked-saved-version.ts` was run on production 2026-10-08
   (2 of 4 unlocked decks repaired). Their dashboard thumbnails may still show the old
   version until re-rendered.
+- **Enhance file swap left Next disabled (fixed 2026-10-08, NOT committed yet):**
+  picking a second file without removing the first ran the old extraction effect's
+  cleanup AFTER `validateAndSetFile` reset `pollCancelledRef`, so the new poll read
+  "Cancelled" and fell back to idle silently. The cleanup now only aborts its own run,
+  and a superseded run no longer touches the stage. Seen with a visitor whose first
+  file was over 100 pages. Mimic / create use the abort signal only (not affected).
 - **Now unused (delete or reuse, owner to decide):** `DesignStep` and `BrandStep` in
   `wizard.tsx`, `WizardHead`'s rail / hints props, the `flows.wizard.hints.*` strings.
 

@@ -719,7 +719,10 @@ export default function EnhanceContentPage() {
         // silently reset to idle, no error toast.
         const isAbort =
           err instanceof DOMException && err.name === "AbortError";
-        if (!isCurrent || pollCancelledRef.current || isAbort) {
+        // A superseded run (file swapped / unmounted) touches nothing: the
+        // new file's run owns the stage now.
+        if (!isCurrent) return;
+        if (pollCancelledRef.current || isAbort) {
           setStage("idle");
           return;
         }
@@ -735,7 +738,11 @@ export default function EnhanceContentPage() {
 
     return () => {
       isCurrent = false;
-      pollCancelledRef.current = true;
+      // Abort only THIS run. Not the shared pollCancelledRef (2026-10-08):
+      // on a direct file swap this cleanup runs AFTER validateAndSetFile
+      // reset the flag for the new file, so setting it here made the new
+      // file's poll read "Cancelled" and fall back to idle silently (file
+      // shown, Next disabled). removeFile still sets the flag itself.
       controller.abort();
     };
   }, [file, dict, guest]);
