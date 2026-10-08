@@ -6,7 +6,7 @@ lands or a new one starts.
 
 ## State
 
-- **Live (2026-10-08): `main` = `6fe4a23`** (after PR #208 `41b9d2d`): everything below marked "NOT live
+- **Live (2026-10-08): `main` = `55f3507`** (after PR #208 `41b9d2d`): everything below marked "NOT live
   yet" / "NOT committed yet" in the 2026-10-07 section is now live.
 - Earlier: `e6bcf86`. Everything in "Batch on dev, 2026-10-06"
   below is live too (deployed 2026-10-07), plus the Oct 7 items in the next section.
@@ -130,7 +130,7 @@ lands or a new one starts.
   format only, so a 4:5 carousel's unlocked posts were written as DECK slides (the bag
   test: posts 1-3 fine, 4-10 deck-like). All jobs now use `frameKindFor` (project type
   social, or a social format), same as generation.
-- **Auto font (2026-10-08, NOT committed yet):** the font picker on create / enhance /
+- **Auto font (2026-10-08, live in `55f3507`):** the font picker on create / enhance /
   social starts on "تلقائي" (googleFamily null). `/api/projects` resolves it with
   `pickAutoFont` (lib/brand/auto-font.ts): design style -> family (instant), else a
   3 s Haiku pick by topic, else Noto Sans Arabic. List (owner-approved): Noto Sans
