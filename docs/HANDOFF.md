@@ -394,8 +394,6 @@ Name templates by stage ("درس المرحلة الابتدائية"), Arabic f
    - Missing space before "في" and after "،" in exported PowerPoint text
      ("مختصةفي", "متقنة،في"). Gamma's export shows the same, so it may come from
      PowerPoint's font rendering. Investigate before claiming anything.
-   - "Failed to start extraction" shows in English on the Arabic UI
-     (`app/api/extract/route.ts` + `lib/extract/error-codes.ts`).
    - Free image-PPTX export logs both a `png` and a `pptx` activity row.
    - `networkidle` waits in other render paths (same fix as
      `lib/export/render-deck-pdf.ts`).
