@@ -6,7 +6,7 @@ lands or a new one starts.
 
 ## State
 
-- **Live (2026-10-08): `main` = `fab9ad8`** (after PR #208 `41b9d2d`): everything below marked "NOT live
+- **Live (2026-10-08): `main` = `6fe4a23`** (after PR #208 `41b9d2d`): everything below marked "NOT live
   yet" / "NOT committed yet" in the 2026-10-07 section is now live.
 - Earlier: `e6bcf86`. Everything in "Batch on dev, 2026-10-06"
   below is live too (deployed 2026-10-07), plus the Oct 7 items in the next section.
@@ -116,7 +116,7 @@ lands or a new one starts.
   "Cancelled" and fell back to idle silently. The cleanup now only aborts its own run,
   and a superseded run no longer touches the stage. Seen with a visitor whose first
   file was over 100 pages. Mimic / create use the abort signal only (not affected).
-- **Carousel playbook for every social post (2026-10-08, NOT committed yet):**
+- **Carousel playbook for every social post (2026-10-08, live in `6fe4a23`):**
   `SOCIAL_PLAYBOOK` in `lib/deck/frame.ts` (social persona only): pick the format from
   the topic (tips, how-to, product, myth/fact or before/after, story, insight,
   announcement), hook card 1 (8 words), card 2 delivers alone, one idea per card
