@@ -6,7 +6,7 @@ lands or a new one starts.
 
 ## State
 
-- **Live (2026-10-08): `main` = `41b9d2d`** (PR #208): everything below marked "NOT live
+- **Live (2026-10-08): `main` = `6b7c61c`** (after PR #208 `41b9d2d`): everything below marked "NOT live
   yet" / "NOT committed yet" in the 2026-10-07 section is now live.
 - Earlier: `e6bcf86`. Everything in "Batch on dev, 2026-10-06"
   below is live too (deployed 2026-10-07), plus the Oct 7 items in the next section.
@@ -103,12 +103,13 @@ lands or a new one starts.
   2026-10-08: auto social aims for 6 to 8 posts (`SOCIAL_AUTO_AIM`, brief
   `slideCountAim`), longer only when the content lists more points; a free auto
   carousel plans 7 (`SOCIAL_TEASER_DEFAULT_TOTAL`: 3 built + 4 locked) instead of 10.
-- **Unlocked decks exported only the free slides (fixed 2026-10-08, NOT committed yet):**
+- **Unlocked decks exported only the free slides (fixed 2026-10-08, live in `6b7c61c`):**
   the first generation auto-saves the teaser version as `savedVersionId`; deck-unlock
   moved only `currentVersionId`, and PNG / PDF export, thumbnails and the library read
   `savedVersionId` first. deck-unlock now moves the saved pin too. Decks unlocked before
-  the fix: run `scripts/fix-unlocked-saved-version.ts` (dry run, then `--apply`)
-  against production once.
+  the fix: `scripts/fix-unlocked-saved-version.ts` was run on production 2026-10-08
+  (2 of 4 unlocked decks repaired). Their dashboard thumbnails may still show the old
+  version until re-rendered.
 - **Now unused (delete or reuse, owner to decide):** `DesignStep` and `BrandStep` in
   `wizard.tsx`, `WizardHead`'s rail / hints props, the `flows.wizard.hints.*` strings.
 
