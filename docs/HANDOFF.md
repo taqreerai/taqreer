@@ -7,7 +7,7 @@ lands or a new one starts.
 ## State
 
 - **Live (2026-10-08): `main` = `55f3507`** (after PR #208 `41b9d2d`): everything below marked "NOT live
-  yet" / "NOT committed yet" in the 2026-10-07 section is now live.
+  yet" / "live in bfa6efc" in the 2026-10-07 section is now live.
 - Earlier: `e6bcf86`. Everything in "Batch on dev, 2026-10-06"
   below is live too (deployed 2026-10-07), plus the Oct 7 items in the next section.
 - **Checkout crash fixed (2026-10-07, `759a4ba` + `e6bcf86`):** Stripe's checkout threw
@@ -71,7 +71,7 @@ lands or a new one starts.
   directive in `DESIGN_STYLE_DIRECTIVES` (deck-generate). Labels differ from the deck
   styles on purpose. Prompt-pipeline edit (static text only): run `/security-review`.
   Not yet tested: a real generation with each new style.
-- **Email sign-up keeps the visitor's work (2026-10-07, NOT committed yet):** the
+- **Email sign-up keeps the visitor's work (2026-10-07, live in bfa6efc):** the
   confirm-signup email always linked to /dashboard, so a visitor who signed up at
   Create lost their setup (and on another device the draft isn't there at all).
   - The confirm screen on /signup now takes the emailed 6-digit code
@@ -94,7 +94,7 @@ lands or a new one starts.
   - **Owner step:** paste the new body from `docs/auth-emails/PASTE-INTO-SUPABASE.md`
     (section 1) into Supabase, Authentication -> Emails -> Confirm signup, BEFORE
     deploying (the old site ignores the new parts, so pasting first is safe).
-- **Social: at least 5 posts, free shows 3 (2026-10-07, NOT committed yet):**
+- **Social: at least 5 posts, free shows 3 (2026-10-07, live in bfa6efc):**
   `SOCIAL_MIN_POSTS` 5 and `SOCIAL_TEASER_VISIBLE` 3 in `lib/credits/cost.ts`
   (`teaserVisibleForFlow`). The route clamps a social count to >= 5, plans the teaser
   with 3 visible (held and charged) and the rest locked; auto social briefs carry
@@ -138,7 +138,7 @@ lands or a new one starts.
   Lalezar, Aref Ruqaa for social only (short text). A user pick, a brand kit font or an
   upload always wins. Mimic, template runs, the brand kit editor and datasheet keep
   Noto (`defaultBrandFont`).
-- **One-time deck unlock (2026-10-08, NOT committed yet, needs PR + security review):**
+- **One-time deck unlock (2026-10-08, live in bfa6efc, needs PR + security review):**
   a free owner can buy ONE teaser deck instead of subscribing: $4.99 (up to 15
   slides) / $5.99 (16-30) / $6.99 (31-50), by the deck's planned size (free part +
   locked tail); above 50 = subscription only. Margins after Stripe + AI cost:
@@ -166,7 +166,7 @@ lands or a new one starts.
   and the failed screen (via `lib/project/fail-reason.ts`, status route + load-project
   `failReason`) says "rephrase your request" with an Edit-the-request link instead of
   Try again.
-- **Guest files survive sign-up on iOS Safari (2026-10-08, NOT committed yet):** a
+- **Guest files survive sign-up on iOS Safari (2026-10-08, live in bfa6efc):** a
   visitor's attached files were kept in IndexedDB as File values; iOS Safari restores
   them unreadable, so the post-sign-up upload broke mid-body and /api/extract 500'd
   ("Failed to parse body as FormData", user samamamrash, iPhone iOS 18.7). The draft
