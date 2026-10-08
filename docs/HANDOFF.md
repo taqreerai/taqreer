@@ -154,10 +154,10 @@ lands or a new one starts.
   - Entitlement: /unlock, studio watermark (load-project), PDF/PNG export and the
     client PPTX export (DeckPurchaseContext) treat a bought deck like a paid one.
   - UI: UpgradeModal shows a "just this presentation" card above the plans.
-  - Owner steps before live: run `npx tsx scripts/stripe-setup-products.ts --live`
-    (creates the 3 prices; the script now chunks lookup_keys by 10), and add
-    `checkout.session.async_payment_succeeded` + `charge.refunded` to the Stripe
-    webhook endpoint's events.
+  - Live Stripe set up 2026-10-08: `deck_unlock_s/m/l` prices created in live, and the
+    "Taqreer prod" webhook destination listens to
+    `checkout.session.async_payment_succeeded` + `charge.refunded`. Non-refundable per
+    Terms section 6 / Refund Policy section 3 (no note on the offer, owner direction).
 - **Teaser shows its full length while generating + declined requests (2026-10-08, NOT
   committed yet):** a free deck's locked slots now appear in the studio from the start
   (writing slots capped at the built part, unlock button busy until it finishes). When
