@@ -14,7 +14,7 @@
 // the /callback route creates the account on first Google sign-in. Left-aligned
 // eyebrow + title, then the fields.
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -33,8 +33,6 @@ export function SignupForm({
   templateId,
   loginHref,
   title,
-  subtitle,
-  note,
   googleNextUrl,
   hardRedirect = false,
 }: {
@@ -42,12 +40,9 @@ export function SignupForm({
   nextUrl: string;
   templateId: string | null;
   loginHref: string;
-  // Step-1 heading overrides (the creation-tool window says what the account
-  // unlocks); the /signup page keeps the defaults.
+  // Step-1 heading override (the creation-tool window); the /signup page keeps
+  // the default.
   title?: string;
-  subtitle?: string;
-  // A line under the heading (the window's "your setup is saved").
-  note?: ReactNode;
   // GoogleAuthButton target when the host is not an auth page.
   googleNextUrl?: string;
   // Full page load on finish: the window's tool page must remount to read
@@ -437,28 +432,15 @@ export function SignupForm({
         /* ─── Step 1: email OR Google ─────────────────────────────── */
         <>
           <div className="text-start">
-            <p className="text-sm text-muted">{t.signup.eyebrow}</p>
-            <h1 className="mt-1 text-2xl font-bold">{title ?? t.signup.title}</h1>
-            {subtitle ? <p className="mt-2 text-sm leading-6 text-muted">{subtitle}</p> : null}
-            {note ? <div className="mt-2">{note}</div> : null}
+            <h1 className="text-2xl font-bold">{title ?? t.signup.title}</h1>
           </div>
 
-          <div className="space-y-2">
-            <GoogleAuthButton
-              disabled={loading}
-              onError={setError}
-              onBusyChange={setLoading}
-              nextUrl={googleNextUrl}
-            />
-            {/* Google needs no confirmation email: nothing can pull the user
-                away from what they were doing (2026-10-07). */}
-            <p className="flex items-center justify-center gap-1 text-xs text-muted">
-              <span className="material-symbols-outlined text-[14px]" aria-hidden>
-                bolt
-              </span>
-              {t.signup.googleHint}
-            </p>
-          </div>
+          <GoogleAuthButton
+            disabled={loading}
+            onError={setError}
+            onBusyChange={setLoading}
+            nextUrl={googleNextUrl}
+          />
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">

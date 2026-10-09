@@ -101,15 +101,6 @@ export function GuestSignupDialog({
                 googleNextUrl={next}
                 hardRedirect
                 title={t.title}
-                subtitle={flow === "social" ? t.bodySocial : t.body}
-                note={
-                  <p className="flex items-center gap-1.5 text-xs text-muted">
-                    <span className="material-symbols-outlined text-[14px] text-[var(--tq-status-ok-text)]" aria-hidden>
-                      check_circle
-                    </span>
-                    {t.saved}
-                  </p>
-                }
               />
 
               {/* Fine print, as on the /signup page (auth layout). */}

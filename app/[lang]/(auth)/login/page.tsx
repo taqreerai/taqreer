@@ -95,8 +95,7 @@ export default function LoginPage() {
       className="space-y-5"
     >
       <div className="text-start">
-        <p className="text-sm text-muted">{t.login.eyebrow}</p>
-        <h1 className="mt-1 text-2xl font-bold">{t.login.title}</h1>
+        <h1 className="text-2xl font-bold">{t.login.title}</h1>
       </div>
 
       {deleted && (

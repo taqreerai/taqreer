@@ -1103,6 +1103,34 @@ html.app-shell-scroll body {
 }
 
 /* ─── Buttons ─── */
+/* "Continue with Google": Google's own light button (white, coloured G, dark
+   text, hairline grey border) in BOTH themes, so it reads as the familiar
+   Google button instead of a disabled field (2026-10-09). */
+.btn-google {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  height: 3rem;
+  border-radius: 9999px;
+  border: 1px solid #dadce0;
+  background: #fff;
+  color: #1f1f1f;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s, box-shadow 0.15s;
+}
+.btn-google:hover:not(:disabled) {
+  background: #f8f9fa;
+  box-shadow: 0 1px 2px rgb(60 64 67 / 0.3);
+}
+.btn-google:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .btn-gradient {
   /* Solid blue CTA (NOT a gradient — the brand gradient is reserved for AI
      buttons). Name kept so the ~24 CTA call sites don't need edits.
