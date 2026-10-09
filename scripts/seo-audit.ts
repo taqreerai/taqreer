@@ -20,13 +20,13 @@ type Targets = { ar?: string[]; en?: string[] };
 // Source: the header comment of each marketing page + docs/HANDOFF.md keyword
 // table (Saudi Arabia volumes). Pages with no measured demand are omitted.
 const TARGETS: Record<string, Targets> = {
-  "": { ar: ["تصميم عرض تقديمي"] },
+  "": { ar: ["عرض تقديمي بالذكاء الاصطناعي"] },
   "ai-presentations": { ar: ["تصميم عرض تقديمي بالذكاء الاصطناعي"] },
-  "arabic-presentations": { ar: ["عروض تقديمية عربية"] },
+  "arabic-presentations": { ar: ["عروض تقديمية عربية"], en: ["arabic presentations"] },
   "presentation-templates": { ar: ["قوالب عروض تقديمية", "قالب بوربوينت"], en: ["presentation templates"] },
   pricing: { ar: ["اسعار taqreer"] },
   redesign: { ar: ["إعادة تصميم عرض تقديمي"], en: ["redesign powerpoint"] },
-  "social-media-posts": { ar: ["تصميم منشورات لمنصات التواصل الاجتماعي"] },
+  "social-media-posts": { ar: ["تصميم منشورات سوشيال ميديا بالذكاء الاصطناعي"] },
   "presentation-style": { ar: ["تصميم عرض بنفس النمط"] },
   "gamma-arabic": { ar: ["جاما ai", "gamma app بالعربي"] },
   "pdf-to-powerpoint": { ar: ["تحويل pdf الى بوربوينت"], en: ["convert pdf to powerpoint"] },
