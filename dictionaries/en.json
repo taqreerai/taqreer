@@ -140,12 +140,12 @@
     "cta": "Make a deck with these images",
     "meta": {
       "title": "Free Stock Images Library | taqreer.ai",
-      "description": "Browse a free library of AI-generated stock images. Search by description, filter by landscape or portrait, and download any image for your presentations and projects."
+      "description": "Free stock images made with AI: search by description, filter by landscape or portrait, and download any image."
     },
     "hero": {
       "eyebrow": "Free stock images",
       "title": "Free stock images library",
-      "subtitle": "A growing library of AI-generated images, free to download. Search by description and filter by landscape or portrait."
+      "subtitle": "Free stock images in a growing AI-generated library, free to download. Search by description and filter by landscape or portrait."
     },
     "breadcrumb": "Free stock images",
     "searchLabel": "Search images by description",
@@ -380,13 +380,13 @@
   "redesign": {
     "meta": {
       "title": "Redesign PowerPoint with AI | taqreer.ai",
-      "description": "Redesign your PowerPoint with AI: upload your old deck and taqreer.ai redesigns it in your brand, keeping your text exactly as it is. Ready to edit and export."
+      "description": "Redesign PowerPoint with AI: upload your old deck and taqreer.ai redesigns it in your brand, keeping your text exactly as it is."
     },
     "breadcrumb": "Redesign",
     "hero": {
       "eyebrow": "Enhance",
-      "title": "Redesign your PowerPoint with AI",
-      "subtitle": "Redesign a PowerPoint by uploading it as a PDF or PPTX: taqreer.ai redesigns it in your brand while keeping your text exactly as it is, in Arabic and English.",
+      "title": "Redesign PowerPoint decks with AI",
+      "subtitle": "Redesign PowerPoint decks by uploading a PDF or PPTX: taqreer.ai redesigns it in your brand while keeping your text exactly as it is, in Arabic and English.",
       "cta": "Try it free"
     },
     "preview": {
@@ -523,7 +523,7 @@
   "arabicPresentations": {
     "meta": {
       "title": "Arabic Presentations with True RTL Support | taqreer.ai",
-      "description": "Create Arabic presentations that export to PowerPoint with correct right-to-left direction, proper alignment, numbers and English terms in the right place, and authentic Arabic fonts. taqreer.ai handles bidirectional text end to end."
+      "description": "Arabic presentations that export to PowerPoint with correct right-to-left direction, proper alignment, and numbers and English terms in the right place."
     },
     "breadcrumb": "Arabic Presentations",
     "hero": {
@@ -925,13 +925,13 @@
   "wordToPowerpoint": {
     "meta": {
       "title": "Word to PowerPoint with AI | taqreer.ai",
-      "description": "Convert a Word document into a designed PowerPoint deck with AI. Upload a DOCX, apply your brand, and get editable slides you can export."
+      "description": "Word to PowerPoint with AI: upload a DOCX, apply your brand, and get editable slides you can export."
     },
     "breadcrumb": "Word to PowerPoint",
     "hero": {
       "eyebrow": "Word to PowerPoint",
       "title": "Convert Word to PowerPoint with AI",
-      "subtitle": "Upload a Word document and the AI turns your text into an organized PowerPoint deck in your brand, in Arabic and English.",
+      "subtitle": "Convert Word to PowerPoint by uploading a Word document: the AI turns your text into an organized deck in your brand, in Arabic and English.",
       "cta": "Try it free"
     },
     "preview": {
@@ -1101,13 +1101,13 @@
   "powerpointImages": {
     "meta": {
       "title": "PowerPoint Images with AI | taqreer.ai",
-      "description": "Add images to your PowerPoint with AI: generated images that fit each slide, a free photo library, and your own uploads, in a deck designed in your brand."
+      "description": "PowerPoint images with AI: generated images that fit each slide, a free photo library, and your own uploads, in your brand."
     },
     "breadcrumb": "PowerPoint images",
     "hero": {
       "eyebrow": "Images",
-      "title": "AI images for your PowerPoint",
-      "subtitle": "The AI generates images that fit each slide's content and design, or pick from the photo library or upload your own.",
+      "title": "PowerPoint images made by AI",
+      "subtitle": "PowerPoint images that fit each slide's content and design: the AI generates them, or pick from the photo library or upload your own.",
       "cta": "Try it free"
     },
     "preview": {
