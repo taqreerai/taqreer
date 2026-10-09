@@ -719,22 +719,28 @@ export default function CreatePage() {
     return { content: contentFile, logo: logoFile, fonts };
   }, [brandFont, contentFile, logoFile]);
 
+  // A visitor who comes back still signed out (Back from Google's page, a
+  // closed sign-up window, a reload) gets their draft back too (2026-10-09:
+  // they landed on an empty first step and typed it all again, in a loop).
+  // Saving waits until that restore has run, or the empty first render
+  // would overwrite the draft.
+  const [guestDraftReady, setGuestDraftReady] = useState(false);
   useEffect(() => {
-    if (!guest) return;
+    if (!guest || !guestDraftReady) return;
     const id = window.setTimeout(() => saveGuestSettings("create", guestSettings), 300);
     return () => window.clearTimeout(id);
-  }, [guest, guestSettings]);
+  }, [guest, guestDraftReady, guestSettings]);
   useEffect(() => {
-    if (!guest) return;
+    if (!guest || !guestDraftReady) return;
     void saveGuestFiles("create", guestFiles);
-  }, [guest, guestFiles]);
+  }, [guest, guestDraftReady, guestFiles]);
   // The top bar's "Log in" asks for an immediate save before leaving.
   useEffect(() => {
-    if (!guest) return;
+    if (!guest || !guestDraftReady) return;
     const flush = () => saveGuestSettings("create", guestSettings);
     window.addEventListener(GUEST_SAVE_EVENT, flush);
     return () => window.removeEventListener(GUEST_SAVE_EVENT, flush);
-  }, [guest, guestSettings]);
+  }, [guest, guestDraftReady, guestSettings]);
 
   const [guestSignupOpen, setGuestSignupOpen] = useState(false);
   const openGuestSignup = async () => {
@@ -746,20 +752,31 @@ export default function CreatePage() {
 
   // Restore after sign-up. "generate" also presses Create by itself (the
   // free-trial pop-up still shows first for a free account) once the file
-  // is extracted and the template resolved.
+  // is extracted and the template resolved. A visitor still signed out gets
+  // a plain restore: same setup and step, the draft kept, nothing starts.
+  // A gallery pick (?template=) is a fresh start and skips it.
   const [autoStart, setAutoStart] = useState(false);
   useEffect(() => {
-    if (guest) return;
-    const mode = readResumeMode();
-    if (!mode) return;
+    const freshPick = new URLSearchParams(window.location.search).has("template");
+    const mode = guest ? (freshPick ? null : "restore") : readResumeMode();
+    if (!mode) {
+      if (guest) queueMicrotask(() => setGuestDraftReady(true));
+      return;
+    }
     let aborted = false;
     (async () => {
       const draft = await loadGuestDraft<GuestDraftSettings>("create");
-      // Drop ?resume so a reload never replays it.
-      const url = new URL(window.location.href);
-      url.searchParams.delete("resume");
-      window.history.replaceState(null, "", url.toString());
-      if (aborted || !draft) return;
+      if (aborted) return;
+      if (!guest) {
+        // Drop ?resume so a reload never replays it.
+        const url = new URL(window.location.href);
+        url.searchParams.delete("resume");
+        window.history.replaceState(null, "", url.toString());
+      }
+      if (!draft) {
+        setGuestDraftReady(true);
+        return;
+      }
       const d = draft.settings;
       setContentText(d.contentText ?? "");
       if (d.language === "ar" || d.language === "en") setLanguage(d.language);
@@ -800,6 +817,17 @@ export default function CreatePage() {
       setImagesMode(!!d.imagesMode);
       if (draft.files.content) setContentFromInput(draft.files.content);
       setStep(mode === "generate" ? LAST_STEP : Math.min(LAST_STEP, Math.max(0, d.step)));
+      setGuestDraftReady(true);
+      if (guest) {
+        // The template stays a remembered pick until sign-in.
+        if (d.templateId) setTemplate({ id: d.templateId, designAnthropicFileId: "" });
+        if (draft.files.lost) {
+          setStep(0);
+          setError(t.guestFileLost);
+        }
+        posthog.capture("create_guest_draft_restored", { flow: "create", step: d.step, hasFile: !!draft.files.content });
+        return;
+      }
       void clearGuestDraft("create");
       posthog.capture("create_guest_resumed", { mode, hasFile: !!draft.files.content });
 

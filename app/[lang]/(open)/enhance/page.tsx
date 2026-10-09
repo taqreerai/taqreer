@@ -766,30 +766,34 @@ export default function EnhanceContentPage() {
     imagesMode,
   };
   const guestSettingsJson = JSON.stringify(guestSettings);
+  // A visitor who comes back still signed out gets their draft back too
+  // (2026-10-09, see /create). Saving waits until that restore has run, or
+  // the empty first render would overwrite the draft.
+  const [guestDraftReady, setGuestDraftReady] = useState(false);
   useEffect(() => {
-    if (!guest) return;
+    if (!guest || !guestDraftReady) return;
     const id = window.setTimeout(
       () => saveGuestSettings("enhance", JSON.parse(guestSettingsJson)),
       300,
     );
     return () => window.clearTimeout(id);
-  }, [guest, guestSettingsJson]);
+  }, [guest, guestDraftReady, guestSettingsJson]);
   const guestFiles: GuestDraftFiles = {
     content: file,
     logo: logoFile,
     fonts: guestFont.fontFiles,
   };
   useEffect(() => {
-    if (!guest) return;
+    if (!guest || !guestDraftReady) return;
     void saveGuestFiles("enhance", { content: file, logo: logoFile, fonts: fontToDraft(brandFont).fontFiles });
-  }, [guest, file, logoFile, brandFont]);
+  }, [guest, guestDraftReady, file, logoFile, brandFont]);
   // The top bar's "Log in" asks for an immediate save before leaving.
   useEffect(() => {
-    if (!guest) return;
+    if (!guest || !guestDraftReady) return;
     const flush = () => saveGuestSettings("enhance", JSON.parse(guestSettingsJson));
     window.addEventListener(GUEST_SAVE_EVENT, flush);
     return () => window.removeEventListener(GUEST_SAVE_EVENT, flush);
-  }, [guest, guestSettingsJson]);
+  }, [guest, guestDraftReady, guestSettingsJson]);
 
   const [guestSignupOpen, setGuestSignupOpen] = useState(false);
   const openGuestSignup = async () => {
@@ -800,18 +804,25 @@ export default function EnhanceContentPage() {
   };
 
   const [autoStart, setAutoStart] = useState(false);
+  // A visitor still signed out gets a plain restore: same setup and step,
+  // the draft kept, nothing starts.
   useEffect(() => {
-    if (guest) return;
-    const mode = readResumeMode();
+    const mode = guest ? "restore" : readResumeMode();
     if (!mode) return;
     let aborted = false;
     (async () => {
       const draft = await loadGuestDraft<EnhanceGuestSettings>("enhance");
-      // Drop ?resume so a reload never replays it.
-      const url = new URL(window.location.href);
-      url.searchParams.delete("resume");
-      window.history.replaceState(null, "", url.toString());
-      if (aborted || !draft) return;
+      if (aborted) return;
+      if (!guest) {
+        // Drop ?resume so a reload never replays it.
+        const url = new URL(window.location.href);
+        url.searchParams.delete("resume");
+        window.history.replaceState(null, "", url.toString());
+      }
+      if (!draft) {
+        setGuestDraftReady(true);
+        return;
+      }
       const d = draft.settings;
       setInstructions(d.instructions ?? "");
       setTemplateId(d.templateId ?? null);
@@ -826,9 +837,18 @@ export default function EnhanceContentPage() {
         setLoadedLogo(null);
       }
       setImagesMode(!!d.imagesMode);
-      // Starts the upload + analysis, now signed in.
+      // Starts the upload + analysis when signed in (a visitor's file waits).
       if (draft.files.content) validateAndSetFile(draft.files.content);
       setStep(mode === "generate" ? ENHANCE_LAST_STEP : Math.min(ENHANCE_LAST_STEP, Math.max(0, d.step)));
+      setGuestDraftReady(true);
+      if (guest) {
+        if (draft.files.lost) {
+          setStep(0);
+          setError(dict.flows.guestFileLost);
+        }
+        posthog.capture("create_guest_draft_restored", { flow: "enhance", step: d.step, hasFile: !!draft.files.content });
+        return;
+      }
       void clearGuestDraft("enhance");
       posthog.capture("create_guest_resumed", { flow: "enhance", mode, hasFile: !!draft.files.content });
       if (draft.files.lost) {

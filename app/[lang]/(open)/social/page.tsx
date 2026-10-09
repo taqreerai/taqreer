@@ -528,28 +528,32 @@ export default function SocialPage() {
     uploadedFonts: guestFont.uploadedFonts,
   };
   const guestSettingsJson = JSON.stringify(guestSettings);
+  // A visitor who comes back still signed out gets their draft back too
+  // (2026-10-09, see /create). Saving waits until that restore has run, or
+  // the empty first render would overwrite the draft.
+  const [guestDraftReady, setGuestDraftReady] = useState(false);
   useEffect(() => {
-    if (!guest) return;
+    if (!guest || !guestDraftReady) return;
     const id = window.setTimeout(
       () => saveGuestSettings("social", JSON.parse(guestSettingsJson)),
       300,
     );
     return () => window.clearTimeout(id);
-  }, [guest, guestSettingsJson]);
+  }, [guest, guestDraftReady, guestSettingsJson]);
   useEffect(() => {
-    if (!guest) return;
+    if (!guest || !guestDraftReady) return;
     void saveGuestFiles("social", {
       content: productFile,
       logo: logoFile,
       fonts: fontToDraft(brandFont).fontFiles,
     });
-  }, [guest, productFile, logoFile, brandFont]);
+  }, [guest, guestDraftReady, productFile, logoFile, brandFont]);
   useEffect(() => {
-    if (!guest) return;
+    if (!guest || !guestDraftReady) return;
     const flush = () => saveGuestSettings("social", JSON.parse(guestSettingsJson));
     window.addEventListener(GUEST_SAVE_EVENT, flush);
     return () => window.removeEventListener(GUEST_SAVE_EVENT, flush);
-  }, [guest, guestSettingsJson]);
+  }, [guest, guestDraftReady, guestSettingsJson]);
 
   const [guestSignupOpen, setGuestSignupOpen] = useState(false);
   const openGuestSignup = async () => {
@@ -564,17 +568,24 @@ export default function SocialPage() {
   };
 
   const [autoStart, setAutoStart] = useState(false);
+  // A visitor still signed out gets a plain restore: same setup and step,
+  // the draft kept, nothing starts.
   useEffect(() => {
-    if (guest) return;
-    const mode = readResumeMode();
+    const mode = guest ? "restore" : readResumeMode();
     if (!mode) return;
     let aborted = false;
     (async () => {
       const draft = await loadGuestDraft<SocialGuestSettings>("social");
-      const url = new URL(window.location.href);
-      url.searchParams.delete("resume");
-      window.history.replaceState(null, "", url.toString());
-      if (aborted || !draft) return;
+      if (aborted) return;
+      if (!guest) {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("resume");
+        window.history.replaceState(null, "", url.toString());
+      }
+      if (!draft) {
+        setGuestDraftReady(true);
+        return;
+      }
       const d = draft.settings;
       setTopic(d.topic ?? "");
       if (d.language === "ar" || d.language === "en") setLanguage(d.language);
@@ -598,6 +609,15 @@ export default function SocialPage() {
       }
       if (draft.files.content) setProductPhoto(draft.files.content);
       setStep(mode === "generate" ? SOCIAL_LAST_STEP : Math.min(SOCIAL_LAST_STEP, Math.max(0, d.step)));
+      setGuestDraftReady(true);
+      if (guest) {
+        if (draft.files.lost) {
+          setStep(0);
+          setError(dict.flows.guestFileLost);
+        }
+        posthog.capture("create_guest_draft_restored", { flow: "social", step: d.step, hasFile: !!draft.files.content });
+        return;
+      }
       void clearGuestDraft("social");
       posthog.capture("create_guest_resumed", { flow: "social", mode });
       if (draft.files.lost) {
