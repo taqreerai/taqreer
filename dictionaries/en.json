@@ -90,7 +90,7 @@
     "hero": {
       "eyebrow": "Templates",
       "title": "Ready-made, editable presentation templates",
-      "subtitle": "Start from a professionally designed presentation template, in Arabic or English. Customize it with AI and your brand in minutes, then export to PowerPoint.",
+      "subtitle": "Presentation templates you can edit with AI: start from a professionally designed template in Arabic or English, customize it with your brand in minutes, then export to PowerPoint.",
       "cta": "Try it free"
     },
     "gallery": {
@@ -385,8 +385,8 @@
     "breadcrumb": "Redesign",
     "hero": {
       "eyebrow": "Enhance",
-      "title": "Redesign your existing deck with AI",
-      "subtitle": "Upload an existing deck in PDF or PowerPoint, and taqreer.ai redesigns it with your brand while keeping your text exactly as it is, in Arabic and English.",
+      "title": "Redesign your PowerPoint with AI",
+      "subtitle": "Redesign a PowerPoint by uploading it as a PDF or PPTX: taqreer.ai redesigns it in your brand while keeping your text exactly as it is, in Arabic and English.",
       "cta": "Try it free"
     },
     "preview": {
@@ -850,7 +850,7 @@
     "hero": {
       "eyebrow": "PDF to PowerPoint",
       "title": "Convert PDF to PowerPoint with AI",
-      "subtitle": "Upload a PDF and the AI reads its content and turns it into a designed PowerPoint deck in your brand, ready to edit and export as PPTX.",
+      "subtitle": "Convert PDF to PowerPoint in one step: upload your file and the AI reads its content and turns it into a designed deck in your brand, ready to edit and export as PPTX.",
       "cta": "Try it free"
     },
     "preview": {
@@ -1017,14 +1017,14 @@
   },
   "powerpointOnline": {
     "meta": {
-      "title": "PowerPoint Online Editor with AI | taqreer.ai",
+      "title": "Edit PowerPoint Online with AI | taqreer.ai",
       "description": "Edit presentations online in your browser: change text, images, and layers, ask AI to rework any slide, with autosave and version history."
     },
     "breadcrumb": "Online editor",
     "hero": {
       "eyebrow": "Editor",
       "title": "Edit PowerPoint online with AI",
-      "subtitle": "Change every detail of your deck right in the browser: drag, resize, and arrange layers, or ask the AI to redesign any slide.",
+      "subtitle": "Edit PowerPoint online right in your browser: drag, resize, and arrange layers, or ask the AI to redesign any slide, with nothing to install.",
       "cta": "Try it free"
     },
     "why": {
