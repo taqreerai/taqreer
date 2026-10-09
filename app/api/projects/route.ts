@@ -37,6 +37,7 @@ import {
   SOCIAL_MIN_POSTS,
   teaserDefaultTotalForFlow,
   teaserVisibleForFlow,
+  teaserVisibleFor,
   estimateSlides,
   slideCapForFlow,
 } from "@/lib/credits/cost";
@@ -956,7 +957,8 @@ export async function POST(request: Request) {
   const isFreeTrial =
     dbUser.role !== "admin" && normalizePlan(dbUser.plan) === "free";
   // Visible part of a teaser: 5 slides, 3 posts for social (2026-10-07).
-  const teaserVisible = teaserVisibleForFlow(creditFlow);
+  // At or below this many slides a deck is fully free (nothing to lock).
+  const teaserFreeMax = teaserVisibleForFlow(creditFlow);
   let teaserPlannedTotal = 0;
   if (isFreeTrial) {
     const est = estimateSlides(slideInput);
@@ -966,9 +968,11 @@ export async function POST(request: Request) {
       est.slides ?? teaserDefaultTotalForFlow(creditFlow),
       slideCapForFlow(creditFlow, getTier("free").slideCap),
     );
-    if (wanted > teaserVisible) teaserPlannedTotal = wanted;
+    if (wanted > teaserFreeMax) teaserPlannedTotal = wanted;
   }
   const isTeaser = teaserPlannedTotal > 0;
+  // Built part: 5 slides, shrunk so at least TEASER_MIN_LOCKED stay locked.
+  const teaserVisible = isTeaser ? teaserVisibleFor(creditFlow, teaserPlannedTotal) : teaserFreeMax;
   const teaserLockedCount = isTeaser ? teaserPlannedTotal - teaserVisible : 0;
 
   const preflight = await preflightGenerate({

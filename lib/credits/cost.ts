@@ -130,6 +130,18 @@ export function teaserVisibleForFlow(flow: Flow): number {
   return flow === "social" ? SOCIAL_TEASER_VISIBLE : TEASER_VISIBLE_COUNT;
 }
 
+// A free deck always keeps at least this many slides / posts locked
+// (2026-10-09), so a 6-slide request no longer gives away 5 of 6. Applies to
+// every flow, social carousels included.
+export const TEASER_MIN_LOCKED = 3;
+
+/** Slides / posts a free teaser builds for a planned deck of `total`: the
+ *  flow's visible count, shrunk so at least TEASER_MIN_LOCKED stay locked. */
+export function teaserVisibleFor(flow: Flow, total: number): number {
+  const visible = teaserVisibleForFlow(flow);
+  return Math.max(1, Math.min(visible, total - TEASER_MIN_LOCKED));
+}
+
 /** The planned length of a free auto deck / carousel for this flow. */
 export function teaserDefaultTotalForFlow(flow: Flow): number {
   return flow === "social" ? SOCIAL_TEASER_DEFAULT_TOTAL : TEASER_DEFAULT_TOTAL;
