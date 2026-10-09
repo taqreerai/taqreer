@@ -43,8 +43,10 @@ export type FontTarget =
 /** One converted weight, EOT bytes base64-encoded for JSON transport. The
  * weight is the numeric CSS font-weight (100–900) of that @font-face. */
 export type ConvertedFontFile = { weight: number; eotBase64: string };
-/** A font family with its converted weight files, ready to splice. */
-export type ConvertedFont = { name: string; files: ConvertedFontFile[] };
+/** A font family with its converted weight files, ready to splice. `alias`
+ * is set when the server renamed the files (see embedAlias): the splice then
+ * registers the alias and renames the deck's runs to it. */
+export type ConvertedFont = { name: string; alias?: string; files: ConvertedFontFile[] };
 export type EmbedFontStats = { attempted: number; embedded: number; failed: number };
 
 // CSS numeric weight → the typeface-NAME suffix PowerPoint uses for that
@@ -79,6 +81,57 @@ export function normalizeWeight(weight: number | string): number {
 export function weightedTypeface(base: string, weight: number | string): string {
   const suffix = WEIGHT_SUFFIX[normalizeWeight(weight)] ?? "";
   return suffix ? `${base} ${suffix}` : base;
+}
+
+/** Private embed name for a Google family: PowerPoint prefers an INSTALLED
+ *  font over the embedded copy when the names match, so an incomplete local
+ *  install (e.g. the Arabic-only Noto release of "Noto Sans Arabic", no Latin
+ *  letters) used to break the deck's text. Single source of truth for the
+ *  server rename (embed-fonts.ts) and the run rename below. */
+export function embedAlias(name: string): string {
+  return `${name} TQ`;
+}
+
+function escapeXmlAttr(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+// Rename every `typeface="…"` that names one of the aliased families (any of
+// the 9 weight names) across the package's XML parts: slides, layouts,
+// masters, theme, notes. dom-to-pptx writes the real family name; the
+// embedded entries carry the alias, so the runs must follow.
+async function renameTypefaces(zip: JSZipType, fonts: ConvertedFont[]): Promise<void> {
+  const map = new Map<string, string>();
+  for (const f of fonts) {
+    if (!f.alias) continue;
+    for (const w of [100, 200, 300, 400, 500, 600, 700, 800, 900]) {
+      map.set(
+        escapeXmlAttr(weightedTypeface(f.name, w)),
+        escapeXmlAttr(weightedTypeface(f.alias, w)),
+      );
+    }
+  }
+  if (map.size === 0) return;
+  const parts = Object.keys(zip.files).filter(
+    (p) => p.startsWith("ppt/") && p.endsWith(".xml"),
+  );
+  for (const path of parts) {
+    const entry = zip.file(path);
+    if (!entry) continue;
+    const xml = await entry.async("string");
+    let changed = false;
+    const next = xml.replace(/typeface="([^"]*)"/g, (whole, value: string) => {
+      const alias = map.get(value);
+      if (!alias) return whole;
+      changed = true;
+      return `typeface="${alias}"`;
+    });
+    if (changed) zip.file(path, next);
+  }
 }
 
 function base64ToBytes(b64: string): Uint8Array {
@@ -267,7 +320,7 @@ export async function embedConvertedFontsInPptx(
   const fileNameByBytes = new Map<string, string>();
   for (const set of usable) {
     for (const file of set.files) {
-      const typeface = weightedTypeface(set.name, file.weight);
+      const typeface = weightedTypeface(set.alias ?? set.name, file.weight);
       if (seenTypefaces.has(typeface)) continue;
       seenTypefaces.add(typeface);
       let fileName = fileNameByBytes.get(file.eotBase64);
@@ -286,6 +339,7 @@ export async function embedConvertedFontsInPptx(
   if (stats) stats.embedded += embeddedCount;
 
   zip.file("ppt/presentation.xml", serializer.serializeToString(presentationDoc));
+  await renameTypefaces(zip, usable);
   zip.file(
     "ppt/_rels/presentation.xml.rels",
     serializer.serializeToString(relsDoc),

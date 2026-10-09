@@ -328,7 +328,7 @@ export function useExportActions({
         const { blob } = await exportManifestAsPptx(
           exportManifest,
           `${title}.pptx`,
-          { skipDownload: true, ...freeWatermarkOpts },
+          { skipDownload: true, aliasFonts: false, ...freeWatermarkOpts },
         );
         if (!blob) throw new Error("PPTX build produced no blob");
         // Slides can't render SVG - swap the upload copy to the raster

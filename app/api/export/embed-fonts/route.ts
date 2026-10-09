@@ -23,6 +23,9 @@ import { convertFontTargets, type FontTarget } from "@/lib/export/embed-fonts";
 // the deck shipped with NO embedded fonts. Sending only the font URLs keeps
 // the request tiny regardless of how many images the deck has.
 //
+// `alias: true` embeds Google families under a private name (embedAlias) so a
+// same-named font installed on the viewer's machine can't shadow the embed.
+//
 // The conversion (wawoff2 WASM, fonteditor-core) is Node-only, hence the
 // route. Best-effort: on any failure we return an empty set and the client
 // ships the deck un-embedded (PPT falls back to system fonts — a working
@@ -144,7 +147,9 @@ export async function POST(request: Request) {
   }
 
   try {
-    const fonts = await convertFontTargets(targets);
+    const fonts = await convertFontTargets(targets, {
+      alias: (body as { alias?: unknown }).alias === true,
+    });
     return NextResponse.json(
       { fonts },
       { headers: { "Cache-Control": "no-store" } },

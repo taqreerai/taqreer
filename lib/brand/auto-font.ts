@@ -86,6 +86,20 @@ const STYLE_FONT: Record<string, string> = {
   "Step by Step": "Noto Sans Arabic",
 };
 
+// English decks (2026-10-08): the list above is Arabic-first. An English deck
+// on Auto gets the Latin family with the same character as the pick, so its
+// type reads as designed for English rather than as an Arabic face's Latin.
+const LATIN_COUNTERPART: Record<string, string> = {
+  "Noto Sans Arabic": "Inter",
+  Cairo: "Poppins",
+  "Noto Naskh Arabic": "Noto Serif",
+  "Markazi Text": "Playfair Display",
+  Lemonada: "Nunito",
+  "Reem Kufi": "Poppins",
+  Lalezar: "Anton",
+  "Aref Ruqaa": "Playfair Display",
+};
+
 export function autoFontUrl(family: string): string {
   return `https://fonts.googleapis.com/css2?family=${encodeURIComponent(family).replace(/%20/g, "+")}:wght@100;200;300;400;500;600;700;800;900&display=swap`;
 }
@@ -99,15 +113,16 @@ export async function pickAutoFont(opts: {
   social: boolean;
   title: string;
   text: string;
+  language?: "ar" | "en";
 }): Promise<{ name: string; url: string; via: "style" | "model" | "default" }> {
   const allowed: readonly string[] = opts.social
     ? [...BODY_FONTS, ...DISPLAY_FONTS]
     : BODY_FONTS;
-  const done = (name: string, via: "style" | "model" | "default") => ({
-    name,
-    url: autoFontUrl(name),
-    via,
-  });
+  const done = (picked: string, via: "style" | "model" | "default") => {
+    const name =
+      opts.language === "en" ? (LATIN_COUNTERPART[picked] ?? picked) : picked;
+    return { name, url: autoFontUrl(name), via };
+  };
 
   const byStyle = opts.designStyle ? STYLE_FONT[opts.designStyle] : undefined;
   if (byStyle && allowed.includes(byStyle)) return done(byStyle, "style");

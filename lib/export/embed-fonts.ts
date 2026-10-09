@@ -26,8 +26,9 @@
 // avoids client CORS gymnastics for the Google Fonts CSS endpoint.
 
 import type { FontTarget, ConvertedFont } from "./embed-fonts-client";
-import { weightedTypeface } from "./embed-fonts-client";
+import { embedAlias, weightedTypeface } from "./embed-fonts-client";
 import { isCffFont, convertOtfToTtf } from "./otf-to-ttf";
+import { renameSfnt } from "./sfnt-rename";
 
 // Re-export the shared transport types so the API route + callers have one
 // import site.
@@ -148,21 +149,26 @@ async function ttfBytesToEot(
   }
 }
 
-// Google-path: fetch → (convert CFF→glyf if needed) → EOT. No rename (Google's
-// per-weight files already name themselves to match the run typefaces).
-async function fetchFontAsEot(src: FontSource): Promise<Uint8Array | null> {
+// Google-path: fetch → (convert CFF→glyf if needed) → EOT. With `renameTo`,
+// the internal names become that typeface first (the alias that keeps an
+// installed font of the same name from shadowing the embed - sfnt-rename.ts).
+async function fetchFontAsEot(
+  src: FontSource,
+  renameTo?: string,
+): Promise<Uint8Array | null> {
   let ttfBytes = await fetchRawFontBytes(src);
   if (!ttfBytes) return null;
   if (isCffFont(ttfBytes)) {
     const converted = await convertOtfToTtf(ttfBytes);
     if (converted) ttfBytes = converted;
   }
+  if (renameTo) ttfBytes = renameSfnt(ttfBytes, renameTo) ?? ttfBytes;
   return ttfBytesToEot(ttfBytes);
 }
 
 // ─── Build the per-font EOT set ─────────────────────────────────────
 
-async function fetchFontFiles(cssUrl: string): Promise<FontFile[]> {
+async function fetchFontFiles(cssUrl: string, alias?: string): Promise<FontFile[]> {
   let css: string;
   try {
     const res = await fetch(cssUrl, {
@@ -177,7 +183,7 @@ async function fetchFontFiles(cssUrl: string): Promise<FontFile[]> {
   // Run every weight in parallel — independent fetches.
   const results = await Promise.all(
     sources.map(async ({ weight, src }) => {
-      const eot = await fetchFontAsEot(src);
+      const eot = await fetchFontAsEot(src, alias && weightedTypeface(alias, weight));
       return eot ? { weight, fontBytes: eot } : null;
     }),
   );
@@ -267,18 +273,27 @@ async function fetchUploadedFontFiles(
  * The result is small (~0.5 MB of font bytes) and JSON-serialisable, so the
  * client can fetch it without ever uploading the deck. Fonts that fully fail
  * convert to `{ name, files: [] }` (the client skips those).
+ *
+ * `alias`: Google families embed under embedAlias(name) so a same-named
+ * installed font can't shadow them; the client renames the runs to match.
+ * Off for the Google Slides upload, which ignores embedded fonts and resolves
+ * the real family name against Google Fonts. Uploaded brand fonts keep their
+ * own names (the owner's installed copy is the same font).
  */
 export async function convertFontTargets(
   targets: FontTarget[],
+  opts?: { alias?: boolean },
 ): Promise<ConvertedFont[]> {
   return Promise.all(
     targets.map(async (t) => {
+      const alias = opts?.alias && !("faces" in t) ? embedAlias(t.name) : undefined;
       const files =
         "faces" in t
           ? await fetchUploadedFontFiles(t.faces, t.name)
-          : await fetchFontFiles(t.url);
+          : await fetchFontFiles(t.url, alias);
       return {
         name: t.name,
+        ...(alias && files.length > 0 ? { alias } : {}),
         files: files.map((f) => ({
           weight: f.weight,
           eotBase64: bytesToBase64(f.fontBytes),

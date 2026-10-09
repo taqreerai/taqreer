@@ -519,6 +519,11 @@ export async function exportManifestAsPptx(
     // adds the quiet watermark picture on slides 2+ plus the file credits
     // and the clickable link over the mark.
     freeWatermark?: "ar" | "en";
+    // Embed Google fonts under a private name (embedAlias) so an installed
+    // font of the same name can't shadow them. Default on; the Google Slides
+    // upload turns it off (Slides ignores embedded fonts and needs the real
+    // family name to find it in Google Fonts).
+    aliasFonts?: boolean;
   }
 ): Promise<{ stats: BiDiPostprocessStats; slideCount: number; blob?: Blob }> {
   // Slide canvas dimensions from the manifest's format (16:9 → 1920×1080;
@@ -847,7 +852,10 @@ export async function exportManifestAsPptx(
         const res = await fetch("/api/export/embed-fonts", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ fonts: fontTargets }),
+          body: JSON.stringify({
+            fonts: fontTargets,
+            alias: opts?.aliasFonts !== false,
+          }),
         });
         if (res.ok) {
           const payload = (await res.json()) as { fonts?: ConvertedFont[] };

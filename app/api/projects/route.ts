@@ -687,6 +687,7 @@ export async function POST(request: Request) {
       social: projectType === "social",
       title,
       text: payload.content?.type === "text" ? (payload.content.text ?? "") : "",
+      language: resolveLanguage(payload.language),
     });
     font = { name: picked.name, storageUrl: null, url: picked.url };
   }
