@@ -1280,18 +1280,26 @@ export default function EnhanceContentPage() {
                         </p>
                       ) : null}
                       {docLikePdf ? (
-                        <p
-                          className="mt-1.5 text-[11px] leading-4 text-foreground/70"
+                        <div
+                          className="mt-2 flex items-start gap-2 rounded-lg border border-foreground/15 bg-overlay-soft p-2.5 text-start"
                           onClick={(event) => event.stopPropagation()}
                         >
-                          {dict.flows.enhance.documentNudge}{" "}
-                          <Link
-                            href={localizedHref("/create", locale)}
-                            className="font-medium text-[var(--tq-brand-blue)] underline-offset-2 hover:underline"
+                          <span
+                            className="material-symbols-outlined text-[var(--tq-brand-blue)]"
+                            style={{ fontSize: "18px" }}
                           >
-                            {dict.flows.enhance.documentNudgeCta}
-                          </Link>
-                        </p>
+                            info
+                          </span>
+                          <p className="text-xs leading-5 text-foreground/80">
+                            {dict.flows.enhance.documentNudge}{" "}
+                            <Link
+                              href={localizedHref("/create", locale)}
+                              className="font-medium text-[var(--tq-brand-blue)] underline-offset-2 hover:underline"
+                            >
+                              {dict.flows.enhance.documentNudgeCta}
+                            </Link>
+                          </p>
+                        </div>
                       ) : null}
                       {stage === "extracting" ? (
                         <div
@@ -1325,6 +1333,21 @@ export default function EnhanceContentPage() {
                     </>
                   )}
                 </button>
+
+                {/* Always-visible pointer for people who arrive with a plain
+                    document (report, paper) instead of a slide deck. Sits
+                    outside the dropzone button so the link is valid HTML. */}
+                {!file ? (
+                  <p className="absolute inset-x-0 bottom-2 px-4 text-center text-[11px] leading-4 text-foreground/60">
+                    {dict.flows.enhance.createHint}{" "}
+                    <Link
+                      href={localizedHref("/create", locale)}
+                      className="font-medium text-[var(--tq-brand-blue)] underline-offset-2 hover:underline"
+                    >
+                      {dict.flows.enhance.createHintCta}
+                    </Link>
+                  </p>
+                ) : null}
 
                 {/* Remove button — overlays at the visual start corner
                     when a file is picked. Sibling (not child) of the
