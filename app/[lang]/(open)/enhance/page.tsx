@@ -379,9 +379,11 @@ export default function EnhanceContentPage() {
   const [kitOptions, setKitOptions] = useState<BrandKitOption[]>([]);
   const kitRawRef = useRef<Map<string, unknown>>(new Map());
   const [saveBrandKit, setSaveBrandKit] = useState<boolean>(false);
-  // AI photos (2026-10-05): off by default, same toggle as /create. On →
-  // deck-generate recreates the source slides' photos as generated images.
-  const [imagesMode, setImagesMode] = useState<boolean>(false);
+  // AI photos (2026-10-05): same toggle as /create. On → deck-generate
+  // recreates the source slides' photos as generated images. On by default
+  // here (2026-10-10): with it off every photo became an "Upload your
+  // picture" placeholder, which read as a broken deck. Users can switch it off.
+  const [imagesMode, setImagesMode] = useState<boolean>(true);
   // Picking a style clears the template; photo-led styles switch AI photos
   // on (never off), like /create.
   const onDesignStyle = (style: string | null) => {
