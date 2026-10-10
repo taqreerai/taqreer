@@ -39,6 +39,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useAnimationControls } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import Link from "next/link";
+import { localizedHref } from "@/lib/i18n/navigation";
 import {
   CreditGateDialog,
   isCreditGatePayload,
@@ -279,7 +281,7 @@ export default function EnhanceContentPage() {
   // stays in the browser; upload + analysis, brand kits and generation wait
   // for sign-in (the draft carries the setup through it).
   const guest = useIsGuest();
-  const { dir } = useLocale();
+  const { dir, locale } = useLocale();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollCancelledRef = useRef(false);
@@ -656,6 +658,13 @@ export default function EnhanceContentPage() {
         setPrepStage(null);
         setExtracted(result);
         setStage("ready");
+        // Measures what people upload here (PDF vs PPTX, page count,
+        // orientation) so the document-vs-deck question has real numbers.
+        posthog.capture("enhance_source_extracted", {
+          ext: file.name.toLowerCase().split(".").pop(),
+          pageCount: result.pageCount,
+          format: result.format,
+        });
 
         // Seed the editable palette from the extraction's colours — but
         // only if the brand kit hasn't already provided some (kit wins,
@@ -1076,6 +1085,13 @@ export default function EnhanceContentPage() {
           .replace("{visible}", String(TEASER_VISIBLE_COUNT))
           .replace("{cap}", String(slideCap))
       : null;
+  // A portrait PDF reads as a document (report, paper), not a slide deck.
+  // Soft nudge only: the user can still enhance it.
+  const docLikePdf =
+    stage === "ready" &&
+    !!file &&
+    file.name.toLowerCase().endsWith(".pdf") &&
+    extracted?.format === "9:16";
   const generateDisabled = stage === "idle" || overCap;
   // Shake the source card the moment an over-cap file is rejected.
   useEffect(() => {
@@ -1259,6 +1275,20 @@ export default function EnhanceContentPage() {
                       {trialPagesNote ? (
                         <p className="mt-1.5 text-[11px] leading-4 text-[var(--tq-brand-blue)]">
                           {trialPagesNote}
+                        </p>
+                      ) : null}
+                      {docLikePdf ? (
+                        <p
+                          className="mt-1.5 text-[11px] leading-4 text-foreground/70"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          {dict.flows.enhance.documentNudge}{" "}
+                          <Link
+                            href={localizedHref("/create", locale)}
+                            className="font-medium text-[var(--tq-brand-blue)] underline-offset-2 hover:underline"
+                          >
+                            {dict.flows.enhance.documentNudgeCta}
+                          </Link>
                         </p>
                       ) : null}
                       {stage === "extracting" ? (

@@ -1567,12 +1567,14 @@
       "originalFile": "Original file",
       "dragDrop": "Drag and drop the file here",
       "clickToSelect": "or click to choose a file",
-      "fileHint": "PDF or PowerPoint (.pptx, .ppt) · up to 100 MB",
+      "fileHint": "PowerPoint, or a PDF exported from slides (.pptx, .ppt) · up to 100 MB",
       "readyToCreate": " · ready to create",
       "creating": " · creating…",
       "extractFailed": "Couldn't analyze the file. Try again.",
       "fileTypeError": "Please upload a PDF or PowerPoint file (.pptx, .ppt).",
-      "fileTooLarge": "The file exceeds the 100 MB max ({size})."
+      "fileTooLarge": "The file exceeds the 100 MB max ({size}).",
+      "documentNudge": "This looks like a document, not a slide deck. To turn a document into a new deck, use",
+      "documentNudgeCta": "Create from document"
     },
     "datasheet": {
       "title": "Turn your data into a deck",

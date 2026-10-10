@@ -1567,12 +1567,14 @@
       "originalFile": "العرض الأصلي",
       "dragDrop": "اسحب وأفلت الملف هنا",
       "clickToSelect": "أو انقر لاختيار ملف",
-      "fileHint": "PDF أو PowerPoint (.pptx, .ppt) · حتى 100 ميجابايت",
+      "fileHint": "PowerPoint أو PDF مصدّر من شرائح (.pptx, .ppt) · حتى 100 ميجابايت",
       "readyToCreate": " · جاهز للبدء",
       "creating": " · جار تحسين العرض…",
       "extractFailed": "لم نتمكن من قراءة الملف. حاول مرة أخرى.",
       "fileTypeError": "الرجاء رفع ملف PDF أو PowerPoint (.pptx, .ppt).",
-      "fileTooLarge": "الملف يتجاوز الحد الأقصى 100 ميجابايت ({size})."
+      "fileTooLarge": "الملف يتجاوز الحد الأقصى 100 ميجابايت ({size}).",
+      "documentNudge": "يبدو هذا الملف مستندا وليس عرضا تقديميا. لتحويل المستند إلى عرض جديد استخدم",
+      "documentNudgeCta": "إنشاء عرض من مستند"
     },
     "datasheet": {
       "title": "حول بياناتك إلى عرض واضح",
@@ -1950,7 +1952,7 @@
   },
   "checkout": { "title": "ترقية باقتك", "topupTitle": "إضافة رصيد", "subtitle": "يمكنك التخفيض أو الإلغاء في أي وقت.", "back": "العودة إلى الفوترة", "loading": "جار تحميل الدفع الآمن…", "emailLabel": "البريد الإلكتروني", "payCta": "ادفع {amount}", "subscribeCta": "اشترك - {amount} / شهر", "subscribeCtaYearly": "اشترك - {amount} / سنة", "perYear": "/ سنة", "processingPay": "جار المعالجة…", "payFailed": "فشل الدفع. تحقق من بيانات البطاقة وحاول مجددا.", "promoLabel": "رمز الخصم", "promoPlaceholder": "أدخل الرمز", "promoApply": "تطبيق", "promoApplying": "جار التطبيق…", "promoInvalid": "هذا الرمز غير صالح.", "promoRemove": "إزالة", "promoApplied": "تم تطبيق الرمز {code}", "error": "تعذر بدء الدفع. حاول مرة أخرى.", "returnProcessing": "جار تأكيد دفعتك…", "returnSuccess": "اكتمل الدفع", "returnCloseBody": "تمت إضافة رصيدك. أغلق هذا التبويب وتابع من حيث توقفت.", "closeTab": "إغلاق هذا التبويب", "returnSuccessBody": "تمت إضافة رصيدك. قد يستغرق ظهوره بضع ثوان.", "returnFailed": "لم يكتمل الدفع", "returnFailedBody": "لم يتم أي خصم. يمكنك المحاولة من الفوترة.", "toBilling": "اذهب إلى الفوترة", "toDashboard": "اذهب إلى لوحة التحكم" },
   "components": {
-    "premiumGate": {"lockedFlowTitle":"هذه الميزة متاحة في باقة {tier}","lockedFlowBody":"يمكنك استكشاف الصفحة وتجهيز محتواك هنا، والإنشاء يحتاج إلى باقة {tier} أو أعلى.","upgrade":"ترقية","slideCapHint":"تصمم الباقة المجانية فقط أول شرائح قليلة، وتُفتح بقية الشرائح عند الاشتراك","lockedCardHint":"تحتاج باقة {tier}","logoLockedTitle":"شعارك في باقة Plus","logoLockedBody":"عروض الباقة المجانية تحمل علامة taqreer.ai"},
+    "premiumGate": {"lockedFlowTitle":"هذه الميزة متاحة في باقة {tier}","lockedFlowBody":"يمكنك استكشاف الصفحة وتجهيز محتواك هنا، والإنشاء يحتاج إلى باقة {tier} أو أعلى.","upgrade":"ترقية","slideCapHint":"صمم الشرائح الأولى من العرض","lockedCardHint":"تحتاج باقة {tier}","logoLockedTitle":"شعارك في باقة Plus","logoLockedBody":"عروض الباقة المجانية تحمل علامة taqreer.ai"},
     "supportWidget": { "whatsappLabel": "تواصل معنا عبر واتساب", "whatsappGreeting": "مرحبا، أحتاج مساعدة في taqreer.ai", "helpLabel": "المساعدة", "popoverTitle": "تحتاج مساعدة؟", "popoverBody": "راسل فريقنا عبر واتساب وسنرد عليك.", "whatsappCta": "تواصل معنا عبر واتساب" },
     "desktopEditHint": { "title": "التعديل الكامل متاح على الكمبيوتر", "body": "على الكمبيوتر يمكنك تعديل كل شيء مباشرة: النصوص والعناصر والألوان. على الجوال يمكنك المعاينة والتعديل بالذكاء الاصطناعي.", "gotIt": "حسنا", "close": "إغلاق" },
     "upgradeModal": { "deckUnlockTitle": "افتح هذا العرض فقط", "deckUnlockOnce": "دفعة واحدة، بدون اشتراك", "deckUnlockPoints": ["نصمم كل الشرائح المقفلة بالكامل", "بدون العلامة المائية", "تصدير PowerPoint وPDF وصور"], "deckUnlockCta": "افتح العرض بـ {price}", "deckUnlockOr": "أو اشترك لقيمة أفضل: عدة عروض كل شهر", "deckUnlockSuccess": "تم الدفع. نصمم الآن بقية الشرائح، وستظهر هنا خلال دقائق.", "title": "ترقية خطتك", "requiresTier": "هذا النموذج يتطلب خطة {tier}", "checkoutTitle": "إتمام الاشتراك", "back": "عودة للخطط", "successTitle": "تمت العملية بنجاح!", "successBody": "تم استلام الدفعة، وسيتم تحديث خطتك ورصيدك خلال لحظات.", "done": "إغلاق" },
