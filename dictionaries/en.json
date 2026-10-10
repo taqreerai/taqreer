@@ -216,7 +216,7 @@
   },
   "aiPresentations": {
     "meta": {
-      "title": "AI PowerPoint Design: Presentation Maker (Arabic & English) | taqreer.ai",
+      "title": "AI PowerPoint Maker (Arabic & English) | taqreer.ai",
       "description": "Design a complete presentation with AI, in Arabic and English. Write a brief or upload a file, apply your brand, and get a fully designed deck you can edit and export to PowerPoint."
     },
     "breadcrumb": "AI Presentations",
@@ -231,7 +231,7 @@
       "subtitle": "Write your content, apply your colors, fonts, and logo, and set the output. This is how every generation starts."
     },
     "why": {
-      "title": "Why taqreer.ai",
+      "title": "Why design PowerPoint with AI in taqreer.ai",
       "subtitle": "Real design for every slide, not just a template.",
       "points": [
         { "title": "From idea to deck", "body": "Start from text or a file, and taqreer.ai builds the whole deck in minutes." },
@@ -244,7 +244,7 @@
       { "q": "How do I design a presentation with AI?", "a": "Write your topic or upload a file, choose your brand, and the AI designs a complete deck in minutes that you can edit and export." },
       { "q": "Does it support Arabic?", "a": "Yes. taqreer.ai is Arabic-first with full right-to-left support and Arabic fonts, and it supports English too." },
       { "q": "Can I edit the deck after it is generated?", "a": "Yes. Edit text, colors, and slides and reorder them right in the editor, with autosave." },
-      { "q": "Can I export to PowerPoint?", "a": "Yes. You export an editable PPTX for PowerPoint on every plan, with the Arabic formatting and text direction preserved. Free-plan exports carry a small watermark." }
+      { "q": "Can I export to PowerPoint?", "a": "Yes. You export an editable PPTX for PowerPoint on every plan, with the Arabic formatting and text direction preserved." }
     ],
     "article": {
       "title": "How to make a PowerPoint with AI in taqreer.ai",
@@ -294,7 +294,7 @@
         {
           "heading": "A clear credit cost",
           "blocks": [
-            "Each deck uses credits based on its slide count and the generation quality you choose, and you see the cost before you start. You are never charged more than that: if the deck comes out shorter or you stop the generation, the difference goes back to your balance, and a failed generation costs nothing. The free plan starts with 400 credits at signup, no card needed. See [pricing and plans](/pricing)."
+            "Each deck uses credits based on its slide count and the generation quality you choose, and you see the cost before you start. You are never charged more than that: if the deck comes out shorter or you stop the generation, the difference goes back to your balance, and a failed generation costs nothing. The free plan starts with free credits at signup, no card needed. See [pricing and plans](/pricing)."
           ]
         },
         {
@@ -323,7 +323,7 @@
       "subtitle": "Choose a platform and size, add your product photo if you like and we design the post around it, apply your brand, and set the design. This is how designing a social post starts."
     },
     "why": {
-      "title": "Why taqreer.ai",
+      "title": "Why design social media posts with taqreer.ai",
       "subtitle": "On-brand posts and carousels, sized for every platform.",
       "points": [
         { "title": "Every platform size", "body": "Instagram, Facebook, X, and LinkedIn ratios, square, portrait, and story, at the exact export size." },
@@ -394,7 +394,7 @@
       "subtitle": "Upload your deck, apply your brand, and taqreer.ai redesigns every slide. This is how enhancing starts."
     },
     "why": {
-      "title": "Why taqreer.ai",
+      "title": "Why redesign your PowerPoint with taqreer.ai",
       "subtitle": "A new design, the same content.",
       "points": [
         { "title": "Keeps your content", "body": "taqreer.ai reads every slide's text from your file and redesigns it without dropping or adding anything, and marks each picture's spot so you can drop your original back in with one click." },
@@ -466,7 +466,7 @@
       "subtitle": "Attach the deck whose style you like, write your content, and taqreer.ai applies the style to every slide. That is how any deck becomes your own template."
     },
     "why": {
-      "title": "Why taqreer.ai",
+      "title": "Why copy a deck design with taqreer.ai",
       "subtitle": "A style you love, with your own content.",
       "points": [
         { "title": "Captures the style", "body": "taqreer.ai analyzes the reference deck's colors, fonts, and layout and applies its spirit to your content." },
@@ -479,7 +479,7 @@
       { "q": "How do I design a deck in another deck's style?", "a": "Attach the deck whose style you like, write or upload your content, and the AI applies its visual style to new slides in minutes." },
       { "q": "What does taqreer.ai take from the reference deck?", "a": "It captures the colors, fonts, layout patterns, and overall visual spirit, and applies them to your new content without copying the original content." },
       { "q": "Does it support Arabic?", "a": "Yes. taqreer.ai is Arabic-first with full right-to-left support and Arabic fonts, and it supports English too." },
-      { "q": "Can I export to PowerPoint?", "a": "Yes. You export an editable PPTX for PowerPoint on every plan, with the Arabic formatting and text direction preserved. Free-plan exports carry a small watermark." }
+      { "q": "Can I export to PowerPoint?", "a": "Yes. You export an editable PPTX for PowerPoint on every plan, with the Arabic formatting and text direction preserved." }
     ],
     "article": {
       "title": "Copy any PowerPoint design and apply it to your content",
@@ -887,7 +887,7 @@
                 "Choose your brand: your colors, fonts, and logo, or pick a [saved brand kit](/brand-kit) to apply it to the whole deck.",
                 "Set the slide size (16:9 for standard decks or 9:16 for vertical) and choose an exact slide count or leave it on auto.",
                 "Click create and watch the slides appear, then adjust any detail in the [editor](/powerpoint-online).",
-                "Export as PPTX to open in PowerPoint, or as PDF to share. Both are available on every plan; free-plan exports carry a small watermark."
+                "Export as PPTX to open in PowerPoint, or as PDF to share. Both are available on every plan."
               ]
             },
             "With these steps, converting a PDF to PPT becomes one task instead of copying text and formatting every slide by hand."
@@ -1085,13 +1085,13 @@
         {
           "heading": "PowerPoint online or desktop software?",
           "blocks": [
-            "A browser editor runs on any computer with nothing to install or update, your deck is saved to your account so you can pick up from any device, and you share a link instead of sending files. If you need to work in PowerPoint on your computer, export an editable PPTX (on paid plans) and continue there."
+            "A browser editor runs on any computer with nothing to install or update, your deck is saved to your account so you can pick up from any device, and you share a link instead of sending files. If you need to work in PowerPoint on your computer, export an editable PPTX and continue there."
           ]
         },
         {
           "heading": "Your work is always saved",
           "blocks": [
-            "The editor saves every change automatically, and you can save versions of your slides and restore any earlier version from the history. When you are done, export to [PowerPoint, PDF, and Google Slides](/export), depending on your plan.",
+            "The editor saves every change automatically, and you can save versions of your slides and restore any earlier version from the history. When you are done, export to [PowerPoint, PDF, and Google Slides](/export).",
             "Note: full editing is on desktop. On mobile you can preview your deck and ask the AI for changes."
           ]
         }
@@ -1126,7 +1126,7 @@
     },
     "faq": [
       { "q": "How do I add AI images to my deck?", "a": "Turn on generated images when you create a deck, and the AI adds images that fit your slides. You can regenerate any image from the editor." },
-      { "q": "Are AI images on the free plan?", "a": "Yes. On the free plan, generated images are free on your trial and do not use your credits. On paid plans, each image uses credits from your monthly balance. The free photo library is open to everyone." },
+      { "q": "Are AI images on the free plan?", "a": "Yes. Generated images are free during your trial and do not use your credits. The free photo library is open to everyone." },
       { "q": "Can I use my own images?", "a": "Yes. Upload images in the editor or save them to your library." },
       { "q": "Do images stay when I export?", "a": "Yes. Images stay in your deck when you export to PowerPoint or PDF." }
     ],
@@ -1144,7 +1144,7 @@
                 "Don't like an image? Regenerate or replace it from the [editor](/powerpoint-online)."
               ]
             },
-            "On paid plans each generated image uses credits; on the free plan, generated images are free during your trial."
+            "Generated images are free during your trial."
           ]
         },
         {
@@ -1573,8 +1573,10 @@
       "extractFailed": "Couldn't analyze the file. Try again.",
       "fileTypeError": "Please upload a PDF or PowerPoint file (.pptx, .ppt).",
       "fileTooLarge": "The file exceeds the 100 MB max ({size}).",
-      "documentNudge": "This looks like a document, not a slide deck. To turn a document into a new deck, use",
-      "documentNudgeCta": "Create from document"
+      "documentNudge": "This looks like a document, not a slide deck. Want it turned into a well designed PowerPoint? Go to",
+      "documentNudgeCta": "Create from document",
+      "createHint": "Have a PDF report or document instead of slides?",
+      "createHintCta": "Turn it into a designed PowerPoint in Create"
     },
     "datasheet": {
       "title": "Turn your data into a deck",
