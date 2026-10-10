@@ -7,6 +7,7 @@ import { isLocale, dirForLocale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { LocaleProvider } from "@/components/i18n/LocaleProvider";
 import { CookieBanner } from "@/components/legal/CookieBanner";
+import { ArabicSuggestion } from "@/components/i18n/ArabicSuggestion";
 import { WhatsAppButton } from "@/components/support/WhatsAppButton";
 import { PostHogProvider } from "@/components/analytics/PostHogProvider";
 import { GoogleAdsTag } from "@/components/analytics/GoogleAdsTag";
@@ -145,10 +146,14 @@ export default async function RootLayout({
     <html
       lang={lang}
       dir={dir}
+      // Browser auto-translate rewrites text inside an LTR page and breaks the
+      // layout; the site ships real Arabic/English pages (see ArabicSuggestion).
+      translate="no"
       className={`${cairo.variable} ${poppins.variable}`}
       suppressHydrationWarning
     >
       <head>
+        <meta name="google" content="notranslate" />
         {/* Pre-paint chrome init (theme + app-shell scroll mode) — see
             CHROME_INIT. Must run before the stylesheet to avoid a flash. */}
         <script dangerouslySetInnerHTML={{ __html: CHROME_INIT }} />
@@ -194,6 +199,7 @@ export default async function RootLayout({
           <PostHogProvider />
           <GoogleAdsTag />
           <CookieBanner />
+          <ArabicSuggestion />
           <WhatsAppButton />
         </LocaleProvider>
       </body>
