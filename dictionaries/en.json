@@ -2049,6 +2049,7 @@
       "failedUpdate": "Failed to update comment."
     },
     "export": {
+      "waitHint": "Still checking your slides. Export unlocks in a moment.",
       "pptx": "PPTX",
       "pdf": "PDF",
       "gslides": "Google Slides",

@@ -330,6 +330,7 @@ const FALLBACK_SCALE = 0.18;
 // Editor undo/redo + checkpointing.
 const UNDO_DEPTH = 100; // cap the per-slide local undo stack (bounds memory)
 const CHECKPOINT_IDLE_MS = 10 * 60 * 1000; // idle-autosave a history checkpoint
+const BAKE_EXPORT_WAIT_MS = 4 * 60 * 1000; // max time Export waits on the bake review
 // One undo step = the slide HTML BEFORE the edit and AFTER it. Storing both lets
 // undo/redo apply a known snapshot instead of re-reading the (mutable) live manifest.
 // `seq` orders slide edits against deck-wide colour/font changes (DeckOp), so
@@ -2240,6 +2241,17 @@ export function DeckView({
     }
     return ids;
   }, [manifest]);
+
+  // Export is held back while the bake's vision review may still swap slide
+  // html, but never for good: a bake that died (or a deck from before the
+  // bake) has no markers, so the wait gives up after BAKE_EXPORT_WAIT_MS.
+  const bakeInFlight = bakePendingIds.size > 0;
+  const [bakeWaitExpired, setBakeWaitExpired] = useState(false);
+  useEffect(() => {
+    if (!bakeInFlight) return;
+    const t = setTimeout(() => setBakeWaitExpired(true), BAKE_EXPORT_WAIT_MS);
+    return () => clearTimeout(t);
+  }, [bakeInFlight]);
 
   // The GenChat feed to display: the generation poll and the deck.genchat
   // broadcasts fill liveGenChat; the manifest's copy refreshes on every
@@ -5268,6 +5280,9 @@ export function DeckView({
                   formatFallback={initialFormat}
                   isSocial={initialIsSocial}
                   role={role}
+                  // Export is hidden while generating; during the freeze bake's vision
+                  // review the button shows a wait hint instead of the formats.
+                  exportBlocked={bakeInFlight && !bakeWaitExpired}
                 />
               </>
             ) : null

@@ -19,6 +19,7 @@ export function StudioActions({
   formatFallback,
   isSocial = false,
   role,
+  exportBlocked = false,
 }: {
   projectId: string;
   projectTitle: string;
@@ -26,6 +27,7 @@ export function StudioActions({
   formatFallback?: SlideFormat;
   isSocial?: boolean;
   role: ProjectRole;
+  exportBlocked?: boolean;
 }) {
   const dict = useDict();
   const { dir } = useLocale();
@@ -44,6 +46,7 @@ export function StudioActions({
         manifest={manifest}
         formatFallback={formatFallback}
         isSocial={isSocial}
+        blocked={exportBlocked}
       />
       {isOwner ? (
         <>

@@ -2049,6 +2049,7 @@
       "failedUpdate": "تعذر تحديث التعليق."
     },
     "export": {
+      "waitHint": "نراجع شرائحك الآن. يتاح التصدير بعد لحظات.",
       "pptx": "PPTX",
       "pdf": "PDF",
       "gslides": "Google Slides",

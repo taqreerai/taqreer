@@ -55,6 +55,7 @@ export function ExportMenu({
   formatFallback,
   isSocial = false,
   disabled,
+  blocked = false,
 }: {
   projectId: string;
   projectTitle: string;
@@ -62,6 +63,9 @@ export function ExportMenu({
   formatFallback?: SlideFormat;
   isSocial?: boolean;
   disabled?: boolean;
+  /** Deck still being finished (generation or the vision review): the menu
+   *  shows a wait hint instead of the formats, and unlocks by itself. */
+  blocked?: boolean;
 }) {
   const dict = useDict();
   const { dir } = useLocale();
@@ -234,6 +238,17 @@ export function ExportMenu({
                   // defined surface in both themes.
                   style={{ top, bottom, left, width: MENU_WIDTH, border: "1px solid var(--tq-border-hairline)" }}
                 >
+                  {blocked ? (
+                    <p className="flex items-start gap-2 p-3 text-[13px] leading-5 text-muted">
+                      <span
+                        className="material-symbols-outlined mt-0.5 shrink-0 animate-spin text-[18px]"
+                        aria-hidden
+                      >
+                        progress_activity
+                      </span>
+                      <span>{dict.editor.export.waitHint}</span>
+                    </p>
+                  ) : (
                   <ul className="flex flex-col p-1.5">
                     {formats.map((f) => {
                       const running = states[f.kind].status === "running";
@@ -313,6 +328,7 @@ export function ExportMenu({
                       );
                     })}
                   </ul>
+                  )}
                   {freeUser ? (
                     // Free plan: nudge toward sharing a link, whose viewers
                     // see the slides without the watermark (project page).
