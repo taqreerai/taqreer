@@ -28,8 +28,9 @@
 //
 // GA4 (2026-10-01, for GA + OpenSEO traffic reporting) rides the SAME gtag.js
 // loader: one extra `config` command, no second Google tag on the page, and
-// the same Consent Mode defaults/updates (analytics_storage is already in the
-// denied default and the granted update below). Production builds only, so
+// the same Consent Mode defaults/updates (analytics_storage defaults to denied
+// only in CONSENT_REQUIRED_REGIONS, granted elsewhere; the update below grants
+// it everywhere on Accept). Production builds only, so
 // local dev traffic never reaches GA.
 //
 // Renders the loader script only; mounted once in app/[lang]/layout.tsx next
@@ -46,6 +47,14 @@ const GA4_ID =
 // gtag.js is loaded ONCE, keyed on whichever ID is active; every other ID is
 // a `config` command on the same loader.
 const LOADER_ID = ADS_ID ?? GA4_ID;
+
+// Regions where analytics stays denied until the banner is accepted: EU27 plus
+// IS, LI, NO (EEA), GB and CH.
+const CONSENT_REQUIRED_REGIONS = [
+  "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR",
+  "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK",
+  "SI", "ES", "SE", "IS", "LI", "NO", "GB", "CH",
+];
 
 const CONSENT_COOKIE = "tq_cookie_consent";
 const ACCEPT_EVENT = "taqreer:cookie-consent-accept";
@@ -80,11 +89,24 @@ let configured = false;
 function ensureConfigured(): void {
   if (configured) return;
   configured = true;
+  // Regional defaults: Google applies the MOST SPECIFIC matching default, so the
+  // region-scoped "denied" below wins in the EEA/UK/CH and the global default
+  // (ads denied, analytics granted) applies everywhere else. Without this, GA4
+  // dropped every unconsented visit (Search Console showed ~96 organic clicks
+  // while GA4 showed zero organic visits). Ads storage stays denied for all
+  // until the banner is accepted.
   gtag("consent", "default", {
     ad_storage: "denied",
     ad_user_data: "denied",
     ad_personalization: "denied",
     analytics_storage: "denied",
+    region: CONSENT_REQUIRED_REGIONS,
+  });
+  gtag("consent", "default", {
+    ad_storage: "denied",
+    ad_user_data: "denied",
+    ad_personalization: "denied",
+    analytics_storage: "granted",
   });
   gtag("js", new Date());
   if (ADS_ID) gtag("config", ADS_ID);
