@@ -1196,7 +1196,7 @@ export default function EnhanceContentPage() {
                 role="status"
                 className="block h-full"
               >
-              <div className="relative h-full">
+              <div className="relative flex h-full flex-col gap-2">
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
@@ -1336,9 +1336,10 @@ export default function EnhanceContentPage() {
 
                 {/* Always-visible pointer for people who arrive with a plain
                     document (report, paper) instead of a slide deck. Sits
-                    outside the dropzone button so the link is valid HTML. */}
+                    below the dropzone button (in flow, so it never overlaps
+                    its hint) and keeps the link valid HTML. */}
                 {!file ? (
-                  <p className="absolute inset-x-0 bottom-2 px-4 text-center text-[11px] leading-4 text-foreground/60">
+                  <p className="shrink-0 px-2 text-center text-[11px] leading-4 text-foreground/60">
                     {dict.flows.enhance.createHint}{" "}
                     <Link
                       href={localizedHref("/create", locale)}
