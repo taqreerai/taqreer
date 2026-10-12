@@ -128,6 +128,23 @@ export function pickBadgeCorner(
       add(el.getBoundingClientRect(), true);
       return;
     }
+    // Small painted shapes holding text (page-number circles, pills, stamps,
+    // tags) occupy their whole box, not just the glyphs: measuring only the
+    // text let the badge land on a page-number circle (prod deck 2026-10-12,
+    // project cmv5fo3k60004et6du5wbedco, slide 5). Big painted boxes (cards,
+    // panels) stay uncounted: the badge may sit on those as before.
+    if (el !== slide && (el.textContent || "").trim()) {
+      const sbg = cs.backgroundColor;
+      const painted =
+        (!!sbg && sbg !== "rgba(0, 0, 0, 0)" && sbg !== "transparent") ||
+        (cs.borderTopStyle !== "none" && parseFloat(cs.borderTopWidth) > 0);
+      if (painted) {
+        const pr = el.getBoundingClientRect();
+        if (pr.width >= 1 && pr.height >= 1 && (pr.width / sr.width) * (pr.height / sr.height) <= 0.02) {
+          add(pr, false);
+        }
+      }
+    }
     const kids = el.childNodes;
     for (let i = 0; i < kids.length; i++) {
       const n = kids[i];
