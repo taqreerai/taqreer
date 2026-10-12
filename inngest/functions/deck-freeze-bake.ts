@@ -71,6 +71,7 @@ import {
 } from "@/lib/schema/slide";
 import { buildHtmlDocumentServer } from "@/lib/export/html-document-server";
 import { FREEZE_SCRIPT } from "@/lib/deck/freeze-script";
+import { ownerGetsVisionReview } from "@/lib/deck/review-gate";
 import { FIT_SCRIPT, type FitCompressResult } from "@/lib/deck/fit-script";
 import { LEADING_NORMALIZE_SCRIPT } from "@/lib/deck/leading-normalize";
 import {
@@ -181,7 +182,7 @@ export const deckFreezeBake = inngest.createFunction(
             where: { id: projectId },
             select: { user: { select: { plan: true, role: true } } },
           });
-          return !(owner?.user?.plan === "free" && owner.user.role !== "admin");
+          return ownerGetsVisionReview(owner?.user);
         })
       : false;
 

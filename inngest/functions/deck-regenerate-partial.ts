@@ -4,6 +4,7 @@ import { NonRetriableError } from "inngest";
 import { inngest } from "@/inngest/client";
 import { holdCredits, settleHold } from "@/lib/credits/server";
 import { regenCost } from "@/lib/credits/cost";
+import { ownerGetsVisionReview } from "@/lib/deck/review-gate";
 import {
   ensureFresh,
   getPreset,
@@ -605,11 +606,23 @@ export const deckRegeneratePartial = inngest.createFunction(
     // save, release in onFailure. Keyed by the target version id - one
     // regen run per version row, stable across Inngest retries.
     const regenChargeKey = `regen:${versionId}`;
-    const regenAmount = regenCost(
-      eventQuality,
-      targetSlideIds.length,
-      creditCostFor,
-      getRegenBaseCredits(),
+    // Free-plan owners get no vision review (lib/deck/review-gate), so they do
+    // not pay the review's base either: shown cost >= held >= charged.
+    const reviewRuns = await step.run("review-gate", async () => {
+      const owner = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { user: { select: { plan: true, role: true } } },
+      });
+      return ownerGetsVisionReview(owner?.user);
+    });
+    const regenAmount = Math.max(
+      0,
+      regenCost(
+        eventQuality,
+        targetSlideIds.length,
+        creditCostFor,
+        getRegenBaseCredits(),
+      ) - (reviewRuns ? 0 : getRegenBaseCredits()),
     );
     const regenHold = await step.run("credit-hold", async () => {
       const project = await prisma.project.findUnique({
@@ -1287,9 +1300,11 @@ export const deckRegeneratePartial = inngest.createFunction(
           error: err instanceof Error ? err.message : String(err),
         });
       }
-      const chargeAmount = bakeDispatched
-        ? regenAmount
-        : Math.max(0, regenAmount - getRegenBaseCredits());
+      // No review owed (free owner): the base is already out of regenAmount.
+      const chargeAmount =
+        bakeDispatched || !reviewRuns
+          ? regenAmount
+          : Math.max(0, regenAmount - getRegenBaseCredits());
       await settleHold({
         jobKey: regenChargeKey,
         chargeAmount,
@@ -1297,6 +1312,7 @@ export const deckRegeneratePartial = inngest.createFunction(
           status: "succeeded",
           slides: targetSlideIds.length,
           bakeDispatched,
+          reviewSkipped: !reviewRuns,
         },
       });
       return { bakeDispatched, chargeAmount };
