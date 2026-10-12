@@ -3537,7 +3537,14 @@ export const deckGenerate = inngest.createFunction(
     // before the user touches the deck. The bake still freezes + gates;
     // regen-triggered bakes keep the review (explicit authoring, subset-
     // sized). All other flows review as before.
-    const review = data.type !== "enhance";
+    // Free-trial teaser decks (owner decision 2026-10-12, token cost): one
+    // authoring pass only, no Opus vision review. The bake still freezes +
+    // gates. The review runs when the owner unlocks the rest (deck-unlock
+    // sends review: true), so paying users get the full second pass.
+    const isFreeTeaser =
+      ((data.brief as { teaser?: { plannedTotal?: number } | null } | null)
+        ?.teaser?.plannedTotal ?? 0) > 0;
+    const review = data.type !== "enhance" && !isFreeTeaser;
     if (isImagesMode(data)) {
       await inngest
         .send({
