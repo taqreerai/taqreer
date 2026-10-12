@@ -889,6 +889,52 @@ export const deckFreezeBake = inngest.createFunction(
         await page.evaluate(
           `${AUDIT_SCRIPT}; window.__tqFixText = __tqFixInvisibleText;`,
         );
+        // Recolor the matched elements in the live page, then carry the fix
+        // into the composed html (kept-flow fallback + dual-store write) and
+        // drop the stale shot.
+        const applyInkFixes = async (
+          sid: string,
+          fixes: {
+            x: number;
+            y: number;
+            w: number;
+            h: number;
+            ink: [number, number, number];
+            color: string;
+          }[],
+          logName: string,
+        ) => {
+          const res = (await page.evaluate(
+            (id, fxs) => {
+              const escaped = id.replace(/[^a-zA-Z0-9_-]/g, "\$&");
+              const sec = document
+                .querySelector(`[data-slide-id="${escaped}"]`)
+                ?.querySelector("section");
+              const well = sec?.querySelector(":scope > .tq-well");
+              if (!sec || !well) return { fixed: 0, html: "" };
+              const fixed = (
+                window as unknown as {
+                  __tqFixText: (w: Element, f: unknown[]) => number;
+                }
+              ).__tqFixText(well, fxs);
+              return { fixed, html: fixed > 0 ? sec.outerHTML : "" };
+            },
+            sid,
+            fixes,
+          )) as { fixed: number; html: string };
+          if (res.fixed > 0) {
+            preShots.delete(sid);
+            const ci = composed.findIndex((s) => s.slideId === sid);
+            if (ci >= 0 && res.html) {
+              composed[ci] = { ...composed[ci], html: res.html };
+            }
+            logger.info(logName, {
+              slideId: sid,
+              fixed: res.fixed,
+              colors: fixes.map((f) => f.color).join(","),
+            });
+          }
+        };
         for (const sid of toFreeze) {
           const checks = finalAudit[sid]?.pixelChecks ?? [];
           if (checks.length === 0) continue;
@@ -908,39 +954,26 @@ export const deckFreezeBake = inngest.createFunction(
             ink: m.check.ink,
             color: backstopInk(m.ground!, manifest.theme.palette),
           }));
-          const res = (await page.evaluate(
-            (id, fxs) => {
-              const escaped = id.replace(/[^a-zA-Z0-9_-]/g, "\\$&");
-              const sec = document
-                .querySelector(`[data-slide-id="${escaped}"]`)
-                ?.querySelector("section");
-              const well = sec?.querySelector(":scope > .tq-well");
-              if (!sec || !well) return { fixed: 0, html: "" };
-              const fixed = (
-                window as unknown as {
-                  __tqFixText: (w: Element, f: unknown[]) => number;
-                }
-              ).__tqFixText(well, fxs);
-              return { fixed, html: fixed > 0 ? sec.outerHTML : "" };
-            },
-            sid,
-            fixes,
-          )) as { fixed: number; html: string };
-          if (res.fixed > 0) {
-            // The DOM changed: the cached shot is stale (flow shot re-taken
-            // below), and the composed html must carry the fix so the
-            // kept-flow fallback + dual-store write ship it too.
-            preShots.delete(sid);
-            const ci = composed.findIndex((s) => s.slideId === sid);
-            if (ci >= 0 && res.html) {
-              composed[ci] = { ...composed[ci], html: res.html };
-            }
-            logger.info("deck_contrast_backstop", {
-              slideId: sid,
-              fixed: res.fixed,
-              colors: fixes.map((f) => f.color).join(","),
-            });
-          }
+          await applyInkFixes(sid, fixes, "deck_contrast_backstop");
+        }
+
+        // CSS-measured invisible text (solid, known background): no pixels to
+        // sample, the ink comes straight from the palette. This used to be
+        // fixed ONLY by the vision pass, so a skipped review (free plan)
+        // shipped it (prod deck 2026-10-12, project cmv5fo3k60004et6du5wbedco
+        // slide 2: light stamp text inheriting the card ink on a light stamp).
+        for (const sid of toFreeze) {
+          const css = finalAudit[sid]?.cssInvisible ?? [];
+          if (css.length === 0) continue;
+          const fixes = css.map((c) => ({
+            x: c.x,
+            y: c.y,
+            w: c.w,
+            h: c.h,
+            ink: c.ink,
+            color: backstopInk(c.bg, manifest.theme.palette),
+          }));
+          await applyInkFixes(sid, fixes, "deck_contrast_css_backstop");
         }
 
         // Flow ground-truth shots for the pixel gate (unmutated slides reuse

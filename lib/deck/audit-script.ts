@@ -61,9 +61,24 @@ export type PixelContrastCheck = {
 };
 
 // __tqAuditWell returns this shape (findings + the pixel-check candidates).
+// Text the CSS contrast walk measured near-invisible against a SOLID, known
+// background. No pixel sampling needed: the bake picks an ink from the deck
+// palette against `bg` and applies it deterministically (the vision pass used
+// to be the only thing that ever fixed these). Same rect convention as
+// PixelContrastCheck.
+export type CssInvisibleText = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  ink: [number, number, number];
+  bg: [number, number, number];
+};
+
 export type FrameAuditResult = {
   findings: FrameAuditFinding[];
   pixelChecks: PixelContrastCheck[];
+  cssInvisible?: CssInvisibleText[];
 };
 
 export const AUDIT_SCRIPT = `
@@ -73,6 +88,7 @@ function __tqAuditWell(well, dir) {
   // collected for the bake's pixel-sampling pass instead of silently skipped.
   // Rects are relative to the [data-slide-id] host - the shoot() clip box.
   var pixelChecks = [];
+  var cssInvisible = [];
   var wr = well.getBoundingClientRect();
   var view = well.ownerDocument.defaultView;
   var hostEl = well.closest("[data-slide-id]");
@@ -371,6 +387,19 @@ function __tqAuditWell(well, dir) {
         Math.abs(ink[0] - bg[0]) + Math.abs(ink[1] - bg[1]) + Math.abs(ink[2] - bg[2]);
       if (dist < 60) {
         contrastCount++;
+        if (hostRect && cssInvisible.length < 24) {
+          var ir = cel.getBoundingClientRect();
+          if (ir.width >= 1 && ir.height >= 1) {
+            cssInvisible.push({
+              x: ir.left - hostRect.left,
+              y: ir.top - hostRect.top,
+              w: ir.width,
+              h: ir.height,
+              ink: [ink[0], ink[1], ink[2]],
+              bg: [bg[0], bg[1], bg[2]],
+            });
+          }
+        }
         if (contrastSamples.length < 6) {
           contrastSamples.push(
             cel.tagName +
@@ -514,7 +543,7 @@ function __tqAuditWell(well, dir) {
     }
   }
 
-  return { findings: findings, pixelChecks: pixelChecks };
+  return { findings: findings, pixelChecks: pixelChecks, cssInvisible: cssInvisible };
 }
 
 // Deterministic ink BACKSTOP (2026-07-15): applied in the freeze step to any
