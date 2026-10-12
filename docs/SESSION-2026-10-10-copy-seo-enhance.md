@@ -97,3 +97,13 @@ Decision: option C (static link in the upload card + stronger callout after dete
 8. Read PostHog `enhance_source_extracted` after about a week to learn the PDF vs PPTX split and how many uploads are portrait documents.
 9. Part 1 open suggestions: hero badge wording, per-page "Why" bullets.
 10. Older owner items: PPTX font test, free-account slide tests, Search Console "Request indexing" for any new pages, monitor `create_guest_draft_restored`, local dev server (Turbopack 0xc0000142) likely needs a Windows restart.
+
+## 14. Temporary: welcome credits dropped to 0 (2026-10-12)
+Owner set the free-plan signup grant to 0 (admin settings, `signupGrant` on the free tier; code defaults in `lib/config/runtime-config.ts` and `lib/credits/cost.ts` still say 400). Decision: free sign-ups can create an account and look around, but need a paid plan to design decks.
+
+**Copy changed to match** (both languages, one commit): every "Try it free" CTA became "Get started" / "ابدأ الآن"; pricing, landing pricing card, FAQs, sign-up hero, templates/exports/images/Gamma FAQs, the free-trial dialog and hints (`flows.generate.slideCapUpsell.*`, `flows.trialPagesNote*`, `flows.overCapTrial`, `components.premiumGate.slideCapHint`), and `app/llms.txt/route.ts`. Not changed: the Gamma comparison facts (their 400 credits), referral invite text, historic "Welcome gift" notification labels, `usage.events.signup`.
+
+**To go back to how it was:**
+1. Admin settings: set the free tier's signup grant (free credits) back to 400.
+2. Copy: `git revert <the copy commit>` (or `git checkout backup/pre-no-welcome-copy-2026-10-12 -- dictionaries/ar.json dictionaries/en.json app/llms.txt/route.ts`), then `./deploy.sh`. The tag `backup/pre-no-welcome-copy-2026-10-12` is the live state just before this change (commit `0ae50725`); it is local, so push it if you want it off this machine.
+3. Note: the Arabic dialog button "صمم الشرائح الأولى من العرض" (owner wording) was replaced by "متابعة" in this temporary state; the revert restores it.

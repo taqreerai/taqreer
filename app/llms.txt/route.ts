@@ -41,7 +41,7 @@ taqreer.ai is Arabic-first: true right-to-left layout, Arabic typography, and bi
 - Export: PowerPoint (PPTX) and PDF, browser-accurate layout
 - Editing: in-browser slide studio with undo, history, and brand kits
 - Brand: apply your logo, colors, and fonts to every deck
-- Free to try: signup includes free credits, no card required
+- Free to sign up: creating an account is free and needs no card; designing decks needs a paid plan
 `;
 
 export function GET() {

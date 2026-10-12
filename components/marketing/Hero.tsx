@@ -204,7 +204,7 @@ export function Hero({ projectCount }: { projectCount?: number }) {
             {/* Typewriter flow phrase + blinking dash caret. aria-hidden on
                 the animated pair; the sr-only span gives screen readers the
                 stable primary phrase instead of a churning live region. */}
-            <span className="sr-only">{dict.landing.hero.titleLine1}</span>
+            <span className="sr-only">{dict.landing.hero.titleLine1}</span>{" "}
             <span
               aria-hidden
               className={`whitespace-nowrap transition-opacity duration-500 ${
