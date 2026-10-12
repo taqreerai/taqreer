@@ -31,7 +31,7 @@ taqreer.ai is Arabic-first: true right-to-left layout, Arabic typography, and bi
 
 - [Home (English)](${SITE}/en)
 - [Home (Arabic)](${SITE}/ar)
-- [Pricing](${SITE}/en/pricing): free tier plus paid plans from 15 to 70 USD per month
+- [Pricing](${SITE}/en/pricing): free account plus paid plans (Plus, Pro, Max) from 9 to 79 USD per month, with cheaper yearly billing
 - [Templates](${SITE}/en/presentation-templates)
 - [Contact](${SITE}/en/contact)
 
