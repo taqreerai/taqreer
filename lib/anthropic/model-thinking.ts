@@ -4,6 +4,7 @@
 //   • claude-sonnet-5-5 → lowest setting is `between_tools`
 //   • claude-opus-5-5   → `adaptive` + effort only (between_tools rejected too)
 //   • claude-fable-*    → `adaptive` only
+//   • claude-haiku-5-5  → `adaptive` only (per API docs, not probed)
 // Older models (sonnet-5, opus-4-8, ...) still take `disabled`.
 
 import type Anthropic from "@anthropic-ai/sdk";
@@ -11,7 +12,9 @@ import type Anthropic from "@anthropic-ai/sdk";
 export type ThinkingOff = { type: "disabled" } | { type: "between_tools" };
 
 const BETWEEN_TOOLS_MODELS = /^claude-sonnet-5-5/;
-const ADAPTIVE_ONLY_MODELS = /fable|^claude-opus-5-5/i;
+// Haiku 5.5: adaptive thinking only (API docs), so the admin form must keep
+// thinking on for it.
+const ADAPTIVE_ONLY_MODELS = /fable|^claude-opus-5-5|^claude-haiku-5-5/i;
 
 /** True when the model has no thinking-off mode (admin must turn thinking on). */
 export function requiresThinking(model: string): boolean {

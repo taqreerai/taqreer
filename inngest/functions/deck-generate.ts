@@ -3537,7 +3537,11 @@ export const deckGenerate = inngest.createFunction(
     // before the user touches the deck. The bake still freezes + gates;
     // regen-triggered bakes keep the review (explicit authoring, subset-
     // sized). All other flows review as before.
-    const review = data.type !== "enhance";
+    // Haiku decks (the low-cost tier, 2026-10-12): one authoring pass, no
+    // Opus review - for every owner, admins included, so a test deck shows
+    // exactly what a Haiku user gets.
+    const isHaikuRun = paramsForQuality(data.quality).model.startsWith("claude-haiku");
+    const review = data.type !== "enhance" && !isHaikuRun;
     if (isImagesMode(data)) {
       await inngest
         .send({
