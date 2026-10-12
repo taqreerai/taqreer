@@ -74,6 +74,10 @@ const FALLBACK_PRESETS: CreditPreset[] = QUALITY_PRESETS.filter(
 // 3+ = pro (Fable, Max-only). The four "level" keys map to the dict labels
 // (draftDesign="أساسي", standardDesign="متوازن", premiumDesign="متقدم",
 // proDesign="احترافي").
+// The Haiku preset(s): the lowest rung, named "Lite" on its own so adding it
+// never renames the existing rungs (designLevel ranks the others without it).
+const isLitePreset = (key: string) => key.startsWith("haiku");
+
 function designLevel(rank: number): "draft" | "standard" | "premium" | "pro" {
   if (rank <= 0) return "draft";
   if (rank === 1) return "standard";
@@ -206,12 +210,21 @@ export function GenerateSplitButton({
   // they'd render ungated/selectable but the server refuses them with
   // preset_locked. Admins see everything (they bypass gating). This also covers
   // the transient state where a preset is added but not yet unlocked in a tier.
-  // Region-limited free account: exactly one preset, shown and selected
-  // (the server runs it whatever is sent; lib/credits/region-model).
+  // Region-limited free account (lib/credits/region-model): its preset is
+  // listed FIRST (the "Basic" rung) and is the only selectable row; every other
+  // model still shows, crowned, so they see what a paid plan unlocks. The
+  // server runs the region preset whatever is sent.
   const regionPreset = !isAdmin ? (credits?.regionPreset ?? null) : null;
-  const presets = (credits?.presets ?? FALLBACK_PRESETS).filter((p) =>
-    regionPreset ? p.key === regionPreset : isAdmin || p.gateTier !== null,
-  );
+  const allPresets = credits?.presets ?? FALLBACK_PRESETS;
+  const visible = regionPreset
+    ? allPresets.filter((p) => p.key === regionPreset || p.gateTier !== null)
+    : allPresets.filter((p) => isAdmin || p.gateTier !== null);
+  // Lite (Haiku) rows first, everything else in its configured order.
+  const presets = [
+    ...visible.filter((p) => isLitePreset(p.key)),
+    ...visible.filter((p) => !isLitePreset(p.key)),
+  ];
+  const liteCount = presets.filter((p) => isLitePreset(p.key)).length;
 
   // Highlight reconciliation: if the selected quality is no longer an ACTIVE
   // preset (admin retired it), highlight the default the server coerces to - but
@@ -221,9 +234,11 @@ export function GenerateSplitButton({
     presets.find((p) => p.key === credits?.defaultPresetKey)?.key ??
     presets[0]?.key ??
     quality;
-  const effectiveQuality = presets.some((p) => p.key === quality)
-    ? quality
-    : reconciledKey;
+  const effectiveQuality = regionPreset
+    ? regionPreset
+    : presets.some((p) => p.key === quality)
+      ? quality
+      : reconciledKey;
 
   // The Generate click. Credits not resolved yet: no-op (sub-second window).
   // Closes BOTH load races - a free user can't skip the upsell, and an admin
@@ -352,16 +367,19 @@ export function GenerateSplitButton({
             </div>
             <div className="flex flex-col gap-1.5 px-2 pb-2">
             {presets.map((preset, presetRank) => {
-              // Ladder rank drives the design-quality name (see designLevel).
-              const level = designLevel(presetRank);
+              // Ladder rank drives the design-quality name (see designLevel);
+              // Lite rows are named apart and don't shift the other rungs.
+              const lite = isLitePreset(preset.key);
+              const level = designLevel(presetRank - liteCount);
               // The row's sub-line names the MODEL. `{model}` is filled from the
               // preset's LIVE label (DB-driven once /api/credits resolves), so an
               // admin model swap shows up here instead of the old hardcoded
               // family names. `|| preset.key` because fillPricingTokens leaves the
               // token intact on a falsy value. The thinking word comes off the
               // preset's own flag, so it can't outlive a non-thinking preset.
-              const descTemplate =
-                level === "pro"
+              const descTemplate = lite
+                ? dict.flows.generate.liteDesignDesc
+                : level === "pro"
                   ? dict.flows.generate.proDesignDesc
                   : level === "premium"
                     ? dict.flows.generate.premiumDesignDesc
@@ -404,12 +422,21 @@ export function GenerateSplitButton({
                 }
               }
               const cost = rowCost(rowSlides);
-              const gateTier = preset.gateTier;
+              // Region-limited: every row but the region preset is locked, and
+              // the upsell points at the first paid tier that has it.
+              const regionLocked = !!regionPreset && preset.key !== regionPreset;
+              const gateTier = regionLocked
+                ? preset.gateTier && preset.gateTier !== "free"
+                  ? preset.gateTier
+                  : "plus"
+                : preset.gateTier;
               const gated =
                 !isAdmin &&
-                userPlan !== null &&
-                gateTier !== null &&
-                TIER_ORDER.indexOf(userPlan) < TIER_ORDER.indexOf(gateTier);
+                (regionLocked ||
+                  (!regionPreset &&
+                    userPlan !== null &&
+                    gateTier !== null &&
+                    TIER_ORDER.indexOf(userPlan) < TIER_ORDER.indexOf(gateTier)));
               const affordable = credits
                 ? (teaserPriced
                     ? rowCost(Math.min(rowSlides, teaserVisible))
@@ -449,7 +476,9 @@ export function GenerateSplitButton({
                   <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="flex min-w-0 items-center gap-2">
                     <span className="truncate text-sm font-medium">
-                      {level === "pro"
+                      {lite
+                        ? dict.flows.generate.liteDesign
+                        : level === "pro"
                         ? dict.flows.generate.proDesign
                         : level === "premium"
                           ? dict.flows.generate.premiumDesign
@@ -458,7 +487,7 @@ export function GenerateSplitButton({
                             : dict.flows.generate.draftDesign}
                     </span>
                     {/* The middle rung is the suggested default. */}
-                    {level === "standard" ? (
+                    {!lite && level === "standard" ? (
                       <span className="quality-recommended shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold leading-none">
                         {dict.flows.generate.recommended}
                       </span>
@@ -505,6 +534,11 @@ export function GenerateSplitButton({
                 </button>
               );
             })}
+            {regionPreset ? (
+              <p className="px-2 pt-1 text-[11px] leading-4 text-foreground/50">
+                {dict.flows.generate.regionModelNote}
+              </p>
+            ) : null}
             </div>
           </motion.div>
         ) : null}

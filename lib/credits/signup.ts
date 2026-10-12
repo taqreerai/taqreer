@@ -49,7 +49,9 @@ const IP_VELOCITY_WINDOW_MS = 24 * 60 * 60 * 1000;
 // Unknown/missing country (null) is NOT blocked, and CF's XX/T1 unknown
 // sentinels pass sanitizeCountry but are not in the set - false positives
 // hurt more than the occasional VPN evader this cheap layer misses.
-const GRANT_BLOCKED_COUNTRIES = new Set(["IN"]);
+// IR, SY, CU, KP (owner decision 2026-10-12): comprehensively sanctioned, so
+// Stripe cannot take a payment there - free credits would never convert.
+const GRANT_BLOCKED_COUNTRIES = new Set(["IN", "IR", "SY", "CU", "KP"]);
 
 /**
  * Canonical inbox identity for alias detection. Lowercases; strips

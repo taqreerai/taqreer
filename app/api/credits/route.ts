@@ -3,7 +3,7 @@
 // render from this one payload + the `credit.balance.changed`
 // broadcast, so they can never disagree.
 
-import { regionFreePreset } from "@/lib/credits/region-model";
+import { isRegionLimitedFree, regionFreePreset } from "@/lib/credits/region-model";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
@@ -146,6 +146,8 @@ export async function GET() {
     // Free accounts from a region-limited country see (and run) only this
     // preset; null = the tier's normal presets.
     regionPreset: regionFreePreset(dbUser),
+    // Same accounts pay the regional one-time unlock price (deck-unlock-brackets).
+    regionPricing: isRegionLimitedFree(dbUser),
     // Per-run slide ceiling for this user's tier (admin -> the 75 system cap).
     // The slide steppers cap their max here so a free user (10) can't pick a
     // count preflight would reject.

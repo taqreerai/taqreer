@@ -19,6 +19,7 @@ import { KNOWN_PLANS, type KnownPlan } from "@/lib/plan";
 import {
   DECK_UNLOCK_BRACKETS,
   deckUnlockLookupKey,
+  REGIONAL_DECK_UNLOCK_CENTS,
   type DeckUnlockBracket,
 } from "@/lib/billing/deck-unlock-brackets";
 
@@ -103,6 +104,15 @@ export const BILLING_CATALOG: readonly PriceSpec[] = [
     productKey: deckUnlockLookupKey(b.key),
     productName: `Taqreer presentation unlock (up to ${b.maxSlides} slides)`,
     amount: b.priceCents,
+    currency: "usd",
+    grant: { kind: "deck_unlock", bracket: b.key },
+  })),
+  // Regional one-time unlocks (region-limited free accounts), same grant.
+  ...DECK_UNLOCK_BRACKETS.map((b): PriceSpec => ({
+    lookupKey: deckUnlockLookupKey(b.key, true),
+    productKey: deckUnlockLookupKey(b.key, true),
+    productName: `Taqreer presentation unlock, regional (up to ${b.maxSlides} slides)`,
+    amount: REGIONAL_DECK_UNLOCK_CENTS[b.key],
     currency: "usd",
     grant: { kind: "deck_unlock", bracket: b.key },
   })),

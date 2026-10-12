@@ -11,6 +11,8 @@
 import { prisma } from "@/lib/prisma";
 import { sendInngestEventWithRetry, tierForUser } from "@/lib/inngest-helpers";
 import { toJson } from "@/lib/api/regen-helpers";
+import { ensureFresh } from "@/lib/config/runtime-config";
+import { regionFreePreset } from "@/lib/credits/region-model";
 
 export {
   DECK_UNLOCK_BRACKETS,
@@ -21,7 +23,11 @@ export {
 } from "@/lib/billing/deck-unlock-brackets";
 
 // Lowest Opus preset every paid tier affords. The unlocked tail is crafted on
-// Opus, for a subscriber and for a one-time buyer alike.
+// Opus, for a subscriber and for a one-time buyer alike - EXCEPT a one-time
+// buyer from a region-limited country (still on the free plan): their tail is
+// written with the same Haiku preset as the free part (owner decision
+// 2026-10-12), so no Opus runs and both halves match. The bake's review is
+// already skipped for free owners (lib/deck/review-gate).
 const UNLOCK_PRESET = "opus-fast";
 
 export type DispatchResult =
@@ -64,6 +70,14 @@ export async function dispatchTeaserUnlock(
   });
   if (inFlight) return { ok: true, alreadyRunning: true };
 
+  // Region-limited one-time buyers get the Haiku tail (see UNLOCK_PRESET).
+  await ensureFresh();
+  const owner = await prisma.user.findUnique({
+    where: { id: project.userId },
+    select: { plan: true, role: true, signupCountry: true },
+  });
+  const unlockPreset = (owner && regionFreePreset(owner)) ?? UNLOCK_PRESET;
+
   const presentation = project.presentation;
   const sourceVersionId = presentation.currentVersionId!;
   let jobId: string | null = null;
@@ -76,9 +90,9 @@ export async function dispatchTeaserUnlock(
         inputJson: toJson({
           sourceVersionId,
           lockedCount: project.teaserLockedCount,
-          quality: UNLOCK_PRESET,
+          quality: unlockPreset,
         }),
-        quality: UNLOCK_PRESET,
+        quality: unlockPreset,
       },
     });
     jobId = job.id;
@@ -92,7 +106,7 @@ export async function dispatchTeaserUnlock(
         presentationId: presentation.id,
         sourceVersionId,
         lockedCount: project.teaserLockedCount,
-        quality: UNLOCK_PRESET,
+        quality: unlockPreset,
         jobId: job.id,
         actorPrismaUserId,
         // Processing priority follows the OWNER's tier (they own the deck).

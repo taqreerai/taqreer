@@ -7,14 +7,37 @@
 //
 // Data behind the list (prod, 2026-10-12, ever-subscribed / users): EG 5/178,
 // IN 1/46, IQ 1/36, YE 1/27, TN 0/22, against SA 33/342, AE 6/54, OM 9/141.
+// DZ and MA added by owner decision the same day. Recount with REAL payers only
+// (Stripe subscription id or a cancelled paid sub; the free plan's placeholder
+// Subscription rows excluded): OM 0/141, PS 0/12, LY 0/11, SD 0/8, LB 0/5,
+// PK 0/6, IR 0/8, SY 0/6 - all added. IR and SY also get NO signup grant
+// (lib/credits/signup.ts): Stripe cannot take payments there.
 
 import { normalizePlan } from "@/lib/plan";
 import { getActivePresetKeys } from "@/lib/config/runtime-config";
 
-export const HAIKU_FREE_COUNTRIES = new Set(["EG", "IN", "IQ", "YE", "TN"]);
+export const HAIKU_FREE_COUNTRIES = new Set([
+  "EG", "IN", "IQ", "YE", "TN", "DZ", "MA",
+  "OM", "PS", "LY", "SD", "LB", "PK", "IR", "SY",
+]);
 
 /** The preset key (admin Settings) these accounts are limited to. */
 export const REGION_FREE_PRESET = "haiku-5-5-fast";
+
+/**
+ * Free (non-admin) account that signed up from a listed country. Drives the
+ * Haiku-only model AND the regional one-time unlock price, independent of
+ * whether the Haiku preset is active.
+ */
+export function isRegionLimitedFree(user: {
+  plan: string | null;
+  role: string | null;
+  signupCountry: string | null;
+}): boolean {
+  if (user.role === "admin" || normalizePlan(user.plan) !== "free") return false;
+  const country = user.signupCountry?.toUpperCase();
+  return !!country && HAIKU_FREE_COUNTRIES.has(country);
+}
 
 /**
  * The single preset this user is limited to, or null when the normal tier
@@ -26,8 +49,6 @@ export function regionFreePreset(user: {
   role: string | null;
   signupCountry: string | null;
 }): string | null {
-  if (user.role === "admin" || normalizePlan(user.plan) !== "free") return null;
-  const country = user.signupCountry?.toUpperCase();
-  if (!country || !HAIKU_FREE_COUNTRIES.has(country)) return null;
+  if (!isRegionLimitedFree(user)) return null;
   return getActivePresetKeys().includes(REGION_FREE_PRESET) ? REGION_FREE_PRESET : null;
 }

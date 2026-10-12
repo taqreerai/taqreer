@@ -1705,7 +1705,7 @@
       "generationQuality": "Generation quality",
       "thinking": "Thinking",
       "fast": "Fast",
-      "draftDesign": "Basic",
+      "liteDesign": "Lite", "liteDesignDesc": "Quick, simple layouts · {model}", "draftDesign": "Basic", "regionModelNote": "Your free plan uses our basic model. Paid plans unlock smarter models with better design and writing.",
       "standardDesign": "Balanced",
       "premiumDesign": "Advanced",
       "proDesign": "Professional",

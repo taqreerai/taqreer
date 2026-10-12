@@ -1705,7 +1705,7 @@
       "generationQuality": "جودة التوليد",
       "thinking": "تفكير",
       "fast": "سريع",
-      "draftDesign": "أساسي",
+      "liteDesign": "مبسط", "liteDesignDesc": "تصاميم سريعة ومبسطة · {model}", "draftDesign": "أساسي", "regionModelNote": "تستخدم خطتك المجانية نموذجنا الأساسي. الخطط المدفوعة تفتح نماذج أذكى بتصميم وكتابة أفضل.",
       "standardDesign": "متوازن",
       "premiumDesign": "متقدم",
       "proDesign": "احترافي",

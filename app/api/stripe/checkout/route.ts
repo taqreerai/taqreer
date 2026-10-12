@@ -21,6 +21,7 @@
 // Checkout; Stripe handles proration on the resulting
 // customer.subscription.updated.
 
+import { isRegionLimitedFree } from "@/lib/credits/region-model";
 import { NextResponse } from "next/server";
 import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 import { prisma } from "@/lib/prisma";
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
 
   const dbUser = await prisma.user.findUnique({
     where: { supabaseUserId: user.id },
-    select: { id: true, email: true, name: true, plan: true, role: true },
+    select: { id: true, email: true, name: true, plan: true, role: true, signupCountry: true },
   });
   if (!dbUser) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -99,7 +100,8 @@ export async function POST(request: Request) {
     if (!bracket) {
       return NextResponse.json({ error: "subscription_required" }, { status: 400 });
     }
-    spec = specByLookupKey(deckUnlockLookupKey(bracket));
+    // Region-limited free accounts pay the regional price (region-model).
+    spec = specByLookupKey(deckUnlockLookupKey(bracket, isRegionLimitedFree(dbUser)));
     deckProjectId = project.id;
   } else if (spec?.grant.kind === "deck_unlock") {
     // A deck unlock price is only sold against a specific deck.

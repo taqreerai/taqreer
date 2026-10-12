@@ -1,5 +1,6 @@
 "use client";
 
+import { useCreditBalance } from "@/lib/credits/store";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
@@ -31,7 +32,7 @@ import { BRANDED_CLOSING_SLIDE } from "@/lib/export/free-branding";
 import { TeaserLockCanvas } from "@/components/preview/TeaserLockCanvas";
 import { DeckPurchaseContext } from "@/lib/billing/deck-purchase-context";
 import {
-  DECK_UNLOCK_BRACKETS,
+  deckUnlockPriceCents,
   bracketForSlides,
   teaserTotalSlides,
 } from "@/lib/billing/deck-unlock-brackets";
@@ -2717,14 +2718,16 @@ export function DeckView({
   // One-time unlock offer for a free owner (2026-10-08): priced by the deck's
   // planned size (free part + locked tail). null above the last bracket
   // (subscription only) or when the deck is already bought / not a teaser.
+  const unlockCredits = useCreditBalance();
   const deckUnlockOffer = useMemo(() => {
     if (!brandingWatermark || role !== "owner" || teaserLockedCount <= 0) return null;
     const bracket = bracketForSlides(
       teaserTotalSlides(initialIsSocial ? "social" : "create", teaserLockedCount),
     );
-    const spec = DECK_UNLOCK_BRACKETS.find((b) => b.key === bracket);
-    return spec ? { projectId, priceCents: spec.priceCents } : null;
-  }, [brandingWatermark, role, teaserLockedCount, initialIsSocial, projectId]);
+    if (!bracket) return null;
+    // Same rule the checkout charges by (region-limited free owner -> regional).
+    return { projectId, priceCents: deckUnlockPriceCents(bracket, !!unlockCredits?.regionPricing) };
+  }, [brandingWatermark, role, teaserLockedCount, initialIsSocial, projectId, unlockCredits?.regionPricing]);
 
   // The unlock button. A free / unpaid owner opens the UpgradeModal (the unlock
   // fires on subscribe success); a paid owner / admin fires the unlock directly.
