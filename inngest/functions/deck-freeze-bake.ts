@@ -164,10 +164,26 @@ export const deckFreezeBake = inngest.createFunction(
     // whole-deck review at that size costs more than the deck. Default
     // TRUE (create / social / mimic / datasheet / regen bakes / ops
     // re-bakes all review).
-    const review = (event.data as { review?: boolean }).review !== false;
+    const reviewRequested = (event.data as { review?: boolean }).review !== false;
     if (!projectId || !versionId) {
       throw new Error("deck-freeze-bake: event missing projectId / versionId");
     }
+    // Free-plan owners never get the Opus vision review (owner decision
+    // 2026-10-12, token cost): one authoring pass, then freeze + gates only.
+    // Gated HERE, the single place the review model is called, so every flow
+    // and every dispatcher (generate, images, regen, ops re-bakes) is covered.
+    // Paid owners and admins keep the review; an unlock runs after the owner
+    // pays, so it reviews as before. Lookup failure fails open to the review.
+    const review = reviewRequested
+      ? await step.run("review-plan-gate", async () => {
+          const { prisma } = await import("@/lib/prisma");
+          const owner = await prisma.project.findUnique({
+            where: { id: projectId },
+            select: { user: { select: { plan: true, role: true } } },
+          });
+          return !(owner?.user?.plan === "free" && owner.user.role !== "admin");
+        })
+      : false;
 
     // ─── Step 1: load + validate the manifest ────────────────────────
     const manifest = await step.run("load-manifest", async () => {
