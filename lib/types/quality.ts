@@ -120,7 +120,7 @@ export const QUALITY_PRESETS: ReadonlyArray<{
   // no draft pathology). Opus is subscription-gated; opus-medium retired.
   { key: "sonnet-fast",    label: "Sonnet 5.5", thinking: false, effort: null,     secsPerSlide: 6,  baseOverheadSecs: 20, active: true },
   { key: "opus-fast",      label: "Opus 5.5", thinking: false, effort: null,     secsPerSlide: 8,  baseOverheadSecs: 25, active: true },
-  { key: "opus-balanced",  label: "Opus 4.8", thinking: true,  effort: "low",    secsPerSlide: 25, baseOverheadSecs: 60, active: true },
+  { key: "opus-balanced",  label: "Opus 4.8", thinking: true,  effort: "low",    secsPerSlide: 25, baseOverheadSecs: 60, active: false },
   // Fable-for-Max 2026-07-21: reactivated as the Max-exclusive top tier
   // ("احترافي" / Professional). Fable requires thinking on.
   { key: "fable-low",      label: "Fable 5.1", thinking: true,  effort: "low",    secsPerSlide: 20, baseOverheadSecs: 45, active: true },
