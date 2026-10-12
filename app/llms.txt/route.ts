@@ -31,7 +31,7 @@ taqreer.ai is Arabic-first: true right-to-left layout, Arabic typography, and bi
 
 - [Home (English)](${SITE}/en)
 - [Home (Arabic)](${SITE}/ar)
-- [Pricing](${SITE}/en/pricing): free account plus paid plans (Plus, Pro, Max) from 9 to 79 USD per month, with cheaper yearly billing
+- [Pricing](${SITE}/en/pricing): free tier plus paid plans (Plus, Pro, Max) from 9 to 79 USD per month, with cheaper yearly billing
 - [Templates](${SITE}/en/presentation-templates)
 - [Contact](${SITE}/en/contact)
 
@@ -41,7 +41,7 @@ taqreer.ai is Arabic-first: true right-to-left layout, Arabic typography, and bi
 - Export: PowerPoint (PPTX) and PDF, browser-accurate layout
 - Editing: in-browser slide studio with undo, history, and brand kits
 - Brand: apply your logo, colors, and fonts to every deck
-- Free to sign up: creating an account is free and needs no card; designing decks needs a paid plan
+- Free to try: signup includes free credits, no card required
 `;
 
 export function GET() {

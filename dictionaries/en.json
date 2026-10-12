@@ -91,7 +91,7 @@
       "eyebrow": "Templates",
       "title": "Ready-made, editable presentation templates",
       "subtitle": "Presentation templates you can edit with AI: start from a professionally designed template in Arabic or English, customize it with your brand in minutes, then export to PowerPoint.",
-      "cta": "Get started"
+      "cta": "Try it free"
     },
     "gallery": {
       "title": "Featured templates",
@@ -108,7 +108,7 @@
       ]
     },
     "faq": [
-      { "q": "Are the templates free?", "a": "Yes, you can browse all templates for free. Using one to design a deck takes credits, and some premium templates are on paid plans." },
+      { "q": "Are the templates free?", "a": "Yes, you can try them free with credits at signup. Some premium templates are available on paid plans." },
       { "q": "Can I edit a template?", "a": "Completely. Change text, colors, images, slides, and their order in the editor, with autosave." },
       { "q": "Do the templates support Arabic?", "a": "Yes. Every template is Arabic-first with correct right-to-left direction and Arabic fonts." },
       { "q": "How do I use a template?", "a": "Pick a template, add your content and brand, let the AI redesign the deck, then export to PowerPoint." }
@@ -183,19 +183,19 @@
       "collaboration": { "title": "Collaboration", "body": "Share, comment, and edit with your team" },
       "exportFormats": { "title": "Export", "body": "PowerPoint, PDF, and Google Slides" },
       "gammaArabic": { "title": "Gamma in Arabic", "body": "Gamma AI vs taqreer.ai for Arabic decks" },
-      "pricing": { "title": "Pricing", "body": "Simple monthly plans." }
+      "pricing": { "title": "Pricing", "body": "Simple plans; try it free." }
     }
   },
   "pricing": {
     "meta": {
       "title": "Pricing & Plans | taqreer.ai",
-      "description": "taqreer.ai plans and pricing for designing AI presentations and reports. Pick the plan that fits the number of decks and slides you need."
+      "description": "taqreer.ai plans and pricing for designing AI presentations and reports. Try it free, then pick the plan that fits the number of decks and slides you need."
     },
     "breadcrumb": "Pricing",
     "hero": {
       "eyebrow": "Pricing",
       "title": "Simple plans for what you need",
-      "subtitle": "Pick the plan that fits your deck and slide volume. Upgrade or cancel anytime."
+      "subtitle": "Try it free with the first 5 slides of your deck designed, then pick the plan that fits your deck and slide volume. Upgrade or cancel anytime."
     },
     "credits": {
       "title": "How credits work",
@@ -203,12 +203,12 @@
       "points": [
         { "title": "Monthly credits with your plan", "body": "Every plan gives you a monthly credit balance to create presentations and reports." },
         { "title": "Credits by usage", "body": "Each deck uses credits based on its slide count and the model used." },
-        { "title": "Free to sign up", "body": "Creating an account is free, and you can look around the studio before you subscribe." },
+        { "title": "{credits} free credits", "body": "You get {credits} free credits at signup to try the platform before subscribing." },
         { "title": "Top-up packs when needed", "body": "Subscribers can buy extra credit packs anytime." }
       ]
     },
     "faq": [
-      { "q": "Is there a free plan?", "a": "Creating an account is free, but designing decks needs a paid plan. Pick one when you are ready; you can upgrade or cancel anytime." },
+      { "q": "Is there a free plan?", "a": "Yes. Try it free with {credits} credits at signup, no card required; we design the first 5 slides of each deck. Upgrade later as you need." },
       { "q": "How do credits work?", "a": "Each deck uses credits based on its slide count and the model used. You get monthly credits with your plan, and can buy top-up packs when needed." },
       { "q": "Can I upgrade or cancel anytime?", "a": "Yes. Upgrade, downgrade, or cancel anytime from your account settings, with no long-term commitment." },
       { "q": "What is the difference between monthly and yearly?", "a": "Yearly costs less per month than monthly with the same features. Choose monthly for flexibility or yearly to save." }
@@ -224,7 +224,7 @@
       "eyebrow": "Create",
       "title": "Make PowerPoint presentations with AI",
       "subtitle": "From an idea or a file to a fully designed deck, in Arabic and English. The AI designs every slide with your brand, and you can still tweak every detail.",
-      "cta": "Get started"
+      "cta": "Try it free"
     },
     "preview": {
       "title": "Full control over your deck",
@@ -286,7 +286,7 @@
                 "A design for every slide: the AI picks each slide's layout for its content instead of pouring text into one fixed template.",
                 "Built-in review: after generating, the AI checks the slides and improves any with layout, overflow, or readability problems.",
                 "Arabic-first: right-to-left direction that stays correct even in the PowerPoint file. See [Arabic presentations](/arabic-presentations).",
-                "Images that fit: the AI can add [generated images](/powerpoint-images) to any deck."
+                "Images that fit: the AI can add [generated images](/powerpoint-images) to any deck, free on your trial."
               ]
             }
           ]
@@ -294,7 +294,7 @@
         {
           "heading": "A clear credit cost",
           "blocks": [
-            "Each deck uses credits based on its slide count and the generation quality you choose, and you see the cost before you start. You are never charged more than that: if the deck comes out shorter or you stop the generation, the difference goes back to your balance, and a failed generation costs nothing. Creating an account is free, and credits come with your plan. See [pricing and plans](/pricing)."
+            "Each deck uses credits based on its slide count and the generation quality you choose, and you see the cost before you start. You are never charged more than that: if the deck comes out shorter or you stop the generation, the difference goes back to your balance, and a failed generation costs nothing. The free plan starts with free credits at signup, no card needed. See [pricing and plans](/pricing)."
           ]
         },
         {
@@ -316,7 +316,7 @@
       "eyebrow": "Social",
       "title": "Social media post and ad design with AI",
       "subtitle": "Pick a platform and size, add your brief and brand, and taqreer.ai designs an on-brand post or carousel for Instagram, Facebook, X, and LinkedIn, in Arabic and English, ready to export as PDF or PNG.",
-      "cta": "Get started"
+      "cta": "Try it free"
     },
     "preview": {
       "title": "From a brief to a post",
@@ -387,7 +387,7 @@
       "eyebrow": "Enhance",
       "title": "Redesign PowerPoint decks with AI",
       "subtitle": "Redesign PowerPoint decks by uploading a PDF or PPTX: taqreer.ai redesigns it in your brand while keeping your text exactly as it is, in Arabic and English.",
-      "cta": "Get started"
+      "cta": "Try it free"
     },
     "preview": {
       "title": "From an old deck to a new design",
@@ -459,7 +459,7 @@
       "eyebrow": "Your own template",
       "title": "Copy the design of any PowerPoint",
       "subtitle": "Attach a deck or design you like, and taqreer.ai applies its visual style to your new content in Arabic and English, keeping colors, fonts, and layout consistent.",
-      "cta": "Get started"
+      "cta": "Try it free"
     },
     "preview": {
       "title": "From a reference design to your deck",
@@ -530,7 +530,7 @@
       "eyebrow": "Arabic-first",
       "title": "Arabic presentations, formatted right",
       "subtitle": "Arabic presentations that export to PowerPoint with correct right-to-left direction: taqreer.ai designs and exports your decks with proper alignment, numbers, and Arabic fonts that stay intact.",
-      "cta": "Get started"
+      "cta": "Try it free"
     },
     "compare": {
       "title": "Arabic, the way it should look",
@@ -680,7 +680,7 @@
       "eyebrow": "Gamma AI vs taqreer.ai",
       "title": "Gamma in Arabic: same idea, a very different design",
       "subtitle": "Gamma is one of the best-known AI presentation tools. We asked it and taqreer.ai for a deck on the same idea: a launch plan for a specialty coffee shop in Riyadh. These are the slides exactly as both tools exported them, opened in PowerPoint, with no edits.",
-      "cta": "Get started with taqreer.ai",
+      "cta": "Try taqreer.ai free",
       "vs": "vs"
     },
     "verdict": {
@@ -829,7 +829,7 @@
       },
       {
         "q": "Is taqreer.ai free?",
-        "a": "Creating an account is free, with no credit card needed. To design decks you pick a paid plan, listed on the pricing page."
+        "a": "You can try it free: we design the first 5 slides of your deck, no credit card needed. For more decks and features, paid plans are listed on the pricing page."
       },
       {
         "q": "Can I edit the deck after it's made?",
@@ -851,7 +851,7 @@
       "eyebrow": "PDF to PowerPoint",
       "title": "Convert PDF to PowerPoint with AI",
       "subtitle": "Convert PDF to PowerPoint in one step: upload your file and the AI reads its content and turns it into a designed deck in your brand, ready to edit and export as PPTX.",
-      "cta": "Get started"
+      "cta": "Try it free"
     },
     "preview": {
       "title": "Start from a PDF",
@@ -932,7 +932,7 @@
       "eyebrow": "Word to PowerPoint",
       "title": "Convert Word to PowerPoint with AI",
       "subtitle": "Convert Word to PowerPoint by uploading a Word document: the AI turns your text into an organized deck in your brand, in Arabic and English.",
-      "cta": "Get started"
+      "cta": "Try it free"
     },
     "preview": {
       "title": "Start from a Word document",
@@ -1025,7 +1025,7 @@
       "eyebrow": "Editor",
       "title": "Edit PowerPoint online with AI",
       "subtitle": "Edit PowerPoint online right in your browser: drag, resize, and arrange layers, or ask the AI to redesign any slide, with nothing to install.",
-      "cta": "Get started"
+      "cta": "Try it free"
     },
     "why": {
       "title": "An editor built for presentations",
@@ -1108,7 +1108,7 @@
       "eyebrow": "Images",
       "title": "PowerPoint images made by AI",
       "subtitle": "PowerPoint images that fit each slide's content and design: the AI generates them, or pick from the photo library or upload your own.",
-      "cta": "Get started"
+      "cta": "Try it free"
     },
     "preview": {
       "title": "Turn on images when you create",
@@ -1126,7 +1126,7 @@
     },
     "faq": [
       { "q": "How do I add AI images to my deck?", "a": "Turn on generated images when you create a deck, and the AI adds images that fit your slides. You can regenerate any image from the editor." },
-      { "q": "Can I add AI images to my deck?", "a": "Yes. Generated images are available for every deck you design, and the free photo library is open to everyone." },
+      { "q": "Are AI images on the free plan?", "a": "Yes. Generated images are free during your trial and do not use your credits. The free photo library is open to everyone." },
       { "q": "Can I use my own images?", "a": "Yes. Upload images in the editor or save them to your library." },
       { "q": "Do images stay when I export?", "a": "Yes. Images stay in your deck when you export to PowerPoint or PDF." }
     ],
@@ -1144,7 +1144,7 @@
                 "Don't like an image? Regenerate or replace it from the [editor](/powerpoint-online)."
               ]
             },
-            "Generated images can be added to any deck."
+            "Generated images are free during your trial."
           ]
         },
         {
@@ -1186,7 +1186,7 @@
       "eyebrow": "Brand",
       "title": "A brand kit for every presentation",
       "subtitle": "Save your colors, fonts, and logo in one brand kit, and every new deck comes out on brand with no setup.",
-      "cta": "Get started"
+      "cta": "Try it free"
     },
     "preview": {
       "title": "Start with your brand",
@@ -1257,7 +1257,7 @@
       "eyebrow": "Collaboration",
       "title": "Collaborate on decks with your team",
       "subtitle": "Invite colleagues and clients to your deck, choose who can view, comment, or edit, and work together in one place.",
-      "cta": "Get started"
+      "cta": "Try it free"
     },
     "why": {
       "title": "Teamwork in one place",
@@ -1325,7 +1325,7 @@
       "eyebrow": "Export",
       "title": "Export to PowerPoint, PDF, and Google Slides",
       "subtitle": "One deck, five formats: an editable PowerPoint file, a PDF to share, PNG images, an HTML page, and Google Slides.",
-      "cta": "Get started"
+      "cta": "Try it free"
     },
     "why": {
       "title": "A format for every use",
@@ -1341,7 +1341,7 @@
       { "q": "Which formats can I export?", "a": "PowerPoint (PPTX), PDF, PNG images, HTML, and Google Slides, on every plan." },
       { "q": "Does Arabic stay correct after export?", "a": "Yes. taqreer.ai keeps right-to-left text direction and alignment in the exported PowerPoint." },
       { "q": "Can I edit the file after exporting?", "a": "Yes, the PPTX is fully editable in PowerPoint on every plan." },
-      { "q": "What does the free plan include?", "a": "Every export format, including editable PPTX, PDF and Google Slides. Free-plan exports carry a small \"Designed with taqreer\" watermark. Paid plans export without a watermark and design full decks." }
+      { "q": "What does the free plan include?", "a": "Every export format, including editable PPTX, PDF and Google Slides. Free-plan exports carry a small \"Designed with taqreer\" watermark, and the free plan designs the first 5 slides of each deck. Paid plans export without a watermark and design full decks." }
     ],
     "article": {
       "title": "Export formats in taqreer.ai: which one should you pick?",
@@ -1446,8 +1446,8 @@
     },
     "signup": { "googleHint": "Fastest: one click, no confirmation email to wait for", "codeBody": "We sent a confirmation code to your email. Enter it here to pick up where you left off.", "codeLabel": "Confirmation code", "codeSubmit": "Confirm and continue", "codeVerifying": "Confirming...", "codeInvalid": "That code is wrong or has expired. Check it or ask for a new one.", "codeOrLink": "Or press the confirm button in the email, and this page carries on by itself.",
       "title": "Create account",
-      "subtitle": "Create your account. No credit card needed.",
-      "eyebrow": "Free sign-up, no credit card",
+      "subtitle": "Try it free. No credit card needed.",
+      "eyebrow": "Try it free, no credit card",
       "continue": "Continue",
       "back": "Back",
       "detailsTitle": "A few more details",
@@ -1513,7 +1513,7 @@
   "flows": {
     "design": {"card": "Design", "tabTemplates": "Templates", "tabStyles": "Styles", "colorTemplates": "Color templates", "templatesEmpty": "No ready-made templates yet", "noTemplate": "Automatic", "noTemplateDesc": "We design the deck from scratch", "lockedTitle": "Templates are on the {tier} plan", "lockedBody": "Build your deck on a ready-made template's design, with your content and colors.", "premiumTitle": "This is a premium template", "premiumBody": "Premium templates are on the {tier} plan and up.", "failed": "Couldn't prepare the template, try again", "templateNote": "We'll reuse this template's design with your content. Colors and font come from the template and you can change them.", "freeBadge": "Free", "templateNoteEnhance": "We'll redesign your slides in this template's look, keeping each slide's content as it is.", "slidesFew": "{n} slides", "slidesMany": "{n} slides", "preview": "Preview", "useTemplate": "Use this template", "selected": "Selected", "showAll": "Show all", "allTemplates": "All templates", "allColorTemplates": "All color templates"},
     "switcher": { "label": "Creation tools" },
-    "guest": { "title": "Create your free account to continue", "email": "Sign up with email", "haveAccount": "Have an account?", "login": "Log in" },
+    "guest": { "title": "Create your free account to start designing", "email": "Sign up with email", "haveAccount": "Have an account?", "login": "Log in" },
     "wizard": { "next": "Next", "nextLook": "Next: Look", "back": "Back", "extracting": "Extracting your file...", "hints": { "socialContent": "Write your post's topic, and add your product photo if you like.", "socialDesign": "Pick a post style, or leave it automatic.", "socialSettings": "Last step: platform, size and slide count, then create the post.", "mimicContent": "Write your deck's content or upload its file.", "mimicReference": "Upload a deck whose design you like, and we design your content in its look.", "mimicTemplate": "We design your content in this template's look.", "enhanceFile": "Upload your current deck (PowerPoint or PDF), and add instructions if you like.", "enhanceDesign": "Pick a template or a design style for the redesign, or leave the design automatic.", "enhanceBrand": "Optional: your brand colors, font and logo, then create the deck.", "content": "Write your idea or upload a file, and we turn it into a ready deck.", "design": "Pick a ready-made template or a design style, or leave it to us.", "brand": "Optional: your brand colors, font and logo. You can skip this.", "output": "Last step: slide size and count, then create your deck." } },
     "stylePicker": {"boldSample": "Deck", "socialBoldSample": "BOLD", "dialogTitle": "Choose a design style", "auto": "Auto", "autoDesc": "We pick what fits your content", "change": "Change", "descs": {"swiss": "Strict grid, calm whitespace", "corporate": "Clear charts and figures", "minimal": "One element, generous space", "editorial": "Magazine-style columns", "bold": "Huge display headlines", "duotone": "Two tones, full-bleed imagery", "playful": "Free shapes, bold color", "brutalist": "Raw borders, stark contrast", "classroom": "Clear steps for teaching", "official": "Formal, structured reports", "heritage": "Islamic patterns and arches", "luxury": "Dark, elegant and refined", "techglass": "Glowing, futuristic tech", "startup": "Clean pitch, one highlighted word", "infographic": "Icons, numbers and flows", "sketch": "Notebook doodles and highlights", "organic": "Soft shapes, earthy tones", "retro": "Warm 70s print look", "collage": "Layered photos and tape", "earlyyears": "Big pictures, very few words", "primary": "Colourful, clear and structured", "middleschool": "Energetic, not childish", "highschool": "Mature and exam-focused", "university": "Rigorous academic lectures"}, "socialDescs": {"boldtype": "Giant type, one loud statement", "editorial": "Magazine kicker, big headline, hero", "grainy": "Dreamy gradient auras with grain", "brutalist": "Flat brights, thick borders, shadows", "minimal": "Airy whitespace, one calm idea", "photo": "Full-bleed photo, type on a scrim", "retro": "Risograph two-tone with halftone", "pop3d": "Soft 3D shapes, rounded cards", "swiss": "Strict columns, exact alignment", "corporate": "One hero figure, clean chart", "quote": "One big quote, a bold quote mark", "textpost": "Your words in a personal post card", "heritage": "Geometric patterns and arches", "luxury": "Dark, elegant, hairline frames", "techglow": "Glowing tech, frosted-glass cards", "doodle": "Doodles and highlighter marks", "scrapbook": "Layered photos and tape", "steps": "Numbered steps for how-to carousels"}, "names": {"swiss": "Swiss / Grid", "corporate": "Corporate / Data", "minimal": "Minimal / Keynote", "editorial": "Editorial", "bold": "Bold / Display", "duotone": "Duotone / Full-bleed", "playful": "Playful / Dopamine", "brutalist": "Brutalist", "classroom": "Classroom / Academic", "official": "Official / Government", "heritage": "Heritage / Geometric", "luxury": "Luxury / Dark", "techglass": "Tech / Glass", "startup": "Startup / Modern", "infographic": "Infographic / Icons", "sketch": "Hand-drawn / Sketch", "organic": "Organic / Nature", "retro": "Retro / Vintage", "collage": "Collage / Scrapbook", "earlyyears": "Early Years / KG", "primary": "Primary School", "middleschool": "Middle School", "highschool": "High School", "university": "University Lecture"}, "info": {"swiss": {"does": "Lays every slide on a visible column grid with thin rules, off-centre blocks and one small accent colour. Clean, precise and very organised.", "best": "Architecture, design, engineering, research and tech talks."}, "corporate": {"does": "Each slide opens with its main conclusion as the title, then backs it with stat boxes, tables and clean charts. Colours carry meaning (up, down, neutral).", "best": "Quarterly reports, financials, KPIs, board meetings and consulting."}, "minimal": {"does": "One idea per slide: a single big number, word or photo fills most of the slide, with lots of empty space around it.", "best": "Product launches, keynote talks, vision decks and inspiring speeches."}, "editorial": {"does": "A magazine layout with a tinted side column and a main column, small labels above headings and thin rules between blocks. Photos carry the colour.", "best": "Case studies, culture, history, journalism and annual reports."}, "bold": {"does": "Giant headlines on full brand-colour backgrounds, running off one edge of the slide. Loud, confident and impossible to miss.", "best": "Marketing campaigns, brand launches, pitch openers and events."}, "duotone": {"does": "Every slide is a full-screen photo (or a two-colour split) with bold text over a dark gradient so it stays readable.", "best": "Tourism, events, sports, real estate and storytelling."}, "playful": {"does": "Rounded cards in bright colours with hard drop shadows and a repeated circle or blob shape. Fun, friendly and energetic.", "best": "Kids, training, social media, consumer apps and HR."}, "brutalist": {"does": "Thick borders box every area, with heavy flat colour blocks, no rounded corners and no gradients. Raw and striking.", "best": "Startups, creative agencies, fashion and edgy tech."}, "classroom": {"does": "Built for teaching: numbered steps, key-idea boxes, definition cards and simple labelled diagrams, with text large enough to read from the back of a class.", "best": "Lessons, school projects, training courses, workshops and lectures."}, "official": {"does": "A formal institutional look: a solid header band, numbered sections, ruled tables and labelled figures. Restrained, symmetric and authoritative.", "best": "Ministry and government reports, strategy plans, compliance and official briefings."}, "heritage": {"does": "Arabic and Islamic heritage: geometric star patterns as borders and ornaments, arch-shaped frames and balanced, symmetric layouts.", "best": "Ramadan and Eid, national days, culture, tourism and heritage topics."}, "luxury": {"does": "Quiet luxury on a near-black background: thin fine frames, lots of empty space and elegant light headlines. One focal element per slide.", "best": "Real estate, perfume, jewellery, hospitality and premium brands."}, "techglass": {"does": "A dark background with soft glowing colours and frosted-glass cards holding the content. Modern and futuristic.", "best": "AI, software, fintech, cybersecurity and product demos."}, "startup": {"does": "A clean modern pitch: bold headlines with one highlighted word, soft rounded cards, pill tags and simple line icons.", "best": "Investor pitches, product features, company profiles and team updates."}, "infographic": {"does": "Turns points into visuals: icons with numbers, process arrows, timelines and simple charts, with very little paragraph text.", "best": "Processes, statistics, awareness campaigns, how-to guides and summaries."}, "sketch": {"does": "A warm notebook feel: paper-like background, doodled underlines, circled words, hand-drawn arrows and highlighter marks.", "best": "Brainstorms, workshops, kids' lessons, ideas and creative talks."}, "organic": {"does": "Calm and natural: earthy colours, soft blob shapes, rounded photo frames and plenty of breathing room.", "best": "Wellness, health, sustainability, food, beauty and agriculture."}, "retro": {"does": "A nostalgic print look: warm muted colours, chunky rounded headlines, sunburst and stripe motifs, badges and a light paper grain.", "best": "Cafes and restaurants, events, branding stories and creative talks."}, "collage": {"does": "A creative scrapbook: overlapping photo frames, slightly tilted, with tape strips, sticker labels and layered cards.", "best": "Travel, events recaps, student projects, moodboards and social stories."}, "earlyyears": {"does": "Made for ages 4 to 7: one idea per slide, a single big word or short phrase, cheerful colours, rounded shapes and friendly cartoon pictures that carry the meaning.", "best": "Kindergarten, grades 1 and 2, letters and numbers, colours, animals, songs and simple stories."}, "primary": {"does": "For grades 3 to 6: short sentences in large type, each point with an icon, plus 'did you know?' boxes, quick questions, vocabulary cards and simple labelled diagrams.", "best": "Science, Arabic and English lessons, maths, social studies, school activities and class projects."}, "middleschool": {"does": "For grades 7 to 9: bold modern headings, colour blocks, icon cards, concept maps, simple comparisons and challenge questions. Each section keeps its own colour.", "best": "Science units, geography, history, technology, student presentations and research projects."}, "highschool": {"does": "For grades 10 to 12: clean and serious, with definition and formula boxes, step-by-step worked examples, labelled diagrams and charts, and revision summaries.", "best": "Physics, chemistry, biology, maths, exam revision and senior research projects."}, "university": {"does": "Academic lecture slides: a clear outline and numbered sections, concise argument headlines, models, equations and data figures drawn cleanly, sources where you give them, and discussion questions.", "best": "University lectures, seminars, thesis and research presentations, and academic conferences."}}, "infoAria": "About this style", "whatItDoes": "What it does", "bestFor": "Best for", "showAll": "Show all styles", "allStyles": "All design styles", "thumbTitle": "Plan 2026", "autoInfoDoes": "The AI reads your content and picks the layout and look that fit it best.", "autoInfoBest": "Any topic, when you are not sure which style to pick.", "sectors": {"all": "All", "education": "Education", "business": "Business", "government": "Government", "marketing": "Marketing", "tech": "Tech", "creative": "Creative", "culture": "Culture & heritage", "lifestyle": "Lifestyle"}, "filterAria": "Filter styles by sector"},
     "contentCard": "Content",
@@ -1522,7 +1522,7 @@
     "langArabic": "Arabic",
     "langEnglish": "English",
     "contentPlaceholder": "Write your presentation content here...",
-    "overCapTrial": "This file is too long. Upload a file of up to {max} pages.", "trialPagesNote": "Designing your deck needs a plan. Subscribe to start.", "trialPagesNoteOver": "Designing your deck needs a plan. Decks are designed up to {cap} pages; pages after {cap} are not included.", "overCapWarning": "Your file has {pages} pages, but your current plan creates up to {cap} per deck. To include every page, move to a higher plan or split the content into more than one deck.",
+    "overCapTrial": "This file is too long for the free trial. Upload a file of up to {max} pages.", "trialPagesNote": "The free trial designs only the first few pages now; the rest is completed when you subscribe.", "trialPagesNoteOver": "The free trial designs only the first few pages now, and the deck is completed up to {cap} pages when you subscribe. Pages after {cap} are not included in this deck.", "overCapWarning": "Your file has {pages} pages, but your current plan creates up to {cap} per deck. To include every page, move to a higher plan or split the content into more than one deck.",
     "or": "or",
     "dropTitle": "Drag or click to choose a file",
     "dropSubtitle": "PDF / PPTX / DOCX · up to 100 MB",
@@ -1716,12 +1716,12 @@
       "etaMin": "~{eta} min",
       "balance": "Balance: {count} cr",
       "creditsEstimate": "\u2248 {credits} cr", "creditsEstimateUpTo": "up to {credits} cr",
-      "slideCapUpsell": { "bodyPosts": "The free plan doesn't include design credits. Subscribe to start designing your carousel.", "continuePosts": "Continue",
-        "title": "Free plan",
+      "slideCapUpsell": { "bodyPosts": "On the free plan we design only the first few posts of your carousel; the rest stay locked until you subscribe. Subscribe now to get the full set.", "continuePosts": "Design the first few posts",
+        "title": "Free trial",
         "close": "Close",
-        "body": "The free plan doesn't include design credits. Subscribe to start designing your deck.",
+        "body": "On the free plan we design only the first few slides of your deck; the rest stay locked until you subscribe. Subscribe now to get the full deck.",
         "upgrade": "See plans",
-        "continue": "Continue"
+        "continue": "Design the first few slides"
       }
     },
     "fonts": {
@@ -1746,7 +1746,7 @@
       "titleRotate": ["Design presentations", "Enhance your deck", "Use your own template", "Create social posts"],
       "titleLine2": "with AI",
       "subtitle": "taqreer.ai turns your ideas and files into designed presentations and reports with AI, in Arabic and English, while keeping your brand identity, with an advanced editor to fine-tune every slide.",
-      "cta": "Get started", "ctaNote": "Free to sign up"
+      "cta": "Try it free", "ctaNote": "No credit card needed"
     },
     "sections": {
       "features": {
@@ -1763,7 +1763,7 @@
       "pricing": {
         "eyebrow": "Pricing",
         "title": "Simple plans for what you need",
-        "subtitle": "Pick a monthly plan that fits your deck volume and the slide count you need."
+        "subtitle": "Try it free, or pick a monthly plan that fits your deck volume and the slide count you need."
       },
       "faq": {
         "eyebrow": "Help",
@@ -1780,7 +1780,7 @@
     "templatesCard": {
       "title": "Ready-made templates with RTL support",
       "description": "Start from templates designed for Arabic and English decks, with full right-to-left text support and proper formatting for headings, paragraphs, tables, and bilingual slides.",
-      "cta": "Get started"
+      "cta": "Try it free"
     },
     "templatesGrid": {
       "previewAria": "Preview the template",
@@ -1810,11 +1810,11 @@
       "tiers": [
         {
           "name": "Free",
-          "description": "Create a free account and explore the studio. Subscribe to start designing.",
-          "credits": "No credits included",
-          "features": ["Free account, no card needed", "Explore the studio", "Prepare your content", "See every creation method", "Subscribe when you are ready", "Design decks with AI", "Editable PPTX + all formats", "No watermark", "Premium templates"],
+          "description": "Try every feature free. We design the first 5 slides of each deck; subscribe to unlock the rest.",
+          "credits": "{credits} credits (signup gift)",
+          "features": ["{model}", "First 5 slides of each deck designed", "Editable PPTX + all formats", "All creation methods", "Smart photos + custom brand identity", "AI edits after generation", "No watermark", "Full decks, nothing locked", "Premium templates"],
           "footnote": "Upgrade anytime",
-          "cta": "Get started"
+          "cta": "Try it free"
         },
         {
           "name": "Plus",
@@ -1847,7 +1847,7 @@
       { "q": "How do I design a presentation with AI?", "a": "Write your topic or upload a file in taqreer.ai, choose your brand, and the AI designs a complete presentation in minutes that you can edit and export to PowerPoint." },
       { "q": "Does taqreer.ai design presentations and reports in Arabic?", "a": "Yes. taqreer.ai is Arabic-first with full right-to-left support and Arabic fonts, and it turns your ideas and files into designed presentations and reports in Arabic and English." },
       { "q": "Does it fully support Arabic?", "a": "Yes. taqreer.ai is Arabic-first: correct RTL direction, elegant Arabic fonts, and bidirectional formatting that handles English words and numbers inside Arabic text accurately." },
-      { "q": "How does the credit system work?", "a": "Each deck uses credits based on its slide count and the model used. You get monthly credits with your plan." },
+      { "q": "How does the credit system work?", "a": "Each deck uses credits based on its slide count and the model used. You get monthly credits with your plan, plus {credits} free credits at signup to try the platform." },
       { "q": "Can I edit the deck after creating it?", "a": "Absolutely. The editor lets you edit text, colors, and slides and reorder them, with autosave and checkpoints you can revert to anytime." },
       { "q": "Can I export the deck to PowerPoint?", "a": "Yes. You export your decks as an editable PPTX for PowerPoint on every plan, with the Arabic formatting and text direction preserved." },
       { "q": "Can I apply my own brand identity?", "a": "Yes. Upload your logo, colors, and fonts in the brand identity section, and taqreer.ai applies them automatically so your decks stay on-brand." },
@@ -1954,7 +1954,7 @@
   },
   "checkout": { "title": "Upgrade your plan", "topupTitle": "Add credits", "subtitle": "Downgrade or cancel at any time.", "back": "Back to billing", "loading": "Loading secure checkout…", "emailLabel": "Email", "payCta": "Pay {amount}", "subscribeCta": "Subscribe - {amount} / month", "subscribeCtaYearly": "Subscribe - {amount} / year", "perYear": "/ year", "processingPay": "Processing…", "payFailed": "Payment failed. Check your card details and try again.", "promoLabel": "Promo code", "promoPlaceholder": "Enter code", "promoApply": "Apply", "promoApplying": "Applying…", "promoInvalid": "This code is not valid.", "promoRemove": "Remove", "promoApplied": "Code {code} applied", "error": "Could not start checkout. Please try again.", "returnProcessing": "Confirming your payment…", "returnSuccess": "Payment complete", "returnCloseBody": "Your credits were added. Close this tab and continue where you left off.", "closeTab": "Close this tab", "returnSuccessBody": "Your credits have been added. They may take a few seconds to appear.", "returnFailed": "Payment was not completed", "returnFailedBody": "No charge was made. You can try again from billing.", "toBilling": "Go to billing", "toDashboard": "Go to dashboard" },
   "components": {
-    "premiumGate": {"lockedFlowTitle":"This feature is on the {tier} plan","lockedFlowBody":"You can look around and prepare your content here. Generating needs the {tier} plan or higher.","upgrade":"Upgrade","slideCapHint":"The Free plan has no design credits; subscribe to start designing","lockedCardHint":"Needs the {tier} plan","logoLockedTitle":"Your logo on Plus","logoLockedBody":"Free decks carry the taqreer.ai mark"},
+    "premiumGate": {"lockedFlowTitle":"This feature is on the {tier} plan","lockedFlowBody":"You can look around and prepare your content here. Generating needs the {tier} plan or higher.","upgrade":"Upgrade","slideCapHint":"The Free plan designs only the first few slides; the rest unlock when you subscribe","lockedCardHint":"Needs the {tier} plan","logoLockedTitle":"Your logo on Plus","logoLockedBody":"Free decks carry the taqreer.ai mark"},
     "supportWidget": { "whatsappLabel": "Chat with us on WhatsApp", "whatsappGreeting": "Hi, I need help with taqreer.ai", "helpLabel": "Help", "popoverTitle": "Need help?", "popoverBody": "Message our team on WhatsApp and we'll get back to you.", "whatsappCta": "Contact us via WhatsApp" },
     "desktopEditHint": { "title": "Full editing is on desktop", "body": "On a computer you can edit everything directly: text, elements, and colors. On mobile you can preview and edit with AI.", "gotIt": "Got it", "close": "Close" },
     "upgradeModal": { "deckUnlockTitle": "Unlock just this presentation", "deckUnlockOnce": "One payment, no subscription", "deckUnlockPoints": ["Every locked slide, fully designed", "No watermark", "Export to PowerPoint, PDF and images"], "deckUnlockCta": "Unlock for {price}", "deckUnlockOr": "Or subscribe for better value: several presentations every month", "deckUnlockSuccess": "Payment received. We're designing the rest of your slides now; they'll appear here in a few minutes.", "title": "Upgrade your plan", "requiresTier": "This model requires the {tier} plan", "checkoutTitle": "Complete your subscription", "back": "Back to plans", "successTitle": "Payment successful!", "successBody": "Payment received - your plan and credits will update within moments.", "done": "Close" },
