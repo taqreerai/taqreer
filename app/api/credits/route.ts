@@ -3,6 +3,7 @@
 // render from this one payload + the `credit.balance.changed`
 // broadcast, so they can never disagree.
 
+import { regionFreePreset } from "@/lib/credits/region-model";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
@@ -55,6 +56,8 @@ export async function GET() {
       // Superuser flag → the chrome swaps the plan/credit UI for an
       // "Admin" chip and the client picker treats everything unlocked.
       role: true,
+      // Signup country -> the region-limited free preset (region-model).
+      signupCountry: true,
       // Cadence of the active paid subscription → the plan banner's
       // monthly/yearly pill (PlanUsage reads it from this one payload).
       subscriptions: { select: { cadence: true } },
@@ -140,6 +143,9 @@ export async function GET() {
   return NextResponse.json({
     plan,
     isAdmin: dbUser.role === "admin",
+    // Free accounts from a region-limited country see (and run) only this
+    // preset; null = the tier's normal presets.
+    regionPreset: regionFreePreset(dbUser),
     // Per-run slide ceiling for this user's tier (admin -> the 75 system cap).
     // The slide steppers cap their max here so a free user (10) can't pick a
     // count preflight would reject.

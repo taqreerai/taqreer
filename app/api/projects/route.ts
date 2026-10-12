@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { regionFreePreset } from "@/lib/credits/region-model";
 import { cookies } from "next/headers";
 import type { Prisma } from "@prisma/client";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
@@ -814,7 +815,10 @@ export async function POST(request: Request) {
     }
   }
   await ensureFresh();
-  const quality = resolveQuality(payload.quality);
+  // Region-limited free accounts run the region preset whatever the client
+  // sent (lib/credits/region-model); everyone else keeps their pick.
+  const regionPreset = regionFreePreset(dbUser);
+  const quality = regionPreset ?? resolveQuality(payload.quality);
 
   // ─── Enhance + template (2026-10-05) ────────────────────────────────
   // A redesign in a deck template's look: the template's design reference is
@@ -988,6 +992,7 @@ export async function POST(request: Request) {
     // Admin/superuser: no flow/preset/slide-cap/credit gate. The deck
     // still generates; the hold is waived in the pipeline (owner role).
     isAdmin: dbUser.role === "admin",
+    regionPreset,
   });
   if (!preflight.ok) {
     return NextResponse.json(

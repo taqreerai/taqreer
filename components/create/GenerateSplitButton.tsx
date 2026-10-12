@@ -206,8 +206,11 @@ export function GenerateSplitButton({
   // they'd render ungated/selectable but the server refuses them with
   // preset_locked. Admins see everything (they bypass gating). This also covers
   // the transient state where a preset is added but not yet unlocked in a tier.
-  const presets = (credits?.presets ?? FALLBACK_PRESETS).filter(
-    (p) => isAdmin || p.gateTier !== null,
+  // Region-limited free account: exactly one preset, shown and selected
+  // (the server runs it whatever is sent; lib/credits/region-model).
+  const regionPreset = !isAdmin ? (credits?.regionPreset ?? null) : null;
+  const presets = (credits?.presets ?? FALLBACK_PRESETS).filter((p) =>
+    regionPreset ? p.key === regionPreset : isAdmin || p.gateTier !== null,
   );
 
   // Highlight reconciliation: if the selected quality is no longer an ACTIVE

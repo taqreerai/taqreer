@@ -125,6 +125,9 @@ export async function preflightGenerate(args: {
   // cap rises only to SYSTEM_SLIDE_CAP - 75 is a hard output-token
   // ceiling, not a tier gate, so an exact request above it still blocks.
   isAdmin?: boolean;
+  // Region-limited free account (lib/credits/region-model): the ONLY preset
+  // this user may run, replacing the tier's list. Ignored for admins.
+  regionPreset?: string | null;
   now?: Date;
 }): Promise<PreflightResult> {
   const now = args.now ?? new Date();
@@ -138,7 +141,9 @@ export async function preflightGenerate(args: {
         unlockedPresetKeys: getActivePresetKeys(),
         slideCap: SYSTEM_SLIDE_CAP,
       }
-    : baseTier;
+    : args.regionPreset
+      ? { ...baseTier, unlockedPresetKeys: [args.regionPreset] }
+      : baseTier;
   // Social carousels cap well below the deck tier cap (see slideCapForFlow) so
   // AUTO holds a carousel-sane ceiling; every `tier.slideCap` read below then
   // inherits it (quote, exact-cap block, cappedToTier). Applied to ADMINS too:

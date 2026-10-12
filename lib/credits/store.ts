@@ -50,6 +50,8 @@ export type CreditData = {
   // Superuser: the chrome shows an "Admin" chip instead of the plan/credit
   // UI, and the generation picker treats every preset as unlocked.
   isAdmin?: boolean;
+  // Region-limited free account: the only preset it may run (null = tier presets).
+  regionPreset?: string | null;
   // Per-run slide ceiling for the user's tier (free = 10; admin = system cap).
   // The create/mimic/datasheet slide steppers cap their max at this value.
   slideCap: number;
