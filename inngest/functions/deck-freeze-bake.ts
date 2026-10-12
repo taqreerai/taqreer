@@ -256,11 +256,33 @@ export const deckFreezeBake = inngest.createFunction(
         });
         // Enhance skips the vision render, so no leading normalization here
         // either (it would need its own render); the freeze uses stored html.
+        // A review the DISPATCHER wanted but the free-plan gate skipped is
+        // different: the model is off, the deterministic Arabic-leading fix
+        // is not (it needs no model and the freeze composes its result).
+        const normalizedNoReview: Record<string, string> = {};
+        if (reviewRequested && pendingIds.length > 0) {
+          const browser = await launchGuardedBrowser();
+          try {
+            const page = await openRenderedDeck(browser, manifest, dims);
+            const normResult = await normalizeLeading(page, pendingIds);
+            for (const sid of pendingIds) {
+              if (normResult[sid]?.html) normalizedNoReview[sid] = normResult[sid].html;
+            }
+          } catch (err) {
+            // Best-effort, same as the reviewed path: freeze as-authored.
+            logger.warn("deck_leading_normalize_failed", {
+              versionId,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          } finally {
+            await closeGuardedBrowser(browser);
+          }
+        }
         return {
           revisions: {} as Record<string, string>,
           fixWorthyBefore: {} as Record<string, number>,
           overflowPxBefore: {} as Record<string, number>,
-          normalized: {} as Record<string, string>,
+          normalized: normalizedNoReview,
         };
       }
       // 2a. One clean render: audit findings + a downscaled shot per

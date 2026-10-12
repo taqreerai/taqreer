@@ -80,6 +80,21 @@ function __tqCompressOverflow(well) {
     return false;
   };
 
+  // A painted box (card/panel: fill or border) holding text has no text node
+  // of its own; its bottom padding + border clip while the text still fits.
+  // Same rule as the audit's overflow walk (audit-script.ts), bottom edge only.
+  var isPaintedTextBox = function (el, cs) {
+    var pos = cs.position;
+    if (pos === "absolute" || pos === "fixed") return false;
+    if (el.children.length === 0 || el.hasAttribute("data-tq-lock")) return false;
+    if (!el.textContent || !el.textContent.trim()) return false;
+    var bg = cs.backgroundColor;
+    return (
+      (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") ||
+      (cs.borderBottomStyle !== "none" && parseFloat(cs.borderBottomWidth) > 0)
+    );
+  };
+
   // Worst inked-content extension past the well BOTTOM (the axis this
   // compressor can fix). Mirrors the audit's overflow walk.
   var overflowBottomPx = function () {
@@ -91,7 +106,16 @@ function __tqCompressOverflow(well) {
       if (tn === "STYLE" || tn === "SCRIPT") continue;
       var cs = view.getComputedStyle(el);
       if (cs.display === "none" || cs.visibility === "hidden") continue;
-      if (!hasInk(el)) continue;
+      if (!hasInk(el)) {
+        if (isPaintedTextBox(el, cs)) {
+          var pr = el.getBoundingClientRect();
+          if (pr.width >= 1 && pr.height >= 1) {
+            var pb = pr.bottom - wr.bottom;
+            if (pb > worst) worst = pb;
+          }
+        }
+        continue;
+      }
       var r = el.getBoundingClientRect();
       if (r.width < 1 && r.height < 1) continue;
       var out = r.bottom - wr.bottom;

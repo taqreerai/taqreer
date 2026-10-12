@@ -102,7 +102,34 @@ function __tqAuditWell(well, dir) {
     if (tn === "STYLE" || tn === "SCRIPT") continue;
     var cs = view.getComputedStyle(el);
     if (cs.display === "none" || cs.visibility === "hidden") continue;
-    if (!hasInk(el)) continue;
+    if (!hasInk(el)) {
+      // A PAINTED box (card/panel: fill or border) that holds text has no text
+      // node of its own, so it was invisible here: its bottom padding + border
+      // (~30px) could be clipped by the well while the text still sat inside
+      // the tolerance, and nothing reported it (prod deck 2026-10-12, project
+      // cmv5fo3k60004et6du5wbedco: third card cut off, no finding). Bottom edge
+      // only: that is the overflow compression can fix, and a deliberate
+      // sideways bleed of a decorative band stays quiet.
+      var pos = cs.position;
+      if (
+        pos !== "absolute" && pos !== "fixed" &&
+        el.children.length > 0 &&
+        !el.hasAttribute("data-tq-lock") &&
+        el.textContent && el.textContent.trim() &&
+        ((cs.backgroundColor && cs.backgroundColor !== "rgba(0, 0, 0, 0)" && cs.backgroundColor !== "transparent") ||
+          (cs.borderBottomStyle !== "none" && parseFloat(cs.borderBottomWidth) > 0))
+      ) {
+        var pr = el.getBoundingClientRect();
+        if (pr.width >= 1 && pr.height >= 1) {
+          var pb = pr.bottom - wr.bottom;
+          if (pb > worst) {
+            worst = pb;
+            worstTag = el.tagName + (el.className ? "." + String(el.className).split(" ")[0] : "");
+          }
+        }
+      }
+      continue;
+    }
     var r = el.getBoundingClientRect();
     // a box with no rendered size cannot be clipped visible content
     if (r.width < 1 && r.height < 1) continue;
