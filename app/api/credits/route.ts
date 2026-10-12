@@ -4,6 +4,7 @@
 // broadcast, so they can never disagree.
 
 import { isRegionLimitedFree, regionFreePreset } from "@/lib/credits/region-model";
+import { activePresetPayload } from "@/lib/credits/public-presets";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
@@ -12,7 +13,6 @@ import { getBalance } from "@/lib/credits/server";
 import {
   ensureFresh,
   getFreeCredits,
-  getActivePresets,
   getTier,
   getImageCredits,
   pricingDisplayNumbers,
@@ -122,18 +122,7 @@ export async function GET() {
   // cost + the lowest tier that unlocks it, so GenerateSplitButton shows exactly
   // what the server will charge and gate on. Inactive presets are absent here,
   // so they disappear from the picker; an added preset appears with no deploy.
-  const presets = getActivePresets().map((p) => ({
-    key: p.key,
-    label: p.label,
-    thinking: p.thinking,
-    effort: p.effort ?? null,
-    baseCredits: p.baseCredits,
-    perSlideCredits: p.perSlideCredits,
-    gateTier:
-      TIER_ORDER.find((plan) =>
-        getTier(plan).unlockedPresetKeys.includes(p.key),
-      ) ?? null,
-  }));
+  const presets = activePresetPayload();
 
   const [tierPrices, topupPacks] = await Promise.all([
     getDisplayPrices(),

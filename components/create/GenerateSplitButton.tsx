@@ -176,6 +176,27 @@ export function GenerateSplitButton({
   // price in view). Null until the first fetch - rows render without
   // the credit chip rather than with a wrong number.
   const credits = useCreditBalance();
+  // Signed-out visitors: the live preset list (+ a display-only region guess)
+  // from the public /api/presets, since /api/credits needs a session. Until it
+  // resolves (or if it fails) the bundled FALLBACK_PRESETS render.
+  const [guestPresets, setGuestPresets] = useState<{
+    presets: CreditPreset[];
+    defaultPresetKey: string;
+    regionPreset: string | null;
+  } | null>(null);
+  useEffect(() => {
+    if (!guest || credits) return;
+    let cancelled = false;
+    fetch("/api/presets", { credentials: "same-origin" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d && Array.isArray(d.presets)) setGuestPresets(d);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [guest, credits]);
   // Free trial teaser (owner direction 2026-10-05): the price shown is the
   // FULL deck's (what the whole deck is worth), but a free (non-admin) deck
   // only builds and charges the first TEASER_VISIBLE_COUNT slides, so
@@ -214,8 +235,10 @@ export function GenerateSplitButton({
   // listed FIRST (the "Basic" rung) and is the only selectable row; every other
   // model still shows, crowned, so they see what a paid plan unlocks. The
   // server runs the region preset whatever is sent.
-  const regionPreset = !isAdmin ? (credits?.regionPreset ?? null) : null;
-  const allPresets = credits?.presets ?? FALLBACK_PRESETS;
+  const regionPreset = !isAdmin
+    ? (credits?.regionPreset ?? guestPresets?.regionPreset ?? null)
+    : null;
+  const allPresets = credits?.presets ?? guestPresets?.presets ?? FALLBACK_PRESETS;
   const visible = regionPreset
     ? allPresets.filter((p) => p.key === regionPreset || p.gateTier !== null)
     : allPresets.filter((p) => isAdmin || p.gateTier !== null);
@@ -231,7 +254,9 @@ export function GenerateSplitButton({
   // only if that default is a RENDERED row; else the first listed preset, so the
   // highlight never lands on a row the picker doesn't show.
   const reconciledKey =
-    presets.find((p) => p.key === credits?.defaultPresetKey)?.key ??
+    presets.find(
+      (p) => p.key === (credits?.defaultPresetKey ?? guestPresets?.defaultPresetKey),
+    )?.key ??
     presets[0]?.key ??
     quality;
   const effectiveQuality = regionPreset

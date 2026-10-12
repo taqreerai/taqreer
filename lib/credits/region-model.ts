@@ -40,6 +40,16 @@ export function isRegionLimitedFree(user: {
 }
 
 /**
+ * Display-only: the region preset a visitor from `country` would get after
+ * signing up (the signed-out picker). Grants nothing by itself.
+ */
+export function regionPresetForCountry(country: string | null): string | null {
+  const c = country?.toUpperCase();
+  if (!c || !HAIKU_FREE_COUNTRIES.has(c)) return null;
+  return getActivePresetKeys().includes(REGION_FREE_PRESET) ? REGION_FREE_PRESET : null;
+}
+
+/**
  * The single preset this user is limited to, or null when the normal tier
  * presets apply. Also null when the Haiku preset is missing or inactive, so a
  * deactivated preset falls back to the tier instead of blocking generation.

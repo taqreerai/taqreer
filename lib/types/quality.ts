@@ -118,12 +118,12 @@ export const QUALITY_PRESETS: ReadonlyArray<{
   // Sonnet restructure 2026-07-21: Sonnet 5 is the new free/entry model
   // (measured this session ~40-57% cheaper than opus-fast, comparable design,
   // no draft pathology). Opus is subscription-gated; opus-medium retired.
-  { key: "sonnet-fast",    label: "Sonnet 5", thinking: false, effort: null,     secsPerSlide: 6,  baseOverheadSecs: 20, active: true },
-  { key: "opus-fast",      label: "Opus 4.8", thinking: false, effort: null,     secsPerSlide: 8,  baseOverheadSecs: 25, active: true },
+  { key: "sonnet-fast",    label: "Sonnet 5.5", thinking: false, effort: null,     secsPerSlide: 6,  baseOverheadSecs: 20, active: true },
+  { key: "opus-fast",      label: "Opus 5.5", thinking: false, effort: null,     secsPerSlide: 8,  baseOverheadSecs: 25, active: true },
   { key: "opus-balanced",  label: "Opus 4.8", thinking: true,  effort: "low",    secsPerSlide: 25, baseOverheadSecs: 60, active: true },
   // Fable-for-Max 2026-07-21: reactivated as the Max-exclusive top tier
   // ("احترافي" / Professional). Fable requires thinking on.
-  { key: "fable-low",      label: "Fable 5",  thinking: true,  effort: "low",    secsPerSlide: 20, baseOverheadSecs: 45, active: true },
+  { key: "fable-low",      label: "Fable 5.1", thinking: true,  effort: "low",    secsPerSlide: 20, baseOverheadSecs: 45, active: true },
   // Retired 2026-07-21 (no measurable quality gain over opus-balanced); kept
   // inactive so legacy opus-medium decks still resolve.
   { key: "opus-medium",    label: "Opus 4.8", thinking: true,  effort: "medium", secsPerSlide: 25, baseOverheadSecs: 60, active: false },
