@@ -22,7 +22,7 @@ import {
   type SlideType,
   type ThemeType,
 } from "@/lib/schema/slide";
-import { paramsForQuality } from "@/lib/anthropic/quality-params";
+import { isHaikuQuality, paramsForQuality } from "@/lib/anthropic/quality-params";
 import {
   ensureFresh,
   defaultPresetKey,
@@ -2309,6 +2309,7 @@ export const deckGenerate = inngest.createFunction(
             // post at 16:9 (X/LinkedIn landscape) is not a social-format but still
             // needs the social persona. isSocialFormat stays for the legacy 3:4.
             kind: frameKindFor(data.type, slideFormat),
+            haikuRules: isHaikuQuality(data.quality),
           }),
           paletteAuto ? AUTO_PALETTE_ADDENDUM : null,
           paletteReference ? REFERENCE_PALETTE_ADDENDUM : null,

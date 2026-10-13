@@ -99,3 +99,8 @@ export function paramsForQuality(
 ): AnthropicCallParams {
   return paramsForPreset(quality) ?? FALLBACK_PARAMS;
 }
+
+/** True when the preset runs a Haiku model (gets the extra layout rules in frameSystemPrompt). */
+export function isHaikuQuality(quality: string | undefined | null): boolean {
+  return paramsForQuality(quality).model.startsWith("claude-haiku");
+}

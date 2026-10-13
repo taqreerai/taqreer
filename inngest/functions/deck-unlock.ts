@@ -29,7 +29,7 @@ import {
   type SlideType,
 } from "@/lib/schema/slide";
 import { ensureFresh } from "@/lib/config/runtime-config";
-import { paramsForQuality } from "@/lib/anthropic/quality-params";
+import { isHaikuQuality, paramsForQuality } from "@/lib/anthropic/quality-params";
 import { scopeDeckCss, unscopeDeckCss } from "@/lib/deck/scope-css";
 import { buildSlideHtml, canvasFrameCss } from "@/lib/deck/scaffold";
 import {
@@ -196,6 +196,8 @@ export const deckUnlock = inngest.createFunction(
       language: manifest.language === "en" ? "en" : "ar",
       imagesMode: isImagesDeck,
       kind: frameKindFor(projectType, format),
+      // The Haiku tail (region-limited buyers) gets the same rules as its head.
+      haikuRules: isHaikuQuality(data.quality ?? "opus-fast"),
     });
     const briefText = source.rawBrief
       ? // 40k chars (was 6k, 2026-10-05): the teaser now covers every flow,
