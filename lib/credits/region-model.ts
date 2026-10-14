@@ -19,8 +19,8 @@ import { getActivePresetKeys } from "@/lib/config/runtime-config";
 export const HAIKU_FREE_COUNTRIES = new Set([
   "EG", "IN", "IQ", "YE", "TN", "DZ", "MA",
   "OM", "PS", "LY", "SD", "LB", "PK", "IR", "SY",
-  // JO added by owner decision 2026-10-13.
-  "JO",
+  // JO added by owner decision 2026-10-13, AF 2026-10-14.
+  "JO", "AF",
 ]);
 
 /** The preset key (admin Settings) these accounts are limited to. */
