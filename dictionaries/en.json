@@ -1810,7 +1810,7 @@
       "tiers": [
         {
           "name": "Free",
-          "description": "Try the tool free. We design the first few slides of each deck; subscribe to unlock the rest.",
+          "description": "We design the first few slides of the deck",
           "credits": "{credits} credits to try the tool",
           "features": ["{model}", "First few slides of each deck designed", "Editable PPTX + all formats", "All creation methods", "Custom brand identity", "AI edits after generation", "No watermark", "Full decks, nothing locked", "Premium templates"],
           "footnote": "Upgrade anytime",
