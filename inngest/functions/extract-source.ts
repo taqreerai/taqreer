@@ -139,8 +139,11 @@ function parseExtractRequestedEvent(data: unknown): ExtractRequestedEvent {
   // user's object. The upload route always writes to
   // `${supabaseUserId}/extract/<jobId>/...`; reject anything that
   // escapes that prefix or carries path traversal.
+  // Traversal means a path SEGMENT that is "." or "..": a ".." inside a file
+  // name ("Marie-..pptx") is harmless (slashes never survive the name sanitizer)
+  // and used to fail every such upload.
   if (
-    ev.fileBucketPath.includes("..") ||
+    ev.fileBucketPath.split("/").some((seg) => seg === ".." || seg === ".") ||
     !ev.fileBucketPath.startsWith(`${ev.supabaseUserId}/`)
   ) {
     throw new NonRetriableError(

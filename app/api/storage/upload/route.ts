@@ -15,7 +15,9 @@ const allowedBuckets = new Set(["source-files", "brand-assets"]);
 const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
 
 function safeFileName(name: string) {
-  return name.replace(/[^\w.\-]+/g, "-");
+  // Same sanitizer as /api/extract: no ".." runs in a storage key.
+  const cleaned = name.replace(/[^\w.\-]+/g, "-").replace(/\.{2,}/g, ".");
+  return /^\.?$/.test(cleaned) ? "file" : cleaned;
 }
 
 export async function POST(request: Request) {

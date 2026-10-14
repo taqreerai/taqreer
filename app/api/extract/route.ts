@@ -46,8 +46,12 @@ const ALLOWED_MIME = new Set([
 ]);
 
 function safeFileName(name: string) {
-  // Same sanitizer the existing /api/storage/upload route uses.
-  return name.replace(/[^\w.\-]+/g, "-");
+  // Same sanitizer the existing /api/storage/upload route uses. Runs of dots
+  // collapse to one ("Marie ..pptx" used to leave a ".." in the storage key and
+  // the extract-source path guard rejected it), and a name that is only dots
+  // falls back to "file".
+  const cleaned = name.replace(/[^\w.\-]+/g, "-").replace(/\.{2,}/g, ".");
+  return /^\.?$/.test(cleaned) ? "file" : cleaned;
 }
 
 export async function POST(request: Request) {
