@@ -7,20 +7,32 @@
 //
 // Telemetry source: deck-generate writes model/quality/inputTokens/
 // outputTokens/cacheReadTokens/cacheCreationTokens on the Job at
-// completion. Cache pricing: reads at 0.1x input, 5-minute-TTL writes at
-// 1.25x input (the pipeline's ephemeral cache).
+// completion. Cache pricing: per-model read rate (see RATES), 5-minute-TTL
+// writes at 1.25x input (the pipeline's ephemeral cache).
 import { prisma } from "../lib/prisma";
 
-// $ per MTok by model prefix; extend as models enter the preset matrix.
-const RATES: Array<{ prefix: string; inUsd: number; outUsd: number }> = [
-  { prefix: "claude-opus", inUsd: 5, outUsd: 25 },
-  { prefix: "claude-fable", inUsd: 10, outUsd: 50 },
-  { prefix: "claude-sonnet", inUsd: 3, outUsd: 15 },
-  { prefix: "claude-haiku", inUsd: 1, outUsd: 5 },
+// Anthropic list prices, $ per MTok (verified 2026-10-14 against the current
+// model table). Specific prefixes first: the first match wins, so a newer
+// generation must precede its family prefix. cacheReadUsd is the cache-HIT rate
+// (not always 0.1x input: Opus 5.5 is 0.05x, Fable 5.1 is 0.025x); cache WRITES
+// (5-minute TTL) are 1.25x input for every model. Haiku 5.5 is priced for
+// prompts up to 100K tokens ($0.50 / $2.50 beyond; no deck prompt gets there) and
+// its cache-read rate is assumed 0.1x (not published in the table).
+type Rate = { prefix: string; inUsd: number; outUsd: number; cacheReadUsd: number };
+const RATES: Rate[] = [
+  { prefix: "claude-fable", inUsd: 10, outUsd: 50, cacheReadUsd: 0.25 },
+  { prefix: "claude-opus-5-5", inUsd: 4, outUsd: 20, cacheReadUsd: 0.2 },
+  { prefix: "claude-opus", inUsd: 5, outUsd: 25, cacheReadUsd: 0.5 },
+  { prefix: "claude-sonnet-5", inUsd: 2, outUsd: 10, cacheReadUsd: 0.2 }, // 5.5 and 5
+  { prefix: "claude-sonnet", inUsd: 3, outUsd: 15, cacheReadUsd: 0.3 }, // 4.x
+  { prefix: "claude-haiku-5", inUsd: 0.1, outUsd: 0.5, cacheReadUsd: 0.01 },
+  { prefix: "claude-haiku", inUsd: 1, outUsd: 5, cacheReadUsd: 0.1 }, // 4.5
 ];
+// Unknown model: price it as the dearest common family so a surprise reads high.
+const FALLBACK_RATE: Rate = { prefix: "", inUsd: 5, outUsd: 25, cacheReadUsd: 0.5 };
 
-function rateFor(model: string | null) {
-  return RATES.find((r) => model?.startsWith(r.prefix)) ?? RATES[0];
+function rateFor(model: string | null): Rate {
+  return RATES.find((r) => model?.startsWith(r.prefix)) ?? FALLBACK_RATE;
 }
 
 async function main() {
@@ -70,7 +82,7 @@ async function main() {
     agg.usd +=
       (j.inputTokens / 1e6) * r.inUsd +
       (j.outputTokens / 1e6) * r.outUsd +
-      (j.cacheReadTokens / 1e6) * r.inUsd * 0.1 +
+      (j.cacheReadTokens / 1e6) * r.cacheReadUsd +
       (j.cacheCreationTokens / 1e6) * r.inUsd * 1.25;
     byPreset.set(key, agg);
   }
