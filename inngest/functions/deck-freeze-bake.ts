@@ -807,6 +807,27 @@ export const deckFreezeBake = inngest.createFunction(
         const preShots = revisedShots;
         const finalAudit = await auditSlides(page, toFreeze, manifest.direction);
 
+        // DETECT-ONLY (2026-10-14): how often a slide freezes with a large empty
+        // vertical gap. Not a finding, never fed to the vision pass; one log line
+        // per bake so the rate can be read from prod before deciding whether a
+        // deterministic expand step is worth building.
+        {
+          const dz = toFreeze
+            .map((sid) => ({ sid, d: finalAudit[sid]?.deadZone }))
+            .filter((x) => x.d !== undefined);
+          if (dz.length > 0) {
+            const wide = dz.filter((x) => (x.d?.gapPct ?? 0) > 25);
+            logger.info("deck_deadzone", {
+              versionId,
+              slides: dz.length,
+              over25: wide.length,
+              worstGapPct: Math.max(...dz.map((x) => x.d?.gapPct ?? 0)),
+              medianCoverPct: dz.map((x) => x.d?.coverPct ?? 0).sort((a, b) => a - b)[Math.floor(dz.length / 2)],
+              wide: JSON.stringify(wide.map((x) => [x.sid, x.d?.gapPct, x.d?.coverPct])).slice(0, 400),
+            });
+          }
+        }
+
         // ── DETERMINISTIC OVERFLOW BACKSTOP (2026-08-11) ── nothing freezes
         // with measured vertical overflow while deterministic compression
         // can fix it. The vision gets first shot at a design-quality fix;

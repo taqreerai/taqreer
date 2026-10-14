@@ -79,6 +79,9 @@ export type FrameAuditResult = {
   findings: FrameAuditFinding[];
   pixelChecks: PixelContrastCheck[];
   cssInvisible?: CssInvisibleText[];
+  // Detect-only layout metric (never a finding): largest empty vertical gap and
+  // the share of well rows holding ink, both in percent of the well height.
+  deadZone?: { gapPct: number; coverPct: number };
 };
 
 export const AUDIT_SCRIPT = `
@@ -543,7 +546,50 @@ function __tqAuditWell(well, dir) {
     }
   }
 
-  return { findings: findings, pixelChecks: pixelChecks, cssInvisible: cssInvisible };
+  // ── dead zone: DETECT-ONLY metric (2026-10-14) ──
+  // The underfill check above measures the content EXTENT (topmost to
+  // bottommost ink), so a title at the top and a card row pushed to the bottom
+  // by margin-top:auto reads as a full slide. This measures the largest empty
+  // vertical GAP between ink and the share of well rows that hold ink. It is
+  // NOT a finding: it is returned beside them and only logged by the bake
+  // (deck_deadzone), so nothing here reaches the vision pass or changes a slide.
+  var dzIv = [];
+  var dzEls = well.querySelectorAll("*");
+  for (var dz = 0; dz < dzEls.length; dz++) {
+    var dzEl = dzEls[dz];
+    var dzTn = dzEl.tagName.toUpperCase();
+    if (dzTn === "STYLE" || dzTn === "SCRIPT") continue;
+    if (!hasInk(dzEl)) continue;
+    var dzCs = view.getComputedStyle(dzEl);
+    if (dzCs.display === "none" || dzCs.visibility === "hidden") continue;
+    var dzR = dzEl.getBoundingClientRect();
+    if (dzR.height < 2 || dzR.width < 2) continue;
+    var dzTop = Math.max(dzR.top, wr.top) - wr.top;
+    var dzBot = Math.min(dzR.bottom, wr.bottom) - wr.top;
+    if (dzBot > dzTop) dzIv.push([dzTop, dzBot]);
+  }
+  var deadZone = { gapPct: 0, coverPct: 0 };
+  if (dzIv.length > 0 && wr.height > 0) {
+    dzIv.sort(function (a, b) { return a[0] - b[0]; });
+    var dzS = dzIv[0][0], dzE = dzIv[0][1], dzCover = 0, dzGap = 0;
+    for (var dzI = 1; dzI < dzIv.length; dzI++) {
+      if (dzIv[dzI][0] <= dzE + 1) {
+        if (dzIv[dzI][1] > dzE) dzE = dzIv[dzI][1];
+      } else {
+        dzCover += dzE - dzS;
+        if (dzIv[dzI][0] - dzE > dzGap) dzGap = dzIv[dzI][0] - dzE;
+        dzS = dzIv[dzI][0];
+        dzE = dzIv[dzI][1];
+      }
+    }
+    dzCover += dzE - dzS;
+    deadZone = {
+      gapPct: Math.round((dzGap / wr.height) * 100),
+      coverPct: Math.round((dzCover / wr.height) * 100),
+    };
+  }
+
+  return { findings: findings, pixelChecks: pixelChecks, cssInvisible: cssInvisible, deadZone: deadZone };
 }
 
 // Deterministic ink BACKSTOP (2026-07-15): applied in the freeze step to any
