@@ -28,20 +28,25 @@ export function AIImagesPanel({
   value,
   onChange,
   disabled = false,
+  lockedOn = false,
 }: {
   value: boolean;
   onChange: (v: boolean) => void;
   disabled?: boolean;
+  /** Free account on a flow that includes the photos: shown ON, toggle not changeable. */
+  lockedOn?: boolean;
 }) {
   const dict = useDict();
   const credits = useCreditBalance();
   // null plan (still hydrating) gates like free — the toggle defaults OFF, so
   // a paying user's pre-hydration state is just "crown for a beat", never a
   // wrongly-blocked enabled state (lib/images/images-gating.ts).
-  const locked = isImagesLocked({
-    plan: credits?.plan ?? null,
-    isAdmin: credits?.isAdmin ?? false,
-  });
+  const locked =
+    !lockedOn &&
+    isImagesLocked({
+      plan: credits?.plan ?? null,
+      isAdmin: credits?.isAdmin ?? false,
+    });
   const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   const handleChange = (next: boolean) => {
@@ -93,9 +98,9 @@ export function AIImagesPanel({
       <div className="shrink-0">
         <Toggle
           ariaLabel={dict.flows.brand.aiImagesTitle}
-          value={value}
+          value={lockedOn ? true : value}
           onChange={handleChange}
-          disabled={disabled}
+          disabled={disabled || lockedOn}
         />
       </div>
       <UpgradeModal

@@ -10,6 +10,11 @@
 // feature for now. Paid plans pay the DB per-image rate. Admins are exempt.
 // The lock + UpgradeModal plumbing is the original one; only isImagesLocked
 // changed. Existing decks keep the images they already have.
+// 2026-10-14 (owner decision): the ENHANCE flow is open to free accounts with
+// images locked ON (a 1:1 rebuild without them left every source photo as an
+// "Upload your picture" placeholder). Free images cost 0 credits and the free
+// deck is a 5-slide teaser, so the spend is bounded. The Enhance page shows the
+// toggle locked on for free accounts.
 
 import { type KnownPlan, isPaidPlan } from "@/lib/plan";
 
@@ -27,8 +32,11 @@ export const IMAGES_GATE_TIER: KnownPlan = "plus";
 export function isImagesLocked(user: {
   plan: string | null;
   isAdmin: boolean;
+  /** Credit flow of the run; Enhance is open to every plan. */
+  flow?: string;
 }): boolean {
   if (user.isAdmin) return false;
+  if (user.flow === "enhance") return false;
   return !isPaidPlan(user.plan);
 }
 

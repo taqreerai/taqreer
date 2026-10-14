@@ -384,6 +384,13 @@ export default function EnhanceContentPage() {
   // here (2026-10-10): with it off every photo became an "Upload your
   // picture" placeholder, which read as a broken deck. Users can switch it off.
   const [imagesMode, setImagesMode] = useState<boolean>(true);
+  // Free accounts get the photos on Enhance with the toggle locked ON (owner
+  // decision 2026-10-14, lib/images/images-gating.ts); the server lets Enhance
+  // through the images gate for every plan.
+  const enhanceCredits = useCreditBalance();
+  const freeLockedOn =
+    !!enhanceCredits && !enhanceCredits.isAdmin && normalizePlan(enhanceCredits.plan) === "free";
+  const imagesOn = freeLockedOn || imagesMode;
   // Picking a style clears the template; photo-led styles switch AI photos
   // on (never off), like /create.
   const onDesignStyle = (style: string | null) => {
@@ -1017,7 +1024,7 @@ export default function EnhanceContentPage() {
           // first paint instead of flipping mid-stream.
           language: extracted.language ?? "ar",
           saveBrandKit,
-          imagesMode,
+          imagesMode: imagesOn,
           slideCount: resolvedSlideCount,
           quality,
           ...(templateId ? { templateId } : {}),
@@ -1409,9 +1416,10 @@ export default function EnhanceContentPage() {
 
             <div className="border-t border-[var(--tq-border-hairline)] pt-4 stage:pt-3 stage-tight:pt-2">
               <AIImagesPanel
-                value={imagesMode}
+                value={imagesOn}
                 onChange={setImagesMode}
                 disabled={stage === "submitting"}
+                lockedOn={freeLockedOn}
               />
             </div>
           </WizardCard>
@@ -1498,7 +1506,7 @@ export default function EnhanceContentPage() {
               quality={quality}
               onQualityChange={setQuality}
               slideCount={extracted?.pageCount ?? undefined}
-              imagesMode={imagesMode}
+              imagesMode={imagesOn}
               disabled={generateDisabled}
               loading={generateLoading}
               label={generateLabel}
