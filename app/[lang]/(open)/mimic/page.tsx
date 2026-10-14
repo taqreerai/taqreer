@@ -1,10 +1,15 @@
-// /mimic — standalone Mimic flow (upload your own design reference).
-// The flow body lives in components/mimic/MimicFlow.tsx, shared with
-// /use-template/[id] (template mode). This route just renders it in
-// the default standalone mode.
+// /mimic - retired (2026-10-15). "Your own template" is now the "Upload your own"
+// tile inside /create's Templates tab, so this route only forwards old links and
+// search results there. The flow body (components/mimic/MimicFlow.tsx) still
+// backs /use-template/[id].
 
-import MimicFlow from "@/components/mimic/MimicFlow";
+import { redirect } from "next/navigation";
 
-export default function MimicPage() {
-  return <MimicFlow />;
+export default async function MimicPage({
+  params,
+}: {
+  params: Promise<{ lang: string }>;
+}) {
+  const { lang } = await params;
+  redirect(`/${lang}/create`);
 }

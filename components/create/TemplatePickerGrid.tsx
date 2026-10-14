@@ -24,7 +24,7 @@
 
 import { PickerExpandButton, PickerExpandModal } from "@/components/create/PickerExpandModal";
 import { PillButton } from "@/components/create/PillButton";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { TemplateUpgradeModal, type TemplateGate } from "@/components/app/TemplateUpgradeModal";
 import { useTemplateLock } from "@/lib/templates/use-template-lock";
@@ -42,6 +42,16 @@ import { FIT_MAX_ROWS, useFitCount } from "@/components/create/useFitCount";
 
 export type PickedTemplate = { template: PickerTemplate; use: MimicTemplateUse };
 
+export type TemplateUploadControl = {
+  // The upload is the selected design reference.
+  active: boolean;
+  name: string | null;
+  stage: "idle" | "extracting" | "ready";
+  onFile: (file: File) => void;
+  // Signed-out visitor: asks them to sign up instead of opening the picker.
+  onGuest?: () => void;
+};
+
 // How long each slide shows while a tile is hovered.
 const FLIP_MS = 900;
 
@@ -57,6 +67,7 @@ export function TemplatePickerGrid({
   wide = false,
   fit = false,
   onGuestSelect,
+  upload,
 }: {
   selectedId: string | null;
   onSelect: (picked: PickedTemplate) => void;
@@ -70,6 +81,10 @@ export function TemplatePickerGrid({
   // columns follow the CARD width, and on a viewport-fit stage only the rows
   // scroll inside the card; elsewhere 4 rows, the rest behind "Show all".
   fit?: boolean;
+  // "Upload your own" (/create only, 2026-10-15): a presentation the user likes
+  // the look of, used as the design reference. Replaces the old separate
+  // "Your own template" section. Absent = no tile (e.g. /enhance).
+  upload?: TemplateUploadControl;
 }) {
   const dict = useDict();
   const { locale } = useLocale();
@@ -81,6 +96,7 @@ export function TemplatePickerGrid({
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [error, setError] = useState(false);
   const [gate, setGate] = useState<TemplateGate>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let aborted = false;
@@ -193,6 +209,59 @@ export function TemplatePickerGrid({
     </button>
   );
 
+  // "Upload your own" tile: same plan gate as the template flow itself.
+  const uploadLock = upload ? lockFor({ isMine: false }) : null;
+  const uploadTile = upload ? (
+    <div key="upload" className="contents">
+      <input
+        ref={uploadInputRef}
+        type="file"
+        className="hidden"
+        accept=".pptx,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) upload.onFile(file);
+        }}
+      />
+      <button
+        type="button"
+        disabled={disabled || upload.stage === "extracting"}
+        onClick={() => {
+          setExpanded(false);
+          if (upload.onGuest) return upload.onGuest();
+          if (uploadLock) return openGate(uploadLock, false);
+          if (upload.active) return onClear();
+          uploadInputRef.current?.click();
+        }}
+        title={t.uploadOwnDesc}
+        aria-pressed={upload.active}
+        className={`pick-tile flex flex-col rounded-lg p-1 ${wide ? "rounded-xl p-1.5" : ""} ${upload.active ? "is-active" : ""}`}
+      >
+        <div
+          className="flex w-full flex-col items-center justify-center gap-1 rounded-md border border-dashed border-[var(--tq-border-hairline)] px-2 text-center text-foreground/70"
+          style={{ aspectRatio: "16/9" }}
+        >
+          <span
+            className={`material-symbols-outlined ${upload.stage === "extracting" ? "animate-spin" : ""}`}
+            style={{ fontSize: wide ? 26 : 16 }}
+            aria-hidden
+          >
+            {upload.stage === "extracting" ? "progress_activity" : upload.active ? "check_circle" : "upload_file"}
+          </span>
+          <span className={`max-w-full truncate ${wide ? "text-sm font-semibold text-foreground" : "text-[10px] font-medium"}`} dir="auto">
+            {upload.active && upload.name ? upload.name : t.uploadOwn}
+          </span>
+          {wide ? (
+            <span className="text-[11px] leading-4 text-foreground/55">
+              {upload.stage === "extracting" ? t.uploadAnalyzing : upload.active ? t.uploadReady : t.uploadOwnDesc}
+            </span>
+          ) : null}
+        </div>
+      </button>
+    </div>
+  ) : null;
+
   const list = templates ?? [];
   const skeletons = Array.from({ length: wide ? 7 : 5 }).map((_, i) => (
     <div
@@ -202,12 +271,13 @@ export function TemplatePickerGrid({
     />
   ));
 
-  const { boxRef: fitBoxRef, gridRef: fitGridRef, count: fitCount } = useFitCount(wide && fit, list.length + 1, FIT_MAX_ROWS);
-  const allTiles = [noneTile, ...(templates === null ? skeletons : list.map((tpl) => tile(tpl)))];
+  const { boxRef: fitBoxRef, gridRef: fitGridRef, count: fitCount } = useFitCount(wide && fit, list.length + (upload ? 2 : 1), FIT_MAX_ROWS);
+  const allTiles = [noneTile, ...(uploadTile ? [uploadTile] : []), ...(templates === null ? skeletons : list.map((tpl) => tile(tpl)))];
   const expandModal = (
     <PickerExpandModal open={expanded} title={t.allTemplates} onClose={() => setExpanded(false)}>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
         {noneTile}
+        {uploadTile}
         {list.map((tpl) => tile(tpl, true))}
       </div>
     </PickerExpandModal>
@@ -239,6 +309,7 @@ export function TemplatePickerGrid({
       ) : wide ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 2xl:grid-cols-5">
           {noneTile}
+          {uploadTile}
           {templates === null ? skeletons : list.map((tpl) => tile(tpl))}
         </div>
       ) : (
@@ -249,6 +320,7 @@ export function TemplatePickerGrid({
               scrolls instead. */}
           <div className="design-scroll grid shrink-0 auto-rows-max grid-cols-3 gap-2 @min-[26rem]:grid-cols-4 @min-[34rem]:grid-cols-5 @min-[46rem]:grid-cols-6">
             {noneTile}
+            {uploadTile}
             {templates === null ? skeletons : list.map((tpl) => tile(tpl))}
           </div>
           {list.length > 5 ? (

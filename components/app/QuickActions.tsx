@@ -29,7 +29,6 @@ type QuickActionCard = {
 const CARD_BASE = [
   { icon: "add_circle", key: "create", path: "/create" },
   { icon: "auto_fix_high", key: "enhance", path: "/enhance" },
-  { icon: "content_copy", key: "mimic", path: "/mimic" },
   { icon: "tag", key: "social", path: "/social" },
 ] as const;
 
@@ -47,7 +46,7 @@ export function QuickActions() {
 
   return (
     <section>
-      <div className="mx-auto grid max-w-3xl grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="mx-auto grid max-w-3xl grid-cols-2 gap-4 lg:grid-cols-3">
         {cards.map((card) => (
           <QACard key={card.href} card={card} />
         ))}

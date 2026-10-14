@@ -25,11 +25,10 @@ export function useAppNav(): {
 } {
   const dict = useDict();
 
-  // Creation flows — إنشاء / تحسين / محاكاة / من بيانات.
+  // Creation flows — إنشاء / تحسين / منشورات. ("Your own template" is the Upload tile in /create.)
   const actionButtons: AppNavItem[] = [
     { label: dict.nav.create, icon: "add_circle", path: "/create" },
     { label: dict.nav.enhance, icon: "auto_fix_high", path: "/enhance" },
-    { label: dict.nav.mimic, icon: "content_copy", path: "/mimic" },
     { label: dict.nav.social, icon: "tag", path: "/social" },
   ];
 

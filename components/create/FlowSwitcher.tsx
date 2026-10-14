@@ -1,10 +1,11 @@
 "use client";
 
 // Tool switcher at the top of every creation wizard (2026-10-07, owner
-// direction): one segmented row - Create, Enhance, Your own template, Social -
+// direction): one segmented row - Create, Enhance, Social (2026-10-15: "Your own
+// template" is now the Upload tile in /create's Templates tab) -
 // with the current tool marked, so a visitor who landed on the wrong tool
 // moves over in one click. Same flows, icons and copy as the dashboard's
-// QuickActions. All four are open to visitors, so every link goes direct.
+// QuickActions. All three are open to visitors, so every link goes direct.
 // Phones show the icon only for the other tools (`.tool-tab-label`).
 
 import Link from "next/link";
@@ -17,7 +18,6 @@ import type { GuestFlow } from "@/lib/create/guest-draft";
 const FLOWS: readonly { icon: string; key: GuestFlow }[] = [
   { icon: "add_circle", key: "create" },
   { icon: "auto_fix_high", key: "enhance" },
-  { icon: "content_copy", key: "mimic" },
   { icon: "tag", key: "social" },
   // /datasheet is left out on purpose (2026-10-06): an unlisted tool with no
   // search demand; spreadsheets are meant to come to /create.

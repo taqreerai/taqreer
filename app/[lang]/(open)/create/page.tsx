@@ -48,6 +48,7 @@
 // still hydrate from sessionStorage or the user's default.
 
 import { type PickedTemplate } from "@/components/create/TemplatePickerGrid";
+import { uploadDesignReference } from "@/lib/extract/design-upload";
 import {
   fetchUse,
   readCachedUse,
@@ -143,6 +144,8 @@ const POLL_INTERVAL_MS = 2_500;
 const POLL_TIMEOUT_MS = 5 * 60 * 1_000;
 const MIN_PALETTE = 2;
 const MAX_PALETTE = 6;
+// Sentinel `template.id` for an uploaded design reference ("Upload your own").
+const DESIGN_UPLOAD_ID = "upload";
 const DEFAULT_PALETTE = ["#000000", "#FFFFFF"];
 
 // Wizard steps (2026-10-06 redesign, owner direction: the three side-by-side
@@ -482,6 +485,46 @@ export default function CreatePage() {
   const [error, setError] = useState("");
   // 402 credit-gate payload from POST /api/projects (billing Phase A).
   const [creditGate, setCreditGate] = useState<CreditGatePayload | null>(null);
+  // "Upload your own" (2026-10-15, replaces the separate /mimic section): a
+  // presentation the user likes the look of becomes the design reference. It rides
+  // the `template` state under a sentinel id so every template rule (mutually
+  // exclusive with a style, pending spinner, reset) applies; the server gets a
+  // mimic source with the extracted design file and NO templateId.
+  const [designUploadName, setDesignUploadName] = useState<string | null>(null);
+  const designUploadAbort = useRef<AbortController | null>(null);
+  const onUploadDesign = useCallback(
+    async (file: File) => {
+      designUploadAbort.current?.abort();
+      const controller = new AbortController();
+      designUploadAbort.current = controller;
+      setError("");
+      setDesignUploadName(file.name);
+      setTemplate({ id: DESIGN_UPLOAD_ID, designAnthropicFileId: "" });
+      setDesignStyle(null);
+      try {
+        const result = await uploadDesignReference(file, controller.signal);
+        if (controller.signal.aborted) return;
+        setTemplate({ id: DESIGN_UPLOAD_ID, designAnthropicFileId: result.anthropicFileId });
+        setSlideSize(result.format);
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        setTemplate(null);
+        setDesignUploadName(null);
+        setError(
+          err instanceof Error
+            ? localizedExtractError(dict.flows.extractErrors, err.message)
+            : t.design.uploadFailed,
+        );
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dict/t are stable i18n objects; the handler only reads them on the error path
+    [],
+  );
+  // Dropping the upload as the design reference (a template, a style or the
+  // "Automatic" tile was picked) cancels an analysis that is still running.
+  useEffect(() => {
+    if (template?.id !== DESIGN_UPLOAD_ID) designUploadAbort.current?.abort();
+  }, [template]);
   const [quality, setQuality] = useDefaultQuality();
 
   // ─── Derived flags ─────────────────────────────────────────────
@@ -515,6 +558,7 @@ export default function CreatePage() {
   // A remembered-but-unresolved template (a visitor's pick, or one being
   // set up right after sign-in): generating must wait for its reference.
   const templatePending = !!template && !template.designAnthropicFileId;
+  const designUploadActive = template?.id === DESIGN_UPLOAD_ID;
   const generateLoading = submitting || fileExtracting || (!guest && templatePending);
 
   // ─── File validation ───────────────────────────────────────────
@@ -676,7 +720,7 @@ export default function CreatePage() {
       contentText,
       language,
       persistentText,
-      templateId: template?.id ?? null,
+      templateId: template && template.id !== DESIGN_UPLOAD_ID ? template.id : null,
       designStyle,
       lookTab,
       colors,
@@ -1031,7 +1075,7 @@ export default function CreatePage() {
           ...(source ? { source } : {}),
           // Lets the server honour a free-plan template (it re-mints the
           // design reference itself for those).
-          ...(template ? { templateId: template.id } : {}),
+          ...(template && template.id !== DESIGN_UPLOAD_ID ? { templateId: template.id } : {}),
         }),
       });
 
@@ -1269,7 +1313,14 @@ export default function CreatePage() {
               onClearTemplate={() => setTemplate(null)}
               designStyle={designStyle}
               onDesignStyle={onDesignStyle}
-              templateNote={t.design.templateNote}
+              templateNote={designUploadActive ? t.design.uploadNote : t.design.templateNote}
+              upload={{
+                active: designUploadActive,
+                name: designUploadName,
+                stage: !designUploadActive ? "idle" : template?.designAnthropicFileId ? "ready" : "extracting",
+                onFile: (file) => void onUploadDesign(file),
+                onGuest: guest ? () => void openGuestSignup() : undefined,
+              }}
               disabled={submitting}
             />
             <BrandCard

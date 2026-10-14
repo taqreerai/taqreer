@@ -67,7 +67,7 @@ export default async function PresentationStylePage(props: {
   const t = dict.presentationStyle;
   // Free CTA: /mimic is open to visitors (2026-10-06); they sign up at its
   // Create button.
-  const ctaHref = localizedHref("/mimic", locale);
+  const ctaHref = localizedHref("/create", locale);
 
   return (
     <div className="pb-8">

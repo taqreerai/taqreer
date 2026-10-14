@@ -30,6 +30,7 @@ import type { BrandFontState } from "@/lib/brand/fonts";
 import {
   TemplatePickerGrid,
   type PickedTemplate,
+  type TemplateUploadControl,
 } from "@/components/create/TemplatePickerGrid";
 import { DesignStyleGrid } from "@/components/create/DesignStylePicker";
 import type { PickerTemplate } from "@/app/api/templates/route";
@@ -500,6 +501,7 @@ export function DesignCard({
   designStyle,
   onDesignStyle,
   templateNote,
+  upload,
   disabled = false,
 }: {
   tab: "templates" | "styles";
@@ -511,6 +513,8 @@ export function DesignCard({
   designStyle: string | null;
   onDesignStyle: (style: string | null) => void;
   templateNote: string;
+  // /create only: the "Upload your own" tile in the Templates tab.
+  upload?: TemplateUploadControl;
   disabled?: boolean;
 }) {
   const t = useDict().flows;
@@ -546,6 +550,7 @@ export function DesignCard({
             selectedId={templateId}
             onSelect={onPickTemplate}
             onClear={onClearTemplate}
+            upload={upload}
             disabled={disabled}
           />
         </div>

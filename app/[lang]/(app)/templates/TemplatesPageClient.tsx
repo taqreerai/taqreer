@@ -14,7 +14,9 @@
 // and we never re-fetch.
 
 import { useMemo, useState } from "react";
-import { useDict } from "@/components/i18n/LocaleProvider";
+import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+import { PillButton } from "@/components/create/PillButton";
+import { localizedHref } from "@/lib/i18n/navigation";
 import { TemplatesGrid } from "@/components/app/TemplatesGrid";
 import {
   TemplatesFilterBar,
@@ -90,6 +92,7 @@ export function TemplatesPageClient({
   const { lockFor, isPremiumLock } = useTemplateLock();
   // Multi-select to delete (own templates only, 2026-06-12).
   const router = useRouter();
+  const { locale } = useLocale();
   const sel = useMultiSelect();
   const [bulkConfirm, setBulkConfirm] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -250,9 +253,21 @@ export function TemplatesPageClient({
   return (
     <>
       <div className="page-container">
-        <header className="mb-8">
-          <h1 className="tq-h1">{t.title}</h1>
-          <p className="tq-subhead">{t.subtitle}</p>
+        <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="tq-h1">{t.title}</h1>
+            <p className="tq-subhead">{t.subtitle}</p>
+          </div>
+          {/* "Your own template" lives in /create's Templates tab (2026-10-15):
+              upload a deck whose look you like. */}
+          <PillButton
+            variant="secondary"
+            icon="upload_file"
+            title={t.uploadOwnHint}
+            onClick={() => router.push(localizedHref("/create", locale))}
+          >
+            {t.uploadOwn}
+          </PillButton>
         </header>
 
         <TemplatesFilterBar
