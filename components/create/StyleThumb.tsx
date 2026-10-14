@@ -504,6 +504,27 @@ function render(k: DeckStyleKey | "auto", title: string, dir: "rtl" | "ltr"): Re
           <L top="48.5%" s="9%" w="18%" c="#2D2A2666" />
         </>
       );
+    case "whiteboard":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="radial-gradient(#C7CDD6 1px,transparent 1.4px) 0 0/5% 8.9% #F6F7F9" />
+          <T top="7%" s="6%" c="#1F2937" size={8}>{title}</T>
+          <B top="22%" s="5%" w="24%" h="8%" c="#E4E8EE" r="3px 3px 0 0" />
+          <L top="25%" s="7%" w="14%" c="#6B728066" />
+          <B top="29%" s="5%" e="5%" h="62%" c="#FFFFFF" r={3} style={{ border: "1px solid #D5DAE1" }} />
+          <B top="38%" s="9%" w="19%" h="30%" c="#FFE27A" r={2} style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.15)" }} />
+          <B top="38%" s="34%" w="19%" h="30%" c="#FFB3C7" r={2} style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.15)" }} />
+          <B top="38%" s="59%" w="19%" h="30%" c="#9BD1FF" r={2} style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.15)" }} />
+          <L top="46%" s="11%" w="13%" c="#1F293755" />
+          <L top="54%" s="11%" w="9%" c="#1F293755" />
+          <L top="46%" s="36%" w="13%" c="#1F293755" />
+          <L top="46%" s="61%" w="13%" c="#1F293755" />
+          <svg viewBox="0 0 100 10" preserveAspectRatio="none" style={box({ top: "76%", s: "9%", w: "70%", h: "8%" }, dir === "rtl" ? { transform: "scaleX(-1)" } : {})}>
+            <path d="M2 5H92" fill="none" stroke="#6B7280" strokeWidth="1.6" />
+            <path d="M85 1L97 5L85 9" fill="none" stroke="#6B7280" strokeWidth="1.6" />
+          </svg>
+        </>
+      );
   }
 }
 

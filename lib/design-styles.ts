@@ -49,6 +49,7 @@ export const DECK_STYLES = [
   { key: "organic", label: "Organic / Nature", photos: true, sectors: ["lifestyle"] },
   { key: "retro", label: "Retro / Vintage", photos: false, sectors: ["creative", "lifestyle"] },
   { key: "collage", label: "Collage / Scrapbook", photos: true, sectors: ["creative", "lifestyle", "education"] },
+  { key: "whiteboard", label: "Whiteboard / Sticky Notes", photos: false, sectors: ["business", "tech", "education", "creative"] },
 ] as const satisfies readonly DeckStyle[];
 
 export type DeckStyleKey = (typeof DECK_STYLES)[number]["key"];

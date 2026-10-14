@@ -1,9 +1,9 @@
-// Auto font (owner decision 2026-10-08): when the user leaves the font on
-// Auto (no Google pick, no upload), the server picks one from a SHORT tested
-// list instead of always using Noto Sans Arabic. A deck still has ONE font
-// (headings + body), so presentations only use the families that read well
-// in body text; the display / script families are for social cards, whose
-// text is short (the carousel playbook caps a card at ~25 words).
+// Auto font. DECKS (2026-10-15, owner decision): a fixed standard font, no
+// per-style or per-topic pick: Cairo for an Arabic deck, Inter for an English
+// one. SOCIAL posts keep the pick below (owner decision 2026-10-08): the server
+// picks one from a SHORT tested list; a deck still has ONE font (headings +
+// body), and the display / script families are for social cards, whose text is
+// short (the carousel playbook caps a card at ~25 words).
 //
 //   1. A picked design style maps straight to its family (instant, free).
 //   2. Style also on Auto: one small Haiku call picks from the list based on
@@ -15,6 +15,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 export const AUTO_FONT_DEFAULT = "Noto Sans Arabic";
+// The standard deck fonts (non-social Auto).
+export const DECK_FONT_ARABIC = "Cairo";
+export const DECK_FONT_LATIN = "Inter";
 
 // Readable in body text: allowed for every flow.
 const BODY_FONTS = [
@@ -115,6 +118,10 @@ export async function pickAutoFont(opts: {
   text: string;
   language?: "ar" | "en";
 }): Promise<{ name: string; url: string; via: "style" | "model" | "default" }> {
+  if (!opts.social) {
+    const name = opts.language === "en" ? DECK_FONT_LATIN : DECK_FONT_ARABIC;
+    return { name, url: autoFontUrl(name), via: "default" };
+  }
   const allowed: readonly string[] = opts.social
     ? [...BODY_FONTS, ...DISPLAY_FONTS]
     : BODY_FONTS;

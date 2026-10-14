@@ -44,6 +44,7 @@ import {
 } from "@/lib/credits/cost";
 import { normalizePlan } from "@/lib/plan";
 import { mintTemplateDesignFile } from "@/lib/template/mint-design";
+import { pickAutoStyle } from "@/lib/create/auto-style";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
 import { REFERRAL_COOKIE } from "@/lib/referral-code";
 import { clientIp, rateLimited } from "@/lib/api/rate-limit";
@@ -1033,13 +1034,33 @@ export async function POST(request: Request) {
   const imageRegion =
     payload.imagesMode === true ? detectImageRegion(request.headers) : null;
 
+  // Auto design style (2026-10-15): a CREATE deck with the style left on Auto gets
+  // one picked from the style list to fit its content (lib/create/auto-style.ts).
+  // Create only: not enhance / mimic / social / datasheet, not a template run, and
+  // only when the client sent a rules object. Any failure leaves the style unset.
+  let briefRules = payload.rules ?? null;
+  if (
+    briefRules &&
+    !briefRules.designStyle &&
+    creditFlow === "create" &&
+    !(typeof payload.templateId === "string" && payload.templateId) &&
+    payload.content?.type === "text"
+  ) {
+    const autoStyle = await pickAutoStyle({
+      title,
+      text: payload.content.text ?? "",
+      imagesMode: payload.imagesMode === true,
+    });
+    if (autoStyle) briefRules = { ...briefRules, designStyle: autoStyle };
+  }
+
   const brief = {
     title,
     language: contentLanguage,
     direction: contentDirection,
     content: payload.content,
     brand: claudeBrand,
-    rules: payload.rules ?? null,
+    rules: briefRules,
     slideCount: cappedSlideCount,
     // "exact" = the user picked the number (author exactly N).
     // "ceiling" = auto/estimate - slideCount is the HELD MAXIMUM; the model
@@ -1213,7 +1234,7 @@ export async function POST(request: Request) {
           content: payload.content,
           brand: payload.brand,
           enhance: sanitizedEnhance,
-          rules: payload.rules,
+          rules: briefRules,
           slideCount: cappedSlideCount,
           // Persist only the SOURCE KIND — `loadProject`'s
           // `readSourceKind` keys off `source.kind` to pick the
