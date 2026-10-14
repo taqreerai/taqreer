@@ -209,9 +209,8 @@ export async function preflightGenerate(args: {
   ) {
     return { ok: false, plan, balance, reason: "preset_locked", quotes };
   }
-  // Generated-images gate (lib/images/images-gating.ts). Open to every plan
-  // since 2026-10-04 (free pays 0 per image); kept wired to isImagesLocked so
-  // restoring the gate is a one-line change there.
+  // Generated-images gate (lib/images/images-gating.ts): paid plans only
+  // (admins exempt), 402 `images_locked` for free accounts.
   if (imagesMode && isImagesLocked({ plan, isAdmin: args.isAdmin === true })) {
     return { ok: false, plan, balance, reason: "images_locked", quotes };
   }

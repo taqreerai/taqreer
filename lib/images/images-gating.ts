@@ -4,12 +4,12 @@
 //   • preflightGenerate (the server 402 `images_locked` gate)
 // Same shape as lib/export/export-gating.ts.
 //
-// 2026-10-04 (owner decision): generated images are UNLOCKED for every plan.
-// Free accounts get them at 0 credits per image (imageCreditsForPlan), so a
-// free 8-slide deck still fits the 400 signup grant. That is self-limiting:
-// free accounts can't buy top-ups, so the free images end with the grant.
-// Paid plans pay the DB per-image rate as before. The lock + UpgradeModal
-// plumbing stays so the gate can be restored by editing isImagesLocked.
+// 2026-10-04 (owner decision): generated images were unlocked for every plan,
+// free accounts at 0 credits per image (imageCreditsForPlan).
+// 2026-10-14 (owner decision): locked for free accounts again, a paid-plan
+// feature for now. Paid plans pay the DB per-image rate. Admins are exempt.
+// The lock + UpgradeModal plumbing is the original one; only isImagesLocked
+// changed. Existing decks keep the images they already have.
 
 import { type KnownPlan, isPaidPlan } from "@/lib/plan";
 
@@ -28,8 +28,8 @@ export function isImagesLocked(user: {
   plan: string | null;
   isAdmin: boolean;
 }): boolean {
-  void user;
-  return false;
+  if (user.isAdmin) return false;
+  return !isPaidPlan(user.plan);
 }
 
 /**
