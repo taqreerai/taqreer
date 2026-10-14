@@ -40,11 +40,14 @@ export const CREDIT_COST: Record<Quality, { base: number; perSlide: number }> =
     // the old opus-fast price; each Opus preset inherits the next-higher old
     // price (so the 3 price points are unchanged, just reassigned). opus-medium
     // kept for legacy decks (deactivated in the preset config).
-    "sonnet-fast": { base: 160, perSlide: 27 },
+    // 2026-10-14 (owner decision, -20%): Sonnet re-priced from 160 + 27 to 130 + 22
+    // once measured Sonnet 5.5 COGS ($2/$10) came in far under the Opus-era price
+    // it had inherited; paired with the flagged-only vision review (deck-freeze-bake).
+    "sonnet-fast": { base: 130, perSlide: 22 },
     "opus-fast": { base: 460, perSlide: 34 },
     "opus-balanced": { base: 660, perSlide: 42 },
     "opus-medium": { base: 660, perSlide: 42 },
-    "fable-low": { base: 960, perSlide: 72 },
+    "fable-low": { base: 1900, perSlide: 150 },
   };
 
 // A preset → cost lookup. Defaults to the CREDIT_COST constant (the client
@@ -161,6 +164,11 @@ export type TierConfig = {
   flows: readonly Flow[];
 };
 
+// 2026-10-14 (owner decision, measured COGS re-eval at corrected Anthropic rates):
+// ladder $9 / $19 / $59 (Pro $25 -> $19, Max $79 -> $59), Max credits 35,000 -> 30,000,
+// fable-low 960 + 72 -> 1,900 + 150 per slide so a Fable deck costs about what a
+// Sonnet or Opus deck does per credit (it was sold near cost). Plus unchanged.
+// The 2026-07-28 note below is superseded.
 // The tier ladder. 2026-07-28 reprice: Plus $9 and Max $79, Pro held at $25
 // (owner call on the 2026-07-28 margin re-eval; measured full-burn margins
 // Plus 72%->62%, Max 70%->62% with fable-low on claude-opus-5, Pro stays 52%
@@ -194,7 +202,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     flows: ALL_FLOWS,
   },
   pro: {
-    priceUsd: 25,
+    priceUsd: 19,
     monthlyAllotment: 10000,
     signupGrant: 0,
     slideCap: 60,
@@ -202,8 +210,8 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     flows: ALL_FLOWS,
   },
   max: {
-    priceUsd: 79,
-    monthlyAllotment: 35000,
+    priceUsd: 59,
+    monthlyAllotment: 30000,
     signupGrant: 0,
     slideCap: 75,
     presets: ["sonnet-fast", "opus-fast", "opus-balanced", "fable-low"],

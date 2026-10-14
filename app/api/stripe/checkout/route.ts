@@ -181,7 +181,7 @@ export async function POST(request: Request) {
       ? `${APP_URL}/project/${encodeURIComponent(deckProjectId)}`
       : `${APP_URL}/checkout/return?session_id={CHECKOUT_SESSION_ID}`,
     // Promo codes: YEARLY subscriptions only (user direction 2026-07-07).
-    // Yearly list prices are $7 / $21 / $67 a month (2026-10-02, 22% / 16% /
+    // Yearly list prices are $7 / $16 / $50 a month (2026-10-02, 22% / 16% /
     // 15% off monthly); the campaign coupon is a round 10% off on top
     // (~30% / 24% / 24% total). Codes are created in the Stripe dashboard,
     // not seeded: coupon percent_off = 10, duration = "once" (first year

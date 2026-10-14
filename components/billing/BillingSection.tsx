@@ -27,7 +27,8 @@ import {
 import {
   fillPricingTokens,
   tierNumberFor,
-  topUnlockedPresetLabel,
+  modelFamilyName,
+  unlockedModelNames,
   yearlyDiscountPct,
 } from "@/lib/credits/pricing-tokens";
 import { QUALITY_PRESETS, DEFAULT_QUALITY } from "@/lib/types/quality";
@@ -238,9 +239,11 @@ export function BillingSection({
             // fillPricingTokens leaves {model} intact on a falsy value, so an
             // empty string here would render the raw token on the card.
             const seedModel =
-              topUnlockedPresetLabel(QUALITY_PRESETS, TIERS[tier].presets) ??
-              QUALITY_PRESETS.find((p) => p.key === DEFAULT_QUALITY)?.label ??
-              QUALITY_PRESETS[0].label;
+              unlockedModelNames(QUALITY_PRESETS, TIERS[tier].presets, isFree ? "haiku" : undefined) ??
+              modelFamilyName(
+                QUALITY_PRESETS.find((p) => p.key === DEFAULT_QUALITY)?.label ??
+                  QUALITY_PRESETS[0].label,
+              );
             const num = tierNumberFor(credits?.tierNumbers, tier) ?? {
               credits: isFree ? TIERS.free.signupGrant : TIERS[tier].monthlyAllotment,
               slides: TIERS[tier].slideCap,

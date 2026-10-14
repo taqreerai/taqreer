@@ -18,7 +18,7 @@
 import { prisma } from "@/lib/prisma";
 import type { AnthropicCallParams } from "@/lib/anthropic/quality-params";
 import { requiresThinking, thinkingOffFor } from "@/lib/anthropic/model-thinking";
-import { topUnlockedPresetLabel } from "@/lib/credits/pricing-tokens";
+import { modelFamilyName, unlockedModelNames } from "@/lib/credits/pricing-tokens";
 
 type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 
@@ -66,10 +66,10 @@ export type TierConfigRow = {
 // Fable keeps its 960/72 study price. Fable requires thinking on (the API
 // rejects thinking:disabled for Fable). Sonnet maxTokens 64000; Opus/Fable 128000.
 export const SEED_PRESETS: readonly PresetConfig[] = [
-  { key: "sonnet-fast",   label: "Sonnet 5.5", model: "claude-sonnet-5-5", thinking: false, effort: null,     maxTokens: 64000,  baseCredits: 160, perSlideCredits: 27, secsPerSlide: 6,  baseOverheadSecs: 20, active: true,  sortOrder: 0 },
+  { key: "sonnet-fast",   label: "Sonnet 5.5", model: "claude-sonnet-5-5", thinking: false, effort: null,     maxTokens: 64000,  baseCredits: 130, perSlideCredits: 22, secsPerSlide: 6,  baseOverheadSecs: 20, active: true,  sortOrder: 0 },
   { key: "opus-fast",     label: "Opus 5.5", model: "claude-opus-5-5", thinking: false, effort: null,     maxTokens: 128000, baseCredits: 460, perSlideCredits: 34, secsPerSlide: 8,  baseOverheadSecs: 25, active: true,  sortOrder: 1 },
   { key: "opus-balanced", label: "Opus 4.8", model: "claude-opus-4-8", thinking: true,  effort: "low",    maxTokens: 128000, baseCredits: 660, perSlideCredits: 42, secsPerSlide: 25, baseOverheadSecs: 60, active: false, sortOrder: 2 },
-  { key: "fable-low",     label: "Fable 5.1",  model: "claude-fable-5-1",  thinking: true,  effort: "low",    maxTokens: 128000, baseCredits: 960, perSlideCredits: 72, secsPerSlide: 20, baseOverheadSecs: 45, active: true,  sortOrder: 3 },
+  { key: "fable-low",     label: "Fable 5.1",  model: "claude-fable-5-1",  thinking: true,  effort: "low",    maxTokens: 128000, baseCredits: 1900, perSlideCredits: 150, secsPerSlide: 20, baseOverheadSecs: 45, active: true,  sortOrder: 3 },
   { key: "opus-medium",   label: "Opus 4.8", model: "claude-opus-4-8", thinking: true,  effort: "medium", maxTokens: 128000, baseCredits: 660, perSlideCredits: 42, secsPerSlide: 25, baseOverheadSecs: 60, active: false, sortOrder: 4 },
 ];
 
@@ -79,8 +79,8 @@ export const SEED_PRESETS: readonly PresetConfig[] = [
 export const SEED_TIERS: readonly TierConfigRow[] = [
   { plan: "free", priceUsd: 0,   monthlyAllotment: 0,     signupGrant: 400, slideCap: 30, unlockedPresetKeys: ["sonnet-fast"], flows: ["create", "enhance", "mimic", "datasheet", "social"], sortOrder: 0 },
   { plan: "plus", priceUsd: 9,   monthlyAllotment: 4000,  signupGrant: 0,   slideCap: 30, unlockedPresetKeys: ["sonnet-fast", "opus-fast"], flows: ["create", "enhance", "mimic", "datasheet", "social"], sortOrder: 1 },
-  { plan: "pro",  priceUsd: 25,  monthlyAllotment: 10000, signupGrant: 0,   slideCap: 60, unlockedPresetKeys: ["sonnet-fast", "opus-fast", "opus-balanced"], flows: ["create", "enhance", "mimic", "datasheet", "social"], sortOrder: 2 },
-  { plan: "max",  priceUsd: 79,  monthlyAllotment: 35000, signupGrant: 0,   slideCap: 75, unlockedPresetKeys: ["sonnet-fast", "opus-fast", "opus-balanced", "fable-low"], flows: ["create", "enhance", "mimic", "datasheet", "social"], sortOrder: 3 },
+  { plan: "pro",  priceUsd: 19,  monthlyAllotment: 10000, signupGrant: 0,   slideCap: 60, unlockedPresetKeys: ["sonnet-fast", "opus-fast", "opus-balanced"], flows: ["create", "enhance", "mimic", "datasheet", "social"], sortOrder: 2 },
+  { plan: "max",  priceUsd: 59,  monthlyAllotment: 30000, signupGrant: 0,   slideCap: 75, unlockedPresetKeys: ["sonnet-fast", "opus-fast", "opus-balanced", "fable-low"], flows: ["create", "enhance", "mimic", "datasheet", "social"], sortOrder: 3 },
 ];
 
 // Seed default + regen preset, mirroring DEFAULT_QUALITY / REGEN_QUALITY.
@@ -319,13 +319,13 @@ export function pricingDisplayNumbers(): {
   slides: number;
   model: string;
 }[] {
-  // Ladder in ascending sortOrder - the last active entry a tier unlocks is the
-  // model that tier is really selling, and the name its card advertises.
+  // Ladder in ascending sortOrder; the card lists the tier's model families.
   const ladder = getAllPresets();
   // Never let a card render a raw {model} token: fall back to the default
   // preset's label (what a user actually gets), then to the seed's first label.
-  const fallbackLabel =
-    getPreset(defaultPresetKey())?.label ?? SEED_PRESETS[0].label;
+  const fallbackLabel = modelFamilyName(
+    getPreset(defaultPresetKey())?.label ?? SEED_PRESETS[0].label,
+  );
   // Iterate the FIXED plan set (not getTiers()) so the result ALWAYS carries
   // all four plans. A partially-wiped tiers table can't yield a short list that
   // would leave a card rendering a raw {credits}/{slides} token. getTier() falls
@@ -336,8 +336,11 @@ export function pricingDisplayNumbers(): {
       plan,
       credits: plan === "free" ? t.signupGrant : t.monthlyAllotment,
       slides: t.slideCap,
+      // Every model family the tier offers ("Sonnet / Opus"), cheapest first; the
+      // Free card also advertises Haiku (the region-limited free preset).
       model:
-        topUnlockedPresetLabel(ladder, t.unlockedPresetKeys) ?? fallbackLabel,
+        unlockedModelNames(ladder, t.unlockedPresetKeys, plan === "free" ? "haiku" : undefined) ??
+        fallbackLabel,
     };
   });
 }

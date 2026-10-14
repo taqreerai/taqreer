@@ -361,7 +361,7 @@ export default function CreatePage() {
   // direct path.
   const creditsForImages = useCreditBalance();
   const imagesUnlocked = !isImagesLocked({
-    plan: creditsForImages?.plan ?? null,
+    regionLimited: !!creditsForImages?.regionPreset,
     isAdmin: creditsForImages?.isAdmin ?? false,
   });
   // Images default OFF for every plan (owner decision 2026-10-05); the user

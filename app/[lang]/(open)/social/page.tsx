@@ -208,7 +208,7 @@ export default function SocialPage() {
   const [productUpgradeOpen, setProductUpgradeOpen] = useState(false);
   const credits = useCreditBalance();
   const imagesLocked = isImagesLocked({
-    plan: credits?.plan ?? null,
+    regionLimited: !!credits?.regionPreset,
     isAdmin: credits?.isAdmin ?? false,
   });
 

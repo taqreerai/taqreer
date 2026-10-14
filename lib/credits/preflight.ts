@@ -209,9 +209,9 @@ export async function preflightGenerate(args: {
   ) {
     return { ok: false, plan, balance, reason: "preset_locked", quotes };
   }
-  // Generated-images gate (lib/images/images-gating.ts): paid plans only
-  // (admins exempt, the Enhance flow open to all), 402 `images_locked` otherwise.
-  if (imagesMode && isImagesLocked({ plan, isAdmin: args.isAdmin === true, flow: args.flow })) {
+  // Generated-images gate (lib/images/images-gating.ts): locked only for
+  // region-limited free accounts (admins exempt), 402 `images_locked`.
+  if (imagesMode && isImagesLocked({ regionLimited: !!args.regionPreset, isAdmin: args.isAdmin === true })) {
     return { ok: false, plan, balance, reason: "images_locked", quotes };
   }
   // An EXACT size above the cap blocks BEFORE generating (enhance is a

@@ -195,7 +195,7 @@
     "hero": {
       "eyebrow": "Pricing",
       "title": "Simple plans for what you need",
-      "subtitle": "Try it free with the first 5 slides of your deck designed, then pick the plan that fits your deck and slide volume. Upgrade or cancel anytime."
+      "subtitle": "Try it free with the first few slides of your deck designed, then pick the plan that fits your deck and slide volume. Upgrade or cancel anytime."
     },
     "credits": {
       "title": "How credits work",
@@ -208,7 +208,7 @@
       ]
     },
     "faq": [
-      { "q": "Is there a free plan?", "a": "Yes. Try it free with {credits} credits at signup, no card required; we design the first 5 slides of each deck. Upgrade later as you need." },
+      { "q": "Is there a free plan?", "a": "Yes. Try it free with {credits} credits at signup, no card required; we design the first few slides of each deck. Upgrade later as you need." },
       { "q": "How do credits work?", "a": "Each deck uses credits based on its slide count and the model used. You get monthly credits with your plan, and can buy top-up packs when needed." },
       { "q": "Can I upgrade or cancel anytime?", "a": "Yes. Upgrade, downgrade, or cancel anytime from your account settings, with no long-term commitment." },
       { "q": "What is the difference between monthly and yearly?", "a": "Yearly costs less per month than monthly with the same features. Choose monthly for flexibility or yearly to save." }
@@ -829,7 +829,7 @@
       },
       {
         "q": "Is taqreer.ai free?",
-        "a": "You can try it free: we design the first 5 slides of your deck, no credit card needed. For more decks and features, paid plans are listed on the pricing page."
+        "a": "You can try it free: we design the first few slides of your deck, no credit card needed. For more decks and features, paid plans are listed on the pricing page."
       },
       {
         "q": "Can I edit the deck after it's made?",
@@ -1126,7 +1126,7 @@
     },
     "faq": [
       { "q": "How do I add AI images to my deck?", "a": "Turn on generated images when you create a deck, and the AI adds images that fit your slides. You can regenerate any image from the editor." },
-      { "q": "Are AI images on the free plan?", "a": "Yes. Generated images are free during your trial and do not use your credits. The free photo library is open to everyone." },
+      { "q": "Are AI images on the free plan?", "a": "Yes, in most regions. Generated images are free during your trial and do not use your credits. The free photo library is open to everyone." },
       { "q": "Can I use my own images?", "a": "Yes. Upload images in the editor or save them to your library." },
       { "q": "Do images stay when I export?", "a": "Yes. Images stay in your deck when you export to PowerPoint or PDF." }
     ],
@@ -1341,7 +1341,7 @@
       { "q": "Which formats can I export?", "a": "PowerPoint (PPTX), PDF, PNG images, HTML, and Google Slides, on every plan." },
       { "q": "Does Arabic stay correct after export?", "a": "Yes. taqreer.ai keeps right-to-left text direction and alignment in the exported PowerPoint." },
       { "q": "Can I edit the file after exporting?", "a": "Yes, the PPTX is fully editable in PowerPoint on every plan." },
-      { "q": "What does the free plan include?", "a": "Every export format, including editable PPTX, PDF and Google Slides. Free-plan exports carry a small \"Designed with taqreer\" watermark, and the free plan designs the first 5 slides of each deck. Paid plans export without a watermark and design full decks." }
+      { "q": "What does the free plan include?", "a": "Every export format, including editable PPTX, PDF and Google Slides. Free-plan exports carry a small \"Designed with taqreer\" watermark, and the free plan designs the first few slides of each deck. Paid plans export without a watermark and design full decks." }
     ],
     "article": {
       "title": "Export formats in taqreer.ai: which one should you pick?",
@@ -1810,9 +1810,9 @@
       "tiers": [
         {
           "name": "Free",
-          "description": "Try every feature free. We design the first 5 slides of each deck; subscribe to unlock the rest.",
-          "credits": "{credits} credits (signup gift)",
-          "features": ["{model}", "First 5 slides of each deck designed", "Editable PPTX + all formats", "All creation methods", "Custom brand identity", "AI edits after generation", "No watermark", "Full decks, nothing locked", "Premium templates"],
+          "description": "Try the tool free. We design the first few slides of each deck; subscribe to unlock the rest.",
+          "credits": "{credits} credits to try the tool",
+          "features": ["{model}", "First few slides of each deck designed", "Editable PPTX + all formats", "All creation methods", "Custom brand identity", "AI edits after generation", "No watermark", "Full decks, nothing locked", "Premium templates"],
           "footnote": "Upgrade anytime",
           "cta": "Try it free"
         },

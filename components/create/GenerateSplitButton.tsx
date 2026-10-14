@@ -225,6 +225,9 @@ export function GenerateSplitButton({
   // Admin/superuser: every preset is unlocked and no credit cost shows
   // (the run is never charged). Mirrors the server preflight bypass.
   const isAdmin = credits?.isAdmin ?? false;
+  // The row badged "Recommended": mirrors lib/credits/use-default-quality.
+  const recommendedKey =
+    isAdmin || userPlan === "max" ? "opus-fast" : "sonnet-fast";
   // DB-driven active presets from admin Settings; bundled fallback until the
   // first /api/credits resolves. Inactive presets are absent -> never shown.
   // Also hide presets that NO tier unlocks (gateTier null) from non-admins:
@@ -511,8 +514,10 @@ export function GenerateSplitButton({
                             ? dict.flows.generate.standardDesign
                             : dict.flows.generate.draftDesign}
                     </span>
-                    {/* The middle rung is the suggested default. */}
-                    {!lite && level === "standard" ? (
+                    {/* The suggested row is the one the page starts on
+                        (use-default-quality): Opus for Max and admins, Sonnet
+                        for everyone else. */}
+                    {!lite && preset.key === recommendedKey ? (
                       <span className="quality-recommended shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold leading-none">
                         {dict.flows.generate.recommended}
                       </span>

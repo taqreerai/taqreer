@@ -86,6 +86,44 @@ export function topUnlockedPresetLabel(
   return best;
 }
 
+// Model families in the order a card lists them (cheapest first).
+const MODEL_FAMILY_ORDER = ["haiku", "sonnet", "opus", "fable"];
+
+/** "Opus 5.5" -> "Opus": the family name, so a card never goes stale on a version bump. */
+export function modelFamilyName(label: string): string {
+  return label.replace(/\s*v?\d+(?:\.\d+)*\s*$/i, "").trim() || label;
+}
+
+/**
+ * The model FAMILIES a tier offers, for the card's model line ("Sonnet / Opus /
+ * Fable"): the distinct families of every ACTIVE preset the tier unlocks, ordered
+ * cheapest first. `alsoKeyPrefix` adds active presets outside the tier's unlock
+ * list (the Free card advertises Haiku, which region-limited free accounts run).
+ * Null when nothing resolves; callers supply their own fallback.
+ */
+export function unlockedModelNames(
+  ladder: readonly { key: string; label: string; active: boolean }[],
+  unlockedKeys: readonly string[],
+  alsoKeyPrefix?: string,
+): string | null {
+  const families: string[] = [];
+  for (const p of ladder) {
+    if (!p.active) continue;
+    const included =
+      unlockedKeys.includes(p.key) ||
+      (!!alsoKeyPrefix && p.key.startsWith(alsoKeyPrefix));
+    if (!included) continue;
+    const name = modelFamilyName(p.label);
+    if (!families.includes(name)) families.push(name);
+  }
+  if (families.length === 0) return null;
+  const rank = (n: string) => {
+    const i = MODEL_FAMILY_ORDER.indexOf(n.toLowerCase());
+    return i === -1 ? MODEL_FAMILY_ORDER.length : i;
+  };
+  return [...families].sort((a, b) => rank(a) - rank(b)).join(" / ");
+}
+
 /** Look up a tier's display numbers by plan, tolerating an absent list. */
 export function tierNumberFor(
   list: readonly TierDisplayNumber[] | undefined,

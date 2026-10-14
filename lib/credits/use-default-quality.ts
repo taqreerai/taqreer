@@ -1,9 +1,10 @@
 "use client";
 
-// The generation level a create page starts on (2026-10-03, owner
-// direction): paid accounts (and admins) whose plan unlocks the Opus level ("opus-fast",
-// Opus 5.5) start there; free accounts keep the bundled default (Sonnet 5.5).
-// A manual pick in the quality menu always wins. Derived during render from
+// The generation level a create page starts on. 2026-10-03: paid accounts that
+// unlock the Opus level ("opus-fast", Opus 5.5) started there. 2026-10-14 (owner
+// decision): Plus and Pro now START on the bundled default (Sonnet 5.5, more decks
+// per credit); only Max and admins start on Opus. A manual pick in the quality
+// menu always wins. Derived during render from
 // /api/credits (no effect), so it settles the moment credits resolve.
 
 import { useState } from "react";
@@ -23,7 +24,7 @@ export function useDefaultQuality(): [Quality, (q: Quality) => void] {
     const plan = normalizePlan(credits.plan);
     const unlocked =
       credits.isAdmin ||
-      (plan !== "free" &&
+      (plan === "max" &&
         preset.gateTier !== null &&
         TIER_ORDER.indexOf(plan) >= TIER_ORDER.indexOf(preset.gateTier));
     if (unlocked) fallback = PAID_DEFAULT;

@@ -4,17 +4,12 @@
 //   • preflightGenerate (the server 402 `images_locked` gate)
 // Same shape as lib/export/export-gating.ts.
 //
-// 2026-10-04 (owner decision): generated images were unlocked for every plan,
-// free accounts at 0 credits per image (imageCreditsForPlan).
-// 2026-10-14 (owner decision): locked for free accounts again, a paid-plan
-// feature for now. Paid plans pay the DB per-image rate. Admins are exempt.
-// The lock + UpgradeModal plumbing is the original one; only isImagesLocked
-// changed. Existing decks keep the images they already have.
-// 2026-10-14 (owner decision): the ENHANCE flow is open to free accounts with
-// images locked ON (a 1:1 rebuild without them left every source photo as an
-// "Upload your picture" placeholder). Free images cost 0 credits and the free
-// deck is a 5-slide teaser, so the spend is bounded. The Enhance page shows the
-// toggle locked on for free accounts.
+// 2026-10-04 (owner decision): generated images unlocked for every plan, free
+// accounts at 0 credits per image (imageCreditsForPlan).
+// 2026-10-14 (owner decision, final): images are locked ONLY for the
+// region-limited free accounts (lib/credits/region-model, the Haiku-only
+// countries, to cap spend there); everyone else has them, free accounts included.
+// Admins are always exempt. Existing decks keep the images they already have.
 
 import { type KnownPlan, isPaidPlan } from "@/lib/plan";
 
@@ -22,22 +17,16 @@ import { type KnownPlan, isPaidPlan } from "@/lib/plan";
 export const IMAGES_GATE_TIER: KnownPlan = "plus";
 
 /**
- * Whether generated images are tier-locked for this user.
- *
- * `plan: null` means "unknown" (the /api/credits fetch hasn't resolved yet)
- * and gates like free — the ExportMenu stance. The toggle defaults OFF, so a
- * paying user's pre-hydration state is simply "off + crown for a beat", never
- * a wrongly-blocked enabled state.
+ * Whether generated images are locked for this user: only a region-limited FREE
+ * account (the server derives it from the stored signup country; the client reads
+ * `regionPreset` from /api/credits). Unknown (credits not loaded yet) is not
+ * locked: the server gate is authoritative and the toggle defaults off.
  */
 export function isImagesLocked(user: {
-  plan: string | null;
+  regionLimited: boolean;
   isAdmin: boolean;
-  /** Credit flow of the run; Enhance is open to every plan. */
-  flow?: string;
 }): boolean {
-  if (user.isAdmin) return false;
-  if (user.flow === "enhance") return false;
-  return !isPaidPlan(user.plan);
+  return !user.isAdmin && user.regionLimited;
 }
 
 /**

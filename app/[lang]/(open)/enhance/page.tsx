@@ -35,6 +35,7 @@
 
 import { STYLE_REQUIRES_IMAGES } from "@/components/create/OutputCards";
 import { AIImagesPanel } from "@/components/brand/AIImagesPanel";
+import { isImagesLocked } from "@/lib/images/images-gating";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useAnimationControls } from "framer-motion";
@@ -384,13 +385,15 @@ export default function EnhanceContentPage() {
   // here (2026-10-10): with it off every photo became an "Upload your
   // picture" placeholder, which read as a broken deck. Users can switch it off.
   const [imagesMode, setImagesMode] = useState<boolean>(true);
-  // Free accounts get the photos on Enhance with the toggle locked ON (owner
-  // decision 2026-10-14, lib/images/images-gating.ts); the server lets Enhance
-  // through the images gate for every plan.
+  // Region-limited free accounts can't use generated images (lib/images/images-
+  // gating.ts): the default-ON state must not reach the server for them, or the
+  // run would be refused with images_locked. Everyone else keeps the toggle.
   const enhanceCredits = useCreditBalance();
-  const freeLockedOn =
-    !!enhanceCredits && !enhanceCredits.isAdmin && normalizePlan(enhanceCredits.plan) === "free";
-  const imagesOn = freeLockedOn || imagesMode;
+  const imagesLocked = isImagesLocked({
+    regionLimited: !!enhanceCredits?.regionPreset,
+    isAdmin: enhanceCredits?.isAdmin ?? false,
+  });
+  const imagesOn = imagesMode && !imagesLocked;
   // Picking a style clears the template; photo-led styles switch AI photos
   // on (never off), like /create.
   const onDesignStyle = (style: string | null) => {
@@ -1419,7 +1422,6 @@ export default function EnhanceContentPage() {
                 value={imagesOn}
                 onChange={setImagesMode}
                 disabled={stage === "submitting"}
-                lockedOn={freeLockedOn}
               />
             </div>
           </WizardCard>

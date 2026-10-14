@@ -124,6 +124,13 @@ const LIFT_PIXEL_GATE = 0.15;
 // scale, and legibility judgeable at ~1k input tokens per slide; the full
 // canvas would cost ~2.2k for no review benefit.
 const VISION_IMAGE_EDGE = 1152;
+// Flagged-only review thresholds: a full bake reviews only slides with a measured
+// finding, a vertical dead zone over REVIEW_FLAG_GAP_PCT of the well, or ink
+// covering under REVIEW_FLAG_COVER_PCT of its rows. Bakes of this many slides or
+// fewer (single-slide regen, small subsets) review everything.
+const REVIEW_ALL_AT_OR_BELOW = 3;
+const REVIEW_FLAG_GAP_PCT = 25;
+const REVIEW_FLAG_COVER_PCT = 45;
 // Output ceiling for the vision call - a ceiling, not a target ("OK" costs
 // ~1 token). Bounds a rogue full-deck re-emission at roughly 10 slides.
 const VISION_MAX_TOKENS = 32_000;
@@ -293,6 +300,11 @@ export const deckFreezeBake = inngest.createFunction(
       const shots = new Map<string, string>();
       const thumbs: string[] = [];
       let findings: Record<string, FrameAuditFinding[]> = {};
+      // Slides the vision model is asked about. null = every pending slide.
+      // Flagged-only review (2026-10-14, owner decision, token cost): on a full
+      // bake only slides with a measured finding or a dead zone are sent; the
+      // rest freeze as authored. Small bakes (single-slide regen etc.) review all.
+      let reviewIds: Set<string> | null = null;
       // Deterministic Arabic-leading fix (crowded headlines → line-height 1.3,
       // measured-fit, never overflow). Runs BEFORE the audit so crowding is
       // already resolved: the audit stops flagging it and the vision round is
@@ -382,6 +394,24 @@ export const deckFreezeBake = inngest.createFunction(
               thumbs.push(`data:image/jpeg;base64,${thumb.toString("base64")}`);
             }
           }
+          if (pendingIds.length > REVIEW_ALL_AT_OR_BELOW) {
+            reviewIds = new Set(
+              pendingIds.filter((sid) => {
+                const dz = auditRes[sid]?.deadZone;
+                return (
+                  (findings[sid]?.length ?? 0) > 0 ||
+                  (dz !== undefined &&
+                    (dz.gapPct > REVIEW_FLAG_GAP_PCT ||
+                      dz.coverPct < REVIEW_FLAG_COVER_PCT))
+                );
+              }),
+            );
+            logger.info("deck_review_scope", {
+              versionId,
+              pending: pendingIds.length,
+              flagged: reviewIds.size,
+            });
+          }
         } finally {
           await closeGuardedBrowser(browser);
         }
@@ -443,6 +473,7 @@ export const deckFreezeBake = inngest.createFunction(
 
           const visionInputs: FrameVisionSlideInput[] = [];
           for (const s of pending) {
+            if (reviewIds && !reviewIds.has(s.slideId)) continue;
             // Feed the model the NORMALIZED html (leading already fixed) so it
             // reviews what was actually rendered + audited, and its revision
             // builds on the corrected leading instead of re-introducing it.

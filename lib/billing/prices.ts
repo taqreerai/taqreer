@@ -60,9 +60,12 @@ export const YEARLY_PER_MONTH_USD: Record<"plus" | "pro" | "max", number> = {
   // per-month figure is a round number, rounded DOWN from the 15%-off base
   // (7.65 / 21.25 / 67.15): $7 / $21 / $67, billed $84 / $252 / $804 a year.
   // Savings vs monthly: Plus 22%, Pro 16%, Max 15%.
+  // 2026-10-14 ladder $9 / $19 / $59: 15%-off base 7.65 / 16.15 / 50.15, rounded
+  // DOWN to $7 / $16 / $50, billed $84 / $192 / $600 a year (Plus 22%, Pro 16%,
+  // Max 15% below monthly).
   plus: 7,
-  pro: 21,
-  max: 67,
+  pro: 16,
+  max: 50,
 };
 
 const PAID_PLANS = KNOWN_PLANS.filter(
