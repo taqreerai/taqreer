@@ -64,15 +64,14 @@ const on = { enabled: true };
 const off = { enabled: false };
 
 // Paid tiers (Plus/Pro/Max) share ONE aligned feature list (model + 8 features);
-// flags toggle the premium tail: Plus lacks premium templates + priority, Pro
-// lacks priority, Max has everything. (row 0 = credits, row 1 = model.)
-// Free (2026-10-05 free trial): its OWN list - 5 designed slides per deck,
-// every format, every creation method, photos + brand identity ON; AI edits
-// after generation (paid again 2026-10-05), no watermark, full (unlocked)
-// decks and premium templates OFF.
+// templates and styles are on for every plan since 2026-10-14, so only
+// processing priority differs (Max only). (row 0 = credits, row 1 = model.)
+// Free has its OWN list: the first few slides designed, every format, every
+// creation method, brand identity and templates and styles ON; AI edits after
+// generation, no watermark and full (unlocked) decks OFF.
 const TIERS: Tier[] = [
-  { features: [on, on, on, on, on, on, off, off, off, off], isFree: true },
-  { features: [on, on, on, on, on, on, on, on, off, off] },
+  { features: [on, on, on, on, on, on, on, off, off, off], isFree: true },
+  { features: [on, on, on, on, on, on, on, on, on, off] },
   { features: [on, on, on, on, on, on, on, on, on, off], popular: true },
   { features: [on, on, on, on, on, on, on, on, on, on] },
 ];

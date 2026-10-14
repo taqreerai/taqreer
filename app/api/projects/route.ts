@@ -42,7 +42,7 @@ import {
   estimateSlides,
   slideCapForFlow,
 } from "@/lib/credits/cost";
-import { isProPlan, normalizePlan } from "@/lib/plan";
+import { normalizePlan } from "@/lib/plan";
 import { mintTemplateDesignFile } from "@/lib/template/mint-design";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
 import { REFERRAL_COOKIE } from "@/lib/referral-code";
@@ -823,8 +823,7 @@ export async function POST(request: Request) {
   // ─── Enhance + template (2026-10-05) ────────────────────────────────
   // A redesign in a deck template's look: the template's design reference is
   // minted HERE from payload.templateId with the same checks as
-  // /api/templates/[id]/use (visible to the caller; premium needs Pro unless
-  // owner/admin). A client-sent designAnthropicFileId is always discarded.
+  // /api/templates/[id]/use (visible to the caller). A client-sent designAnthropicFileId is always discarded.
   if (validatedSource?.kind === "enhance") {
     validatedSource = { ...validatedSource, designAnthropicFileId: undefined };
     if (typeof payload.templateId === "string" && payload.templateId) {
@@ -835,9 +834,6 @@ export async function POST(request: Request) {
       const isOwner = !!tpl && tpl.ownerId === dbUser.id;
       if (!tpl || (!isOwner && !tpl.isPublic)) {
         return NextResponse.json({ error: "Template not found" }, { status: 404 });
-      }
-      if (tpl.isPremium && !isOwner && dbUser.role !== "admin" && !isProPlan(dbUser.plan)) {
-        return NextResponse.json({ error: "This template requires a Pro plan" }, { status: 402 });
       }
       if (!tpl.pdfUrl) {
         return NextResponse.json({ error: "Template is still being prepared" }, { status: 409 });
@@ -877,10 +873,8 @@ export async function POST(request: Request) {
       where: { id: payload.templateId },
       select: { id: true, isFree: true, isPremium: true, isPublic: true, ownerId: true, pdfUrl: true },
     });
-    // Never a premium one, even if a curator flags it free (Pro-only stays Pro).
     if (
       tpl?.isFree &&
-      !tpl.isPremium &&
       tpl.pdfUrl &&
       (tpl.isPublic || tpl.ownerId === dbUser.id)
     ) {

@@ -30,7 +30,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { PremiumBadge } from "@/components/app/PremiumBadge";
 import type { SlideFormat } from "@/lib/schema/slide";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { useSwipeNav } from "@/hooks/useSwipeNav";
@@ -63,8 +62,9 @@ type Props = {
   // use-template flow. The button stays visible (with reduced opacity)
   // so the user gets feedback that their click registered.
   useBusy?: boolean;
-  // Show the "مميز" badge in the header when previewing a premium
-  // template. The actual use-gate lives in the caller's onUseTemplate.
+  // Kept so callers still compile: premium templates carry no badge or gate
+  // since 2026-10-14 (the use-gate for plan-locked templates lives in the
+  // caller's onUseTemplate).
   isPremium?: boolean;
 };
 
@@ -75,7 +75,6 @@ export function TemplateLightbox({
   onClose,
   onUseTemplate,
   useBusy,
-  isPremium,
 }: Props) {
   const dict = useDict();
   const { dir } = useLocale();
@@ -221,7 +220,6 @@ export function TemplateLightbox({
                   >
                     {dict.components.lightbox.title}
                   </h2>
-                  {isPremium ? <PremiumBadge className="shrink-0" /> : null}
                 </div>
                 <div className="flex items-center gap-3">
                   {isMulti ? (

@@ -146,7 +146,7 @@ export function TemplateTile({
   // templates (owner direction: free users must see at a glance which ones
   // are paid); the free-plan ones get a "free" badge instead.
   const { lockFor, flowLocked } = useTemplateLock();
-  const showPremium = !!isPremium || lockFor(template) != null;
+  const showPremium = lockFor(template) != null;
   const freeBadge = flowLocked && !!isFree;
   // Admins manage every tile (delete any user's template); owners manage
   // their own. Drives whether the 3-dots trigger + menu render at all.

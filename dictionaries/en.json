@@ -108,7 +108,7 @@
       ]
     },
     "faq": [
-      { "q": "Are the templates free?", "a": "Yes, you can try them free with credits at signup. Some premium templates are available on paid plans." },
+      { "q": "Are the templates free?", "a": "Yes. Every template and style is available on every plan, and you can try them free with credits at signup." },
       { "q": "Can I edit a template?", "a": "Completely. Change text, colors, images, slides, and their order in the editor, with autosave." },
       { "q": "Do the templates support Arabic?", "a": "Yes. Every template is Arabic-first with correct right-to-left direction and Arabic fonts." },
       { "q": "How do I use a template?", "a": "Pick a template, add your content and brand, let the AI redesign the deck, then export to PowerPoint." }
@@ -1812,7 +1812,7 @@
           "name": "Free",
           "description": "We design the first few slides of the deck",
           "credits": "{credits} credits to try the tool",
-          "features": ["{model}", "First few slides of each deck designed", "Editable PPTX + all formats", "All creation methods", "Custom brand identity", "AI edits after generation", "No watermark", "Full decks, nothing locked", "Premium templates"],
+          "features": ["{model}", "First few slides of each deck designed", "Editable PPTX + all formats", "All creation methods", "Custom brand identity", "Templates and styles", "AI edits after generation", "No watermark", "Full decks, nothing locked"],
           "footnote": "Upgrade anytime",
           "cta": "Try it free"
         },
@@ -1820,15 +1820,15 @@
           "name": "Plus",
           "description": "To create decks regularly with every creation method.",
           "credits": "{credits} credits / month",
-          "features": ["{model}", "Full decks up to {slides} slides", "Editable PPTX + all formats", "No watermark", "All creation methods + AI edits", "Smart photos for your content", "Custom brand identity", "Premium templates", "Processing priority"],
+          "features": ["{model}", "Full decks up to {slides} slides", "Editable PPTX + all formats", "No watermark", "All creation methods + AI edits", "Smart photos for your content", "Custom brand identity", "Templates and styles", "Processing priority"],
           "footnote": "Upgrade or downgrade anytime",
           "cta": "Start now"
         },
         {
           "name": "Pro",
-          "description": "For pros who want top quality and premium templates.",
+          "description": "For pros who want higher quality and more capacity.",
           "credits": "{credits} credits / month",
-          "features": ["{model}", "Full decks up to {slides} slides", "Editable PPTX + all formats", "No watermark", "All creation methods + AI edits", "Smart photos for your content", "Custom brand identity", "Premium templates", "Processing priority"],
+          "features": ["{model}", "Full decks up to {slides} slides", "Editable PPTX + all formats", "No watermark", "All creation methods + AI edits", "Smart photos for your content", "Custom brand identity", "Templates and styles", "Processing priority"],
           "footnote": "Upgrade or downgrade anytime",
           "cta": "Start now"
         },
@@ -1836,7 +1836,7 @@
           "name": "Max",
           "description": "For heavy use, with maximum capacity and priority.",
           "credits": "{credits} credits / month",
-          "features": ["{model}", "Full decks up to {slides} slides", "Editable PPTX + all formats", "No watermark", "All creation methods + AI edits", "Smart photos for your content", "Custom brand identity", "Premium templates", "Processing priority"],
+          "features": ["{model}", "Full decks up to {slides} slides", "Editable PPTX + all formats", "No watermark", "All creation methods + AI edits", "Smart photos for your content", "Custom brand identity", "Templates and styles", "Processing priority"],
           "footnote": "You can downgrade anytime",
           "cta": "Start now"
         }

@@ -37,7 +37,6 @@ import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { BrandSnapshotSchema } from "@/lib/template/derive-brand";
 import { mintTemplateDesignFile } from "@/lib/template/mint-design";
-import { isProPlan } from "@/lib/plan";
 
 // Node runtime — the Anthropic SDK + Buffer handling need it; the
 // download + upload can take a few seconds for a large deck.
@@ -82,23 +81,8 @@ export async function POST(
     );
   }
 
-  // Premium gate — premium templates require the paid "pro" plan
-  // (product decision 2026-05-29). Owners can always use their own. The
-  // plan is only fetched when it matters (premium + non-owner). 402
-  // Payment Required → the client routes the user to the pricing section.
-  if (template.isPremium && !isOwner) {
-    const dbUser = await prisma.user.findUnique({
-      where: { supabaseUserId: user.id },
-      select: { plan: true, role: true },
-    });
-    // Admins/superusers can use any template, like owners use their own.
-    if (dbUser?.role !== "admin" && !isProPlan(dbUser?.plan)) {
-      return NextResponse.json(
-        { error: "This template requires a Pro plan" },
-        { status: 402 },
-      );
-    }
-  }
+  // Premium templates are open to every plan (owner decision 2026-10-14): the
+  // `isPremium` flag no longer gates use, so there is no plan lookup here.
 
   // Re-validate the stored snapshot (schema may have shifted since the
   // row was written). 500 so the client shows "couldn't load template"
