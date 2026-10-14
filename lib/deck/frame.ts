@@ -14,6 +14,8 @@
 // pipeline (warm dispatch + reconcile) generates and fills them - the frame
 // adds no new image machinery.
 
+import { isolateLatinRuns } from "@/lib/deck/bidi-isolate";
+
 // ── geometry ────────────────────────────────────────────────────────────────
 // Derived from the canvas so every format gets proportional framing. 16:9
 // values: margin 64, split 768, band 378, gap 64 at 1920x1080; portrait 3:4
@@ -407,7 +409,12 @@ export function assembleFramedSlide(
   }
 
   // ── Layer 1: the well (Claude's flow design, verbatim) ──
-  const wellHtml = `<div class="tq-well"${wellStyle}>${decl.wellHtml}</div>`;
+  // RTL decks: Latin / number runs get their LTR isolation here whatever the model
+  // did (lib/deck/bidi-isolate.ts) - the one chokepoint generation, vision
+  // revisions and partial regen all share.
+  const wellBody =
+    ctx.direction === "rtl" ? isolateLatinRuns(decl.wellHtml) : decl.wellHtml;
+  const wellHtml = `<div class="tq-well"${wellStyle}>${wellBody}</div>`;
 
   // ── Layer 2: chrome = an EMPTY structure sentinel ──
   // The system renders NOTHING here (owner direction 2026-07-10: chrome only
