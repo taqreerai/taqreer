@@ -68,7 +68,13 @@ import {
   deleteFileFromAnthropic,
 } from "@/lib/anthropic/files";
 import { frameKindFor } from "@/lib/deck/frame-kind";
-import { enforceCarriedAssetImgs, enforceCarriedTables } from "@/lib/deck/carried-assets";
+import {
+  CARRIED_PICTURES_RULE,
+  CARRIED_TABLES_RULE,
+  carriedSlideBlock,
+  enforceCarriedAssetImgs,
+  enforceCarriedTables,
+} from "@/lib/deck/carried-assets";
 import { prepareCarriedPictures, type CarriedPicture, type CarriedTable } from "@/lib/extract/carried-pictures";
 
 function getClient() {
@@ -1413,31 +1419,10 @@ function buildSourceContentBlocks(
       const slideTables = fileId
         ? (enhanceImages.tables ?? []).filter((t) => t.slideIndex === i)
         : [];
-      const tableLines = slideTables.map((t) => {
-        const rows = t.spec.rows.length;
-        const chars = t.spec.rows.flat().reduce((n, c) => n + c.text.length, 0) / Math.max(1, t.spec.rows.flat().length);
-        const width = t.spec.columns >= 4 || chars > 30 ? 1600 : 1100;
-        const height = Math.min(820, rows * (chars > 30 ? 120 : 76));
-        return `<div data-table="${t.tableId}"></div>  ${rows} rows x ${t.spec.columns} columns${t.spec.headerRow ? ", header row" : ""}; suggested box ${width}x${height}px`;
-      });
       blocks.push({
         type: "text",
         text:
-          (slidePictures.length > 0
-            ? `── SLIDE ${i + 1}: ORIGINAL PICTURES (place each one, tag unchanged) ──\n` +
-              slidePictures
-                .map(
-                  (p) =>
-                    `<img data-asset="${p.assetId}" src="/api/assets/${event.projectId}/${p.assetId}" alt="${(p.altText ?? "").replace(/["<>&]/g, "")}">  aspect ${p.aspect} (e.g. ${p.cls === "small" ? 120 : 720}x${Math.round((p.cls === "small" ? 120 : 720) / p.aspect)}px)${p.cls === "small" ? "  small: icon / logo / badge" : ""}`,
-                )
-                .join("\n") +
-              "\n\n"
-            : "") +
-          (tableLines.length > 0
-            ? `── SLIDE ${i + 1}: ORIGINAL TABLES (the system fills each box) ──\n` +
-              tableLines.join("\n") +
-              "\n\n"
-            : "") +
+          carriedSlideBlock(i + 1, event.projectId, slidePictures, slideTables) +
           `── SLIDE ${i + 1} / ${total} — exact text (verbatim, authoritative) ──\n` +
           (text.length > 0
             ? text
@@ -1574,12 +1559,12 @@ function buildSourceTextDirective(
       // carried over, never swapped. Listed per slide, ahead of its text.
       ...((enhanceImages?.tables?.length ?? 0) > 0
         ? [
-            `  • ORIGINAL TABLES: FIRST RULE for tables. A slide may come with an "ORIGINAL TABLES" block. For each listed table put ONE EMPTY <div data-table="ID" style="width:...px;height:...px"></div> where the table belongs, sized to fit its rows (start from the suggested size). Never write that table's cells, rows or a <table> yourself, and never repeat its cells as text, cards or bullets elsewhere on the slide (they also appear in the exact-text block; that is the table): the system fills the box with the EXACT table, styled from the slide's text colour and --primary. A title or a short caption above it is fine.`,
+            CARRIED_TABLES_RULE,
           ]
         : []),
       ...((enhanceImages?.pictures?.length ?? 0) > 0
         ? [
-            `  • ORIGINAL PICTURES: FIRST RULE, overrides the photo, logo and placeholder rules below for every picture it covers. A slide may come with an "ORIGINAL PICTURES" block: the user's own pictures from that slide, already extracted. Put EVERY listed picture on its redesigned slide, exactly once, as the given <img> tag with its data-asset and src attributes UNCHANGED (never write any other /api/assets URL). Give the img an inline style with an explicit width and height in px whose ratio matches the listed aspect (scale the example size; never square a wide picture), so nothing is cut off. Move, resize, round, frame or shadow it to suit the new design; never crop away its subject, recolour it with filters, cover it with text, or replace it with a generated image, a photo slot, an icon or an SVG drawing. "small" entries are icons, logos or badges: keep them small. Pictures NOT listed (template backgrounds, frame art) are not carried: do not recreate them.`,
+            CARRIED_PICTURES_RULE,
           ]
         : []),
       `  • LOGOS / BRAND MARKS — never recreate. If anything in a slide image looks like a logo, brand mark, monogram, or stylized identifier, do NOT draw it in SVG (approximations look off and bloat the output). Two options: (a) brand name is readable as text → styled text matching the weight/colour you can read; (b) otherwise → a styled placeholder <div> with a short label (the brand name if readable, else "Logo"). The user swaps it post-generation.`,
@@ -2211,7 +2196,25 @@ export const deckGenerate = inngest.createFunction(
       // (photo slots / AI photos), never fails the deck.
       const carried = await step.run("carry-source-pictures", async () => {
         try {
-          return await prepareCarriedPictures({ projectId, sourcePath, sourceMime });
+          const result = await prepareCarriedPictures({ projectId, sourcePath, sourceMime });
+          // Durable copy for the free-plan UNLOCK, which runs later (often after
+          // the 24h source purge) and authors the locked tail: it reads which
+          // picture / table belongs to which slide from here. Job.inputJson is
+          // the durable brief home; retry / regen replay ignore this key.
+          if (jobId && (result.pictures.length > 0 || result.tables.length > 0)) {
+            const job = await prisma.job.findUnique({ where: { id: jobId }, select: { inputJson: true } });
+            const input = (job?.inputJson ?? {}) as Record<string, unknown>;
+            await prisma.job.update({
+              where: { id: jobId },
+              data: {
+                inputJson: {
+                  ...input,
+                  carried: { pictures: result.pictures, tables: result.tables },
+                } as Prisma.InputJsonValue,
+              },
+            });
+          }
+          return result;
         } catch (err) {
           logger.warn("enhance_carry_pictures_failed", {
             projectId,

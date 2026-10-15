@@ -111,3 +111,57 @@ export function enforceCarriedAssetImgs(
     return /^\s*(https?:\/\/[^/]*)?\/api\/assets\//i.test(src) ? "" : tag;
   });
 }
+
+// ─── Prompt side (shared by deck-generate and deck-unlock) ────────────────────────
+// One source of truth for what the model is told, so the unlocked tail of a
+// free deck places its carried pictures and tables exactly like generation.
+
+export type CarriedPictureRef = {
+  assetId: string;
+  slideIndex: number;
+  cls: "content" | "small";
+  aspect: number;
+  altText: string | null;
+};
+export type CarriedTableRef = { tableId: string; slideIndex: number; spec: TableSpec };
+
+export const CARRIED_TABLES_RULE = `  • ORIGINAL TABLES: FIRST RULE for tables. A slide may come with an "ORIGINAL TABLES" block. For each listed table put ONE EMPTY <div data-table="ID" style="width:...px;height:...px"></div> where the table belongs, sized to fit its rows (start from the suggested size). Never write that table's cells, rows or a <table> yourself, and never repeat its cells as text, cards or bullets elsewhere on the slide (they also appear in the exact-text block; that is the table): the system fills the box with the EXACT table, styled from the slide's text colour and --primary. A title or a short caption above it is fine.`;
+
+export const CARRIED_PICTURES_RULE = `  • ORIGINAL PICTURES: FIRST RULE, overrides the photo, logo and placeholder rules below for every picture it covers. A slide may come with an "ORIGINAL PICTURES" block: the user's own pictures from that slide, already extracted. Put EVERY listed picture on its redesigned slide, exactly once, as the given <img> tag with its data-asset and src attributes UNCHANGED (never write any other /api/assets URL). Give the img an inline style with an explicit width and height in px whose ratio matches the listed aspect (scale the example size; never square a wide picture), so nothing is cut off. Move, resize, round, frame or shadow it to suit the new design; never crop away its subject, recolour it with filters, cover it with text, or replace it with a generated image, a photo slot, an icon or an SVG drawing. "small" entries are icons, logos or badges: keep them small. Pictures NOT listed (template backgrounds, frame art) are not carried: do not recreate them.`;
+
+/** The ORIGINAL PICTURES / ORIGINAL TABLES block for one slide ("" when none). */
+export function carriedSlideBlock(
+  slideNumber: number, // 1-based
+  projectId: string,
+  pictures: readonly CarriedPictureRef[],
+  tables: readonly CarriedTableRef[],
+): string {
+  let out = "";
+  if (pictures.length > 0) {
+    out +=
+      `── SLIDE ${slideNumber}: ORIGINAL PICTURES (place each one, tag unchanged) ──\n` +
+      pictures
+        .map((p) => {
+          const w = p.cls === "small" ? 120 : 720;
+          return `<img data-asset="${p.assetId}" src="/api/assets/${projectId}/${p.assetId}" alt="${(p.altText ?? "").replace(/["<>&]/g, "")}">  aspect ${p.aspect} (e.g. ${w}x${Math.round(w / p.aspect)}px)${p.cls === "small" ? "  small: icon / logo / badge" : ""}`;
+        })
+        .join("\n") +
+      "\n\n";
+  }
+  if (tables.length > 0) {
+    out +=
+      `── SLIDE ${slideNumber}: ORIGINAL TABLES (the system fills each box) ──\n` +
+      tables
+        .map((t) => {
+          const rows = t.spec.rows.length;
+          const cells = t.spec.rows.flat();
+          const chars = cells.reduce((n, c) => n + c.text.length, 0) / Math.max(1, cells.length);
+          const width = t.spec.columns >= 4 || chars > 30 ? 1600 : 1100;
+          const height = Math.min(820, rows * (chars > 30 ? 120 : 76));
+          return `<div data-table="${t.tableId}"></div>  ${rows} rows x ${t.spec.columns} columns${t.spec.headerRow ? ", header row" : ""}; suggested box ${width}x${height}px`;
+        })
+        .join("\n") +
+      "\n\n";
+  }
+  return out;
+}

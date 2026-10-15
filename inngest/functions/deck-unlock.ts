@@ -49,6 +49,15 @@ import {
   neutralizeGenImages,
 } from "@/lib/images/slide-images";
 import { frameKindFor } from "@/lib/deck/frame-kind";
+import {
+  CARRIED_PICTURES_RULE,
+  CARRIED_TABLES_RULE,
+  carriedSlideBlock,
+  enforceCarriedAssetImgs,
+  enforceCarriedTables,
+  type CarriedPictureRef,
+  type CarriedTableRef,
+} from "@/lib/deck/carried-assets";
 
 function getClient(): Anthropic {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -206,6 +215,60 @@ export const deckUnlock = inngest.createFunction(
         JSON.stringify(source.rawBrief).slice(0, 40000)
       : manifest.title;
 
+    // Enhance: the user's own pictures and tables of the LOCKED slides (owner
+    // rule 2026-10-15, docs/enhance-visuals-plan.md). Generation stored them in
+    // the private bucket and saved which belongs to which slide on its Job; the
+    // raw upload itself may be purged by now. Enhance keeps one slide per
+    // source slide, so source slide i is deck position i.
+    const carried = await step.run("load-carried-assets", async () => {
+      const jobs = await prisma.job.findMany({
+        where: { projectId, type: "deck.generate" },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        select: { inputJson: true },
+      });
+      for (const j of jobs) {
+        const c = (j.inputJson as { carried?: { pictures?: CarriedPictureRef[]; tables?: CarriedTableRef[] } } | null)?.carried;
+        if (!c) continue;
+        const inTail = (slideIndex: number) => slideIndex >= visibleCount && slideIndex < total;
+        return {
+          pictures: (c.pictures ?? []).filter((x) => inTail(x.slideIndex)),
+          tables: (c.tables ?? []).filter((x) => inTail(x.slideIndex)),
+        };
+      }
+      return { pictures: [] as CarriedPictureRef[], tables: [] as CarriedTableRef[] };
+    });
+    const carriedBlock = (() => {
+      if (carried.pictures.length === 0 && carried.tables.length === 0) return "";
+      const blocks: string[] = [];
+      for (let idx = visibleCount; idx < total; idx++) {
+        const b = carriedSlideBlock(
+          idx + 1,
+          projectId,
+          carried.pictures.filter((x) => x.slideIndex === idx),
+          carried.tables.filter((x) => x.slideIndex === idx),
+        );
+        if (b) blocks.push(b);
+      }
+      return [
+        "",
+        "THE USER'S OWN PICTURES AND TABLES for the slides you author (from their uploaded deck):",
+        ...(carried.tables.length > 0 ? [CARRIED_TABLES_RULE] : []),
+        ...(carried.pictures.length > 0 ? [CARRIED_PICTURES_RULE] : []),
+        "",
+        ...blocks,
+      ].join("\n");
+    })();
+    const carriedAssets = new Map(carried.pictures.map((x) => [x.assetId, x.aspect] as const));
+    const carriedTables = new Map(carried.tables.map((x) => [x.tableId, x.spec] as const));
+    if (carriedBlock) {
+      logger.info("deck_unlock_carried", {
+        projectId,
+        pictures: carried.pictures.length,
+        tables: carried.tables.length,
+      });
+    }
+
     // ── 2. Author the withheld tail (one Opus call, N sections) ──
     const rawReply = await step.run("author-continuation", async () => {
       await ensureFresh();
@@ -215,7 +278,7 @@ export const deckUnlock = inngest.createFunction(
         sectionTag: extractStoredSectionTag(s.html),
         wellHtml: (extractStoredWell(s.html) ?? "").slice(0, 6000),
       }));
-      const userMessage = frameContinuationUserMessage(
+      const continuation = frameContinuationUserMessage(
         {
           visibleCount,
           total,
@@ -226,6 +289,7 @@ export const deckUnlock = inngest.createFunction(
         },
         sourceDeckCss,
       );
+      const userMessage = carriedBlock ? `${continuation}\n${carriedBlock}` : continuation;
       const client = getClient();
       // STREAM (not create): a non-streaming call at this max_tokens trips the
       // SDK's ">10 minute operation" guard. finalMessage() still returns the
@@ -281,7 +345,14 @@ export const deckUnlock = inngest.createFunction(
         },
       );
       // House style: no em/en dashes (lib/deck/strip-dashes.ts).
-      const decl = parseFrameSlide(stripTextDashes(noStyles));
+      // Carried pictures / tables: canonical links, exact tables, nothing
+      // foreign (lib/deck/carried-assets.ts), same as generation's ingest.
+      const decl = parseFrameSlide(
+        enforceCarriedTables(
+          enforceCarriedAssetImgs(stripTextDashes(noStyles), projectId, carriedAssets),
+          carriedTables,
+        ),
+      );
       const assembled = assembleFramedSlide(decl, frameCtx, slideIndex, dims);
       const html = buildSlideHtml(
         assembled,
