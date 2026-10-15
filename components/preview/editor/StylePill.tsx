@@ -645,6 +645,15 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
         target.removeAttribute("data-genimage");
         target.removeAttribute("data-genrole");
         target.removeAttribute("data-genaspect");
+        // A carried original picture (Enhance, data-asset) replaced by an upload
+        // stops being the asset, but remembers it so "Restore original" can
+        // put it back. Keep the FIRST original if the user replaces twice.
+        const assetId = target.getAttribute("data-asset");
+        const prevSrc = target.getAttribute("src") ?? "";
+        if (assetId && prevSrc.startsWith("/api/assets/") && !target.hasAttribute("data-asset-original")) {
+          target.setAttribute("data-asset-original", prevSrc);
+        }
+        target.removeAttribute("data-asset");
         dirty.current = true;
         force((n) => n + 1);
       } catch (err) {
@@ -712,6 +721,27 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
 
   // An AI-generated image box (vs an uploaded/replaced one) carries both
   // data-genid and a non-empty data-genimage prompt — only those can regen.
+  // Enhance carried pictures (lib/deck/carried-assets): the original picture
+  // from the user's file, or an upload that replaced one (restorable).
+  const originalSrc = kind === "image" ? target.getAttribute("data-asset-original") : null;
+  const canRestoreOriginal = !!originalSrc && /^\/api\/assets\/[^/]+\/[^/]+$/.test(originalSrc);
+  const restoreOriginal = () => {
+    if (!originalSrc || !canRestoreOriginal) return;
+    target.removeAttribute("srcset");
+    target.setAttribute("src", originalSrc);
+    target.setAttribute("data-asset", originalSrc.split("/").pop() ?? "");
+    target.removeAttribute("data-asset-original");
+    dirty.current = true;
+    force((n) => n + 1);
+  };
+  // Fill (cover) vs show whole (contain), for any picture.
+  const fitWhole =
+    kind === "image" && (target.ownerDocument.defaultView?.getComputedStyle(target).objectFit ?? "") === "contain";
+  const toggleFit = () => {
+    target.style.setProperty("object-fit", fitWhole ? "cover" : "contain");
+    dirty.current = true;
+    force((n) => n + 1);
+  };
   const isAiImage =
     kind === "image" &&
     !!target.getAttribute("data-genid") &&
@@ -1048,6 +1078,37 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
             hidden
             onChange={onPickImage}
           />
+          {/* Fill / show whole: the redesign may letterbox a picture whose box
+              does not match its proportions (never crops it); one click flips. */}
+          <button
+            type="button"
+            aria-label={fitWhole ? t.fitFillHint : t.fitWholeHint}
+            title={fitWhole ? t.fitFillHint : t.fitWholeHint}
+            onClick={toggleFit}
+            className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] text-foreground/85 transition-colors hover:text-foreground"
+            style={{ background: "var(--tq-surface)", border: "1px solid var(--tq-border-hairline)", marginInlineStart: 6 }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 15 }} aria-hidden>
+              {fitWhole ? "crop_free" : "fit_screen"}
+            </span>
+            {fitWhole ? t.fitFill : t.fitWhole}
+          </button>
+          {/* Restore original: only after a carried picture was replaced. */}
+          {canRestoreOriginal && (
+            <button
+              type="button"
+              aria-label={t.restoreOriginalHint}
+              title={t.restoreOriginalHint}
+              onClick={restoreOriginal}
+              className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] text-foreground/85 transition-colors hover:text-foreground"
+              style={{ background: "var(--tq-surface)", border: "1px solid var(--tq-border-hairline)", marginInlineStart: 6 }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 15 }} aria-hidden>
+                history
+              </span>
+              {t.restoreOriginal}
+            </button>
+          )}
           {/* §19 — Regenerate an AI image with an edited prompt. Only for AI
               boxes (data-genid + data-genimage). Opens a surface-popover prompt
               editor pre-filled with the box's prompt. */}
