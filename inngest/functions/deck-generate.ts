@@ -1540,10 +1540,14 @@ function buildSourceTextDirective(
       `  • Produce EXACTLY ${slideCount} slides — one per source slide, in the SAME order. Do not merge, split, drop, add, or reorder.`,
       `  • Re-execute typography, hierarchy, whitespace, layout, and visual rhythm to editorial quality.`,
       ``,
-      `CONTENT FIDELITY (two hard limits):`,
+      `CONTENT FIDELITY (hard limits):`,
       `  • Each slide's paired exact-text block is the authoritative source for that slide's facts — read the words from it, not off the image (avoids OCR drift); the image is for LAYOUT + VISUAL identity only.`,
       `  • Never invent — every number, name, claim, and fact on a slide must come from that source text; do not add statistics, examples, or detail that isn't there.`,
       `  • Never drop real information — every distinct fact in the source must survive somewhere in the deck; you may relocate, compress, or reword it, but not delete it.`,
+      // 2026-10-15: test redesigns added eyebrows that were not in the source
+      // ("Annual report", "BUDGET"). The design prompt invites small labels,
+      // so the redesign rule has to say where their words come from.
+      `  • No added labels: never add an eyebrow, kicker, tag, chip, category word or section label (e.g. "Overview", "Budget", "Annual report", "Key results") whose words are not on that source slide. A small label is allowed only when it repeats text the source slide already has (its own heading, a heading of the same deck, the deck title as running chrome) or is a plain number (step, page). When a slide needs a label and the source has none, design without one.`,
       `  • Keep each slide's own language and script (Arabic stays Arabic, English stays English, mixed stays mixed) — do NOT translate or transliterate.`,
       ``,
       ...(source.designAnthropicFileId
