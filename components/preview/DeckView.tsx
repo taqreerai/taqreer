@@ -5068,13 +5068,13 @@ export function DeckView({
       }));
 
   // Teaser paywall: locked slots appended after the real slides - OWNER only,
-  // never once unlocked. Shown WHILE generating too (2026-10-08), so the deck's
-  // full length is visible from the start. Each slot's
+  // never once unlocked. Shown only AFTER generation finishes (2026-10-15): while
+  // generating, the panel holds just the slides being written. Each slot's
   // background is a random gradient built from the DECK's own palette under a
   // dark scrim (not a copy of any real slide). Nothing here enters slideJson,
   // so exports / bake / gallery ignore teasers by construction.
   const effectiveTeaserLocked =
-    teaserActive && (generating || viewSlides.length > 0) ? teaserLockedCount : 0;
+    teaserActive && !generating && viewSlides.length > 0 ? teaserLockedCount : 0;
   const teaserPalette = viewManifest?.theme.palette ?? [];
   const teaserGradients: string[] = [];
   if (effectiveTeaserLocked > 0) {
@@ -5087,6 +5087,12 @@ export function DeckView({
         index: base + i,
         lockedIndex: i,
         gradient,
+        // Blurred copy of a visible slide (skip the cover when there is more
+        // than one), cycled so neighbouring tiles differ.
+        sourceSlide:
+          viewSlides.length > 1
+            ? viewSlides[1 + (i % (viewSlides.length - 1))]
+            : viewSlides[0],
       });
     }
   }
