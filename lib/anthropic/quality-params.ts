@@ -100,7 +100,18 @@ export function paramsForQuality(
   return paramsForPreset(quality) ?? FALLBACK_PARAMS;
 }
 
-/** True when the preset runs a Haiku model (gets the extra layout rules in frameSystemPrompt). */
+/** True when the preset runs a Haiku model (no vision review; see deck-generate). */
 export function isHaikuQuality(quality: string | undefined | null): boolean {
   return paramsForQuality(quality).model.startsWith("claude-haiku");
+}
+
+/**
+ * True when frameSystemPrompt appends the LAYOUT CHECKLIST: the Haiku and Sonnet
+ * presets (2026-10-15). Their layouts leave dead zones and half-empty cards (the
+ * review pass revises 37% of Sonnet slides, 56% of those for dead space), which
+ * Opus does not. Opus prompts stay byte-identical, so their cache is untouched.
+ */
+export function usesLayoutRules(quality: string | undefined | null): boolean {
+  const model = paramsForQuality(quality).model;
+  return model.startsWith("claude-haiku") || model.startsWith("claude-sonnet");
 }

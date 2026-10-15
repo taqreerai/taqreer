@@ -4,6 +4,7 @@
 // backs /use-template/[id].
 
 import { redirect } from "next/navigation";
+import { defaultLocale, isLocale } from "@/lib/i18n/config";
 
 export default async function MimicPage({
   params,
@@ -11,5 +12,6 @@ export default async function MimicPage({
   params: Promise<{ lang: string }>;
 }) {
   const { lang } = await params;
-  redirect(`/${lang}/create`);
+  // Only a real locale ever reaches the redirect target (never the raw segment).
+  redirect(`/${isLocale(lang) ? lang : defaultLocale}/create`);
 }

@@ -86,9 +86,9 @@ export function frameSystemPrompt(opts: {
   // no PPTX AVOID list (3:4 exports PDF/PNG rendered by real Chrome), bands
   // favored over splits (splits are narrow at 1080 wide). Defaults to "deck".
   kind?: "deck" | "social";
-  // Haiku runs only: appends HAIKU_LAYOUT_RULES. Off for every other model, so
-  // their prompt (and its cache) stays byte-identical.
-  haikuRules?: boolean;
+  // Haiku and Sonnet runs: appends LAYOUT_RULES (usesLayoutRules). Off for Opus and
+  // Fable, so their prompt (and its cache) stays byte-identical.
+  layoutRules?: boolean;
 }): string {
   const { canvas, language, imagesMode } = opts;
   const social = opts.kind === "social";
@@ -187,14 +187,14 @@ BRAND & COLOUR - the brand variables are INJECTED for you; reference them, don't
 GRAPHICS - icons: inline an <svg viewBox="0 0 24 24"> with a REAL icon's path data from a standard open set (e.g. Lucide), stroked or filled in a brand colour. Charts / graphs: inline <svg>. Country flags: <img src="https://flagcdn.com/<cc>.svg"> (lowercase ISO code). NEVER hotlink any other external image${imagesMode ? " - photographic imagery ONLY via data-bg-prompt or an in-well data-genimage slot" : ""}.
 
 AVOID (these don't render in export): conic-gradient, colour-to-alpha gradients, mix-blend-mode, backdrop-filter, filter: blur() / drop-shadow(), -webkit-text-stroke (use <svg><text stroke fill="none">), rgba() for translucency on a fill (use opacity on the element). Static only - no animation / transition / :hover / :focus / JS.
-ALSO AVOID: !important, viewport units (vw/vh/vmin/vmax), @media, position: fixed.${opts.haikuRules ? `\n\n${HAIKU_LAYOUT_RULES}` : ""}`;
+ALSO AVOID: !important, viewport units (vw/vh/vmin/vmax), @media, position: fixed.${opts.layoutRules ? `\n\n${LAYOUT_RULES}` : ""}`;
 }
 
-// Extra layout rules for Haiku runs only (2026-10-13). Haiku follows the prose
+// Extra layout rules for Haiku (2026-10-13) and Sonnet (2026-10-15) runs. They follow the prose
 // rules above loosely: on a 31-slide enhance deck the type was tiny, cards were
 // half empty and a label sat far from the text it names. These are concrete,
 // checkable numbers instead of judgement calls.
-const HAIKU_LAYOUT_RULES = `LAYOUT CHECKLIST - check every slide against this before closing it:
+const LAYOUT_RULES = `LAYOUT CHECKLIST - check every slide against this before closing it:
 - ‼️ TYPE SIZE: body text, bullets and card text are at least 26px; chips, labels and captions at least 20px; headlines at least 56px; the cover and section titles at least 80px. Never smaller, even when the source text is short. Short text means a bigger size, not a smaller one.
 - ‼️ NO EMPTY CARDS: a card or panel is as tall as its content plus padding. Never stretch a card (flex:1, align-items:stretch, a fixed height) to fill the well when its text is short; let it hug its content and size the type up instead. At most 20 percent of a card's height may be empty.
 - ‼️ LABELS STAY WITH THEIR TEXT: a tag, chip or caption that names a block sits directly above or below that block, inside the same flex column, never in a separate row at the far edge of the slide. Parallel blocks (two columns, a before and after) each carry their own label in the same position.

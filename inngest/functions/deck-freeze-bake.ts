@@ -74,6 +74,7 @@ import { FREEZE_SCRIPT } from "@/lib/deck/freeze-script";
 import { ownerGetsVisionReview } from "@/lib/deck/review-gate";
 import { FIT_SCRIPT, type FitCompressResult } from "@/lib/deck/fit-script";
 import { LEADING_NORMALIZE_SCRIPT } from "@/lib/deck/leading-normalize";
+import { EXPAND_TO_FILL_SCRIPT } from "@/lib/deck/expand-to-fill";
 import {
   AUDIT_SCRIPT,
   type FrameAuditFinding,
@@ -336,6 +337,27 @@ export const deckFreezeBake = inngest.createFunction(
               logger.info("deck_leading_normalized", {
                 versionId,
                 ...normStats,
+              });
+            // Expand-to-fill (2026-10-15): grow the type on sparse slides so
+            // fewer of them reach the Opus review. Runs on the DOM the
+            // normalizer just left; best-effort like it (a fault re-renders).
+            const fillResult = await expandToFill(
+              page,
+              pendingIds,
+              manifest.direction,
+            );
+            let filled = 0;
+            for (const sid of pendingIds) {
+              if (fillResult[sid]?.html) {
+                normalized[sid] = fillResult[sid].html;
+                filled += 1;
+              }
+            }
+            if (filled > 0)
+              logger.info("deck_expand_to_fill", {
+                versionId,
+                pending: pendingIds.length,
+                expanded: filled,
               });
           } catch (err) {
             logger.warn("deck_leading_normalize_failed", {
@@ -1484,6 +1506,53 @@ async function normalizeLeading(
     string,
     { html: string; adjusted: number; shrunk: number }
   >;
+}
+
+// Expand-to-fill (lib/deck/expand-to-fill.ts): per slide, a measured-fit uniform
+// font growth that is kept only when the audit stays clean. Captures the section
+// html only for slides it changed.
+async function expandToFill(
+  page: Page,
+  slideIds: string[],
+  direction: string,
+): Promise<Record<string, { html: string; factor: number }>> {
+  await page.evaluate(
+    `${AUDIT_SCRIPT}; ${EXPAND_TO_FILL_SCRIPT}; window.__tqAudit = __tqAuditWell; window.__tqExpand = __tqExpandToFillWell;`,
+  );
+  return (await page.evaluate(
+    (ids, dir, coverBelow, gapMax) => {
+      const out: Record<string, { html: string; factor: number }> = {};
+      for (const sid of ids) {
+        const escaped = sid.replace(/[^a-zA-Z0-9_-]/g, "\\$&");
+        const sec = document
+          .querySelector(`[data-slide-id="${escaped}"]`)
+          ?.querySelector("section");
+        const well = sec?.querySelector(":scope > .tq-well");
+        if (!sec || !well) {
+          out[sid] = { html: "", factor: 1 };
+          continue;
+        }
+        const res = (
+          window as unknown as {
+            __tqExpand: (
+              w: Element,
+              d: string,
+              o: { coverBelow: number; gapMax: number },
+            ) => { applied: number; factor: number };
+          }
+        ).__tqExpand(well, dir, { coverBelow, gapMax });
+        out[sid] = {
+          html: res.applied > 0 ? sec.outerHTML : "",
+          factor: res.factor,
+        };
+      }
+      return out;
+    },
+    slideIds,
+    direction,
+    REVIEW_FLAG_COVER_PCT,
+    REVIEW_FLAG_GAP_PCT,
+  )) as Record<string, { html: string; factor: number }>;
 }
 
 // Screenshot one slide's host box (scrolled into view) as a PNG buffer.
