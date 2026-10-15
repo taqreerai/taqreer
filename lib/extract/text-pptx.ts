@@ -50,7 +50,7 @@ export async function extractTextPerSlide(buffer: Buffer): Promise<string[]> {
  * Resolve slide XML paths in PRESENTATION order via
  * presentation.xml + its rels. Falls back to numeric filename order.
  */
-async function resolveSlideOrder(zip: JSZip): Promise<string[]> {
+export async function resolveSlideOrder(zip: JSZip): Promise<string[]> {
   try {
     const presEntry = zip.files["ppt/presentation.xml"];
     const relsEntry = zip.files["ppt/_rels/presentation.xml.rels"];
