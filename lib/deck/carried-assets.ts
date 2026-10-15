@@ -16,6 +16,8 @@
 //     layout itself is never changed.
 // Pure string work (runs inside the stream's ingest, no DOM available).
 
+import { renderTableHtml, type TableSpec } from "@/lib/deck/visuals/table";
+
 const IMG_RE = /<img\b[^>]*>/gi;
 const ATTR = (name: string) => new RegExp(`\\s${name}\\s*=\\s*("([^"]*)"|'([^']*)')`, "i");
 const ASPECT_TOLERANCE = 0.15;
@@ -42,6 +44,51 @@ function fitFor(style: string, aspect: number | undefined): "cover" | "contain" 
   if (!w || !h) return "contain";
   const drawn = w / h;
   return Math.abs(drawn - aspect) / aspect <= ASPECT_TOLERANCE ? "cover" : "contain";
+}
+
+// ─── Tables (step 3) ─────────────────────────────────────────────────
+// The model reserves `<div data-table="s05-t1" style="width:..;height:..">`;
+// the box is filled here with the EXACT source table (renderTableHtml), and
+// whatever the model put inside it is discarded. An unknown table id removes
+// the whole box. Nested divs are matched by depth, not by a lazy regex.
+
+const OPEN_TABLE_BOX_RE = /<div\b[^>]*\sdata-table\s*=\s*("([^"]*)"|'([^']*)')[^>]*>/gi;
+
+function closingDivIndex(html: string, from: number): number {
+  const tagRe = /<\/?div\b[^>]*>/gi;
+  tagRe.lastIndex = from;
+  let depth = 1;
+  for (let m = tagRe.exec(html); m; m = tagRe.exec(html)) {
+    depth += m[0][1] === "/" ? -1 : 1;
+    if (depth === 0) return m.index;
+  }
+  return -1;
+}
+
+export function enforceCarriedTables(
+  html: string,
+  tables: ReadonlyMap<string, TableSpec>,
+): string {
+  if (!/data-table\s*=/i.test(html)) return html;
+  let out = "";
+  let cursor = 0;
+  OPEN_TABLE_BOX_RE.lastIndex = 0;
+  for (let m = OPEN_TABLE_BOX_RE.exec(html); m; m = OPEN_TABLE_BOX_RE.exec(html)) {
+    const id = m[2] ?? m[3] ?? "";
+    const openEnd = m.index + m[0].length;
+    const close = closingDivIndex(html, openEnd);
+    if (close < 0) break; // unbalanced: leave the rest as written
+    const end = close + "</div>".length;
+    const spec = tables.get(id);
+    out += html.slice(cursor, m.index);
+    if (spec) {
+      const style = attr(m[0], "style") ?? "";
+      out += `${m[0]}${renderTableHtml(spec, { boxHeight: px(style, "height") })}</div>`;
+    }
+    cursor = end;
+    OPEN_TABLE_BOX_RE.lastIndex = end;
+  }
+  return out + html.slice(cursor);
 }
 
 export function enforceCarriedAssetImgs(

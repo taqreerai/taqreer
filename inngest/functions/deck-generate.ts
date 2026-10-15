@@ -68,8 +68,8 @@ import {
   deleteFileFromAnthropic,
 } from "@/lib/anthropic/files";
 import { frameKindFor } from "@/lib/deck/frame-kind";
-import { enforceCarriedAssetImgs } from "@/lib/deck/carried-assets";
-import { prepareCarriedPictures, type CarriedPicture } from "@/lib/extract/carried-pictures";
+import { enforceCarriedAssetImgs, enforceCarriedTables } from "@/lib/deck/carried-assets";
+import { prepareCarriedPictures, type CarriedPicture, type CarriedTable } from "@/lib/extract/carried-pictures";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -139,6 +139,8 @@ type EnhanceImages = {
   // The user's own pictures carried over from a PPTX upload (Enhance phase 1,
   // docs/enhance-visuals-plan.md), stored in the private source-assets bucket.
   pictures?: CarriedPicture[];
+  // Native PPTX tables, carried as exact cells (step 3).
+  tables?: CarriedTable[];
 };
 
 // ─── Shared prompt fragments (DRY) ───────────────────────────────────
@@ -1408,6 +1410,16 @@ function buildSourceContentBlocks(
       const slidePictures = fileId
         ? (enhanceImages.pictures ?? []).filter((p) => p.slideIndex === i)
         : [];
+      const slideTables = fileId
+        ? (enhanceImages.tables ?? []).filter((t) => t.slideIndex === i)
+        : [];
+      const tableLines = slideTables.map((t) => {
+        const rows = t.spec.rows.length;
+        const chars = t.spec.rows.flat().reduce((n, c) => n + c.text.length, 0) / Math.max(1, t.spec.rows.flat().length);
+        const width = t.spec.columns >= 4 || chars > 30 ? 1600 : 1100;
+        const height = Math.min(820, rows * (chars > 30 ? 120 : 76));
+        return `<div data-table="${t.tableId}"></div>  ${rows} rows x ${t.spec.columns} columns${t.spec.headerRow ? ", header row" : ""}; suggested box ${width}x${height}px`;
+      });
       blocks.push({
         type: "text",
         text:
@@ -1419,6 +1431,11 @@ function buildSourceContentBlocks(
                     `<img data-asset="${p.assetId}" src="/api/assets/${event.projectId}/${p.assetId}" alt="${(p.altText ?? "").replace(/["<>&]/g, "")}">  aspect ${p.aspect} (e.g. ${p.cls === "small" ? 120 : 720}x${Math.round((p.cls === "small" ? 120 : 720) / p.aspect)}px)${p.cls === "small" ? "  small: icon / logo / badge" : ""}`,
                 )
                 .join("\n") +
+              "\n\n"
+            : "") +
+          (tableLines.length > 0
+            ? `── SLIDE ${i + 1}: ORIGINAL TABLES (the system fills each box) ──\n` +
+              tableLines.join("\n") +
               "\n\n"
             : "") +
           `── SLIDE ${i + 1} / ${total} — exact text (verbatim, authoritative) ──\n` +
@@ -1551,6 +1568,11 @@ function buildSourceTextDirective(
       `VISUAL HANDLING — placeholders over redraws (saves time, looks honest):`,
       // Enhance phase 1 (owner rule 2026-10-15): the user's own pictures are
       // carried over, never swapped. Listed per slide, ahead of its text.
+      ...((enhanceImages?.tables?.length ?? 0) > 0
+        ? [
+            `  • ORIGINAL TABLES: FIRST RULE for tables. A slide may come with an "ORIGINAL TABLES" block. For each listed table put ONE EMPTY <div data-table="ID" style="width:...px;height:...px"></div> where the table belongs, sized to fit its rows (start from the suggested size). Never write that table's cells, rows or a <table> yourself, and never repeat its cells as text, cards or bullets elsewhere on the slide (they also appear in the exact-text block; that is the table): the system fills the box with the EXACT table, styled from the slide's text colour and --primary. A title or a short caption above it is fine.`,
+          ]
+        : []),
       ...((enhanceImages?.pictures?.length ?? 0) > 0
         ? [
             `  • ORIGINAL PICTURES: FIRST RULE, overrides the photo, logo and placeholder rules below for every picture it covers. A slide may come with an "ORIGINAL PICTURES" block: the user's own pictures from that slide, already extracted. Put EVERY listed picture on its redesigned slide, exactly once, as the given <img> tag with its data-asset and src attributes UNCHANGED (never write any other /api/assets URL). Give the img an inline style with an explicit width and height in px whose ratio matches the listed aspect (scale the example size; never square a wide picture), so nothing is cut off. Move, resize, round, frame or shadow it to suit the new design; never crop away its subject, recolour it with filters, cover it with text, or replace it with a generated image, a photo slot, an icon or an SVG drawing. "small" entries are icons, logos or badges: keep them small. Pictures NOT listed (template backgrounds, frame art) are not carried: do not recreate them.`,
@@ -2198,6 +2220,7 @@ export const deckGenerate = inngest.createFunction(
         logger.info("enhance_carry_pictures", {
           projectId,
           pictures: carried.pictures.length,
+          tables: carried.tables?.length ?? 0,
           skipped: carried.skipped,
           hasContentImages: carried.hasContentImages,
         });
@@ -2215,6 +2238,7 @@ export const deckGenerate = inngest.createFunction(
         textPerSlide:
           teaserTotal != null ? textPerSlide.slice(0, teaserTotal) : textPerSlide,
         pictures: carried?.pictures ?? [],
+        tables: carried?.tables ?? [],
       };
     }
 
@@ -2505,6 +2529,9 @@ export const deckGenerate = inngest.createFunction(
         const carriedAssetIds = new Map(
           (enhanceImages?.pictures ?? []).map((p) => [p.assetId, p.aspect] as const),
         );
+        const carriedTables = new Map(
+          (enhanceImages?.tables ?? []).map((t) => [t.tableId, t.spec] as const),
+        );
         const ingestSlide = (rawParsed: ParsedSlide) => {
           // House style: no em/en dashes. Strip them in code before the slide
           // is framed, streamed or reviewed, so the Opus review never spends a
@@ -2513,10 +2540,13 @@ export const deckGenerate = inngest.createFunction(
             ...rawParsed,
             // Carried pictures: canonical src for this deck's own assets, any
             // other /api/assets reference removed (lib/deck/carried-assets.ts).
-            html: enforceCarriedAssetImgs(
-              stripTextDashes(rawParsed.html),
-              projectId,
-              carriedAssetIds,
+            html: enforceCarriedTables(
+              enforceCarriedAssetImgs(
+                stripTextDashes(rawParsed.html),
+                projectId,
+                carriedAssetIds,
+              ),
+              carriedTables,
             ),
           };
           // ── FRAME self-correction (data-revises) ── thinking mode re-emits

@@ -56,13 +56,69 @@ export type PptxPicture = {
   asShapeFill: boolean;
 };
 
+export type PptxTableCell = { text: string; colSpan: number; rowSpan: number };
+
+export type PptxTable = {
+  // Visible cells only: continuation cells of a merge (hMerge / vMerge) are
+  // dropped, the anchor cell carries colSpan / rowSpan.
+  rows: PptxTableCell[][];
+  headerRow: boolean; // a:tblPr firstRow="1"
+  columns: number;
+};
+
 export type PptxFrame = {
   slideIndex: number;
   kind: "chart" | "table" | "diagram" | "other";
   box: Box;
   // chart: the chart part path (ppt/charts/chartN.xml) when resolvable
   partPath: string | null;
+  // table: the exact cells, straight from a:tbl
+  table?: PptxTable;
 };
+
+// Exact text of a table cell: runs joined, paragraphs on their own line.
+function cellText(tc: XmlElement): string {
+  const txBody = child(tc, NS_A, "txBody");
+  if (!txBody) return "";
+  return children(txBody)
+    .filter((p) => p.namespaceURI === NS_A && p.localName === "p")
+    .map((p) => {
+      let out = "";
+      const walk = (el: XmlElement) => {
+        for (const c of children(el)) {
+          if (c.namespaceURI === NS_A && c.localName === "t") out += c.textContent ?? "";
+          else if (c.namespaceURI === NS_A && c.localName === "br") out += "\n";
+          else walk(c);
+        }
+      };
+      walk(p);
+      return out;
+    })
+    .join("\n")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
+function readTable(graphicData: XmlElement): PptxTable | undefined {
+  const tbl = child(graphicData, NS_A, "tbl");
+  if (!tbl) return undefined;
+  const columns = children(child(tbl, NS_A, "tblGrid") ?? tbl).filter((c) => c.localName === "gridCol").length;
+  const rows: PptxTableCell[][] = [];
+  for (const tr of children(tbl).filter((c) => c.namespaceURI === NS_A && c.localName === "tr")) {
+    const row: PptxTableCell[] = [];
+    for (const tc of children(tr).filter((c) => c.namespaceURI === NS_A && c.localName === "tc")) {
+      if (tc.getAttribute("hMerge") === "1" || tc.getAttribute("vMerge") === "1") continue;
+      row.push({
+        text: cellText(tc),
+        colSpan: Math.max(1, num(tc.getAttribute("gridSpan"), 1)),
+        rowSpan: Math.max(1, num(tc.getAttribute("rowSpan"), 1)),
+      });
+    }
+    rows.push(row);
+  }
+  if (rows.length === 0) return undefined;
+  return { rows, headerRow: child(tbl, NS_A, "tblPr")?.getAttribute("firstRow") === "1", columns: columns || Math.max(...rows.map((r) => r.reduce((n, c) => n + c.colSpan, 0))) };
+}
 
 export type PptxVisuals = {
   slideCount: number;
@@ -328,7 +384,8 @@ export async function extractPptxVisuals(buffer: Buffer): Promise<PptxVisuals> {
             const rel = cid ? rels.get(cid) : undefined;
             if (rel && !rel.external) partPath = resolvePart(dir, rel.target);
           }
-          frames.push({ slideIndex, kind, box: toBox(map(x.x, x.y, x.cx, x.cy)), partPath });
+          const table = kind === "table" && graphicData ? readTable(graphicData) : undefined;
+          frames.push({ slideIndex, kind, box: toBox(map(x.x, x.y, x.cx, x.cy)), partPath, ...(table ? { table } : {}) });
         }
       }
     };

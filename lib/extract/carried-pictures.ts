@@ -13,6 +13,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { extractPptxVisuals, classifyPptxPictures } from "@/lib/extract/pptx-visuals";
 import { buildPptxAssets } from "@/lib/extract/pptx-asset-crops";
 import { uploadSourceAsset } from "@/lib/storage/source-assets";
+import type { TableSpec } from "@/lib/deck/visuals/table";
 
 const SOURCE_FILES_BUCKET = "source-files";
 const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
@@ -27,6 +28,14 @@ export type CarriedPicture = {
   altText: string | null;
 };
 
+// A native PPTX table, carried as its EXACT cells (step 3): the model reserves
+// a box, the server fills it (lib/deck/carried-assets enforceCarriedTables).
+export type CarriedTable = {
+  tableId: string; // "s05-t1"
+  slideIndex: number;
+  spec: TableSpec;
+};
+
 export type CarriedPictures = {
   // Per-file AI images rule (owner, 2026-10-15): any CONTENT picture in the
   // file switches AI images off for the whole deck.
@@ -35,6 +44,7 @@ export type CarriedPictures = {
   // Pictures found but not storable here (EMF / WMF / undecodable): left to
   // the existing photo-slot handling until page crops land.
   skipped: number;
+  tables: CarriedTable[];
 };
 
 export async function prepareCarriedPictures(opts: {
@@ -42,7 +52,7 @@ export async function prepareCarriedPictures(opts: {
   sourcePath: string;
   sourceMime: string;
 }): Promise<CarriedPictures> {
-  if (opts.sourceMime !== PPTX_MIME) return { hasContentImages: false, pictures: [], skipped: 0 };
+  if (opts.sourceMime !== PPTX_MIME) return { hasContentImages: false, pictures: [], skipped: 0, tables: [] };
 
   const { data, error } = await getSupabaseAdmin().storage.from(SOURCE_FILES_BUCKET).download(opts.sourcePath);
   if (error || !data) throw new Error(`carried pictures: source not found at ${opts.sourcePath}`);
@@ -80,5 +90,23 @@ export async function prepareCarriedPictures(opts: {
       altText: a.altText ? a.altText.slice(0, 200) : null,
     })),
     skipped: assets.length - storable.length,
+    tables: tablesOf(visuals),
   };
+}
+
+// Native tables, numbered per slide in document order.
+function tablesOf(visuals: Awaited<ReturnType<typeof extractPptxVisuals>>): CarriedTable[] {
+  const perSlide = new Map<number, number>();
+  const out: CarriedTable[] = [];
+  for (const f of visuals.frames) {
+    if (f.kind !== "table" || !f.table) continue;
+    const n = (perSlide.get(f.slideIndex) ?? 0) + 1;
+    perSlide.set(f.slideIndex, n);
+    out.push({
+      tableId: `s${String(f.slideIndex + 1).padStart(2, "0")}-t${n}`,
+      slideIndex: f.slideIndex,
+      spec: f.table,
+    });
+  }
+  return out;
 }
