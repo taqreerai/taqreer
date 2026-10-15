@@ -132,6 +132,12 @@ const VISION_IMAGE_EDGE = 1152;
 const REVIEW_ALL_AT_OR_BELOW = 3;
 const REVIEW_FLAG_GAP_PCT = 25;
 const REVIEW_FLAG_COVER_PCT = 45;
+// Expand-to-fill thresholds. A reviewed deck only needs the type grown where the
+// review would flag it (REVIEW_FLAG_COVER_PCT). A deck with NO review (free plan,
+// Haiku) has no model to catch a sparse slide, so the same guarded growth runs
+// under a higher coverage bar. Both enforce the 20px type floor.
+const NO_REVIEW_FILL_COVER_PCT = 60;
+const TYPE_FLOOR_PX = 20;
 // Output ceiling for the vision call - a ceiling, not a target ("OK" costs
 // ~1 token). Bounds a rogue full-deck re-emission at roughly 10 slides.
 const VISION_MAX_TOKENS = 32_000;
@@ -276,6 +282,28 @@ export const deckFreezeBake = inngest.createFunction(
             for (const sid of pendingIds) {
               if (normResult[sid]?.html) normalizedNoReview[sid] = normResult[sid].html;
             }
+            // No review model here, so the deterministic fill + type floor is
+            // the only layout correction this deck gets (higher coverage bar).
+            const fillNoReview = await expandToFill(
+              page,
+              pendingIds,
+              manifest.direction,
+              NO_REVIEW_FILL_COVER_PCT,
+            );
+            let filledNoReview = 0;
+            for (const sid of pendingIds) {
+              if (fillNoReview[sid]?.html) {
+                normalizedNoReview[sid] = fillNoReview[sid].html;
+                filledNoReview += 1;
+              }
+            }
+            if (filledNoReview > 0)
+              logger.info("deck_expand_to_fill", {
+                versionId,
+                pending: pendingIds.length,
+                expanded: filledNoReview,
+                review: false,
+              });
           } catch (err) {
             // Best-effort, same as the reviewed path: freeze as-authored.
             logger.warn("deck_leading_normalize_failed", {
@@ -345,6 +373,7 @@ export const deckFreezeBake = inngest.createFunction(
               page,
               pendingIds,
               manifest.direction,
+              REVIEW_FLAG_COVER_PCT,
             );
             let filled = 0;
             for (const sid of pendingIds) {
@@ -1515,12 +1544,13 @@ async function expandToFill(
   page: Page,
   slideIds: string[],
   direction: string,
+  coverBelow: number,
 ): Promise<Record<string, { html: string; factor: number }>> {
   await page.evaluate(
     `${AUDIT_SCRIPT}; ${EXPAND_TO_FILL_SCRIPT}; window.__tqAudit = __tqAuditWell; window.__tqExpand = __tqExpandToFillWell;`,
   );
   return (await page.evaluate(
-    (ids, dir, coverBelow, gapMax) => {
+    (ids, dir, coverBelow, gapMax, floorPx) => {
       const out: Record<string, { html: string; factor: number }> = {};
       for (const sid of ids) {
         const escaped = sid.replace(/[^a-zA-Z0-9_-]/g, "\\$&");
@@ -1537,12 +1567,12 @@ async function expandToFill(
             __tqExpand: (
               w: Element,
               d: string,
-              o: { coverBelow: number; gapMax: number },
-            ) => { applied: number; factor: number };
+              o: { coverBelow: number; gapMax: number; floorPx: number },
+            ) => { applied: number; factor: number; floored: number };
           }
-        ).__tqExpand(well, dir, { coverBelow, gapMax });
+        ).__tqExpand(well, dir, { coverBelow, gapMax, floorPx });
         out[sid] = {
-          html: res.applied > 0 ? sec.outerHTML : "",
+          html: res.applied > 0 || res.floored > 0 ? sec.outerHTML : "",
           factor: res.factor,
         };
       }
@@ -1550,8 +1580,9 @@ async function expandToFill(
     },
     slideIds,
     direction,
-    REVIEW_FLAG_COVER_PCT,
+    coverBelow,
     REVIEW_FLAG_GAP_PCT,
+    TYPE_FLOOR_PX,
   )) as Record<string, { html: string; factor: number }>;
 }
 
