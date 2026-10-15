@@ -1487,6 +1487,11 @@ html.app-shell-scroll body {
   background: rgba(0, 0, 0, 0.55);
   text-align: center;
 }
+/* Over a ghost slide (the slot's blurred invented layout) the scrim stays light
+   so the deck's colours and shapes show through. */
+.tq-teaser-lock-scrim.is-ghost {
+  background: rgba(0, 0, 0, 0.22);
+}
 .tq-teaser-lock-icon {
   color: #fff;
   opacity: 0.92;

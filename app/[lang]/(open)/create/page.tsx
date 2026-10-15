@@ -492,8 +492,11 @@ export default function CreatePage() {
   // mimic source with the extracted design file and NO templateId.
   const [designUploadName, setDesignUploadName] = useState<string | null>(null);
   const designUploadAbort = useRef<AbortController | null>(null);
+  // A visitor's pick stays in the browser (the draft store); it is analysed after
+  // sign-up, when Generate is pressed, like their content file.
+  const [designUploadFile, setDesignUploadFile] = useState<File | null>(null);
   const onUploadDesign = useCallback(
-    async (file: File) => {
+    async (file: File): Promise<boolean> => {
       designUploadAbort.current?.abort();
       const controller = new AbortController();
       designUploadAbort.current = controller;
@@ -503,11 +506,12 @@ export default function CreatePage() {
       setDesignStyle(null);
       try {
         const result = await uploadDesignReference(file, controller.signal);
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted) return false;
         setTemplate({ id: DESIGN_UPLOAD_ID, designAnthropicFileId: result.anthropicFileId });
         setSlideSize(result.format);
+        return true;
       } catch (err) {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted) return false;
         setTemplate(null);
         setDesignUploadName(null);
         setError(
@@ -515,11 +519,31 @@ export default function CreatePage() {
             ? localizedExtractError(dict.flows.extractErrors, err.message)
             : t.design.uploadFailed,
         );
+        return false;
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- dict/t are stable i18n objects; the handler only reads them on the error path
     [],
   );
+  // The "Upload your own" tile: a member's file is analysed at once; a visitor's
+  // is only remembered (no sign-in until they press Generate).
+  const onPickDesignFile = (file: File) => {
+    if (!guest) {
+      void onUploadDesign(file);
+      return;
+    }
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setError(
+        t.fileTooLarge.replace("{size}", `${(file.size / 1024 / 1024).toFixed(1)} ${t.unitMB}`),
+      );
+      return;
+    }
+    setError("");
+    setDesignUploadFile(file);
+    setDesignUploadName(file.name);
+    setTemplate({ id: DESIGN_UPLOAD_ID, designAnthropicFileId: "" });
+    setDesignStyle(null);
+  };
   // Dropping the upload as the design reference (a template, a style or the
   // "Automatic" tile was picked) cancels an analysis that is still running.
   useEffect(() => {
@@ -760,8 +784,13 @@ export default function CreatePage() {
         if (face.file) fonts[`${fi}:${ci}`] = face.file;
       }),
     );
-    return { content: contentFile, logo: logoFile, fonts };
-  }, [brandFont, contentFile, logoFile]);
+    return {
+      content: contentFile,
+      design: designUploadActive ? designUploadFile : null,
+      logo: logoFile,
+      fonts,
+    };
+  }, [brandFont, contentFile, logoFile, designUploadActive, designUploadFile]);
 
   // A visitor who comes back still signed out (Back from Google's page, a
   // closed sign-up window, a reload) gets their draft back too (2026-10-09:
@@ -860,6 +889,12 @@ export default function CreatePage() {
       setPagination(d.pagination !== false);
       setImagesMode(!!d.imagesMode);
       if (draft.files.content) setContentFromInput(draft.files.content);
+      const designFile = draft.files.design ?? null;
+      if (designFile && guest) {
+        setDesignUploadFile(designFile);
+        setDesignUploadName(designFile.name);
+        setTemplate({ id: DESIGN_UPLOAD_ID, designAnthropicFileId: "" });
+      }
       setStep(mode === "generate" ? LAST_STEP : Math.min(LAST_STEP, Math.max(0, d.step)));
       setGuestDraftReady(true);
       if (guest) {
@@ -874,6 +909,18 @@ export default function CreatePage() {
       }
       void clearGuestDraft("create");
       posthog.capture("create_guest_resumed", { mode, hasFile: !!draft.files.content });
+
+      if (designFile) {
+        // The visitor's uploaded design reference is analysed now that they are
+        // signed in; auto-start below waits for it (templatePending).
+        const ok = await onUploadDesign(designFile);
+        if (aborted) return;
+        if (!ok) {
+          // Unreadable: back to the Design step, nothing generates.
+          setStep(1);
+          return;
+        }
+      }
 
       if (d.templateId) {
         setTemplate({ id: d.templateId, designAnthropicFileId: "" });
@@ -1317,9 +1364,13 @@ export default function CreatePage() {
               upload={{
                 active: designUploadActive,
                 name: designUploadName,
-                stage: !designUploadActive ? "idle" : template?.designAnthropicFileId ? "ready" : "extracting",
-                onFile: (file) => void onUploadDesign(file),
-                onGuest: guest ? () => void openGuestSignup() : undefined,
+                stage:
+                  !designUploadActive
+                    ? "idle"
+                    : guest || template?.designAnthropicFileId
+                      ? "ready"
+                      : "extracting",
+                onFile: onPickDesignFile,
               }}
               disabled={submitting}
             />

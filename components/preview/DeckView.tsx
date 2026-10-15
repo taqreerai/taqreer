@@ -26,10 +26,11 @@ import {
   type SlideType,
   type ThemeType,
 } from "@/lib/schema/slide";
-import { SlideRenderer } from "@/components/slides/SlideRenderer";
+import { SlideRenderer, slideRootBackground } from "@/components/slides/SlideRenderer";
 import { FreeWatermarkLayer, BrandedClosingSlide } from "@/components/preview/FreeBranding";
 import { BRANDED_CLOSING_SLIDE } from "@/lib/export/free-branding";
 import { TeaserLockCanvas } from "@/components/preview/TeaserLockCanvas";
+import { TEASER_GHOST_VARIANTS, TeaserGhostSlide } from "@/components/preview/TeaserGhostSlide";
 import { DeckPurchaseContext } from "@/lib/billing/deck-purchase-context";
 import {
   deckUnlockPriceCents,
@@ -5077,22 +5078,29 @@ export function DeckView({
     teaserActive && !generating && viewSlides.length > 0 ? teaserLockedCount : 0;
   const teaserPalette = viewManifest?.theme.palette ?? [];
   const teaserGradients: string[] = [];
+  // Each locked slot draws an invented layout (TeaserGhostSlide) on the deck's
+  // own slide background, so it looks like this deck but never like a copy of
+  // a visible slide. The background comes from a content slide (not the cover).
+  const teaserGhosts: { variant: number; background: string }[] = [];
   if (effectiveTeaserLocked > 0) {
     const base = navItems.length;
+    const bgSlide = viewSlides.length > 1 ? viewSlides[1] : viewSlides[0];
+    const ghostBg = viewManifest
+      ? slideRootBackground(bgSlide.html, viewManifest.theme.background)
+      : null;
     for (let i = 0; i < effectiveTeaserLocked; i++) {
       const gradient = teaserGradient(teaserPalette, i);
       teaserGradients.push(gradient);
+      const ghost = ghostBg
+        ? { variant: (i + viewSlides.length) % TEASER_GHOST_VARIANTS, background: ghostBg }
+        : undefined;
+      if (ghost) teaserGhosts.push(ghost);
       navItems.push({
         kind: "teaser",
         index: base + i,
         lockedIndex: i,
         gradient,
-        // Blurred copy of a visible slide (skip the cover when there is more
-        // than one), cycled so neighbouring tiles differ.
-        sourceSlide:
-          viewSlides.length > 1
-            ? viewSlides[1 + (i % (viewSlides.length - 1))]
-            : viewSlides[0],
+        ghost,
       });
     }
   }
@@ -5113,6 +5121,7 @@ export function DeckView({
   const teaserGradientFocused = teaserFocusActive
     ? teaserGradients[focusedTeaser!]
     : null;
+  const teaserGhostFocused = teaserFocusActive ? (teaserGhosts[focusedTeaser!] ?? null) : null;
 
   // Peer/own regen overlay for the focused slide (completed only — no focused
   // slide identity to key on while generating).
@@ -6151,6 +6160,19 @@ export function DeckView({
             >
               <TeaserLockCanvas
                 gradient={teaserGradientFocused}
+                ghost={
+                  teaserGhostFocused && viewManifest ? (
+                    <TeaserGhostSlide
+                      variant={teaserGhostFocused.variant}
+                      background={teaserGhostFocused.background}
+                      text={viewManifest.theme.text}
+                      palette={viewManifest.theme.palette}
+                      direction={viewManifest.direction === "ltr" ? "ltr" : "rtl"}
+                      width={canvasW}
+                      height={canvasH}
+                    />
+                  ) : null
+                }
                 onUnlock={handleTeaserUnlock}
                 unlocking={teaserUnlocking || generating}
                 labels={{

@@ -1331,6 +1331,9 @@ export async function POST(request: Request) {
           : validatedSource?.kind === "data"
             ? "datasheet"
             : projectType,
+      // What the browser sent for the AI photos toggle, so "why no photos"
+      // is answerable per deck (2026-10-15).
+      images_mode: payload.imagesMode === true,
     });
   } catch (error) {
     // Inngest unreachable after retries — mark the rows so the user

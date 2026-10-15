@@ -25,6 +25,7 @@ import { SegmentedToggle } from "@/components/create/controls";
 import { SlideRenderer, slideRootBackground } from "@/components/slides/SlideRenderer";
 import { SlidePresenceStack } from "@/components/preview/SlidePresenceStack";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
+import { TeaserGhostSlide } from "@/components/preview/TeaserGhostSlide";
 import type { SlideManifest, SlideType } from "@/lib/schema/slide";
 import { dimensionsForFormat, type SlideFormat } from "@/lib/schema/slide";
 import type { PresenceViewer } from "@/lib/realtime/project-channel";
@@ -78,11 +79,11 @@ export type NavItem =
       index: number;
       lockedIndex: number;
       gradient: string;
-      // A REAL, already-visible slide the tile shows heavily blurred, so the
-      // locked tail carries the same colors and layout feel as the unlocked
-      // slides (2026-10-15). Never withheld content: the withheld slides do not
-      // exist. Absent (gradient fallback) when no slide has streamed yet.
-      sourceSlide?: SlideType;
+      // An invented layout (TeaserGhostSlide) drawn on the deck's own slide
+      // background and blurred, so the locked tail looks like this deck but not
+      // like a copy of any visible slide. Never withheld content: the withheld
+      // slides do not exist. Absent (gradient fallback) without a manifest.
+      ghost?: { variant: number; background: string };
     }
   // Free-plan branded closing slide (2026-10-02): a system tile after the
   // real slides. Never a manifest slide; selection routes through
@@ -520,31 +521,20 @@ export function SlideNavSidebar({
                     </div>
                   ) : null
                 ) : item.kind === "teaser" ? (
-                  // Locked teaser tile: a blurred copy of a visible slide so it
-                  // looks like the unlocked ones, else the palette gradient.
+                  // Locked teaser tile: a blurred invented layout in the deck's
+                  // colours (see TeaserGhostSlide), else the palette gradient.
                   // The padlock overlay below marks it locked.
-                  item.sourceSlide && manifest ? (
-                    <div
-                      className="h-full w-full overflow-hidden"
-                      style={{
-                        background: slideRootBackground(item.sourceSlide.html, item.gradient),
-                      }}
-                    >
-                      <div
-                        className="h-full w-full"
-                        // Scaled up a touch so the blur never fades to the edge.
-                        style={{ filter: "blur(7px)", transform: "scale(1.12)" }}
-                      >
-                        <SlideRenderer
-                          slide={item.sourceSlide}
-                          theme={manifest.theme}
-                          direction={manifest.direction}
-                          language={manifest.language}
-                          width={canvasW}
-                          height={canvasH}
-                          scale={thumbScale}
-                        />
-                      </div>
+                  item.ghost && manifest ? (
+                    <div className="relative h-full w-full overflow-hidden">
+                      <TeaserGhostSlide
+                        variant={item.ghost.variant}
+                        background={item.ghost.background}
+                        text={manifest.theme.text}
+                        palette={manifest.theme.palette}
+                        direction={manifest.direction === "ltr" ? "ltr" : "rtl"}
+                        width={canvasW}
+                        height={canvasH}
+                      />
                     </div>
                   ) : (
                     <div
