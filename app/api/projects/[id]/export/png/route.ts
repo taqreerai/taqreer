@@ -190,7 +190,7 @@ export async function POST(
   const zip = new JSZip();
   try {
     const page = await browser.newPage();
-    await guardPageEgress(page);
+    await guardPageEgress(page, { sourceAssetsProjectId: projectId });
     // Viewport sized to a SINGLE slide + 1 px pad on the height.
     // Was `canvasH * (slides+1)` — that grew linearly with deck
     // length and crossed Chromium's hard 16,384 px screenshot

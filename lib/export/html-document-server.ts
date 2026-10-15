@@ -23,6 +23,7 @@
 // the browser variant would produce thumbnails that don't match the
 // live preview.
 
+import { RENDER_ORIGIN } from "@/lib/storage/source-assets";
 import type { SlideManifest } from "@/lib/schema/slide";
 import { dimensionsForFormat } from "@/lib/schema/slide";
 import { sanitizeSlideHtmlServer } from "@/lib/export/sanitize-server";
@@ -163,6 +164,7 @@ export function buildHtmlDocumentServer(
 <html dir="${manifest.direction}" lang="${manifest.language}">
 <head>
 <meta charset="UTF-8">
+<base href="${RENDER_ORIGIN}/">
 <title>${escapeText(manifest.title)}</title>
 ${fontLinks}
 ${pickedFontLinks}

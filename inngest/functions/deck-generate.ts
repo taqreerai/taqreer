@@ -68,6 +68,8 @@ import {
   deleteFileFromAnthropic,
 } from "@/lib/anthropic/files";
 import { frameKindFor } from "@/lib/deck/frame-kind";
+import { enforceCarriedAssetImgs } from "@/lib/deck/carried-assets";
+import { prepareCarriedPictures, type CarriedPicture } from "@/lib/extract/carried-pictures";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -131,7 +133,13 @@ async function flushSlideImages(fileIds: string[]): Promise<number> {
 // transient Files-API image ids (one per source slide) + each slide's
 // verbatim text. Built by the rasterize-and-upload step, threaded into
 // the message builders, and flushed after the run.
-type EnhanceImages = { fileIds: string[]; textPerSlide: string[] };
+type EnhanceImages = {
+  fileIds: string[];
+  textPerSlide: string[];
+  // The user's own pictures carried over from a PPTX upload (Enhance phase 1,
+  // docs/enhance-visuals-plan.md), stored in the private source-assets bucket.
+  pictures?: CarriedPicture[];
+};
 
 // ─── Shared prompt fragments (DRY) ───────────────────────────────────
 // The legacy authoring prompts (SYSTEM_PROMPT_CREATE_HTML / _SOCIAL_HTML,
@@ -1395,9 +1403,24 @@ function buildSourceContentBlocks(
         } as unknown as Anthropic.Messages.ContentBlockParam);
       }
       const text = (textPerSlide[i] ?? "").trim();
+      // Carried original pictures of this slide (images are only attached
+      // for the slides authored in this run, so only those list theirs).
+      const slidePictures = fileId
+        ? (enhanceImages.pictures ?? []).filter((p) => p.slideIndex === i)
+        : [];
       blocks.push({
         type: "text",
         text:
+          (slidePictures.length > 0
+            ? `── SLIDE ${i + 1}: ORIGINAL PICTURES (place each one, tag unchanged) ──\n` +
+              slidePictures
+                .map(
+                  (p) =>
+                    `<img data-asset="${p.assetId}" src="/api/assets/${event.projectId}/${p.assetId}" alt="${(p.altText ?? "").replace(/["<>&]/g, "")}">  aspect ${p.aspect} (e.g. ${p.cls === "small" ? 120 : 720}x${Math.round((p.cls === "small" ? 120 : 720) / p.aspect)}px)${p.cls === "small" ? "  small: icon / logo / badge" : ""}`,
+                )
+                .join("\n") +
+              "\n\n"
+            : "") +
           `── SLIDE ${i + 1} / ${total} — exact text (verbatim, authoritative) ──\n` +
           (text.length > 0
             ? text
@@ -1526,6 +1549,13 @@ function buildSourceTextDirective(
       `  • Content margins are consistent — every slide's body starts at the same edges (you pick the inset) so nothing jumps frame to frame.`,
       ``,
       `VISUAL HANDLING — placeholders over redraws (saves time, looks honest):`,
+      // Enhance phase 1 (owner rule 2026-10-15): the user's own pictures are
+      // carried over, never swapped. Listed per slide, ahead of its text.
+      ...((enhanceImages?.pictures?.length ?? 0) > 0
+        ? [
+            `  • ORIGINAL PICTURES: FIRST RULE, overrides the photo, logo and placeholder rules below for every picture it covers. A slide may come with an "ORIGINAL PICTURES" block: the user's own pictures from that slide, already extracted. Put EVERY listed picture on its redesigned slide, exactly once, as the given <img> tag with its data-asset and src attributes UNCHANGED (never write any other /api/assets URL). Give the img an inline style with an explicit width and height in px whose ratio matches the listed aspect (scale the example size; never square a wide picture), so nothing is cut off. Move, resize, round, frame or shadow it to suit the new design; never crop away its subject, recolour it with filters, cover it with text, or replace it with a generated image, a photo slot, an icon or an SVG drawing. "small" entries are icons, logos or badges: keep them small. Pictures NOT listed (template backgrounds, frame art) are not carried: do not recreate them.`,
+          ]
+        : []),
       `  • LOGOS / BRAND MARKS — never recreate. If anything in a slide image looks like a logo, brand mark, monogram, or stylized identifier, do NOT draw it in SVG (approximations look off and bloat the output). Two options: (a) brand name is readable as text → styled text matching the weight/colour you can read; (b) otherwise → a styled placeholder <div> with a short label (the brand name if readable, else "Logo"). The user swaps it post-generation.`,
       // 2026-10-06: the user's own pictures never reach the redesign (source
       // asset extraction was removed 2026-05-25), so a photo placeholder is
@@ -2150,10 +2180,41 @@ export const deckGenerate = inngest.createFunction(
           `enhance prep mismatch: ${pageCount} slide images vs ${textPerSlide.length} text blocks`,
         );
       }
+      // Original pictures (owner rule 2026-10-15: never swapped, carried over).
+      // Best-effort: a failure here falls back to the pre-carry behaviour
+      // (photo slots / AI photos), never fails the deck.
+      const carried = await step.run("carry-source-pictures", async () => {
+        try {
+          return await prepareCarriedPictures({ projectId, sourcePath, sourceMime });
+        } catch (err) {
+          logger.warn("enhance_carry_pictures_failed", {
+            projectId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          return null;
+        }
+      });
+      if (carried) {
+        logger.info("enhance_carry_pictures", {
+          projectId,
+          pictures: carried.pictures.length,
+          skipped: carried.skipped,
+          hasContentImages: carried.hasContentImages,
+        });
+        // Per-file AI images rule: a file with any content picture gets no AI
+        // images. Image credits settle on boxes actually generated, so this
+        // also charges nothing for images.
+        const brief = data.brief as { imagesMode?: boolean } | null;
+        if (carried.hasContentImages && brief?.imagesMode === true) {
+          brief.imagesMode = false;
+          logger.info("enhance_ai_images_off_source_has_pictures", { projectId });
+        }
+      }
       enhanceImages = {
         fileIds: prep.fileIds,
         textPerSlide:
           teaserTotal != null ? textPerSlide.slice(0, teaserTotal) : textPerSlide,
+        pictures: carried?.pictures ?? [],
       };
     }
 
@@ -2441,13 +2502,22 @@ export const deckGenerate = inngest.createFunction(
         // product-marked box at assembly below.
         const productImageUrl = readProductImageUrl(data);
 
+        const carriedAssetIds = new Map(
+          (enhanceImages?.pictures ?? []).map((p) => [p.assetId, p.aspect] as const),
+        );
         const ingestSlide = (rawParsed: ParsedSlide) => {
           // House style: no em/en dashes. Strip them in code before the slide
           // is framed, streamed or reviewed, so the Opus review never spends a
           // whole-slide rewrite on a dash (lib/deck/strip-dashes.ts).
           const parsed: ParsedSlide = {
             ...rawParsed,
-            html: stripTextDashes(rawParsed.html),
+            // Carried pictures: canonical src for this deck's own assets, any
+            // other /api/assets reference removed (lib/deck/carried-assets.ts).
+            html: enforceCarriedAssetImgs(
+              stripTextDashes(rawParsed.html),
+              projectId,
+              carriedAssetIds,
+            ),
           };
           // ── FRAME self-correction (data-revises) ── thinking mode re-emits
           // improved slides; the frame prompt's revision contract marks them

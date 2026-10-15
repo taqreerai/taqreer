@@ -277,7 +277,7 @@ export const deckFreezeBake = inngest.createFunction(
         if (reviewRequested && pendingIds.length > 0) {
           const browser = await launchGuardedBrowser();
           try {
-            const page = await openRenderedDeck(browser, manifest, dims);
+            const page = await openRenderedDeck(browser, manifest, dims, projectId);
             const normResult = await normalizeLeading(page, pendingIds);
             for (const sid of pendingIds) {
               if (normResult[sid]?.html) normalizedNoReview[sid] = normResult[sid].html;
@@ -343,7 +343,7 @@ export const deckFreezeBake = inngest.createFunction(
       {
         const browser = await launchGuardedBrowser();
         try {
-          let page = await openRenderedDeck(browser, manifest, dims);
+          let page = await openRenderedDeck(browser, manifest, dims, projectId);
           // Best-effort: a normalizer fault must NEVER fail a bake (it runs on
           // every deck). On any error, skip normalization and audit the deck
           // as-authored - the crowding finding then simply routes to the
@@ -398,7 +398,7 @@ export const deckFreezeBake = inngest.createFunction(
             // then see mutated slides the freeze won't use. Re-render the
             // authored deck so audit + shots + freeze all agree on as-authored.
             await page.close().catch(() => undefined);
-            page = await openRenderedDeck(browser, manifest, dims);
+            page = await openRenderedDeck(browser, manifest, dims, projectId);
           }
           // Audit the NORMALIZED DOM (crowding is pre-fixed here).
           const auditRes = await auditSlides(
@@ -808,6 +808,7 @@ export const deckFreezeBake = inngest.createFunction(
           browser,
           composedManifest as SlideManifest,
           dims,
+          projectId,
         );
 
         // Regression guard: re-audit REVISED slides in the corrected render.
@@ -1367,10 +1368,12 @@ async function openRenderedDeck(
   browser: Awaited<ReturnType<typeof launchGuardedBrowser>>,
   manifest: SlideManifest,
   dims: { width: number; height: number },
+  projectId: string,
 ): Promise<Page> {
   const html = buildHtmlDocumentServer(manifest);
   const page = await browser.newPage();
-  await guardPageEgress(page);
+  // Carried-over source assets of THIS deck only (lib/export/puppeteer-pool).
+  await guardPageEgress(page, { sourceAssetsProjectId: projectId });
   // +1: a clip rect EQUAL to the viewport hits a Chrome blank-output edge
   // case (see thumbnail-render.ts) - keep the viewport larger.
   await page.setViewport({

@@ -36,6 +36,22 @@ function assetKey(projectId: string, assetId: string): string {
   return `${projectId}/${assetId}`;
 }
 
+// Server-side headless renders (freeze bake, thumbnails, PDF / PNG export) load
+// slide HTML with setContent, where a relative `/api/assets/...` has nothing to
+// resolve against. buildHtmlDocumentServer sets this as the document <base>,
+// and guardPageEgress answers `${RENDER_ORIGIN}/api/assets/...` straight from
+// the private bucket, for the rendered deck's OWN project only. The slide's
+// src attribute stays relative, so a bake that writes HTML back never
+// persists anything but `/api/assets/...`. Not a real host: never resolvable.
+export const RENDER_ORIGIN = "https://render.taqreer.invalid";
+
+/** `/api/assets/{projectId}/{assetId}` -> its parts, or null. */
+export function parseSourceAssetPath(pathname: string): { projectId: string; assetId: string } | null {
+  const m = pathname.match(/^\/api\/assets\/([^/]+)\/([^/]+)$/);
+  if (!m || !isValidSourceAssetRef(m[1], m[2])) return null;
+  return { projectId: m[1], assetId: m[2] };
+}
+
 /** The app-relative URL slide HTML uses for an asset (never a storage URL). */
 export function sourceAssetHref(projectId: string, assetId: string): string {
   assetKey(projectId, assetId);

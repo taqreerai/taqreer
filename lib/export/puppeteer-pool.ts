@@ -22,6 +22,11 @@
 // blind would break all rendering. Revisit as a box-verified change.
 
 import puppeteer, { type Browser, type Page } from "puppeteer";
+import {
+  RENDER_ORIGIN,
+  parseSourceAssetPath,
+  readSourceAsset,
+} from "@/lib/storage/source-assets";
 
 const MAX_CONCURRENT = 2;
 let active = 0;
@@ -110,10 +115,35 @@ function isAllowedRequestUrl(raw: string): boolean {
 
 // Intercept every request the rendered page makes and abort anything
 // outside the allowlist (the SSRF guard). MUST be called before setContent.
-export async function guardPageEgress(page: Page): Promise<void> {
+//
+// `sourceAssetsProjectId`: the deck being rendered. Its carried-over source
+// assets (`/api/assets/{projectId}/...`, resolved against RENDER_ORIGIN) are
+// served from the private bucket. ONLY that project's: slide HTML is
+// user-editable, so a reference to another project's asset is aborted, never
+// fetched (it would leak a private picture into this deck's export).
+export async function guardPageEgress(
+  page: Page,
+  opts?: { sourceAssetsProjectId?: string },
+): Promise<void> {
   await page.setRequestInterception(true);
   page.on("request", (req) => {
-    const decision = isAllowedRequestUrl(req.url())
+    const raw = req.url();
+    if (raw.startsWith(`${RENDER_ORIGIN}/`)) {
+      const ref = parseSourceAssetPath(new URL(raw).pathname);
+      if (!ref || !opts?.sourceAssetsProjectId || ref.projectId !== opts.sourceAssetsProjectId) {
+        Promise.resolve(req.abort()).catch(() => {});
+        return;
+      }
+      readSourceAsset(ref.projectId, ref.assetId)
+        .then((asset) =>
+          asset
+            ? req.respond({ status: 200, contentType: asset.contentType, body: asset.bytes })
+            : req.abort(),
+        )
+        .catch(() => Promise.resolve(req.abort()).catch(() => {}));
+      return;
+    }
+    const decision = isAllowedRequestUrl(raw)
       ? req.continue()
       : req.abort();
     // continue()/abort() return void on older Puppeteer, a Promise on newer;

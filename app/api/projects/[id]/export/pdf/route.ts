@@ -193,7 +193,7 @@ export async function POST(
   let pdfBuffer: Buffer;
   try {
     const page = await browser.newPage();
-    await guardPageEgress(page);
+    await guardPageEgress(page, { sourceAssetsProjectId: projectId });
     // Viewport size matches a single slide so element layout
     // settles before pagination kicks in. The actual PDF page size
     // is driven by `page.pdf({ width, height })` below; viewport

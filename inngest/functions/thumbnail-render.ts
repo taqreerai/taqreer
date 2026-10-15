@@ -141,7 +141,7 @@ export const thumbnailRender = inngest.createFunction(
       const browser = await launchGuardedBrowser();
       try {
         const page = await browser.newPage();
-        await guardPageEgress(page);
+        await guardPageEgress(page, { sourceAssetsProjectId: projectId });
         // Viewport sized to a SINGLE slide + 1 px pad. The earlier
         // `canvasH * (slides+1)` recipe crossed Chromium's hard
         // 16,384 px screenshot limit on long decks — at 9:16 that
