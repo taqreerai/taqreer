@@ -26,6 +26,10 @@ const buckets: { name: string; public: boolean; fileSizeLimit?: number }[] = [
   // <img src> baked into saved slide HTML never expires (exports + decks
   // older than a year keep resolving).
   { name: "generated-images", public: true },
+  // Enhance: pictures / charts / tables carried over from the user's uploaded
+  // deck (docs/enhance-visuals-plan.md). PRIVATE: crops of the user's own
+  // document, served only through the access-checked /api/assets route.
+  { name: "source-assets", public: false, fileSizeLimit: 20971520 }, // 20 MB
 ];
 
 async function setupBuckets() {

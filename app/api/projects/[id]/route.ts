@@ -17,6 +17,7 @@ import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
 import { isAdminSupabaseUser } from "@/lib/api/admin-context";
+import { removeProjectSourceAssets } from "@/lib/storage/source-assets";
 
 // Same bucket the thumbnail-render Inngest function writes to.
 // Path convention: ${supabaseUserId}/${projectId}/${savedVersionId}/${slideKey}.webp
@@ -208,6 +209,16 @@ export async function DELETE(
     console.warn("[projects/delete] storage cleanup failed", {
       projectId,
       error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // Carried-over source assets (private bucket, Enhance phase 1). Same
+  // best-effort contract as the thumbnails above.
+  const assetCleanupError = await removeProjectSourceAssets(projectId);
+  if (assetCleanupError) {
+    console.warn("[projects/delete] source asset cleanup failed", {
+      projectId,
+      error: assetCleanupError,
     });
   }
 
