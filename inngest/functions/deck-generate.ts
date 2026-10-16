@@ -2214,6 +2214,18 @@ export const deckGenerate = inngest.createFunction(
               },
             });
           }
+          // Logged here, not below: Inngest re-runs the code outside a step on
+          // every resume, so a log out there prints once per replay.
+          logger.info("enhance_carry_pictures", {
+            projectId,
+            pictures: result.pictures.length,
+            tables: result.tables?.length ?? 0,
+            skipped: result.skipped,
+            hasContentImages: result.hasContentImages,
+          });
+          if (result.hasContentImages && (data.brief as { imagesMode?: boolean } | null)?.imagesMode === true) {
+            logger.info("enhance_ai_images_off_source_has_pictures", { projectId });
+          }
           return result;
         } catch (err) {
           logger.warn("enhance_carry_pictures_failed", {
@@ -2224,20 +2236,13 @@ export const deckGenerate = inngest.createFunction(
         }
       });
       if (carried) {
-        logger.info("enhance_carry_pictures", {
-          projectId,
-          pictures: carried.pictures.length,
-          tables: carried.tables?.length ?? 0,
-          skipped: carried.skipped,
-          hasContentImages: carried.hasContentImages,
-        });
         // Per-file AI images rule: a file with any content picture gets no AI
         // images. Image credits settle on boxes actually generated, so this
-        // also charges nothing for images.
+        // also charges nothing for images. Re-applied on every replay (the
+        // function restarts with the original brief); the logs live in the step.
         const brief = data.brief as { imagesMode?: boolean } | null;
         if (carried.hasContentImages && brief?.imagesMode === true) {
           brief.imagesMode = false;
-          logger.info("enhance_ai_images_off_source_has_pictures", { projectId });
         }
       }
       enhanceImages = {
