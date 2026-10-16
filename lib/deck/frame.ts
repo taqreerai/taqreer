@@ -547,12 +547,19 @@ export type FrameContinuationInput = {
   deckTitle: string | null;
   brief: string; // compact topic/brief context for on-theme continuity
   existingSlides: { position: number; sectionTag: string; wellHtml: string }[];
+  // Enhance (a REDESIGN of the user's own deck, 2026-10-16): each locked
+  // position N redesigns SOURCE slide N with its exact words, instead of
+  // inventing a continuation. Absent = the create / social continuation.
+  redesignSources?: { position: number; text: string }[];
 };
 
 export function frameContinuationUserMessage(
   input: FrameContinuationInput,
   deckCss: string,
 ): string {
+  if (input.redesignSources && input.redesignSources.length > 0) {
+    return frameRedesignContinuationMessage(input, input.redesignSources, deckCss);
+  }
   const firstNew = input.visibleCount + 1;
   const existing = input.existingSlides
     .map(
@@ -577,6 +584,45 @@ RULES:
 - The FINAL section (position ${input.total}) is the deck's closing - give it a closing role (data-role="closing").
 - Build genuinely NEW slides that advance and finish the story; a tail that restates the opening act is a failure.
 - Match the established design system: reuse the deck stylesheet's classes, the same headline/type treatment, and the same chrome the existing slides use, so the tail reads as one designer on one grid.
+- Preserve numerals as Latin digits (0-9). In RTL decks a digit-only block with dir="ltr" renders text-align:start as LEFT - set text-align explicitly to place numerals where the composition needs them.`;
+}
+
+// Enhance unlock: the deck is a slide-by-slide REDESIGN of the user's own
+// file, so the locked slides are NOT a story to continue. Position N redesigns
+// source slide N with that slide's exact words (the same fidelity contract the
+// Enhance generation follows); nothing is added to "complete an arc".
+function frameRedesignContinuationMessage(
+  input: FrameContinuationInput,
+  sources: { position: number; text: string }[],
+  deckCss: string,
+): string {
+  const firstNew = input.visibleCount + 1;
+  const existing = input.existingSlides
+    .map(
+      (s) =>
+        `--- Slide ${s.position} ---\nSection attributes: ${s.sectionTag}\nWell (look reference ONLY; FROZEN machine output, never a layout to copy):\n${s.wellHtml}`,
+    )
+    .join("\n\n");
+  const sourceBlocks = sources
+    .map((s) => `── SOURCE SLIDE ${s.position}: exact text (verbatim, authoritative) ──\n${s.text.trim() || "(no text on this slide)"}`)
+    .join("\n\n");
+
+  return `FINISH AN EXISTING REDESIGN. This deck is a slide-by-slide redesign of the user's own presentation: deck slide N is the redesign of source slide N. Slides 1 to ${input.visibleCount} are done and FIXED. Redesign source slides ${firstNew} to ${input.total} now, one slide each, in order.
+
+${input.deckTitle ? `Deck title: ${input.deckTitle}\n\n` : ""}The source slides to redesign, with their EXACT words:
+${sourceBlocks}
+
+The finished slides, in order (to MATCH THE LOOK only, their content is not yours to repeat):
+${existing}
+
+Shared deck stylesheet (FIXED - you cannot change it; reuse its classes or use inline styles, and do NOT emit a <style> block):
+${deckCss}
+
+RULES:
+- Reply with EXACTLY ${input.lockedCount} <section> elements in the generation contract, in ORDER (position ${firstNew} first, ${input.total} last): position N is the redesign of SOURCE SLIDE N above. Each section declares its data attributes (data-label, data-role, data-bg, and any bg-css / bg-prompt / bg-scrim per the system rules) and contains exactly one <div class="well"> authored in PURE FLOW. No <style> block, no data-revises, no prose, no fences - the FIRST character of your reply is the < of the first section.
+- CONTENT FIDELITY (hard limits): each slide's words come from its source slide's exact text: keep the wording, the facts and their order (fix only an obvious typo). Never invent: no new headline, subtitle, statistic, example, summary, thank-you, call-to-action or closing that is not on that source slide, and never add an eyebrow, kicker, tag or section label whose words are not on it (a plain step or page number is fine). Never drop real information. Keep the slide's own language and script.
+- The deck ends where the source ends: a slide is a closing only if its source slide is one. Do not turn the last slide into a recap or a thank-you.
+- Match the established design system: reuse the deck stylesheet's classes, the same headline/type treatment, and the same chrome the finished slides use, so the whole deck reads as one designer on one grid.
 - Preserve numerals as Latin digits (0-9). In RTL decks a digit-only block with dir="ltr" renders text-align:start as LEFT - set text-align explicitly to place numerals where the composition needs them.`;
 }
 

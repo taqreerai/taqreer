@@ -227,6 +227,20 @@ export const deckUnlock = inngest.createFunction(
         take: 5,
         select: { inputJson: true },
       });
+      // Enhance redesign text: every source slide's exact words live on the
+      // generation job's brief (the durable home; the raw upload is purged).
+      let redesignSources: { position: number; text: string }[] = [];
+      for (const j of jobs) {
+        const src = (j.inputJson as { brief?: { source?: { kind?: string; textPerSlide?: unknown } } } | null)?.brief?.source;
+        if (src?.kind !== "enhance" || !Array.isArray(src.textPerSlide)) continue;
+        const texts = src.textPerSlide as unknown[];
+        redesignSources = [];
+        for (let idx = visibleCount; idx < total; idx++) {
+          const t = texts[idx];
+          redesignSources.push({ position: idx + 1, text: typeof t === "string" ? t.slice(0, 6000) : "" });
+        }
+        break;
+      }
       for (const j of jobs) {
         const c = (j.inputJson as { carried?: { pictures?: CarriedPictureRef[]; tables?: CarriedTableRef[] } } | null)?.carried;
         if (!c) continue;
@@ -234,9 +248,10 @@ export const deckUnlock = inngest.createFunction(
         return {
           pictures: (c.pictures ?? []).filter((x) => inTail(x.slideIndex)),
           tables: (c.tables ?? []).filter((x) => inTail(x.slideIndex)),
+          redesignSources,
         };
       }
-      return { pictures: [] as CarriedPictureRef[], tables: [] as CarriedTableRef[] };
+      return { pictures: [] as CarriedPictureRef[], tables: [] as CarriedTableRef[], redesignSources };
     });
     const carriedBlock = (() => {
       if (carried.pictures.length === 0 && carried.tables.length === 0) return "";
@@ -266,6 +281,7 @@ export const deckUnlock = inngest.createFunction(
         projectId,
         pictures: carried.pictures.length,
         tables: carried.tables.length,
+        redesign: carried.redesignSources.length > 0,
       });
     }
 
@@ -286,6 +302,8 @@ export const deckUnlock = inngest.createFunction(
           deckTitle: frameCtx.deckTitle,
           brief: briefText,
           existingSlides,
+          // Enhance: redesign each locked source slide with its exact words.
+          ...(carried.redesignSources.length > 0 ? { redesignSources: carried.redesignSources } : {}),
         },
         sourceDeckCss,
       );
