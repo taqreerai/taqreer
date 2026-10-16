@@ -526,7 +526,7 @@ RULES:
 - Reply with EXACTLY ONE corrected <section> in the generation contract: keep the declared data attributes from the section tag above (change data-bg-css only if your design needs it; keep data-label and data-role), containing exactly one <div class="well"> in PURE FLOW. No <style> block, no data-revises, no prose, no fences - the FIRST character of your reply is the < of the section.
 - Never copy position:absolute, left/top offsets, or fixed pixel insets from the current code - they are machine output, not design.
 - Keep the message and text content as written${input.comments.length ? " except where a comment asks otherwise" : ""}.
-- Preserve every <img> src EXACTLY. Keep data-genimage boxes exactly as they are (same data-genimage, data-genaspect, data-gensource, and data-genref values, no new image slots).
+- Preserve every <img> src EXACTLY. Keep data-genimage boxes exactly as they are (same data-genimage, data-genaspect, data-gensource, and data-genref values, no new image slots). Keep every <img data-asset> (the user's own picture) and every <div data-table> box (the user's own table) on the slide with its attributes and contents unchanged: you may move and resize them, never remove, replace or rewrite them.
 - Numerals in RTL decks: a digit block with dir="ltr" renders text-align:start as LEFT - keep dir=ltr, set text-align explicitly to place the numerals where the composition needs them.`;
 }
 
@@ -708,7 +708,7 @@ RULES:
 - THEN emit the corrected <section> for every REVISING slide, in the exact generation contract (same declared attributes unless the fix requires changing one, exactly one <div class="well">) PLUS data-revises="<the slide's position number>".
 - Beyond the findings, revise when a correction genuinely improves the slide: a real defect or a clear visual upgrade. Never re-emit for a minor taste difference.
 - Keep the message and text content as written (trim or rewrap text only when the defect demands it).
-- Preserve every <img> src EXACTLY. Keep data-genimage boxes exactly as they are (same data-genimage, data-genaspect, data-gensource, and data-genref values, no new image slots).
+- Preserve every <img> src EXACTLY. Keep data-genimage boxes exactly as they are (same data-genimage, data-genaspect, data-gensource, and data-genref values, no new image slots). Keep every <img data-asset> (the user's own picture) and every <div data-table> box (the user's own table) on the slide with its attributes and contents unchanged: you may move and resize them, never remove, replace or rewrite them.
 - Numerals in RTL decks: a digit block with dir="ltr" renders text-align:start as LEFT - keep dir=ltr, set text-align explicitly to place the numerals where the composition needs them.`,
   });
   return blocks;

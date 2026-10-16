@@ -1,6 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { toSdkThinking } from "@/lib/anthropic/model-thinking";
 import { NonRetriableError } from "inngest";
+import {
+  appendMissingCarried,
+  hasCarried,
+  restoreCarried,
+  snapshotCarried,
+} from "@/lib/deck/carried-assets";
 import { inngest } from "@/inngest/client";
 import { holdCredits, settleHold } from "@/lib/credits/server";
 import { regenCost } from "@/lib/credits/cost";
@@ -952,7 +958,19 @@ export const deckRegeneratePartial = inngest.createFunction(
               },
             );
             // House style: no em/en dashes (lib/deck/strip-dashes.ts).
-            const decl = parseFrameSlide(stripTextDashes(noStyles));
+            let regenBody = stripTextDashes(noStyles);
+            // Enhance carried pictures / tables survive a redesign: canonical
+            // links, exact tables, and anything the model dropped is put back
+            // (the bake's review then places it; it can no longer drop it).
+            const carriedSnap = snapshotCarried(sourceSlide!.html);
+            if (hasCarried(carriedSnap)) {
+              const restored = restoreCarried(regenBody, projectId, carriedSnap);
+              regenBody = appendMissingCarried(restored.html, projectId, carriedSnap, restored.missing);
+              if (restored.missing.length > 0) {
+                logger.warn("deck_regen_restored_carried", { projectId, slideId, missing: restored.missing });
+              }
+            }
+            const decl = parseFrameSlide(regenBody);
             let assembled = assembleFramedSlide(
               decl,
               frameCtx!,

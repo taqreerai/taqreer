@@ -54,6 +54,7 @@
 // diff; serialize-reload roundtrip 0.000%.
 
 import sharp from "sharp";
+import { hasCarried, restoreCarried, snapshotCarried } from "@/lib/deck/carried-assets";
 import { Prisma } from "@prisma/client";
 import type { Page } from "puppeteer";
 import { inngest } from "@/inngest/client";
@@ -661,7 +662,24 @@ export const deckFreezeBake = inngest.createFunction(
                 const slide = bySlideId.get(target.slideId);
                 if (!slide) continue;
                 // The reviewer's rewrite gets the same dash cleanup.
-                const decl = parseFrameSlide(stripTextDashes(sec.html));
+                let reviewBody = stripTextDashes(sec.html);
+                // Enhance carried pictures / tables: a review may move them,
+                // never drop them. A revision that loses one is refused and
+                // the slide keeps its current (frozen-to-be) version.
+                const carriedSnap = snapshotCarried(slide.html);
+                if (hasCarried(carriedSnap)) {
+                  const restored = restoreCarried(reviewBody, projectId, carriedSnap);
+                  if (restored.missing.length > 0) {
+                    logger.warn("deck_vision_dropped_carried", {
+                      versionId,
+                      slideId: target.slideId,
+                      missing: restored.missing,
+                    });
+                    continue;
+                  }
+                  reviewBody = restored.html;
+                }
+                const decl = parseFrameSlide(reviewBody);
                 let html = assembleFramedSlide(decl, ctx, revises, dims);
                 // Re-wrap with the deck's scoped CSS: reuse the stored
                 // slide's own style content minus the frame armor

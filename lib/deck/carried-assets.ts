@@ -65,9 +65,11 @@ function closingDivIndex(html: string, from: number): number {
   return -1;
 }
 
-export function enforceCarriedTables(
+// Walk every table box; `fill` returns its new inner HTML, or null to drop
+// the whole box. `inner` is what the box holds now.
+function mapTableBoxes(
   html: string,
-  tables: ReadonlyMap<string, TableSpec>,
+  fill: (id: string, openTag: string, inner: string) => string | null,
 ): string {
   if (!/data-table\s*=/i.test(html)) return html;
   let out = "";
@@ -79,16 +81,24 @@ export function enforceCarriedTables(
     const close = closingDivIndex(html, openEnd);
     if (close < 0) break; // unbalanced: leave the rest as written
     const end = close + "</div>".length;
-    const spec = tables.get(id);
+    const next = fill(id, m[0], html.slice(openEnd, close));
     out += html.slice(cursor, m.index);
-    if (spec) {
-      const style = attr(m[0], "style") ?? "";
-      out += `${m[0]}${renderTableHtml(spec, { boxHeight: px(style, "height") })}</div>`;
-    }
+    if (next !== null) out += `${m[0]}${next}</div>`;
     cursor = end;
     OPEN_TABLE_BOX_RE.lastIndex = end;
   }
   return out + html.slice(cursor);
+}
+
+export function enforceCarriedTables(
+  html: string,
+  tables: ReadonlyMap<string, TableSpec>,
+): string {
+  return mapTableBoxes(html, (id, openTag) => {
+    const spec = tables.get(id);
+    if (!spec) return null;
+    return renderTableHtml(spec, { boxHeight: px(attr(openTag, "style") ?? "", "height") });
+  });
 }
 
 export function enforceCarriedAssetImgs(
@@ -105,7 +115,9 @@ export function enforceCarriedAssetImgs(
       const style = (attr(tag, "style") ?? "").replace(/;?\s*object-fit\s*:[^;]*/gi, "").trim();
       const fit = fitFor(style, assets.get(id));
       const nextStyle = `${style}${style && !style.endsWith(";") ? ";" : ""}object-fit:${fit}`;
-      return setAttr(setAttr(tag, "src", `/api/assets/${projectId}/${id}`), "style", nextStyle);
+      const aspect = assets.get(id);
+      const stamped = aspect && Number.isFinite(aspect) ? setAttr(tag, "data-asset-aspect", String(aspect)) : tag;
+      return setAttr(setAttr(stamped, "src", `/api/assets/${projectId}/${id}`), "style", nextStyle);
     }
     const src = attr(tag, "src") ?? "";
     return /^\s*(https?:\/\/[^/]*)?\/api\/assets\//i.test(src) ? "" : tag;
@@ -164,4 +176,85 @@ export function carriedSlideBlock(
       "\n\n";
   }
   return out;
+}
+
+// ─── Keeping them through later rewrites ───────────────────────────────────────────────
+// The bake's vision review and the studio's "redesign this slide" rewrite a
+// slide that already holds carried pictures and filled tables. Snapshot them
+// from the CURRENT slide, then after the rewrite: canonical links, the exact
+// table bodies back (the model may have touched them), anything foreign
+// removed, and report what the rewrite DROPPED so the caller can refuse the
+// rewrite (bake) or put the items back (redesign).
+
+export type CarriedSnapshot = {
+  assets: Map<string, number>; // assetId -> aspect (NaN when unknown)
+  tables: Map<string, string>; // tableId -> the filled table HTML
+};
+
+export function snapshotCarried(html: string): CarriedSnapshot {
+  const assets = new Map<string, number>();
+  for (const m of html.matchAll(IMG_RE)) {
+    const id = attr(m[0], "data-asset");
+    if (id) assets.set(id, Number(attr(m[0], "data-asset-aspect") ?? NaN));
+  }
+  const tables = new Map<string, string>();
+  mapTableBoxes(html, (id, _open, inner) => {
+    if (id && /<table\b/i.test(inner)) tables.set(id, inner);
+    return inner;
+  });
+  return { assets, tables };
+}
+
+export function hasCarried(snap: CarriedSnapshot): boolean {
+  return snap.assets.size > 0 || snap.tables.size > 0;
+}
+
+export function restoreCarried(
+  html: string,
+  projectId: string,
+  snap: CarriedSnapshot,
+): { html: string; missing: string[] } {
+  let out = enforceCarriedAssetImgs(html, projectId, snap.assets);
+  out = mapTableBoxes(out, (id) => snap.tables.get(id) ?? null);
+  const present = snapshotCarried(out);
+  const missing = [
+    ...[...snap.assets.keys()].filter((id) => !present.assets.has(id)),
+    ...[...snap.tables.keys()].filter((id) => !present.tables.has(id)),
+  ];
+  return { html: out, missing };
+}
+
+/**
+ * Put dropped carried items back at the end of the slide's well (a plain row),
+ * so a redesign never loses the user's picture or table. Layout polish is left
+ * to the bake's review, which may move them but can no longer drop them.
+ */
+export function appendMissingCarried(
+  html: string,
+  projectId: string,
+  snap: CarriedSnapshot,
+  missing: readonly string[],
+): string {
+  if (missing.length === 0) return html;
+  const parts: string[] = [];
+  for (const id of missing) {
+    if (snap.assets.has(id)) {
+      const aspect = snap.assets.get(id)!;
+      const w = 520;
+      const h = Number.isFinite(aspect) && aspect > 0 ? Math.round(w / aspect) : 390;
+      parts.push(
+        `<img data-asset="${id}"${Number.isFinite(aspect) ? ` data-asset-aspect="${aspect}"` : ""} src="/api/assets/${projectId}/${id}" alt="" style="width:${w}px;height:${h}px;object-fit:cover;border-radius:16px">`,
+      );
+    } else if (snap.tables.has(id)) {
+      parts.push(`<div data-table="${id}" style="width:100%">${snap.tables.get(id)}</div>`);
+    }
+  }
+  if (parts.length === 0) return html;
+  const row = `<div style="display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start">${parts.join("")}</div>`;
+  const well = /<div\b[^>]*class\s*=\s*("[^"]*\bwell\b[^"]*"|'[^']*\bwell\b[^']*')[^>]*>/i.exec(html);
+  if (well) {
+    const close = closingDivIndex(html, well.index + well[0].length);
+    if (close >= 0) return html.slice(0, close) + row + html.slice(close);
+  }
+  return html + row;
 }
