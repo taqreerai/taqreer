@@ -37,6 +37,14 @@ const FULL_BLEED_AREA = 0.85;
 const REPEAT_SHARE = 0.5;
 const MIN_REPEAT_SLIDES = 3;
 
+// Shared with the PDF path (lib/extract/pdf-visuals.ts): same classes, same limits.
+export const PICTURE_THRESHOLDS = {
+  smallArea: SMALL_AREA,
+  fullBleedArea: FULL_BLEED_AREA,
+  repeatShare: REPEAT_SHARE,
+  minRepeatSlides: MIN_REPEAT_SLIDES,
+} as const;
+
 export type Box = { x: number; y: number; w: number; h: number };
 
 export type PptxPicture = {

@@ -205,3 +205,38 @@ must finish before the model starts).
 
 Correction to the spike notes: Arabic text DOES extract from the finance PDF; the
 spike ran `pdftotext` without `-enc UTF-8`, which production always passes.
+
+## 10. Phase 2 spike: PDF pictures (2026-10-16)
+
+Question: can a PDF upload's pictures be found and cut out exactly, with no model
+reading, like the PPTX path?
+
+**Result: yes**, through `pdftocairo -svg` (one page per call), not `pdftohtml -xml`.
+
+- `pdftohtml -xml` gives each image's UNCLIPPED rectangle. Canva-style decks crop
+  pictures with clip paths (rounded corners, oversized bitmaps), so those boxes spill
+  over the page and overlap. Unusable.
+- `pdftocairo -svg` keeps, per image: the transform matrix, every ancestor clip path
+  and the soft mask. Visible region = image box intersected with all clips. Checked
+  on the interior-design portfolio (rounded photos, floor plans, cut-out renders),
+  a Canva portfolio (148 content pictures over 40 pages) and the Arabic finance
+  deck (equation pictures and the cover logo kept, template banners and logos on
+  every page dropped): the boxes sit on the real pictures.
+- Pictures: clip box mapped back into the bitmap's pixels (inverse transform).
+  Transparent cut-outs need the SOFT MASK applied (the mask is a second bitmap whose
+  luminance is the alpha); without it they come out on black.
+- Real files (13 distinct): 4 with no usable pictures, the rest with real ones.
+  Speed about 1 s per page (3 to 11 s for a normal deck; 45 s for 40 photo-heavy pages).
+- Placement kinds seen: masks on most Canva files; rotation only at +-90 degrees
+  (bake the rotation into the file); a mask that is a flat opacity rectangle (a
+  faded picture, 17 to 88%), treated as decoration and dropped.
+- Page-scan PDFs (a screenshot per page, no text layer; one file had 37 of them):
+  one image covers the page. Rule: full-page unrepeated image on a page with under
+  15 words, and that is true for at least 3 pages and half of the file, means a
+  scan: NOT carried, does not switch AI images off. A lone full-bleed cover photo
+  stays a content picture.
+- Same classes as PPTX (content / small / background / repeated), same thresholds,
+  media identity = hash of the bitmap.
+- Not covered: charts and diagrams drawn as vector paths (phase 3, needs a model to
+  find them), pictures used as pattern fills.
+- Production has poppler 24.02 with `pdftocairo`.

@@ -6,17 +6,19 @@
 //
 // Every slide's pictures are stored, not only the visible ones of a free-plan
 // teaser, so an unlock later can place them too (the raw upload itself is
-// purged after 24h by source-files-cleanup). PDF uploads return no pictures
-// for now (phase 2).
+// purged after 24h by source-files-cleanup). PDF uploads go through
+// lib/extract/pdf-visuals.ts (phase 2); a PDF has no native tables here yet.
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { extractPptxVisuals, classifyPptxPictures } from "@/lib/extract/pptx-visuals";
-import { buildPptxAssets } from "@/lib/extract/pptx-asset-crops";
+import { buildPptxAssets, type PptxAsset } from "@/lib/extract/pptx-asset-crops";
+import { buildPdfAssets, classifyPdfPictures, extractPdfPictures } from "@/lib/extract/pdf-visuals";
 import { uploadSourceAsset } from "@/lib/storage/source-assets";
 import type { TableSpec } from "@/lib/deck/visuals/table";
 
 const SOURCE_FILES_BUCKET = "source-files";
 const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+const PDF_MIME = "application/pdf";
 // Upload concurrency: small files, a few at a time.
 const UPLOAD_PARALLEL = 4;
 
@@ -52,16 +54,29 @@ export async function prepareCarriedPictures(opts: {
   sourcePath: string;
   sourceMime: string;
 }): Promise<CarriedPictures> {
-  if (opts.sourceMime !== PPTX_MIME) return { hasContentImages: false, pictures: [], skipped: 0, tables: [] };
+  if (opts.sourceMime !== PPTX_MIME && opts.sourceMime !== PDF_MIME) {
+    return { hasContentImages: false, pictures: [], skipped: 0, tables: [] };
+  }
 
   const { data, error } = await getSupabaseAdmin().storage.from(SOURCE_FILES_BUCKET).download(opts.sourcePath);
   if (error || !data) throw new Error(`carried pictures: source not found at ${opts.sourcePath}`);
   const buffer = Buffer.from(await data.arrayBuffer());
 
-  const visuals = await extractPptxVisuals(buffer);
-  const classes = classifyPptxPictures(visuals);
-  const hasContentImages = [...classes.values()].includes("content");
-  const assets = await buildPptxAssets(buffer, visuals, classes);
+  let assets: PptxAsset[];
+  let hasContentImages: boolean;
+  let tables: CarriedTable[] = [];
+  if (opts.sourceMime === PDF_MIME) {
+    const visuals = await extractPdfPictures(buffer);
+    const classes = classifyPdfPictures(visuals);
+    hasContentImages = [...classes.values()].includes("content");
+    assets = await buildPdfAssets(visuals, classes);
+  } else {
+    const visuals = await extractPptxVisuals(buffer);
+    const classes = classifyPptxPictures(visuals);
+    hasContentImages = [...classes.values()].includes("content");
+    assets = await buildPptxAssets(buffer, visuals, classes);
+    tables = tablesOf(visuals);
+  }
 
   const storable = assets.filter((a) => a.file.kind === "image");
   for (let i = 0; i < storable.length; i += UPLOAD_PARALLEL) {
@@ -90,7 +105,7 @@ export async function prepareCarriedPictures(opts: {
       altText: a.altText ? a.altText.slice(0, 200) : null,
     })),
     skipped: assets.length - storable.length,
-    tables: tablesOf(visuals),
+    tables,
   };
 }
 
