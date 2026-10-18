@@ -25,6 +25,17 @@ import { CheckoutBoundary } from "@/components/billing/CheckoutBoundary";
 import { planLabel, type KnownPlan } from "@/lib/plan";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 
+// Why the modal opened. `tier` (lowest plan that unlocks it), `feature` (which
+// plan row answers it) and `icon` are optional; without them the callout still
+// shows the reason, just without the plan pointers.
+export type GateContext = {
+  title: string;
+  body: string;
+  icon?: string;
+  tier?: KnownPlan | null;
+  feature?: "images" | "aiEdit" | null;
+};
+
 export function UpgradeModal({
   open,
   onClose,
@@ -52,7 +63,7 @@ export function UpgradeModal({
   onClose: () => void;
   requiredTier?: KnownPlan | null;
   initialLookupKey?: string | null;
-  gateContext?: { title: string; body: string } | null;
+  gateContext?: GateContext | null;
   onSuccess?: () => void;
 }) {
   const dict = useDict();
@@ -63,6 +74,7 @@ export function UpgradeModal({
   const [done, setDone] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(panelRef, open);
+  const minTier = requiredTier ?? gateContext?.tier ?? null;
 
   // Fresh steps every open — adjust during render (React's "reset state when a
   // prop changes" pattern) instead of an effect, so it can't cascade. The guard
@@ -133,13 +145,9 @@ export function UpgradeModal({
                         ? lookupKey === DECK_UNLOCK_KEY
                           ? t.deckUnlockTitle
                           : t.checkoutTitle
-                        : gateContext
-                          ? gateContext.title
-                          : t.title}
+                        : t.title}
                   </h3>
-                  {!done && !lookupKey && gateContext ? (
-                    <p className="mt-1 text-sm text-muted">{gateContext.body}</p>
-                  ) : !done && !lookupKey && requiredTier ? (
+                  {!done && !lookupKey && !gateContext && requiredTier ? (
                     <p className="mt-1 text-sm text-muted">
                       {t.requiresTier.replace(
                         "{tier}",
@@ -168,6 +176,24 @@ export function UpgradeModal({
                   </button>
                 </div>
               </div>
+
+              {/* The REASON for the upgrade, as its own callout (a title line in
+                  the header was getting lost next to the plan cards). */}
+              {!done && !lookupKey && gateContext ? (
+                <div className="px-4 pt-5 md:px-8">
+                  <div role="status" className="gate-reason flex items-start gap-3.5 rounded-2xl px-4 py-3.5 md:px-5">
+                    <span className="gate-reason-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full">
+                      <span className="material-symbols-outlined text-[24px]" aria-hidden>
+                        {gateContext.icon ?? "lock"}
+                      </span>
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-base font-bold text-foreground md:text-lg">{gateContext.title}</p>
+                      <p className="mt-0.5 text-sm text-muted">{gateContext.body}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
               {/* Body - scrolls when the cards overflow short screens. */}
               <div className="overflow-y-auto px-4 pb-8 pt-6 md:px-8">
@@ -212,7 +238,14 @@ export function UpgradeModal({
                         onBuy={() => setLookupKey(DECK_UNLOCK_KEY)}
                       />
                     ) : null}
-                    <BillingSection variant="modal" minTier={requiredTier} onBuy={(key) => setLookupKey(key)} />
+                    <BillingSection
+                      variant="modal"
+                      minTier={minTier}
+                      gated={gateContext != null}
+                      requiredBadge={t.requiredBadge}
+                      highlightFeature={gateContext?.feature ?? null}
+                      onBuy={(key) => setLookupKey(key)}
+                    />
                   </CheckoutBoundary>
                 )}
               </div>

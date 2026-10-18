@@ -22,8 +22,8 @@ import {
   SOCIAL_TEASER_DEFAULT_TOTAL,
   SOCIAL_TEASER_VISIBLE,
 } from "@/lib/credits/cost";
-import { isImagesLocked, IMAGES_GATE_TIER } from "@/lib/images/images-gating";
-import { planLabel } from "@/lib/plan";
+import { isImagesLocked } from "@/lib/images/images-gating";
+import { imagesGateContext } from "@/components/billing/gate-context";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { PersistentRow } from "@/components/brand/PersistentRow";
@@ -667,13 +667,7 @@ export default function SocialPage() {
           for a locked toggle enable. */}
       <UpgradeModal
         open={productUpgradeOpen}
-        gateContext={{
-          title: dict.components.creditGate.imagesLockedTitle,
-          body: `${dict.components.creditGate.imagesLockedBody.replace(
-            "{tier}",
-            planLabel(dict.components.planUsage, IMAGES_GATE_TIER),
-          )} ${dict.components.creditGate.chooseTier}`.trim(),
-        }}
+        gateContext={imagesGateContext(dict)}
         onClose={() => setProductUpgradeOpen(false)}
       />
       <div className="mt-[4vh] flex w-full flex-col items-center gap-5 px-4 desk:px-8 stage:mt-0 stage:min-h-0 stage-tight:gap-3">

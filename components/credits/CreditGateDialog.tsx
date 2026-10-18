@@ -12,8 +12,8 @@ import { useDict } from "@/components/i18n/LocaleProvider";
 import { TOPUP_PACKS } from "@/lib/credits/cost";
 import { formatCredits, useCreditBalance } from "@/lib/credits/store";
 import { normalizePlan, planLabel } from "@/lib/plan";
-import { IMAGES_GATE_TIER } from "@/lib/images/images-gating";
-import { UpgradeModal } from "@/components/billing/UpgradeModal";
+import { UpgradeModal, type GateContext } from "@/components/billing/UpgradeModal";
+import { aiEditGateContext, imagesGateContext } from "@/components/billing/gate-context";
 
 // The 402 body POST /api/projects returns when preflight blocks.
 export type CreditGatePayload = {
@@ -78,7 +78,7 @@ export function CreditGateDialog({
   const initialLookupKey = coveringPack ? `topup_${coveringPack.key}` : null;
 
   // Contextual headline so the tiers modal explains WHY it opened.
-  let gateContext: { title: string; body: string } | null = null;
+  let gateContext: GateContext | null = null;
   if (gate) {
     const cta = t.chooseTier;
     if (gate.error === "insufficient_credits") {
@@ -86,7 +86,7 @@ export function CreditGateDialog({
       const detail = t.insufficientBody
         .replace("{needed}", formatCredits(needed))
         .replace("{have}", formatCredits(gate.balance));
-      gateContext = { title: t.insufficientTitle, body: `${detail} ${cta}`.trim() };
+      gateContext = { title: t.insufficientTitle, body: `${detail} ${cta}`.trim(), icon: "toll" };
     } else if (gate.error === "flow_locked") {
       // Fill {tier} with the localized name of the cheapest plan whose
       // flows include the gated one (server-derived from live config);
@@ -98,33 +98,25 @@ export function CreditGateDialog({
           "{tier}",
           planLabel(dict.components.planUsage, tierKey),
         )} ${cta}`.trim(),
+        icon: "lock",
+        tier: normalizePlan(tierKey),
       };
     } else if (gate.error === "preset_locked") {
       gateContext = {
         title: t.presetLockedTitle,
         body: `${t.presetLockedBody} ${cta}`.trim(),
+        icon: "tune",
       };
     } else if (gate.error === "ai_edit_locked") {
       // AI edits after generation are a paid feature (2026-10-02).
-      gateContext = {
-        title: t.aiEditLockedTitle,
-        body: `${t.aiEditLockedBody.replace(
-          "{tier}",
-          planLabel(dict.components.planUsage, gate.minFlowTier ?? "plus"),
-        )} ${cta}`.trim(),
-      };
+      gateContext = aiEditGateContext(dict, normalizePlan(gate.minFlowTier ?? "plus"));
     } else if (gate.error === "images_locked") {
-      gateContext = {
-        title: t.imagesLockedTitle,
-        body: `${t.imagesLockedBody.replace(
-          "{tier}",
-          planLabel(dict.components.planUsage, IMAGES_GATE_TIER),
-        )} ${cta}`.trim(),
-      };
+      gateContext = imagesGateContext(dict);
     } else {
       gateContext = {
         title: t.capTitle,
         body: `${t.capBody.replace("{cap}", formatCredits(gate.slideCap ?? 0))} ${cta}`.trim(),
+        icon: "slideshow",
       };
     }
   }

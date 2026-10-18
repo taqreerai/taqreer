@@ -29,6 +29,8 @@ export function TemplateUpgradeModal({
           ? {
               title: (gate.premium ? t.premiumTitle : t.lockedTitle).replace("{tier}", label),
               body: (gate.premium ? t.premiumBody : t.lockedBody).replace("{tier}", label),
+              icon: "workspace_premium",
+              tier: gate.tier,
             }
           : null
       }

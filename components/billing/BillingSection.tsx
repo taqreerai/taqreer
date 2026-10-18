@@ -64,6 +64,11 @@ const FALLBACK_DISCOUNT_PCT = Math.max(
 // "Pro" carries the landing's popular pill here too.
 const POPULAR_TIER: KnownPlan = "pro";
 
+// Which plan row answers a locked-feature gate (index into the card's feature
+// list: 0 credits, 1 model, 2 slides, 3 PPTX, 4 watermark, 5 creation + AI
+// edits, 6 smart photos). Same order in every language's pricing copy.
+const GATE_FEATURE_ROW: Record<"images" | "aiEdit", number> = { images: 6, aiEdit: 5 };
+
 export function BillingSection({
   // "modal" (UpgradeModal, 2026-06-12): plan cards only - no plan
   // summary, no top-up packs - and purchases go through onBuy (the
@@ -75,10 +80,19 @@ export function BillingSection({
   // PR#57): tiers BELOW it render dimmed with a disabled CTA so a
   // user chasing a pro-gated feature can't buy plus and stay blocked.
   minTier,
+  // Locked-feature popup (UpgradeModal): the reason sits in its own callout, so
+  // the "Change plan" heading goes, the minimum plan wears `requiredBadge` in
+  // place of the popular pill, and the row that answers the gate is marked.
+  gated = false,
+  requiredBadge = null,
+  highlightFeature = null,
 }: {
   variant?: "page" | "modal";
   onBuy?: (lookupKey: string) => void;
   minTier?: KnownPlan | null;
+  gated?: boolean;
+  requiredBadge?: string | null;
+  highlightFeature?: "images" | "aiEdit" | null;
 } = {}) {
   const dict = useDict();
   const { locale, dir } = useLocale();
@@ -174,8 +188,8 @@ export function BillingSection({
 
       {/* ── Change plan ── */}
       <section>
-        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-foreground">{t.changePlan}</h2>
+        <div className={`mb-5 flex flex-wrap items-center gap-3 ${gated ? "justify-end" : "justify-between"}`}>
+          {gated ? null : <h2 className="text-lg font-semibold text-foreground">{t.changePlan}</h2>}
           {/* The design-system white animated toggle - same control as
               the landing's monthly/yearly switch. */}
           <SegmentedToggle<Cadence>
@@ -210,7 +224,14 @@ export function BillingSection({
             // Below the caller's gate -> visible for context, not buyable.
             const belowGate =
               minTier != null && idx < TIER_ORDER.indexOf(minTier);
-            const popular = tier === POPULAR_TIER;
+            // A gated popup points at ONE plan (the lowest that unlocks the
+            // feature); the generic "most popular" pill would compete with it.
+            const emphasizeRequired = gated && minTier != null;
+            const popular = emphasizeRequired ? tier === minTier : tier === POPULAR_TIER;
+            const gateRow =
+              emphasizeRequired && highlightFeature && idx >= TIER_ORDER.indexOf(minTier)
+                ? GATE_FEATURE_ROW[highlightFeature]
+                : null;
             const copy = pricing.tiers[idx];
             // Live Stripe price (the actual charge) from /api/credits; the
             // bundled constants are only a pre-hydration fallback (self-correcting).
@@ -273,7 +294,7 @@ export function BillingSection({
                 {popular && (
                   <div className="hero-stat-pill absolute -top-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full px-4 py-1.5 text-xs font-medium">
                     <span className="h-1.5 w-1.5 rounded-full" style={{ background: "#fff" }} />
-                    {pricing.mostPopular}
+                    {emphasizeRequired && requiredBadge ? requiredBadge : pricing.mostPopular}
                   </div>
                 )}
 
@@ -291,7 +312,7 @@ export function BillingSection({
                         key={fi}
                         className={`flex items-center gap-2.5 whitespace-nowrap text-[13px] ${
                           enabled ? "" : "text-muted opacity-60"
-                        }`}
+                        } ${gateRow === fi ? "gate-feature-row -mx-2 rounded-lg px-2 py-1.5" : ""}`}
                       >
                         <span
                           className="material-symbols-outlined"

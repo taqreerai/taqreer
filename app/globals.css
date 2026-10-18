@@ -2329,6 +2329,26 @@ body:has(.tq-support-toolbar) .support-fab-anchor {
 .premium-banner-icon {
   background: color-mix(in srgb, var(--tq-premium-gold) 16%, transparent);
 }
+/* Upgrade modal opened by a locked feature (2026-10-18): the REASON callout
+   under the title, and the one plan row that matches the gate. Brand-blue tint,
+   same recipe as .deck-font-note, a step stronger so the reason is the first
+   thing read. */
+.gate-reason {
+  background: color-mix(in srgb, var(--tq-brand-blue) 12%, var(--tq-surface));
+  border: 1px solid color-mix(in srgb, var(--tq-brand-blue) 45%, transparent);
+}
+.gate-reason-icon {
+  background: color-mix(in srgb, var(--tq-brand-blue) 22%, transparent);
+  color: var(--tq-brand-blue);
+}
+.gate-feature-row {
+  background: color-mix(in srgb, var(--tq-brand-blue) 14%, transparent);
+  box-shadow: inset 2px 0 0 var(--tq-brand-blue);
+  font-weight: 600;
+}
+[dir="rtl"] .gate-feature-row {
+  box-shadow: inset -2px 0 0 var(--tq-brand-blue);
+}
 .badge-premium {
   display: inline-flex;
   align-items: center;

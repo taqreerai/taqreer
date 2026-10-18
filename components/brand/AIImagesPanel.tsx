@@ -19,8 +19,8 @@ import { useState } from "react";
 import { Toggle } from "@/components/create/controls";
 import { useDict } from "@/components/i18n/LocaleProvider";
 import { useCreditBalance } from "@/lib/credits/store";
-import { isImagesLocked, IMAGES_GATE_TIER } from "@/lib/images/images-gating";
-import { planLabel } from "@/lib/plan";
+import { isImagesLocked } from "@/lib/images/images-gating";
+import { imagesGateContext } from "@/components/billing/gate-context";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import { PremiumCrown } from "@/components/billing/PremiumCrown";
 
@@ -98,13 +98,7 @@ export function AIImagesPanel({
       </div>
       <UpgradeModal
         open={upgradeOpen}
-        gateContext={{
-          title: dict.components.creditGate.imagesLockedTitle,
-          body: `${dict.components.creditGate.imagesLockedBody.replace(
-            "{tier}",
-            planLabel(dict.components.planUsage, IMAGES_GATE_TIER),
-          )} ${dict.components.creditGate.chooseTier}`.trim(),
-        }}
+        gateContext={imagesGateContext(dict)}
         onClose={() => setUpgradeOpen(false)}
       />
     </div>
