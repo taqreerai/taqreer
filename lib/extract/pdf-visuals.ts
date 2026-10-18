@@ -17,10 +17,14 @@
 // `needsPageCrop` like an EMF in the PPTX path. A mask that is a flat opacity
 // rectangle (a faded picture) is treated as decoration.
 //
-// Page-scan PDFs (a screenshot or scan per page, no text layer) have one image
-// covering each page; carrying those would be nonsense, so a file where most
-// pages look like that gets them classified `pagescan` (not carried, and they do
-// not switch AI images off).
+// Page-sized pictures (one image covering the page, almost no text layer) are
+// classified `pagescan` when most pages of the file look like that. Two kinds:
+//   artwork  an illustration with its text painted in (a cover, a lesson poster):
+//            carried as a "page" picture, which the slide shows full-bleed as its
+//            background (the words are inside it, so it is not re-typeset)
+//   scan     a document scan / screenshot (mostly white): not carried, the model
+//            reads the page image as before
+// Flat images (one colour: drop shadows, glows, solid fills) are never carried.
 //
 // Untrusted input: a user's PDF runs through poppler (already true for the page
 // rasterization), the SVG is parsed with xmldom after the base64 payloads are cut
@@ -54,12 +58,18 @@ const SCAN_MAX_WORDS = 15;
 const SCAN_MIN_PAGES = 3;
 const SCAN_SHARE = 0.5;
 const DECOR_ASPECT = 8; // a small picture this much longer than wide is a strip, not a picture
+const FLAT_SD = 6; // colour spread (0..255) under which an image is a single flat colour
+const FLAT_SEMI_SHARE = 0.35; // ...and this share of it is semi-transparent: a shadow / glow
+const SCAN_WHITE_SHARE = 0.3; // a page-sized picture with this much white is a scan, not artwork
 const DECOR_TILES = 3; // the same small picture this many times on one page is a pattern
 
 // pagescan: a scanned / screenshot page. faded: a picture drawn at a flat
 // opacity. decor: a small picture tiled several times on one page (torn-paper
 // edges, a dot, a divider), or a hairline strip.
 export type PdfPictureClass = PictureClass | "pagescan" | "faded" | "decor";
+
+// An asset ready to store. cls "page" = a page-sized artwork (see header).
+export type PdfAsset = Omit<PptxAsset, "cls"> & { cls: PptxAsset["cls"] | "page" };
 
 type Mat = [number, number, number, number, number, number];
 type Rect = [number, number, number, number];
@@ -473,34 +483,74 @@ async function cutPicture(p: PdfPicture): Promise<Cut> {
   return { bytes: enc.data, contentType: hasAlpha ? "image/png" : "image/jpeg", width: enc.info.width, height: enc.info.height };
 }
 
-/** Content + small pictures as ready-to-store asset files (ids like "s07-a1"). */
-export async function buildPdfAssets(visuals: PdfVisuals, classes: Map<PdfPicture, PdfPictureClass>): Promise<PptxAsset[]> {
+// Flat single-colour images (drop shadows, glows, solid fills) and how white a
+// picture is, from a 48 px thumbnail of the cut.
+async function pixelStats(bytes: Buffer): Promise<{ flat: boolean; whiteShare: number }> {
+  const { data } = await sharpOf(bytes)
+    .resize({ width: 48, height: 48, fit: "inside" })
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  let n = 0, semi = 0, transparent = 0, white = 0;
+  const sum = [0, 0, 0], sumSq = [0, 0, 0];
+  for (let i = 0; i < data.length; i += 4) {
+    const a = data[i + 3];
+    if (a < 16) {
+      transparent++;
+      continue;
+    }
+    n++;
+    if (a < 235) semi++;
+    if (Math.min(data[i], data[i + 1], data[i + 2]) > 228) white++;
+    for (let c = 0; c < 3; c++) {
+      sum[c] += data[i + c];
+      sumSq[c] += data[i + c] * data[i + c];
+    }
+  }
+  if (n === 0) return { flat: true, whiteShare: 0 };
+  const sd = [0, 1, 2].reduce((t, c) => t + Math.sqrt(Math.max(0, sumSq[c] / n - (sum[c] / n) ** 2)), 0) / 3;
+  // One colour AND either a solid fill (nothing transparent) or a soft-edged
+  // shadow / glow. A hard-edged one-colour logo on transparency is kept.
+  const flat = sd < FLAT_SD && (transparent === 0 || semi / n >= FLAT_SEMI_SHARE);
+  return { flat, whiteShare: white / n };
+}
+
+/**
+ * Content + small pictures (and page-sized artwork) as ready-to-store asset
+ * files (ids like "s07-a1"). Flat images and document scans are left out.
+ */
+export async function buildPdfAssets(visuals: PdfVisuals, classes: Map<PdfPicture, PdfPictureClass>): Promise<PdfAsset[]> {
   const perPage = new Map<number, number>();
   const keep = visuals.pictures.filter((p) => {
     const c = classes.get(p);
-    return c === "content" || c === "small";
+    return c === "content" || c === "small" || c === "pagescan";
   });
   const planned = keep.map((p) => {
     const n = (perPage.get(p.pageIndex) ?? 0) + 1;
     perPage.set(p.pageIndex, n);
     return { p, assetId: `s${String(p.pageIndex + 1).padStart(2, "0")}-a${n}` };
   });
-  return mapPool(planned, 3, async ({ p, assetId }): Promise<PptxAsset> => {
+  const built = await mapPool(planned, 3, async ({ p, assetId }): Promise<PdfAsset | null> => {
+    const c = classes.get(p);
     const base = {
       assetId,
       slideIndex: p.pageIndex,
-      cls: classes.get(p) as PptxAsset["cls"],
+      cls: (c === "pagescan" ? "page" : c) as PdfAsset["cls"],
       box: p.box,
       aspect: Math.round(((p.visible[2] - p.visible[0]) / Math.max(1, p.visible[3] - p.visible[1])) * 100) / 100,
       rotationDeg: 0, // quarter turns are baked into the file
       altText: null,
     };
-    if (p.skewed) return { ...base, file: { kind: "needsPageCrop" } };
+    if (p.skewed) return c === "pagescan" ? null : { ...base, file: { kind: "needsPageCrop" } };
     try {
       const cut = await cutPicture(p);
+      const stats = await pixelStats(cut.bytes);
+      if (stats.flat) return null;
+      if (c === "pagescan" && stats.whiteShare >= SCAN_WHITE_SHARE) return null; // a scan / screenshot, not artwork
       return { ...base, file: { kind: "image", bytes: cut.bytes, contentType: cut.contentType, width: cut.width, height: cut.height } };
     } catch {
-      return { ...base, file: { kind: "needsPageCrop" } };
+      return c === "pagescan" ? null : { ...base, file: { kind: "needsPageCrop" } };
     }
   });
+  return built.filter((a): a is PdfAsset => a !== null);
 }

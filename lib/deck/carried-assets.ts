@@ -17,6 +17,7 @@
 // Pure string work (runs inside the stream's ingest, no DOM available).
 
 import { renderTableHtml, type TableSpec } from "@/lib/deck/visuals/table";
+import type { FrameSlideDecl } from "@/lib/deck/frame";
 
 const IMG_RE = /<img\b[^>]*>/gi;
 const ATTR = (name: string) => new RegExp(`\\s${name}\\s*=\\s*("([^"]*)"|'([^']*)')`, "i");
@@ -131,7 +132,8 @@ export function enforceCarriedAssetImgs(
 export type CarriedPictureRef = {
   assetId: string;
   slideIndex: number;
-  cls: "content" | "small";
+  // "page": a page-sized artwork (PDF) shown full-bleed as the slide background.
+  cls: "content" | "small" | "page";
   aspect: number;
   altText: string | null;
 };
@@ -139,16 +141,25 @@ export type CarriedTableRef = { tableId: string; slideIndex: number; spec: Table
 
 export const CARRIED_TABLES_RULE = `  • ORIGINAL TABLES: FIRST RULE for tables. A slide may come with an "ORIGINAL TABLES" block. For each listed table put ONE EMPTY <div data-table="ID" style="width:...px;height:...px"></div> where the table belongs, sized to fit its rows (start from the suggested size). Never write that table's cells, rows or a <table> yourself, and never repeat its cells as text, cards or bullets elsewhere on the slide (they also appear in the exact-text block; that is the table): the system fills the box with the EXACT table, styled from the slide's text colour and --primary. A title or a short caption above it is fine.`;
 
-export const CARRIED_PICTURES_RULE = `  • ORIGINAL PICTURES: FIRST RULE, overrides the photo, logo and placeholder rules below for every picture it covers. A slide may come with an "ORIGINAL PICTURES" block: the user's own pictures from that slide, already extracted. Put EVERY listed picture on its redesigned slide, exactly once, as the given <img> tag with its data-asset and src attributes UNCHANGED (never write any other /api/assets URL). Give the img an inline style with an explicit width and height in px whose ratio matches the listed aspect (scale the example size; never square a wide picture), so nothing is cut off. Move, resize, round, frame or shadow it to suit the new design; never crop away its subject, recolour it with filters, cover it with text, or replace it with a generated image, a photo slot, an icon or an SVG drawing. "small" entries are icons, logos or badges: keep them small. Pictures NOT listed (template backgrounds, frame art) are not carried: do not recreate them.`;
+export const CARRIED_PICTURES_RULE = `  • ORIGINAL PICTURES: FIRST RULE, overrides the photo, logo and placeholder rules below for every picture it covers. A slide may come with an "ORIGINAL PICTURES" block: the user's own pictures from that slide, already extracted. Put EVERY listed picture on its redesigned slide, exactly once, as the given <img> tag with its data-asset and src attributes UNCHANGED (never write any other /api/assets URL). Give the img an inline style with an explicit width and height in px whose ratio matches the listed aspect (scale the example size; never square a wide picture), so nothing is cut off. Move, resize, round, frame or shadow it to suit the new design; never crop away its subject, recolour it with filters, cover it with text, or replace it with a generated image, a photo slot, an icon or an SVG drawing. "small" entries are icons, logos or badges: keep them small. Pictures NOT listed (template backgrounds, frame art) are not carried: do not recreate them. A "FULL-PAGE ARTWORK" entry is different: it OVERRIDES this whole rule for that slide (follow its own instructions). CONTRAST: every word must stay readable on what it sits on. If the original showed light text on a dark picture, panel or bar, and that backing is not carried over or has moved away from the text, give the text its own dark filled shape or switch it to a dark colour; never leave light text on a light slide ground.`;
 
 /** The ORIGINAL PICTURES / ORIGINAL TABLES block for one slide ("" when none). */
 export function carriedSlideBlock(
   slideNumber: number, // 1-based
   projectId: string,
-  pictures: readonly CarriedPictureRef[],
+  allPictures: readonly CarriedPictureRef[],
   tables: readonly CarriedTableRef[],
 ): string {
   let out = "";
+  const pictures = allPictures.filter((p) => p.cls !== "page");
+  for (const p of allPictures.filter((q) => q.cls === "page")) {
+    out +=
+      `── SLIDE ${slideNumber}: FULL-PAGE ARTWORK (asset "${p.assetId}", aspect ${p.aspect}) ──
+` +
+      `The user's original page is ONE finished illustration that already contains all of its text and design. Do NOT retype, redraw or restyle it, and do not merge other pages into this slide. REQUIRED for this slide: its opening tag must be exactly <section data-label="..." data-role="..." data-bg="image" data-bg-asset="${p.assetId}"> (NOT data-bg="color", no data-bg-prompt, no data-bg-css) and its well must be EMPTY (<div class="well"></div>): no text, no pictures, no shapes, no labels, because every word is already inside the artwork.
+
+`;
+  }
   if (pictures.length > 0) {
     out +=
       `── SLIDE ${slideNumber}: ORIGINAL PICTURES (place each one, tag unchanged) ──\n` +
@@ -257,4 +268,60 @@ export function appendMissingCarried(
     if (close >= 0) return html.slice(0, close) + row + html.slice(close);
   }
   return html + row;
+}
+
+// ─── Full-page artwork as the slide background (PDF, cls "page") ──────────
+// The model marks a slide `data-bg-asset="ID"`. Only an ID that is one of THIS
+// deck's page assets is honoured: the server stamps the canonical src
+// (decl.bgAssetSrc, persisted on the stored section like bgRef) and empties the
+// well, because the artwork already carries its words.
+
+const BG_ASSET_SRC_RE = /^\/api\/assets\/[A-Za-z0-9]{8,40}\/[a-z0-9][a-z0-9-]{0,63}$/i;
+
+export function isBgAssetSrc(v: string | null | undefined): v is string {
+  return !!v && BG_ASSET_SRC_RE.test(v);
+}
+
+export function applyPageBackdrop(
+  decl: FrameSlideDecl,
+  projectId: string,
+  pageIds: ReadonlySet<string>,
+  // Safety net when the model left the marker off: the page artwork of THIS
+  // slide position (source page = slide), used only if the model also wrote
+  // nothing in the well (so no text it authored is thrown away).
+  fallbackId?: string | null,
+): void {
+  let id = decl.bgAsset;
+  if (!(id && pageIds.has(id)) && fallbackId && pageIds.has(fallbackId)) {
+    const hasContent = /<img\b|<svg\b|<table\b/i.test(decl.wellHtml) || decl.wellHtml.replace(/<[^>]*>/g, "").trim() !== "";
+    if (!hasContent) id = fallbackId;
+  }
+  if (id && pageIds.has(id)) {
+    decl.bgAssetSrc = `/api/assets/${projectId}/${id}`;
+    decl.bg = "image";
+    decl.bgPrompt = null;
+    decl.bgScrim = "none";
+    decl.wellHtml = '<div class="well"></div>';
+  } else {
+    decl.bgAssetSrc = null;
+  }
+}
+
+/** The backdrop a stored section already has (for rewrites that must keep it). */
+export function storedPageBackdrop(storedHtml: string, projectId: string): string | null {
+  const tag = /<section\b[^>]*>/i.exec(storedHtml)?.[0] ?? "";
+  const m = tag.match(/\sdata-bg-asset-src\s*=\s*"([^"]*)"/i);
+  const src = m?.[1] ?? null;
+  return isBgAssetSrc(src) && src.startsWith(`/api/assets/${projectId}/`) ? src : null;
+}
+
+/** A rewrite keeps the slide's existing backdrop and ignores whatever the model wrote. */
+export function keepPageBackdrop(decl: FrameSlideDecl, storedHtml: string, projectId: string): void {
+  const prev = storedPageBackdrop(storedHtml, projectId);
+  decl.bgAssetSrc = prev;
+  if (prev) {
+    decl.bg = "image";
+    decl.bgPrompt = null;
+    decl.bgScrim = "none";
+  }
 }

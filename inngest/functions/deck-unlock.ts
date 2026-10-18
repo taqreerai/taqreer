@@ -55,6 +55,7 @@ import {
   carriedSlideBlock,
   enforceCarriedAssetImgs,
   enforceCarriedTables,
+  applyPageBackdrop,
   type CarriedPictureRef,
   type CarriedTableRef,
 } from "@/lib/deck/carried-assets";
@@ -274,7 +275,15 @@ export const deckUnlock = inngest.createFunction(
         ...blocks,
       ].join("\n");
     })();
-    const carriedAssets = new Map(carried.pictures.map((x) => [x.assetId, x.aspect] as const));
+    // Page-sized artworks are shown only as a slide's backdrop (data-bg-asset),
+    // never as a well picture: kept out of the well map (an <img> of one is removed).
+    const carriedAssets = new Map(
+      carried.pictures.filter((x) => x.cls !== "page").map((x) => [x.assetId, x.aspect] as const),
+    );
+    const carriedPageIds = new Set(carried.pictures.filter((x) => x.cls === "page").map((x) => x.assetId));
+    const pageAssetAt = new Map(
+      carried.pictures.filter((x) => x.cls === "page").map((x) => [x.slideIndex, x.assetId] as const),
+    );
     const carriedTables = new Map(carried.tables.map((x) => [x.tableId, x.spec] as const));
     if (carriedBlock) {
       logger.info("deck_unlock_carried", {
@@ -371,6 +380,7 @@ export const deckUnlock = inngest.createFunction(
           carriedTables,
         ),
       );
+      applyPageBackdrop(decl, projectId, carriedPageIds, pageAssetAt.get(slideIndex));
       const assembled = assembleFramedSlide(decl, frameCtx, slideIndex, dims);
       const html = buildSlideHtml(
         assembled,

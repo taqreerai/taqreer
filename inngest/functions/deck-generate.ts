@@ -74,6 +74,7 @@ import {
   carriedSlideBlock,
   enforceCarriedAssetImgs,
   enforceCarriedTables,
+  applyPageBackdrop,
 } from "@/lib/deck/carried-assets";
 import { prepareCarriedPictures, type CarriedPicture, type CarriedTable } from "@/lib/extract/carried-pictures";
 
@@ -2538,8 +2539,21 @@ export const deckGenerate = inngest.createFunction(
         // product-marked box at assembly below.
         const productImageUrl = readProductImageUrl(data);
 
+        // Page-sized artworks (cls "page") are NOT well pictures: a slide shows one
+        // only as its full-bleed backdrop (data-bg-asset), so an <img data-asset>
+        // of one inside the well is removed like any unknown asset.
         const carriedAssetIds = new Map(
-          (enhanceImages?.pictures ?? []).map((p) => [p.assetId, p.aspect] as const),
+          (enhanceImages?.pictures ?? [])
+            .filter((p) => p.cls !== "page")
+            .map((p) => [p.assetId, p.aspect] as const),
+        );
+        const carriedPageIds = new Set(
+          (enhanceImages?.pictures ?? []).filter((p) => p.cls === "page").map((p) => p.assetId),
+        );
+        // Source page position -> its page artwork (fallback when the model
+        // leaves the data-bg-asset marker off but also writes nothing).
+        const pageAssetAt = new Map(
+          (enhanceImages?.pictures ?? []).filter((p) => p.cls === "page").map((p) => [p.slideIndex, p.assetId] as const),
         );
         const carriedTables = new Map(
           (enhanceImages?.tables ?? []).map((t) => [t.tableId, t.spec] as const),
@@ -2575,6 +2589,7 @@ export const deckGenerate = inngest.createFunction(
             if (revises !== null && revises < slides.length) {
               const target = slides[revises];
               const decl = parseFrameSlide(parsed.html);
+              applyPageBackdrop(decl, projectId, carriedPageIds, pageAssetAt.get(revises));
               if (decl.deckTitle) frameCtx.deckTitle = decl.deckTitle;
               if (productImageUrl && decl.bgSource === "product") {
                 decl.bgRef = productImageUrl;
@@ -2692,6 +2707,7 @@ export const deckGenerate = inngest.createFunction(
           // slides.length is the 0-based index of THIS slide (pre-push);
           // the restart guard resets it.
           const decl = parseFrameSlide(parsed.html);
+          applyPageBackdrop(decl, projectId, carriedPageIds, pageAssetAt.get(slides.length));
           if (decl.deckTitle) frameCtx.deckTitle = decl.deckTitle;
           // AUTO nav total: the cover declares the model's intended count
           // (data-deck-slides, read off the opening tag by parseFrameSlide).

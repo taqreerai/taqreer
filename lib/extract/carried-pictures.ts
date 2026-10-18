@@ -11,8 +11,8 @@
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { extractPptxVisuals, classifyPptxPictures } from "@/lib/extract/pptx-visuals";
-import { buildPptxAssets, type PptxAsset } from "@/lib/extract/pptx-asset-crops";
-import { buildPdfAssets, classifyPdfPictures, extractPdfPictures } from "@/lib/extract/pdf-visuals";
+import { buildPptxAssets } from "@/lib/extract/pptx-asset-crops";
+import { buildPdfAssets, classifyPdfPictures, extractPdfPictures, type PdfAsset } from "@/lib/extract/pdf-visuals";
 import { uploadSourceAsset } from "@/lib/storage/source-assets";
 import type { TableSpec } from "@/lib/deck/visuals/table";
 
@@ -25,7 +25,8 @@ const UPLOAD_PARALLEL = 4;
 export type CarriedPicture = {
   assetId: string;
   slideIndex: number; // presentation order, 0-based
-  cls: "content" | "small";
+  // "page": a page-sized artwork (PDF), shown full-bleed as the slide background.
+  cls: "content" | "small" | "page";
   aspect: number; // width / height on the original slide
   altText: string | null;
 };
@@ -62,14 +63,16 @@ export async function prepareCarriedPictures(opts: {
   if (error || !data) throw new Error(`carried pictures: source not found at ${opts.sourcePath}`);
   const buffer = Buffer.from(await data.arrayBuffer());
 
-  let assets: PptxAsset[];
+  let assets: PdfAsset[];
   let hasContentImages: boolean;
   let tables: CarriedTable[] = [];
   if (opts.sourceMime === PDF_MIME) {
     const visuals = await extractPdfPictures(buffer);
     const classes = classifyPdfPictures(visuals);
-    hasContentImages = [...classes.values()].includes("content");
     assets = await buildPdfAssets(visuals, classes);
+    // After the flat-image filter: a file whose only "pictures" were shadows
+    // and fills has no real pictures, so it keeps AI images.
+    hasContentImages = assets.some((a) => a.cls === "content" || a.cls === "page");
   } else {
     const visuals = await extractPptxVisuals(buffer);
     const classes = classifyPptxPictures(visuals);

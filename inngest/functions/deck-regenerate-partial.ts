@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { toSdkThinking } from "@/lib/anthropic/model-thinking";
 import { NonRetriableError } from "inngest";
 import {
+  keepPageBackdrop,
   appendMissingCarried,
   hasCarried,
   restoreCarried,
@@ -971,6 +972,8 @@ export const deckRegeneratePartial = inngest.createFunction(
               }
             }
             const decl = parseFrameSlide(regenBody);
+            // A page-artwork slide keeps its backdrop through an AI edit.
+            keepPageBackdrop(decl, sourceSlide!.html, projectId);
             let assembled = assembleFramedSlide(
               decl,
               frameCtx!,

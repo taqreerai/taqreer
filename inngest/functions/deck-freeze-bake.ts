@@ -54,7 +54,7 @@
 // diff; serialize-reload roundtrip 0.000%.
 
 import sharp from "sharp";
-import { hasCarried, restoreCarried, snapshotCarried } from "@/lib/deck/carried-assets";
+import { hasCarried, keepPageBackdrop, restoreCarried, snapshotCarried } from "@/lib/deck/carried-assets";
 import { Prisma } from "@prisma/client";
 import type { Page } from "puppeteer";
 import { inngest } from "@/inngest/client";
@@ -680,6 +680,8 @@ export const deckFreezeBake = inngest.createFunction(
                   reviewBody = restored.html;
                 }
                 const decl = parseFrameSlide(reviewBody);
+                // A page-artwork slide keeps its backdrop through the review.
+                keepPageBackdrop(decl, slide.html, projectId);
                 let html = assembleFramedSlide(decl, ctx, revises, dims);
                 // Re-wrap with the deck's scoped CSS: reuse the stored
                 // slide's own style content minus the frame armor

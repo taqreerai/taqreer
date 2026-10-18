@@ -15,6 +15,7 @@
 // adds no new image machinery.
 
 import { isolateLatinRuns } from "@/lib/deck/bidi-isolate";
+import { isBgAssetSrc } from "@/lib/deck/carried-assets";
 
 // ── geometry ────────────────────────────────────────────────────────────────
 // Derived from the canvas so every format gets proportional framing. 16:9
@@ -250,6 +251,13 @@ export type FrameSlideDecl = {
    *  Claude) and persisted on the stored section so post-hoc re-assemblies
    *  (vision revision, partial regen, unlock) re-emit it without the brief. */
   bgRef: string | null;
+  /** data-bg-asset - the model's marker that this slide IS a carried page
+   *  artwork (Enhance, PDF). Only the server turns it into bgAssetSrc. */
+  bgAsset: string | null;
+  /** data-bg-asset-src - canonical /api/assets URL of the page artwork shown
+   *  full-bleed behind the slide, stamped server-side (lib/deck/carried-assets)
+   *  and persisted on the stored section so re-assemblies re-emit it. */
+  bgAssetSrc: string | null;
   bgScrim: "none" | "soft" | "strong";
   deckTitle: string | null;
   /** Cover's data-deck-slides = the model's declared intended slide total
@@ -305,6 +313,8 @@ export function parseFrameSlide(sectionHtml: string): FrameSlideDecl {
     bgPrompt: attr(openTag, "data-bg-prompt"),
     bgSource: attr(openTag, "data-bg-source"),
     bgRef: attr(openTag, "data-bg-ref"),
+    bgAsset: attr(openTag, "data-bg-asset"),
+    bgAssetSrc: ((v) => (isBgAssetSrc(v) ? v : null))(attr(openTag, "data-bg-asset-src")),
     bgScrim: scrim === "soft" || scrim === "strong" ? scrim : "none",
     deckTitle: attr(openTag, "data-deck-title"),
     deckSlides: attr(openTag, "data-deck-slides"),
@@ -386,7 +396,10 @@ export function assembleFramedSlide(
     : `<div class="tq-bg" data-tq-lock="1"></div>`;
   let panelHtml = "";
   let wellStyle = "";
-  if (decl.bg === "image" && decl.bgPrompt) {
+  if (decl.bgAssetSrc) {
+    // A carried page artwork (Enhance, PDF): the user's own picture, full-bleed.
+    panelHtml = `<div class="tq-bg" data-tq-lock="1"><img data-asset-bg="1" src="${esc(decl.bgAssetSrc)}" alt="" style="width:100%;height:100%;object-fit:cover;display:block"/></div>`;
+  } else if (decl.bg === "image" && decl.bgPrompt) {
     panelHtml = `<div class="tq-bg" data-tq-lock="1">${bgImg("landscape")}${scrimDiv}</div>`;
   } else if (
     (decl.bg === "split-start" || decl.bg === "split-end") &&
@@ -440,6 +453,7 @@ export function assembleFramedSlide(
       (decl.bgPrompt ? ` data-bg-prompt="${esc(decl.bgPrompt)}"` : "") +
       (decl.bgSource ? ` data-bg-source="${esc(decl.bgSource)}"` : "") +
       (decl.bgRef ? ` data-bg-ref="${esc(decl.bgRef)}"` : "") +
+      (decl.bgAssetSrc ? ` data-bg-asset-src="${esc(decl.bgAssetSrc)}"` : "") +
       (decl.bgScrim !== "none" ? ` data-bg-scrim="${decl.bgScrim}"` : "") +
       (isCover && ctx.deckTitle ? ` data-deck-title="${esc(ctx.deckTitle)}"` : "") +
       `>${ground}${panelHtml}${wellHtml}${chromeHtml}</section>`,
