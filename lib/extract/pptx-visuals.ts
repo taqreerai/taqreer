@@ -27,6 +27,8 @@ const NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main";
 const NS_P = "http://schemas.openxmlformats.org/presentationml/2006/main";
 const NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 const NS_MC = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+// SmartArt's pre-rendered drawing part (ppt/diagrams/drawingN.xml).
+const NS_DSP = "http://schemas.microsoft.com/office/drawing/2008/diagram";
 
 // Below this share of the slide area a picture is an icon / logo / badge.
 const SMALL_AREA = 0.03;
@@ -280,6 +282,55 @@ function readSrcRect(blipFill: XmlElement | null): PptxPicture["srcRect"] {
   return rect.l || rect.t || rect.r || rect.b ? rect : null;
 }
 
+// A picture filling a SmartArt shape: `a:srcRect` trims the media, then
+// `a:stretch/a:fillRect` places the (trimmed) media relative to the shape. A
+// NEGATIVE fillRect inset means the media is drawn larger than the shape and
+// the shape's edge cuts it (PowerPoint's "fill" of a picture list). Both turn
+// into one set of trimmed fractions of the ORIGINAL media.
+function readBlipCrop(blipFill: XmlElement | null): PptxPicture["srcRect"] {
+  const base = readSrcRect(blipFill) ?? { l: 0, t: 0, r: 0, b: 0 };
+  const fr = child(child(blipFill, NS_A, "stretch"), NS_A, "fillRect");
+  if (!fr) return readSrcRect(blipFill);
+  const inset = (k: string) => num(fr.getAttribute(k)) / 100000; // fraction of the shape, may be negative
+  const l = inset("l"), t = inset("t"), r = inset("r"), b = inset("b");
+  const w = 1 - l - r, h = 1 - t - b; // media size as a multiple of the shape
+  if (!(w > 0) || !(h > 0)) return readSrcRect(blipFill);
+  const cutL = Math.max(0, -l) / w, cutR = Math.max(0, -r) / w;
+  const cutT = Math.max(0, -t) / h, cutB = Math.max(0, -b) / h;
+  const spanX = 1 - base.l - base.r, spanY = 1 - base.t - base.b;
+  const out = {
+    l: base.l + spanX * cutL,
+    r: base.r + spanX * cutR,
+    t: base.t + spanY * cutT,
+    b: base.b + spanY * cutB,
+  };
+  return out.l || out.t || out.r || out.b ? out : null;
+}
+
+type PendingDiagram = {
+  slideIndex: number;
+  dataPartPath: string | null; // the diagram's data part (r:dm), holds the link to its drawing
+  slideRels: Map<string, { target: string; external: boolean }>;
+  slideRelsXml: string;
+  dir: string;
+  frame: { x: number; y: number; cx: number; cy: number };
+  map: Mapper;
+};
+
+// SmartArt keeps its pictures in the diagram's pre-rendered drawing part, not
+// in the slide XML. Find the drawing of ONE diagram frame: the data part names
+// it (dsp:dataModelExt relId -> a slide relationship); a slide with a single
+// diagram drawing falls back to that one.
+async function diagramDrawingPath(zip: JSZip, d: PendingDiagram, drawingRels: { id: string; path: string }[]): Promise<string | null> {
+  if (d.dataPartPath) {
+    const dataXml = await zip.files[d.dataPartPath]?.async("string");
+    const relId = dataXml?.match(/<dsp:dataModelExt[^>]*?relId="([^"]+)"/)?.[1];
+    const rel = relId ? d.slideRels.get(relId) : undefined;
+    if (rel && !rel.external) return resolvePart(d.dir, rel.target);
+  }
+  return drawingRels.length === 1 ? drawingRels[0].path : null;
+}
+
 /** Parse a PPTX buffer into per-slide pictures + chart / table frames. */
 export async function extractPptxVisuals(buffer: Buffer): Promise<PptxVisuals> {
   const zip = await JSZip.loadAsync(buffer);
@@ -393,11 +444,74 @@ export async function extractPptxVisuals(buffer: Buffer): Promise<PptxVisuals> {
             if (rel && !rel.external) partPath = resolvePart(dir, rel.target);
           }
           const table = kind === "table" && graphicData ? readTable(graphicData) : undefined;
+          if (kind === "diagram" && graphicData) {
+            const relIds = children(graphicData).find((g) => g.localName === "relIds");
+            const dm = relIds?.getAttributeNS(NS_R, "dm");
+            const dmRel = dm ? rels.get(dm) : undefined;
+            pendingDiagrams.push({
+              slideIndex,
+              dataPartPath: dmRel && !dmRel.external ? resolvePart(dir, dmRel.target) : null,
+              slideRels: rels,
+              slideRelsXml: relsXml,
+              dir,
+              frame: x,
+              map,
+            });
+          }
           frames.push({ slideIndex, kind, box: toBox(map(x.x, x.y, x.cx, x.cy)), partPath, ...(table ? { table } : {}) });
         }
       }
     };
+    const pendingDiagrams: PendingDiagram[] = [];
     visit(spTree, IDENTITY);
+
+    // SmartArt pictures (picture-list diagrams etc.): drawn from the diagram's
+    // drawing part, placed inside the diagram frame.
+    const drawingRels: { id: string; path: string }[] = [];
+    for (const m of relsXml.matchAll(/<Relationship\b[^>]*?\/?>/g)) {
+      if (!m[0].includes("/diagramDrawing\"")) continue;
+      const id = m[0].match(/\bId="([^"]+)"/)?.[1];
+      const target = m[0].match(/\bTarget="([^"]+)"/)?.[1];
+      if (id && target) drawingRels.push({ id, path: resolvePart(dir, target) });
+    }
+    for (const d of pendingDiagrams) {
+      const drawingPath = await diagramDrawingPath(zip, d, drawingRels);
+      const drawingXml = drawingPath ? await zip.files[drawingPath]?.async("string") : null;
+      if (!drawingPath || !drawingXml) continue;
+      const drawingDir = drawingPath.slice(0, drawingPath.lastIndexOf("/"));
+      const dRels = parseRels((await zip.files[relsPathOf(drawingPath)]?.async("string")) ?? "");
+      const dDoc = new DOMParser().parseFromString(drawingXml, "text/xml");
+      const shapes = dDoc.getElementsByTagNameNS(NS_DSP, "sp");
+      for (let i = 0; i < shapes.length; i++) {
+        const sp = shapes[i] as unknown as XmlElement;
+        const cNvPr = child(child(sp, NS_DSP, "nvSpPr"), NS_DSP, "cNvPr");
+        if (cNvPr?.getAttribute("hidden") === "1") continue;
+        const spPr = child(sp, NS_DSP, "spPr");
+        const sx = readXfrm(child(spPr, NS_A, "xfrm"));
+        const blipFill = child(spPr, NS_A, "blipFill");
+        const rid = child(blipFill, NS_A, "blip")?.getAttributeNS(NS_R, "embed");
+        if (!sx || !rid) continue;
+        const rel = dRels.get(rid);
+        if (!rel || rel.external) continue;
+        const mediaPath = resolvePart(drawingDir, rel.target);
+        if (!zip.files[mediaPath]) continue;
+        pictures.push({
+          slideIndex,
+          shapeId: cNvPr?.getAttribute("id") ?? "",
+          name: cNvPr?.getAttribute("name") ?? "",
+          altText: cNvPr?.getAttribute("descr") || null,
+          // The drawing's offsets are EMU inside the frame (same scale as it).
+          box: toBox(d.map(d.frame.x + sx.x, d.frame.y + sx.y, sx.cx, sx.cy)),
+          mediaPath,
+          format: "unknown", // resolved from the bytes after the walk
+          srcRect: readBlipCrop(blipFill),
+          rotationDeg: sx.rot,
+          flipH: sx.flipH,
+          flipV: sx.flipV,
+          asShapeFill: true,
+        });
+      }
+    }
   }
 
   const formats = new Map<string, PptxPicture["format"]>();
