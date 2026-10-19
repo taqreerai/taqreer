@@ -20,6 +20,7 @@ import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 import { DECK_STYLES, STYLE_SECTORS, type DeckStyleKey, type StyleSector } from "@/lib/design-styles";
 import { SocialStyleThumb, StyleThumb, type SocialThumbKey } from "@/components/create/StyleThumb";
 import { StyleInfoButton } from "@/components/create/StyleInfoButton";
+import { LookThumb, hasLookThumb } from "@/components/create/LookThumb";
 import { PickerExpandButton, PickerExpandModal } from "@/components/create/PickerExpandModal";
 import { FIT_MAX_ROWS, useFitCount } from "@/components/create/useFitCount";
 
@@ -137,7 +138,7 @@ export function DesignStylePicker({
   variant?: "deck" | "social";
 }) {
   const dict = useDict();
-  const { dir } = useLocale();
+  const { dir, locale } = useLocale();
   const t = dict.flows.stylePicker;
   const isSocial = variant === "social";
   // Style list, preview renderer, and descriptions all switch on the variant.
@@ -153,6 +154,8 @@ export function DesignStylePicker({
   const renderMini = (key: string) =>
     isSocial ? (
       <SocialStyleThumb k={key as SocialThumbKey} title={t.thumbTitle} dir={dir} />
+    ) : hasLookThumb(locale, key) ? (
+      <LookThumb k={key} locale={locale} />
     ) : (
       <StyleThumb k={key as DeckStyleKey | "auto"} title={t.thumbTitle} dir={dir} />
     );
@@ -352,7 +355,7 @@ export function DesignStyleGrid({
   fit?: boolean;
 }) {
   const dict = useDict();
-  const { dir } = useLocale();
+  const { dir, locale } = useLocale();
   const t = dict.flows.stylePicker;
   const names: Record<string, string> = t.names;
   const descs: Record<string, string> = t.descs;
@@ -403,7 +406,11 @@ export function DesignStyleGrid({
           }`}
         >
           <span className="relative block">
-            <StyleThumb k={tl.key} title={t.thumbTitle} dir={dir} />
+            {hasLookThumb(locale, tl.key) ? (
+              <LookThumb k={tl.key} locale={locale} />
+            ) : (
+              <StyleThumb k={tl.key} title={t.thumbTitle} dir={dir} />
+            )}
             {rank(tl.value) >= 0 ? (
               <span className="style-suggested-badge pointer-events-none absolute start-1.5 top-1.5">
                 <span className="material-symbols-outlined" aria-hidden="true">auto_awesome</span>
