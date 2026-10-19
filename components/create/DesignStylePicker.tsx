@@ -335,10 +335,14 @@ export function DesignStyleGrid({
   disabled = false,
   wide = false,
   fit = false,
+  suggested = [],
 }: {
   value: string | null;
   onChange: (next: string | null) => void;
   disabled?: boolean;
+  // Style labels suggested for the user's content, best first (/create,
+  // 2026-10-19): listed right after Auto with a "Suggested" badge.
+  suggested?: readonly string[];
   // Full-width grid for /create's own Design step (2026-10-06): big tiles
   // with the one-line description, no inner scroll and no "Show all" modal.
   wide?: boolean;
@@ -373,7 +377,13 @@ export function DesignStyleGrid({
       value: s.label,
     })),
   ];
-  const tiles = allTiles.filter((tl) => inSector(tl.key, sector));
+  const rank = (v: string | null) => (v ? suggested.indexOf(v) : -1);
+  const ordered = [
+    ...allTiles.filter((tl) => tl.value === null),
+    ...allTiles.filter((tl) => rank(tl.value) >= 0).sort((a, b) => rank(a.value) - rank(b.value)),
+    ...allTiles.filter((tl) => tl.value !== null && rank(tl.value) < 0),
+  ];
+  const tiles = ordered.filter((tl) => inSector(tl.key, sector));
   const { boxRef: fitBoxRef, gridRef: fitGridRef, count: fitCount } = useFitCount(wide && fit, tiles.length, FIT_MAX_ROWS);
 
   const tile = (tl: (typeof allTiles)[number], big: boolean) => {
@@ -392,7 +402,15 @@ export function DesignStyleGrid({
             active ? "is-active" : ""
           }`}
         >
-          <StyleThumb k={tl.key} title={t.thumbTitle} dir={dir} />
+          <span className="relative block">
+            <StyleThumb k={tl.key} title={t.thumbTitle} dir={dir} />
+            {rank(tl.value) >= 0 ? (
+              <span className="style-suggested-badge pointer-events-none absolute start-1.5 top-1.5">
+                <span className="material-symbols-outlined" aria-hidden="true">auto_awesome</span>
+                {t.suggested}
+              </span>
+            ) : null}
+          </span>
           <span className={`truncate font-medium text-foreground/85 ${big ? "text-[13px]" : "text-[11px]"}`}>
             {tl.name}
           </span>

@@ -43,6 +43,9 @@ export type GuestDraftSettings = {
   persistentText: string;
   templateId: string | null;
   designStyle: string | null;
+  // Who chose the style (2026-10-19): a "Suggested for your content" tile or the
+  // user. Absent on older drafts.
+  designStyleSource?: "manual" | "suggested" | null;
   lookTab: "templates" | "styles";
   colors: string[];
   fontMode: "google" | "upload";

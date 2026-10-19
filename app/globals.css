@@ -2399,6 +2399,25 @@ body:has(.tq-support-toolbar) .support-fab-anchor {
   box-shadow: 0 0 0 1px var(--tq-brand-blue);
   background: color-mix(in srgb, var(--tq-brand-blue) 8%, transparent);
 }
+/* "Suggested for your content" chip on a deck-style tile (2026-10-19): the
+   template tile's Free badge treatment, with a sparkle. */
+.style-suggested-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border-radius: 999px;
+  background: var(--tq-brand-blue);
+  color: #fff;
+  padding-block: 2px;
+  padding-inline: 6px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.2);
+}
+.style-suggested-badge .material-symbols-outlined {
+  font-size: 13px;
+}
 /* Templates | Styles switch on the Design step: full-width, the picked tab
    filled with the brand blue. */
 .design-tabs {

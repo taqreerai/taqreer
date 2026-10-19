@@ -503,6 +503,8 @@ export function DesignCard({
   templateNote,
   upload,
   disabled = false,
+  stylesFirst = false,
+  suggestedStyles,
 }: {
   tab: "templates" | "styles";
   onTab: (next: "templates" | "styles") => void;
@@ -516,6 +518,10 @@ export function DesignCard({
   // /create only: the "Upload your own" tile in the Templates tab.
   upload?: TemplateUploadControl;
   disabled?: boolean;
+  // /create (2026-10-19): the Styles tab comes first, and its grid leads with
+  // the styles suggested for the content.
+  stylesFirst?: boolean;
+  suggestedStyles?: readonly string[];
 }) {
   const t = useDict().flows;
   return (
@@ -523,7 +529,7 @@ export function DesignCard({
       title={t.design.card}
       end={
         <div role="tablist" aria-label={t.design.card} className="design-tabs w-full max-w-xs">
-          {(["templates", "styles"] as const).map((k) => (
+          {(stylesFirst ? (["styles", "templates"] as const) : (["templates", "styles"] as const)).map((k) => (
             <button
               key={k}
               type="button"
@@ -563,6 +569,7 @@ export function DesignCard({
             value={templateId ? "__template__" : designStyle}
             onChange={onDesignStyle}
             disabled={disabled}
+            suggested={suggestedStyles}
           />
         </div>
       </div>

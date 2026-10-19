@@ -45,6 +45,7 @@ import {
 import { normalizePlan } from "@/lib/plan";
 import { mintTemplateDesignFile } from "@/lib/template/mint-design";
 import { pickAutoStyle } from "@/lib/create/auto-style";
+import { uploadedSourceText } from "@/lib/create/source-sample";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
 import { REFERRAL_COOKIE } from "@/lib/referral-code";
 import { clientIp, rateLimited } from "@/lib/api/rate-limit";
@@ -243,6 +244,7 @@ type CreateProjectPayload = {
   };
   rules?: {
     designStyle: string | null;
+    designStyleSource?: "manual" | "suggested" | "auto" | null;
     fixTypos: boolean;
     pagination: boolean;
     persistent: {
@@ -1038,20 +1040,43 @@ export async function POST(request: Request) {
   // one picked from the style list to fit its content (lib/create/auto-style.ts).
   // Create only: not enhance / mimic / social / datasheet, not a template run, and
   // only when the client sent a rules object. Any failure leaves the style unset.
+  // Uploads (2026-10-19) read their text from the extract job that produced the
+  // file. `designStyleSource` records who chose the style: "manual" (picked in
+  // the grid), "suggested" (a "Suggested for your content" tile, kept or
+  // clicked) or "auto" (picked here).
   let briefRules = payload.rules ?? null;
+  if (briefRules) {
+    briefRules = {
+      ...briefRules,
+      designStyleSource: briefRules.designStyle
+        ? briefRules.designStyleSource === "suggested"
+          ? "suggested"
+          : "manual"
+        : null,
+    };
+  }
+  const uploadFileId =
+    validatedSource?.kind === "scratch"
+      ? (validatedSource as { anthropicFileId?: string }).anthropicFileId
+      : undefined;
   if (
     briefRules &&
     !briefRules.designStyle &&
     creditFlow === "create" &&
     !(typeof payload.templateId === "string" && payload.templateId) &&
-    payload.content?.type === "text"
+    (payload.content?.type === "text" ||
+      (payload.content?.type === "file" && typeof uploadFileId === "string" && uploadFileId))
   ) {
+    const text =
+      payload.content.type === "text"
+        ? (payload.content.text ?? "")
+        : await uploadedSourceText(user.id, uploadFileId!);
     const autoStyle = await pickAutoStyle({
       title,
-      text: payload.content.text ?? "",
+      text,
       imagesMode: payload.imagesMode === true,
     });
-    if (autoStyle) briefRules = { ...briefRules, designStyle: autoStyle };
+    if (autoStyle) briefRules = { ...briefRules, designStyle: autoStyle, designStyleSource: "auto" };
   }
 
   const brief = {

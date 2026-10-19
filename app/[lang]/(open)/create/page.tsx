@@ -68,6 +68,7 @@ import { isImagesLocked } from "@/lib/images/images-gating";
 import { displaySlideEstimate } from "@/lib/credits/cost";
 import { localizedHref } from "@/lib/i18n/navigation";
 import { localizedExtractError } from "@/lib/extract/error-codes";
+import { DECK_STYLES } from "@/lib/design-styles";
 import { AnimatePresence, motion } from "framer-motion";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { PersistentRow } from "@/components/brand/PersistentRow";
@@ -224,6 +225,9 @@ export default function CreatePage() {
   const [contentAnthropicFileId, setContentAnthropicFileId] = useState<
     string | null
   >(null);
+  // The uploaded file's text layer (from the extract result), for the style
+  // suggestions on the Design step.
+  const [contentFileText, setContentFileText] = useState("");
   // Slide size now lives in the OUTPUT card (alongside slide count
   // + pagination + persistent overlay). Language stays close to the
   // textarea since it modulates the typed content directly.
@@ -380,9 +384,23 @@ export default function CreatePage() {
   // deck-generate DESIGN_STYLE_DIRECTIVES injection (the directive leads the
   // user message). UI-only picker for now; polished modal UX lands later.
   const [designStyle, setDesignStyle] = useState<string | null>(null);
+  // Styles suggested for the content (2026-10-19, best first) and who chose the
+  // current style: a suggested tile or the user. The first suggestion is applied
+  // until the user picks something themselves.
+  const [suggestedStyles, setSuggestedStyles] = useState<string[]>([]);
+  const [designStyleSource, setDesignStyleSource] = useState<"manual" | "suggested" | null>(null);
+  const styleTouchedRef = useRef(false);
   const onDesignStyle = useCallback(
     (style: string | null) => {
+      const rank = style ? suggestedStyles.indexOf(style) : -1;
+      styleTouchedRef.current = true;
       setDesignStyle(style);
+      setDesignStyleSource(style ? (rank >= 0 ? "suggested" : "manual") : null);
+      posthog.capture("design_style_picked", {
+        flow: "create",
+        style: style ?? "auto",
+        suggestedRank: rank >= 0 ? rank + 1 : null,
+      });
       setTemplate(null);
       // Image-leaning styles auto-enable images mode — overridable: we only
       // flip it ON, never force it off, so the user keeps control (Duotone/
@@ -392,7 +410,7 @@ export default function CreatePage() {
         setImagesMode(true);
       }
     },
-    [imagesUnlocked],
+    [imagesUnlocked, suggestedStyles],
   );
   const [persistentText, setPersistentText] = useState<string>("");
 
@@ -400,7 +418,9 @@ export default function CreatePage() {
   // A picked template: its minted design reference + format. Null = design
   // from scratch (optionally steered by designStyle). Mutually exclusive with
   // a design style: picking one clears the other.
-  const [lookTab, setLookTab] = useState<"templates" | "styles">("templates");
+  // Styles open first (2026-10-19): they are on every plan and change the
+  // whole deck's look.
+  const [lookTab, setLookTab] = useState<"templates" | "styles">("styles");
   // The template's colours + font pre-fill the brand rows (the user can still
   // change them; the deck is recoloured to whatever is set at Generate).
   const applyTemplateUse = useCallback((use: MimicTemplateUse) => {
@@ -612,6 +632,7 @@ export default function CreatePage() {
     if (!valid) return;
     setContentFile(valid);
     setContentText("");
+    setContentFileText("");
     // Reset extraction state on every new pick so the polling
     // effect below restarts cleanly. setStage("extracting") at the
     // call site (not inside the useEffect) keeps the lint rule
@@ -624,6 +645,7 @@ export default function CreatePage() {
   const removeContentFile = () => {
     setContentFile(null);
     setContentAnthropicFileId(null);
+    setContentFileText("");
     setContentFileStage("idle");
     setError("");
   };
@@ -679,10 +701,19 @@ export default function CreatePage() {
           const body = (await res.json()) as
             | { status: "queued" | "processing" }
             | { status: "failed"; error: string }
-            | { status: "completed"; result: { anthropicFileId: string } };
+            | {
+                status: "completed";
+                result: { anthropicFileId: string; fullText?: string; textPerSlide?: string[] };
+              };
           if (body.status === "completed") {
             if (!isCurrent) return;
             setContentAnthropicFileId(body.result.anthropicFileId);
+            setContentFileText(
+              (body.result.fullText?.trim()
+                ? body.result.fullText
+                : (body.result.textPerSlide ?? []).join("\n")
+              ).slice(0, 1200),
+            );
             setContentFileStage("ready");
             return;
           }
@@ -746,6 +777,7 @@ export default function CreatePage() {
       persistentText,
       templateId: template && template.id !== DESIGN_UPLOAD_ID ? template.id : null,
       designStyle,
+      designStyleSource,
       lookTab,
       colors,
       fontMode: brandFont.mode,
@@ -767,6 +799,7 @@ export default function CreatePage() {
       persistentText,
       template,
       designStyle,
+      designStyleSource,
       lookTab,
       colors,
       brandFont,
@@ -854,8 +887,12 @@ export default function CreatePage() {
       setContentText(d.contentText ?? "");
       if (d.language === "ar" || d.language === "en") setLanguage(d.language);
       setPersistentText(d.persistentText ?? "");
-      setLookTab(d.lookTab === "styles" ? "styles" : "templates");
+      setLookTab(d.lookTab === "templates" ? "templates" : "styles");
       setDesignStyle(d.designStyle ?? null);
+      if (d.designStyle) {
+        styleTouchedRef.current = true;
+        setDesignStyleSource(d.designStyleSource === "suggested" ? "suggested" : "manual");
+      }
       setColors(Array.isArray(d.colors) ? d.colors.slice(0, MAX_PALETTE) : []);
       if (d.fontMode === "upload" && d.uploadedFonts.length > 0) {
         setBrandFont({
@@ -1054,6 +1091,7 @@ export default function CreatePage() {
 
       const rules = {
         designStyle: template ? null : designStyle,
+        designStyleSource: template || !designStyle ? null : designStyleSource,
         fixTypos: false,
         pagination,
         persistent: persistentText.trim()
@@ -1163,9 +1201,63 @@ export default function CreatePage() {
   const stepTitles = [t.contentCard, t.design.card];
   const hasContent = hasText || hasFile;
   const goToStep = (next: number) => {
+    if (next === 1 && step !== 1) {
+      posthog.capture("design_step_viewed", { flow: "create", tab: lookTab });
+    }
     setStep(Math.max(0, Math.min(LAST_STEP, next)));
     scrollWizardTop();
   };
+
+  // Style suggestions (2026-10-19): on the Design step, ask once per content
+  // which styles fit it; the first one is applied unless the user already chose
+  // a style or a template (the refs keep the async reply from overriding that).
+  const templatePickedRef = useRef(false);
+  useEffect(() => {
+    templatePickedRef.current = template !== null;
+  }, [template]);
+  const suggestKeyRef = useRef("");
+  const styleSample = (hasFile ? contentFileText : contentText).trim().slice(0, 1200);
+  useEffect(() => {
+    if (step !== 1 || !styleSample) return;
+    const key = `${imagesMode ? 1 : 0}:${styleSample}`;
+    if (key === suggestKeyRef.current) return;
+    suggestKeyRef.current = key;
+    let alive = true;
+    let done = false;
+    fetch("/api/style-suggestions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: styleSample, imagesMode }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { styles?: unknown } | null) => {
+        done = true;
+        if (!alive) return;
+        const styles = (Array.isArray(data?.styles) ? data.styles : []).filter(
+          (s): s is string => typeof s === "string" && DECK_STYLES.some((d) => d.label === s),
+        );
+        setSuggestedStyles(styles);
+        const apply = !!styles[0] && !styleTouchedRef.current && !templatePickedRef.current;
+        if (apply) {
+          setDesignStyle(styles[0]);
+          setDesignStyleSource("suggested");
+        }
+        posthog.capture("design_styles_suggested", {
+          flow: "create",
+          styles,
+          applied: apply,
+          fromFile: hasFile,
+        });
+      })
+      .catch(() => {
+        done = true;
+      });
+    return () => {
+      alive = false;
+      // Interrupted before the reply: ask again next time.
+      if (!done) suggestKeyRef.current = "";
+    };
+  }, [step, styleSample, imagesMode, hasFile]);
 
   return (
     // `.tq-wizard-fit`: on a desktop viewport the page is exactly one viewport
@@ -1353,7 +1445,12 @@ export default function CreatePage() {
           <SplitStep visible={step === 1} label={t.design.card}>
             <DesignCard
               tab={lookTab}
-              onTab={setLookTab}
+              onTab={(next) => {
+                setLookTab(next);
+                posthog.capture("design_tab_switched", { flow: "create", tab: next });
+              }}
+              stylesFirst
+              suggestedStyles={suggestedStyles}
               templateId={template?.id ?? null}
               onPickTemplate={pickTemplate}
               onGuestPickTemplate={guest ? pickGuestTemplate : undefined}
