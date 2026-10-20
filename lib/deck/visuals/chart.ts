@@ -9,7 +9,14 @@
 // bridge / waterfall) keep their place in the stack but are not drawn or listed.
 // Digits stay Latin. Pure string work, no DOM.
 
-export type ChartSeries = { name: string; values: (number | null)[]; hidden: boolean };
+export type ChartSeries = {
+  name: string;
+  values: (number | null)[];
+  hidden: boolean;
+  // Waterfall: fixed fill, and the label to print per point ("" = none)
+  color?: string;
+  labels?: (string | null)[];
+};
 export type ChartSpec = {
   kind: "chart";
   type: "column" | "bar" | "line" | "area" | "pie";
@@ -20,6 +27,10 @@ export type ChartSpec = {
   series: ChartSeries[];
   valueTitle: string;
   categoryTitle: string;
+  // false: no legend (a waterfall colours by meaning, not by series name)
+  legend?: boolean;
+  // true: values printed above each bar (small waterfall steps)
+  outsideLabels?: boolean;
 };
 
 export const isChartSpec = (s: unknown): s is ChartSpec =>
@@ -99,7 +110,7 @@ export function renderChartHtml(spec: ChartSpec, opts: { boxWidth: number | null
   // Legend: visible series only, one row at the top.
   let legendH = 0;
   let legend = "";
-  const needLegend = spec.type === "pie" ? false : shown.length > 1;
+  const needLegend = spec.type === "pie" || spec.legend === false ? false : shown.length > 1;
   if (needLegend) {
     legendH = fs * 2;
     let x = 0;
@@ -220,10 +231,12 @@ export function renderChartHtml(spec: ChartSpec, opts: { boxWidth: number | null
         const y = horiz ? mid - barW / 2 : Math.min(p0, p1);
         const w = horiz ? Math.abs(vPos(b) - vPos(a)) : barW;
         const h = horiz ? barW : Math.abs(p0 - p1);
-        out += `<rect x="${x}" y="${y}" width="${Math.max(0, w)}" height="${Math.max(0, h)}" rx="2" fill="${colorOf(si)}"/>`;
-        if (labelOk && Math.abs(v) > 0) {
-          const txt = spec.percent ? `${Math.round(v)}%` : compact(raw);
-          if (stacked) {
+        out += `<rect x="${x}" y="${y}" width="${Math.max(0, w)}" height="${Math.max(0, h)}" rx="2" fill="${s.color ?? colorOf(si)}"/>`;
+        const own = s.labels ? s.labels[c] : undefined;
+        if (labelOk && Math.abs(v) > 0 && own !== "" && own !== null) {
+          const txt = own ?? (spec.percent ? `${Math.round(v)}%` : compact(raw));
+          if (spec.outsideLabels && !horiz) out += textEl(x + w / 2, y - 8, txt, fs * 0.9, "middle");
+          else if (stacked) {
             const fits = horiz ? w > txt.length * fs * 0.62 : h > fs * 1.4 && w > txt.length * fs * 0.55;
             if (fits) out += textEl(x + w / 2, y + h / 2 + fs * 0.32, txt, fs * 0.9, "middle", 'fill="#fff"');
           } else if (horiz) out += textEl(raw >= 0 ? x + w + 8 : x - 8, mid + fs * 0.3, txt, fs * 0.9, raw >= 0 ? "start" : "end");

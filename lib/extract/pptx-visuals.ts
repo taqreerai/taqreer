@@ -440,7 +440,7 @@ export async function extractPptxVisuals(buffer: Buffer): Promise<PptxVisuals> {
           const graphicData = deep(c, NS_A, "graphicData");
           const uri = graphicData?.getAttribute("uri") ?? "";
           if (!x) continue;
-          const kind: PptxFrame["kind"] = uri.endsWith("/chart") ? "chart" : uri.endsWith("/table") ? "table" : uri.endsWith("/diagram") ? "diagram" : "other";
+          const kind: PptxFrame["kind"] = (uri.endsWith("/chart") || uri.endsWith("/chartex")) ? "chart" : uri.endsWith("/table") ? "table" : uri.endsWith("/diagram") ? "diagram" : "other";
           let partPath: string | null = null;
           if (kind === "chart" && graphicData) {
             const chartEl = children(graphicData).find((g) => g.localName === "chart");
