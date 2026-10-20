@@ -17,6 +17,7 @@
 // Pure string work (runs inside the stream's ingest, no DOM available).
 
 import { renderTableHtml, type TableSpec } from "@/lib/deck/visuals/table";
+import { isChartSpec, renderChartHtml, type ChartSpec } from "@/lib/deck/visuals/chart";
 import type { FrameSlideDecl } from "@/lib/deck/frame";
 
 const IMG_RE = /<img\b[^>]*>/gi;
@@ -53,7 +54,7 @@ function fitFor(style: string, aspect: number | undefined): "cover" | "contain" 
 // whatever the model put inside it is discarded. An unknown table id removes
 // the whole box. Nested divs are matched by depth, not by a lazy regex.
 
-const OPEN_TABLE_BOX_RE = /<div\b[^>]*\sdata-table\s*=\s*("([^"]*)"|'([^']*)')[^>]*>/gi;
+const OPEN_TABLE_BOX_RE = /<div\b[^>]*\sdata-(?:table|chart)\s*=\s*("([^"]*)"|'([^']*)')[^>]*>/gi;
 
 function closingDivIndex(html: string, from: number): number {
   const tagRe = /<\/?div\b[^>]*>/gi;
@@ -72,7 +73,7 @@ function mapTableBoxes(
   html: string,
   fill: (id: string, openTag: string, inner: string) => string | null,
 ): string {
-  if (!/data-table\s*=/i.test(html)) return html;
+  if (!/data-(?:table|chart)\s*=/i.test(html)) return html;
   let out = "";
   let cursor = 0;
   OPEN_TABLE_BOX_RE.lastIndex = 0;
@@ -93,12 +94,18 @@ function mapTableBoxes(
 
 export function enforceCarriedTables(
   html: string,
-  tables: ReadonlyMap<string, TableSpec>,
+  tables: ReadonlyMap<string, TableSpec | ChartSpec>,
 ): string {
   return mapTableBoxes(html, (id, openTag) => {
     const spec = tables.get(id);
     if (!spec) return null;
-    return renderTableHtml(spec, { boxHeight: px(attr(openTag, "style") ?? "", "height") });
+    const style = attr(openTag, "style") ?? "";
+    // A chart id only fills a data-chart box and a table id a data-table box.
+    const wantsChart = /\sdata-chart\s*=/i.test(openTag);
+    if (isChartSpec(spec) !== wantsChart) return null;
+    return isChartSpec(spec)
+      ? renderChartHtml(spec, { boxWidth: px(style, "width"), boxHeight: px(style, "height") })
+      : renderTableHtml(spec, { boxHeight: px(style, "height") });
   });
 }
 
@@ -137,9 +144,11 @@ export type CarriedPictureRef = {
   aspect: number;
   altText: string | null;
 };
-export type CarriedTableRef = { tableId: string; slideIndex: number; spec: TableSpec };
+export type CarriedTableRef = { tableId: string; slideIndex: number; spec: TableSpec | ChartSpec };
 
 export const CARRIED_TABLES_RULE = `  • ORIGINAL TABLES: FIRST RULE for tables. A slide may come with an "ORIGINAL TABLES" block. For each listed table put ONE EMPTY <div data-table="ID" style="width:...px;height:...px"></div> where the table belongs, sized to fit its rows (start from the suggested size). Never write that table's cells, rows or a <table> yourself, and never repeat its cells as text, cards or bullets elsewhere on the slide (they also appear in the exact-text block; that is the table): the system fills the box with the EXACT table, styled from the slide's text colour and --primary. A title or a short caption above it is fine.`;
+
+export const CARRIED_CHARTS_RULE = `  • ORIGINAL CHARTS: FIRST RULE for charts, overrides the "complex charts" placeholder rule below for every chart it covers. A slide may list "ORIGINAL CHARTS" in the same block as its tables. For each listed chart put ONE EMPTY <div data-chart="ID" style="width:...px;height:...px"></div> where the chart belongs (start from the suggested size; give it real room, charts need at least 700x420px). Never draw the chart, write its numbers, labels or a legend yourself, and never repeat its values as text, cards or bullets elsewhere (they also appear in the exact-text block; that is the chart): the system fills the box with the EXACT chart, in the slide's text colour and brand colours. A title or a short caption above it is fine.`;
 
 export const CARRIED_PICTURES_RULE = `  • ORIGINAL PICTURES: FIRST RULE, overrides the photo, logo and placeholder rules below for every picture it covers. A slide may come with an "ORIGINAL PICTURES" block: the user's own pictures from that slide, already extracted. Put EVERY listed picture on its redesigned slide, exactly once, as the given <img> tag with its data-asset and src attributes UNCHANGED (never write any other /api/assets URL). Give the img an inline style with an explicit width and height in px whose ratio matches the listed aspect (scale the example size; never square a wide picture), so nothing is cut off. Move, resize, round, frame or shadow it to suit the new design; never crop away its subject, recolour it with filters, cover it with text, or replace it with a generated image, a photo slot, an icon or an SVG drawing. "small" entries are icons, logos or badges: keep them small. Pictures NOT listed (template backgrounds, frame art) are not carried: do not recreate them. A "FULL-PAGE ARTWORK" entry is different: it OVERRIDES this whole rule for that slide (follow its own instructions). CONTRAST: every word must stay readable on what it sits on. If the original showed light text on a dark picture, panel or bar, and that backing is not carried over or has moved away from the text, give the text its own dark filled shape or switch it to a dark colour; never leave light text on a light slide ground.`;
 
@@ -173,9 +182,15 @@ export function carriedSlideBlock(
   }
   if (tables.length > 0) {
     out +=
-      `── SLIDE ${slideNumber}: ORIGINAL TABLES (the system fills each box) ──\n` +
+      `── SLIDE ${slideNumber}: ORIGINAL TABLES / CHARTS (the system fills each box) ──\n` +
       tables
         .map((t) => {
+          if (isChartSpec(t.spec)) {
+            const c = t.spec;
+            const shown = c.series.filter((x) => !x.hidden);
+            const wide = c.type === "pie" ? 900 : c.categories.length > 8 ? 1500 : 1100;
+            return `<div data-chart="${t.tableId}"></div>  CHART: ${c.type}${c.stacked ? " (stacked)" : ""}, ${c.categories.length} categories, ${shown.length} series${c.title ? `, titled "${c.title.replace(/["<>&]/g, "")}"` : ""}; suggested box ${wide}x520px`;
+          }
           const rows = t.spec.rows.length;
           const cells = t.spec.rows.flat();
           const chars = cells.reduce((n, c) => n + c.text.length, 0) / Math.max(1, cells.length);
@@ -210,7 +225,7 @@ export function snapshotCarried(html: string): CarriedSnapshot {
   }
   const tables = new Map<string, string>();
   mapTableBoxes(html, (id, _open, inner) => {
-    if (id && /<table\b/i.test(inner)) tables.set(id, inner);
+    if (id && /<(table|svg)\b/i.test(inner)) tables.set(id, inner);
     return inner;
   });
   return { assets, tables };
@@ -257,7 +272,9 @@ export function appendMissingCarried(
         `<img data-asset="${id}"${Number.isFinite(aspect) ? ` data-asset-aspect="${aspect}"` : ""} src="/api/assets/${projectId}/${id}" alt="" style="width:${w}px;height:${h}px;object-fit:cover;border-radius:16px">`,
       );
     } else if (snap.tables.has(id)) {
-      parts.push(`<div data-table="${id}" style="width:100%">${snap.tables.get(id)}</div>`);
+      const inner = snap.tables.get(id)!;
+      const isChart = /<svg\b/i.test(inner);
+      parts.push(`<div data-${isChart ? "chart" : "table"}="${id}" style="width:100%;${isChart ? "height:480px" : ""}">${inner}</div>`);
     }
   }
   if (parts.length === 0) return html;

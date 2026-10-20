@@ -22,6 +22,8 @@
 import JSZip from "jszip";
 import { DOMParser, type Element as XmlElement } from "@xmldom/xmldom";
 import { resolveSlideOrder } from "@/lib/extract/text-pptx";
+import { parseChartXml } from "@/lib/extract/pptx-chart";
+import type { ChartSpec } from "@/lib/deck/visuals/chart";
 
 const NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main";
 const NS_P = "http://schemas.openxmlformats.org/presentationml/2006/main";
@@ -84,6 +86,9 @@ export type PptxFrame = {
   partPath: string | null;
   // table: the exact cells, straight from a:tbl
   table?: PptxTable;
+  // chart: the exact series / categories read from the chart part (null when
+  // the chart type is not one we redraw)
+  chart?: ChartSpec;
 };
 
 // Exact text of a table cell: runs joined, paragraphs on their own line.
@@ -521,6 +526,18 @@ export async function extractPptxVisuals(buffer: Buffer): Promise<PptxVisuals> {
       formats.set(p.mediaPath, formatOf(p.mediaPath, bytes.subarray(0, 16)));
     }
     p.format = formats.get(p.mediaPath)!;
+  }
+
+  // Native charts: read their exact data (best-effort, a bad part just stays a placeholder).
+  for (const f of frames) {
+    if (f.kind !== "chart" || !f.partPath) continue;
+    try {
+      const cx = await zip.files[f.partPath]?.async("string");
+      const spec = cx ? parseChartXml(cx) : null;
+      if (spec) f.chart = spec;
+    } catch {
+      /* keep the placeholder handling */
+    }
   }
 
   return { slideCount: order.length, slideSize, pictures, frames };

@@ -52,6 +52,7 @@ import { frameKindFor } from "@/lib/deck/frame-kind";
 import {
   CARRIED_PICTURES_RULE,
   CARRIED_TABLES_RULE,
+  CARRIED_CHARTS_RULE,
   carriedSlideBlock,
   enforceCarriedAssetImgs,
   enforceCarriedTables,
@@ -270,6 +271,7 @@ export const deckUnlock = inngest.createFunction(
         "",
         "THE USER'S OWN PICTURES AND TABLES for the slides you author (from their uploaded deck):",
         ...(carried.tables.length > 0 ? [CARRIED_TABLES_RULE] : []),
+        ...(carried.tables.some((x) => "kind" in x.spec) ? [CARRIED_CHARTS_RULE] : []),
         ...(carried.pictures.length > 0 ? [CARRIED_PICTURES_RULE] : []),
         "",
         ...blocks,

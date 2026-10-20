@@ -71,6 +71,7 @@ import { frameKindFor } from "@/lib/deck/frame-kind";
 import {
   CARRIED_PICTURES_RULE,
   CARRIED_TABLES_RULE,
+  CARRIED_CHARTS_RULE,
   carriedSlideBlock,
   enforceCarriedAssetImgs,
   enforceCarriedTables,
@@ -1561,6 +1562,7 @@ function buildSourceTextDirective(
       ...((enhanceImages?.tables?.length ?? 0) > 0
         ? [
             CARRIED_TABLES_RULE,
+            ...(enhanceImages?.tables?.some((t) => "kind" in t.spec) ? [CARRIED_CHARTS_RULE] : []),
           ]
         : []),
       ...((enhanceImages?.pictures?.length ?? 0) > 0
@@ -1577,7 +1579,7 @@ function buildSourceTextDirective(
         ? `  • PHOTOS / photographic content → images mode is ON: recreate generic photos as generated-image boxes per ENHANCE IMAGES in the system rules; drop purely-decorative filler. MAPS, satellite imagery, SCREENSHOTS, scanned documents and photos of specific real people or places are NOT generated: use the photo slot below instead.`
         : `  • PHOTOS / photographic content → a PHOTO SLOT (below); drop purely-decorative filler.`,
       `  • PHOTO SLOT = a styled placeholder <div data-photoslot="<what the original shows, in the deck's language>"> with an explicit width and height matching the original picture's place in the layout, the palette for its background, and that same short description visible inside it ("Photo: portrait of CEO", "Map: route from A to B"). Exactly one element per picture, with no other content inside it besides the description. The user drops their original picture into it in the editor. The data-photoslot ATTRIBUTE ITSELF IS REQUIRED on that div: a plain div that only looks like a placeholder (a class like "slot" or "ph" with "Photo: ..." text and no attribute) is a dead box the editor cannot fill. Never draw such a box for a picture that is listed in ORIGINAL PICTURES: that picture is placed as its own <img>, not as a slot.`,
-      `  • COMPLEX CHARTS / DIAGRAMS (multi-series charts, org/flow charts, custom illustrations) → styled placeholder block with the title + any axis labels you can read. Do not reconstruct the data graphically.`,
+      `  • COMPLEX CHARTS / DIAGRAMS (multi-series charts, org/flow charts, custom illustrations; NOT a chart listed under ORIGINAL CHARTS, that one is placed per its own rule) → styled placeholder block with the title + any axis labels you can read. Do not reconstruct the data graphically.`,
       `  • SIMPLE ICONS (arrows, checkmarks, stars, Lucide-style strokes) → inline <svg> in your usual clean style.`,
       `  • DECORATIVE shapes that carry no meaning → skip them. The redesign is the priority.`,
     );

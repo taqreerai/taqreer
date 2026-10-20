@@ -15,6 +15,7 @@ import { buildPptxAssets } from "@/lib/extract/pptx-asset-crops";
 import { buildPdfAssets, classifyPdfPictures, extractPdfPictures, type PdfAsset } from "@/lib/extract/pdf-visuals";
 import { uploadSourceAsset } from "@/lib/storage/source-assets";
 import type { TableSpec } from "@/lib/deck/visuals/table";
+import type { ChartSpec } from "@/lib/deck/visuals/chart";
 
 const SOURCE_FILES_BUCKET = "source-files";
 const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
@@ -36,7 +37,8 @@ export type CarriedPicture = {
 export type CarriedTable = {
   tableId: string; // "s05-t1"
   slideIndex: number;
-  spec: TableSpec;
+  // A table's exact cells, or (id "s04-c1") a native chart's exact data.
+  spec: TableSpec | ChartSpec;
 };
 
 export type CarriedPictures = {
@@ -115,16 +117,20 @@ export async function prepareCarriedPictures(opts: {
 // Native tables, numbered per slide in document order.
 function tablesOf(visuals: Awaited<ReturnType<typeof extractPptxVisuals>>): CarriedTable[] {
   const perSlide = new Map<number, number>();
+  const perSlideCharts = new Map<number, number>();
   const out: CarriedTable[] = [];
   for (const f of visuals.frames) {
+    const sl = String(f.slideIndex + 1).padStart(2, "0");
+    if (f.kind === "chart" && f.chart) {
+      const n = (perSlideCharts.get(f.slideIndex) ?? 0) + 1;
+      perSlideCharts.set(f.slideIndex, n);
+      out.push({ tableId: `s${sl}-c${n}`, slideIndex: f.slideIndex, spec: f.chart });
+      continue;
+    }
     if (f.kind !== "table" || !f.table) continue;
     const n = (perSlide.get(f.slideIndex) ?? 0) + 1;
     perSlide.set(f.slideIndex, n);
-    out.push({
-      tableId: `s${String(f.slideIndex + 1).padStart(2, "0")}-t${n}`,
-      slideIndex: f.slideIndex,
-      spec: f.table,
-    });
+    out.push({ tableId: `s${sl}-t${n}`, slideIndex: f.slideIndex, spec: f.table });
   }
   return out;
 }
