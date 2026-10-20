@@ -10,6 +10,9 @@ export async function register() {
   if (process.env.NODE_ENV !== "production") return;
   if (process.env.NEXT_RUNTIME === "nodejs") {
     await import("./sentry.server.config");
+    // Re-sends extraction events the route could not hand to Inngest.
+    const { startExtractSweeper } = await import("./lib/extract/enqueue-sweeper");
+    startExtractSweeper();
   }
   if (process.env.NEXT_RUNTIME === "edge") {
     await import("./sentry.edge.config");

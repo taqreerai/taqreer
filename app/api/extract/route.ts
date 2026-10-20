@@ -26,9 +26,11 @@
 // is for the DERIVED slide PNGs the extraction produces.
 
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
+import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
+import { parkPendingExtract, type PendingExtractEvent } from "@/lib/extract/enqueue-sweeper";
 import { clientIp, rateLimited } from "@/lib/api/rate-limit";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
-import { inngest } from "@/inngest/client";
 import { createClient } from "@/lib/supabase/server";
 import { isBannedSupabaseUser } from "@/lib/api/ban-check";
 import { prisma } from "@/lib/prisma";
@@ -248,48 +250,52 @@ export async function POST(request: Request) {
     // ─── Fire the extraction event ─────────────────────────────────
     // step.run inside extract-source memoizes each phase, so retry
     // semantics are safe even though we hand off raw paths here.
+    const extractEvent = {
+      jobId: job.id,
+      supabaseUserId,
+      fileBucketPath: bucketPath,
+      fileName: file.name,
+      mime: resolvedMime,
+      // Lets extract-source skip the Anthropic PDF upload for enhance (it
+      // rasterizes per-slide PNGs at generation time).
+      flowKind: rawKind,
+      // "content" | "design" for /mimic: lets extract-source skip the upload for
+      // a content file consumed as text (see route above).
+      ...(mimicRole ? { mimicRole } : {}),
+    };
     try {
-      await inngest.send({
+      // Event-level id makes the trigger idempotent: re-firing with the same id
+      // is a no-op on Inngest's side, so the sweeper below can safely re-send.
+      await sendInngestEventWithRetry({
         name: "source.extract.requested",
-        // Event-level id makes the trigger idempotent — re-firing
-        // with the same id is a no-op on Inngest's side. Same jobId
-        // can't accidentally double-process.
         id: `extract:${job.id}`,
-        data: {
-          jobId: job.id,
-          supabaseUserId,
-          fileBucketPath: bucketPath,
-          fileName: file.name,
-          mime: resolvedMime,
-          // Lets extract-source skip the Anthropic PDF upload for
-          // enhance (it rasterizes per-slide PNGs at generation time).
-          flowKind: rawKind,
-          // "content" | "design" for /mimic — lets extract-source skip the
-          // upload for a content file consumed as text (see route above).
-          ...(mimicRole ? { mimicRole } : {}),
-        },
+        data: extractEvent,
       });
     } catch (err) {
-      // Event-send failure is recoverable — the file is uploaded,
-      // the Job row exists. A retry of POST /api/extract would
-      // create a new Job + duplicate the file. Cleaner: surface the
-      // failure and let the client retry. Mark this Job failed too.
-      console.error("[extract] inngest.send failed:", err);
-      await prisma.job
-        .update({
-          where: { id: job.id },
-          data: {
-            status: "failed",
-            outputJson: { error: "Failed to enqueue extraction job" },
-          },
-        })
-        .catch(() => {
-          /* best-effort */
-        });
-      return NextResponse.json(
-        { error: "Failed to start extraction. Try again." },
-        { status: 500 },
-      );
+      // The file is stored and the Job exists, so a failed hand-off must not
+      // cost the user a re-upload (2026-10-20: Inngest edge dropped every send
+      // for ~2 min and a 24 MB file had to be re-uploaded three times). Park the
+      // event on the Job; the sweeper (lib/extract/enqueue-sweeper.ts) keeps
+      // re-sending it and only fails the Job after 15 minutes.
+      console.error("[extract] inngest.send failed, parking for retry:", err);
+      Sentry.captureException(err, { tags: { area: "extract-enqueue" }, extra: { jobId: job.id } });
+      try {
+        await parkPendingExtract(extractEvent as PendingExtractEvent, err instanceof Error ? err.message : String(err));
+      } catch (parkErr) {
+        console.error("[extract] could not park the event:", parkErr);
+        await prisma.job
+          .update({
+            where: { id: job.id },
+            data: { status: "failed", outputJson: { error: "Failed to enqueue extraction job" } },
+          })
+          .catch(() => {
+            /* best-effort */
+          });
+        return NextResponse.json(
+          { error: "Failed to start extraction. Try again." },
+          { status: 500 },
+        );
+      }
     }
 
     return NextResponse.json({ jobId: job.id });
