@@ -27,7 +27,11 @@ export type CarriedPicture = {
   assetId: string;
   slideIndex: number; // presentation order, 0-based
   // "page": a page-sized artwork (PDF), shown full-bleed as the slide background.
-  cls: "content" | "small" | "page";
+  cls: "content" | "small" | "page" | "backdrop";
+  // Where the picture sat on the source slide, as fractions of the slide: the
+  // redesign keeps about the same visual weight (before 2026-10-20 every
+  // picture was suggested at one fixed size, which shrank full-bleed photos).
+  box?: { x: number; y: number; w: number; h: number };
   aspect: number; // width / height on the original slide
   altText: string | null;
 };
@@ -84,6 +88,7 @@ export async function prepareCarriedPictures(opts: {
   }
 
   const storable = assets.filter((a) => a.file.kind === "image");
+  const backdropIds = fullSlidePhotos(storable);
   for (let i = 0; i < storable.length; i += UPLOAD_PARALLEL) {
     await Promise.all(
       storable.slice(i, i + UPLOAD_PARALLEL).map((a) => {
@@ -103,7 +108,8 @@ export async function prepareCarriedPictures(opts: {
     pictures: storable.map((a) => ({
       assetId: a.assetId,
       slideIndex: a.slideIndex,
-      cls: a.cls,
+      cls: backdropIds.has(a.assetId) ? ("backdrop" as const) : a.cls,
+      box: { x: round3(a.box.x), y: round3(a.box.y), w: round3(a.box.w), h: round3(a.box.h) },
       // The PICTURE's own proportions (after the slide's crop), not the shape's:
       // a stretched source shape would otherwise make object-fit: cover cut it.
       aspect: Math.round((a.file.kind === "image" ? a.file.width / a.file.height : a.aspect) * 100) / 100,
@@ -112,6 +118,25 @@ export async function prepareCarriedPictures(opts: {
     skipped: assets.length - storable.length,
     tables,
   };
+}
+
+const round3 = (n: number) => Math.round(n * 1000) / 1000;
+
+// A content picture that covers the slide (visible share >= 85%, see below) is that
+// slide's photo background, not a picture to frame. One per slide: the largest.
+export function fullSlidePhotos(assets: readonly PdfAsset[]): Set<string> {
+  const best = new Map<number, { id: string; area: number }>();
+  for (const a of assets) {
+    if (a.cls !== "content") continue;
+    const vw = Math.max(0, Math.min(1, a.box.x + a.box.w) - Math.max(0, a.box.x));
+    const vh = Math.max(0, Math.min(1, a.box.y + a.box.h) - Math.max(0, a.box.y));
+    const area = vw * vh;
+    // Covers the slide, or spans its full height / width and most of the other
+    // side (a poster-style cover whose art bleeds off one edge).
+    const hero = area >= 0.85 || (area >= 0.6 && (vh >= 0.95 || vw >= 0.95));
+    if (hero && area > (best.get(a.slideIndex)?.area ?? 0)) best.set(a.slideIndex, { id: a.assetId, area });
+  }
+  return new Set([...best.values()].map((b) => b.id));
 }
 
 // Native tables, numbered per slide in document order.

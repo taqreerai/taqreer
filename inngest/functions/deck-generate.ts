@@ -200,7 +200,7 @@ const ENHANCE_IMG_ADDENDUM = `ENHANCE IMAGES: images mode is ON for this redesig
 // just redirects the base prompt toward it. Appended AFTER so it wins.
 const ENHANCE_TEMPLATE_ADDENDUM = `ENHANCE + TEMPLATE — the user picked a deck TEMPLATE for this redesign. Override "improve only layout, hierarchy, typography, spacing, and rhythm" and any instruction to invent your own visual system: REPRODUCE the attached DESIGN reference's visual language (layout system, type hierarchy, spacing, shapes, grids, decorative motifs) on every slide, recoloured to the injected brand variables. Everything else in ENHANCE MODE still holds: exactly one redesigned slide per source slide, same order, each slide's content from its own exact-text block, never the template's words.`;
 
-const ENHANCE_HTML_ADDENDUM = `ENHANCE MODE — this is a REDESIGN of an EXISTING deck, not a fresh original. Override "Design a complete, ORIGINAL slide deck — your own visual system, fresh for this brief" and "VARY the composition slide to slide" above: follow the per-slide redesign brief in the user message instead. PRESERVE each source slide's CONTENT and the brand's VISUAL IDENTITY (palette, fonts, logo); improve only layout, hierarchy, typography, spacing, and rhythm. LOCK one consistent chrome + type system across every slide — a single coherent redesign, not a set of unrelated layouts. (Output format is unchanged: one \`<style>\` then the \`<section>\` slides.)`;
+const ENHANCE_HTML_ADDENDUM = `ENHANCE MODE — this is a REDESIGN of an EXISTING deck, not a fresh original. Override "Design a complete, ORIGINAL slide deck — your own visual system, fresh for this brief" and "VARY the composition slide to slide" above: follow the per-slide redesign brief in the user message instead. PRESERVE each source slide's CONTENT and the brand's VISUAL IDENTITY (palette, fonts, logo); improve only layout, hierarchy, typography, spacing, and rhythm. LOCK one consistent chrome + type system across every slide — a single coherent redesign, not a set of unrelated layouts. The lock covers chrome, type, colour and spacing, NOT the composition: each slide keeps the composition ROLE of its own source slide (see COMPOSITION in the user message), so the deck does not collapse into one repeated card layout. (Output format is unchanged: one \`<style>\` then the \`<section>\` slides.)`;
 
 // Auto-palette addendum — appended ONLY when the brief carries no brand
 // colors (palette "auto": the user left the picker on Auto and no kit filled
@@ -1556,6 +1556,11 @@ function buildSourceTextDirective(
       `  • ONE headline system for the whole deck: a given role's heading (section title, content headline, stat caption) uses the SAME size, weight, colour, and placement on every slide of that role. Do NOT reinvent the headline treatment slide to slide — flipping through should feel like one designer on one grid, not ${slideCount} different takes on the same brand.`,
       `  • Content margins are consistent — every slide's body starts at the same edges (you pick the inset) so nothing jumps frame to frame.`,
       ``,
+      `COMPOSITION — KEEP EACH SLIDE'S OWN ROLE (the chrome lock above does not mean one layout for every slide; if a DESIGN template is attached, its layout system takes over instead):`,
+      `  • Look at what each source slide IS and keep that composition, only executed better: a full-bleed cover or photo slide stays a full-bleed photo slide, a photo collage stays a collage, a photo + text split stays a split, a big-number / stat slide stays a big-number slide, a table or chart slide stays a table or chart slide, an agenda stays a list. Do NOT turn every slide into the same eyebrow + title + underline + white cards layout.`,
+      `  • Across the deck the compositions should visibly differ wherever the source slides differ; what stays identical is the chrome, the type scale, the palette and the spacing system. A photo-led source slide must stay photo-led: the pictures keep their visual weight (see ORIGINAL PICTURES), they are not shrunk into thumbnails to make room for cards.`,
+      `  • Cards, borders and tinted panels are an option for grouped text, not a default wrapper for every element.`,
+      ``,
       `VISUAL HANDLING — placeholders over redraws (saves time, looks honest):`,
       // Enhance phase 1 (owner rule 2026-10-15): the user's own pictures are
       // carried over, never swapped. Listed per slide, ahead of its text.
@@ -2546,8 +2551,12 @@ export const deckGenerate = inngest.createFunction(
         // of one inside the well is removed like any unknown asset.
         const carriedAssetIds = new Map(
           (enhanceImages?.pictures ?? [])
-            .filter((p) => p.cls !== "page")
+            .filter((p) => p.cls !== "page" && p.cls !== "backdrop")
             .map((p) => [p.assetId, p.aspect] as const),
+        );
+        // Single full-slide photos: the slide's photo background (data-bg-asset).
+        const carriedBackdropIds = new Set(
+          (enhanceImages?.pictures ?? []).filter((p) => p.cls === "backdrop").map((p) => p.assetId),
         );
         const carriedPageIds = new Set(
           (enhanceImages?.pictures ?? []).filter((p) => p.cls === "page").map((p) => p.assetId),
@@ -2591,7 +2600,7 @@ export const deckGenerate = inngest.createFunction(
             if (revises !== null && revises < slides.length) {
               const target = slides[revises];
               const decl = parseFrameSlide(parsed.html);
-              applyPageBackdrop(decl, projectId, carriedPageIds, pageAssetAt.get(revises));
+              applyPageBackdrop(decl, projectId, carriedPageIds, pageAssetAt.get(revises), carriedBackdropIds);
               if (decl.deckTitle) frameCtx.deckTitle = decl.deckTitle;
               if (productImageUrl && decl.bgSource === "product") {
                 decl.bgRef = productImageUrl;
@@ -2709,7 +2718,7 @@ export const deckGenerate = inngest.createFunction(
           // slides.length is the 0-based index of THIS slide (pre-push);
           // the restart guard resets it.
           const decl = parseFrameSlide(parsed.html);
-          applyPageBackdrop(decl, projectId, carriedPageIds, pageAssetAt.get(slides.length));
+          applyPageBackdrop(decl, projectId, carriedPageIds, pageAssetAt.get(slides.length), carriedBackdropIds);
           if (decl.deckTitle) frameCtx.deckTitle = decl.deckTitle;
           // AUTO nav total: the cover declares the model's intended count
           // (data-deck-slides, read off the opening tag by parseFrameSlide).

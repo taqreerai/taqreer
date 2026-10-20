@@ -280,9 +280,10 @@ export const deckUnlock = inngest.createFunction(
     // Page-sized artworks are shown only as a slide's backdrop (data-bg-asset),
     // never as a well picture: kept out of the well map (an <img> of one is removed).
     const carriedAssets = new Map(
-      carried.pictures.filter((x) => x.cls !== "page").map((x) => [x.assetId, x.aspect] as const),
+      carried.pictures.filter((x) => x.cls !== "page" && x.cls !== "backdrop").map((x) => [x.assetId, x.aspect] as const),
     );
     const carriedPageIds = new Set(carried.pictures.filter((x) => x.cls === "page").map((x) => x.assetId));
+    const carriedBackdropIds = new Set(carried.pictures.filter((x) => x.cls === "backdrop").map((x) => x.assetId));
     const pageAssetAt = new Map(
       carried.pictures.filter((x) => x.cls === "page").map((x) => [x.slideIndex, x.assetId] as const),
     );
@@ -382,7 +383,7 @@ export const deckUnlock = inngest.createFunction(
           carriedTables,
         ),
       );
-      applyPageBackdrop(decl, projectId, carriedPageIds, pageAssetAt.get(slideIndex));
+      applyPageBackdrop(decl, projectId, carriedPageIds, pageAssetAt.get(slideIndex), carriedBackdropIds);
       const assembled = assembleFramedSlide(decl, frameCtx, slideIndex, dims);
       const html = buildSlideHtml(
         assembled,

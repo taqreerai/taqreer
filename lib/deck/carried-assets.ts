@@ -140,7 +140,8 @@ export type CarriedPictureRef = {
   assetId: string;
   slideIndex: number;
   // "page": a page-sized artwork (PDF) shown full-bleed as the slide background.
-  cls: "content" | "small" | "page";
+  cls: "content" | "small" | "page" | "backdrop";
+  box?: { x: number; y: number; w: number; h: number };
   aspect: number;
   altText: string | null;
 };
@@ -150,7 +151,7 @@ export const CARRIED_TABLES_RULE = `  • ORIGINAL TABLES: FIRST RULE for tables
 
 export const CARRIED_CHARTS_RULE = `  • ORIGINAL CHARTS: FIRST RULE for charts, overrides the "complex charts" placeholder rule below for every chart it covers. A slide may list "ORIGINAL CHARTS" in the same block as its tables. For each listed chart put ONE EMPTY <div data-chart="ID" style="width:...px;height:...px"></div> where the chart belongs (start from the suggested size; give it real room, charts need at least 700x420px). Never draw the chart, write its numbers, labels or a legend yourself, and never repeat its values as text, cards or bullets elsewhere (they also appear in the exact-text block; that is the chart): the system fills the box with the EXACT chart, in the slide's text colour and brand colours. A title or a short caption above it is fine.`;
 
-export const CARRIED_PICTURES_RULE = `  • ORIGINAL PICTURES: FIRST RULE, overrides the photo, logo and placeholder rules below for every picture it covers. A slide may come with an "ORIGINAL PICTURES" block: the user's own pictures from that slide, already extracted. Put EVERY listed picture on its redesigned slide, exactly once, as the given <img> tag with its data-asset and src attributes UNCHANGED (never write any other /api/assets URL). Give the img an inline style with an explicit width and height in px whose ratio matches the listed aspect (scale the example size; never square a wide picture), so nothing is cut off. Move, resize, round, frame or shadow it to suit the new design; never crop away its subject, recolour it with filters, cover it with text, or replace it with a generated image, a photo slot, an icon or an SVG drawing. "small" entries are icons, logos or badges: keep them small. Pictures NOT listed (template backgrounds, frame art) are not carried: do not recreate them. A "FULL-PAGE ARTWORK" entry is different: it OVERRIDES this whole rule for that slide (follow its own instructions). CONTRAST: every word must stay readable on what it sits on. If the original showed light text on a dark picture, panel or bar, and that backing is not carried over or has moved away from the text, give the text its own dark filled shape or switch it to a dark colour; never leave light text on a light slide ground.`;
+export const CARRIED_PICTURES_RULE = `  • ORIGINAL PICTURES: FIRST RULE, overrides the photo, logo and placeholder rules below for every picture it covers. A slide may come with an "ORIGINAL PICTURES" block: the user's own pictures from that slide, already extracted. Put EVERY listed picture on its redesigned slide, exactly once, as the given <img> tag with its data-asset and src attributes UNCHANGED (never write any other /api/assets URL). Give the img an inline style with an explicit width and height in px whose ratio matches the listed aspect (scale the example size; never square a wide picture), so nothing is cut off. Move, resize, round, frame or shadow it to suit the new design; never crop away its subject, recolour it with filters, cover it with text, or replace it with a generated image, a photo slot, an icon or an SVG drawing. "small" entries are icons, logos or badges: keep them small. Pictures NOT listed (template backgrounds, frame art) are not carried: do not recreate them. A "FULL-PAGE ARTWORK" or "FULL-SLIDE PHOTO" entry is different: it OVERRIDES this whole rule for that slide (follow its own instructions). Each picture entry also states its ORIGINAL size and place: keep the picture's visual weight, do not turn every photo into a small thumbnail. CONTRAST: every word must stay readable on what it sits on. If the original showed light text on a dark picture, panel or bar, and that backing is not carried over or has moved away from the text, give the text its own dark filled shape or switch it to a dark colour; never leave light text on a light slide ground.`;
 
 /** The ORIGINAL PICTURES / ORIGINAL TABLES block for one slide ("" when none). */
 export function carriedSlideBlock(
@@ -160,7 +161,15 @@ export function carriedSlideBlock(
   tables: readonly CarriedTableRef[],
 ): string {
   let out = "";
-  const pictures = allPictures.filter((p) => p.cls !== "page");
+  const pictures = allPictures.filter((p) => p.cls !== "page" && p.cls !== "backdrop");
+  for (const p of allPictures.filter((q) => q.cls === "backdrop")) {
+    out +=
+      `── SLIDE ${slideNumber}: FULL-SLIDE PHOTO (asset "${p.assetId}", aspect ${p.aspect}) ──
+` +
+      `The user's original slide uses this photo as its WHOLE background, with the slide's text on top. Use it the same way: the slide's opening tag must include data-bg="image" data-bg-asset="${p.assetId}" and data-bg-scrim="soft" (or "strong" when the text needs it), with NO data-bg-prompt, no data-bg-css and no <img> of this asset. The well holds the slide's own text and elements as usual (the system draws the photo behind it and a scrim for legibility). Do not box it into a card or a thumbnail.
+
+`;
+  }
   for (const p of allPictures.filter((q) => q.cls === "page")) {
     out +=
       `── SLIDE ${slideNumber}: FULL-PAGE ARTWORK (asset "${p.assetId}", aspect ${p.aspect}) ──
@@ -174,8 +183,13 @@ export function carriedSlideBlock(
       `── SLIDE ${slideNumber}: ORIGINAL PICTURES (place each one, tag unchanged) ──\n` +
       pictures
         .map((p) => {
-          const w = p.cls === "small" ? 120 : 720;
-          return `<img data-asset="${p.assetId}" src="/api/assets/${projectId}/${p.assetId}" alt="${(p.altText ?? "").replace(/["<>&]/g, "")}">  aspect ${p.aspect} (e.g. ${w}x${Math.round(w / p.aspect)}px)${p.cls === "small" ? "  small: icon / logo / badge" : ""}`;
+          // Start from the picture's ORIGINAL size on the slide (1920 px canvas),
+          // so a hero photo stays a hero photo; fixed examples shrank them all.
+          const w = p.cls === "small" ? 120 : p.box ? Math.max(200, Math.min(1800, Math.round(p.box.w * 1920))) : 720;
+          const where = p.box
+            ? `; ORIGINAL: ${Math.round(p.box.w * 100)}% of the slide width x ${Math.round(p.box.h * 100)}% of its height, at ${Math.round(Math.max(0, p.box.x) * 100)}% from the left / ${Math.round(Math.max(0, p.box.y) * 100)}% from the top. Keep about this visual weight; resize only when the new layout needs it, and never shrink a main photo below ~70% of this`
+            : "";
+          return `<img data-asset="${p.assetId}" src="/api/assets/${projectId}/${p.assetId}" alt="${(p.altText ?? "").replace(/["<>&]/g, "")}">  aspect ${p.aspect} (e.g. ${w}x${Math.round(w / p.aspect)}px)${p.cls === "small" ? "  small: icon / logo / badge" : where}`;
         })
         .join("\n") +
       "\n\n";
@@ -307,7 +321,18 @@ export function applyPageBackdrop(
   // slide position (source page = slide), used only if the model also wrote
   // nothing in the well (so no text it authored is thrown away).
   fallbackId?: string | null,
+  // Full-slide PHOTO backdrops (cls "backdrop"): same marker, but the slide
+  // keeps its own text and the model's scrim choice.
+  photoIds?: ReadonlySet<string>,
 ): void {
+  const photo = decl.bgAsset;
+  if (photo && photoIds?.has(photo)) {
+    decl.bgAssetSrc = `/api/assets/${projectId}/${photo}`;
+    decl.bg = "image";
+    decl.bgPrompt = null;
+    if (decl.bgScrim === "none") decl.bgScrim = "soft";
+    return;
+  }
   let id = decl.bgAsset;
   if (!(id && pageIds.has(id)) && fallbackId && pageIds.has(fallbackId)) {
     const hasContent = /<img\b|<svg\b|<table\b/i.test(decl.wellHtml) || decl.wellHtml.replace(/<[^>]*>/g, "").trim() !== "";
