@@ -142,6 +142,70 @@ export async function generateImage(opts: {
 // A failure is TRANSIENT (worth retrying) when it's a rate-limit, a server
 // error, or a network/timeout blip — vs PERMANENT (a 400 / content-policy /
 // moderation rejection) which will never recover, so we surface it at once.
+// Enhance (owner rule 2026-10-15): an original photo may be enhanced, never
+// swapped. The model gets the photo itself and may only repair it.
+const RESTORE_PROMPT =
+  "Restore and enhance THIS exact photograph. Keep the same scene, subject, " +
+  "composition, framing, camera angle, people, faces, expressions, objects and " +
+  "their positions. Fix fading, low contrast, colour casts, noise, blur, low " +
+  "resolution and compression artefacts; recover natural colour and fine detail so " +
+  "it looks like a sharp, well-exposed modern photo. Do not add, remove or move " +
+  "anything, do not change any visible text, logo or sign, and do not turn it into " +
+  "an illustration or change its style.";
+
+/**
+ * AI photo restoration (studio, user-initiated). Returns PNG bytes at one of
+ * the model's sizes; the caller fits them back to the photo's own proportions.
+ */
+export async function restorePhoto(opts: {
+  bytes: Buffer;
+  contentType: string;
+  aspect: number; // width / height of the original
+}): Promise<GeneratedImageResult> {
+  return editPhoto({ ...opts, prompt: RESTORE_PROMPT });
+}
+
+/** Model size closest to a picture's proportions. */
+export function aspectForRatio(ratio: number): ImageAspect {
+  return ratio > 1.2 ? "landscape" : ratio < 0.83 ? "portrait" : "square";
+}
+
+/**
+ * Photo refresh (Enhance, opt-in): re-shoot a generic photo in the deck's
+ * style, from the photo itself so the subject stays what the slide needs.
+ */
+export async function restylePhoto(opts: {
+  bytes: Buffer;
+  contentType: string;
+  aspect: number;
+  prompt: string;
+}): Promise<GeneratedImageResult> {
+  return editPhoto({ ...opts, prompt: `${opts.prompt.trim()} ${TEXTLESS_GUARD}` });
+}
+
+async function editPhoto(opts: {
+  bytes: Buffer;
+  contentType: string;
+  aspect: number;
+  prompt: string;
+}): Promise<GeneratedImageResult> {
+  const size = SIZE_FOR_ASPECT[aspectForRatio(opts.aspect)];
+  const image = await toFile(opts.bytes, opts.contentType === "image/png" ? "photo.png" : "photo.jpg", {
+    type: opts.contentType,
+  });
+  const res = await getClient().images.edit({
+    model: MODEL,
+    image,
+    prompt: opts.prompt,
+    size,
+    quality: QUALITY,
+    n: 1,
+  });
+  const b64 = res.data?.[0]?.b64_json;
+  if (!b64) throw new Error("gpt-image-2 returned no image data");
+  return { b64, size };
+}
+
 function isTransientImageError(err: unknown): boolean {
   const status = (err as { status?: number } | null)?.status;
   if (typeof status === "number") return status === 429 || status >= 500;

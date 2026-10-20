@@ -74,6 +74,7 @@ export type EnhanceGuestSettings = {
   googleFamily: string | null;
   uploadedFonts: { name: string; weights: number[] }[];
   imagesMode: boolean;
+  refreshPhotos?: boolean;
 };
 
 // /mimic's setup (content file -> `content`, reference deck -> `design`).

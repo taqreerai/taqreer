@@ -259,6 +259,9 @@ type CreateProjectPayload = {
   // Phase 3; until then it's settable via the payload for testing). Only
   // honoured for create flows in deck-generate's buildUserMessage gate.
   imagesMode?: boolean;
+  // Enhance "Refresh my photos" (opt-in): deck-generate re-makes a capped set
+  // of the most important generic photos (lib/extract/photo-refresh.ts).
+  refreshPhotos?: boolean;
   slideCount?: number | null;
   quality?: Quality | null;
   // User-picked on /create/content (2026-05-20). Drives Project.language
@@ -1120,6 +1123,7 @@ export async function POST(request: Request) {
     // generated-image boxes. OMITTED when off, so a normal deck's brief
     // (and the prompt built from it) stays byte-for-byte unchanged.
     ...(payload.imagesMode === true ? { imagesMode: true } : {}),
+    ...(payload.refreshPhotos === true && projectType === "enhance" ? { refreshPhotos: true } : {}),
     // Regional people descriptor for generated lifestyle images (only when
     // resolvable). buildUserMessage turns this into the cast directive.
     ...(imageRegion ? { imageRegion } : {}),

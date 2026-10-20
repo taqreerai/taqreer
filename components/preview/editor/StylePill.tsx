@@ -329,6 +329,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
   // Image "Replace": hidden file input + in-flight upload flag.
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [aiState, setAiState] = useState<"idle" | "working" | "notPhoto" | "locked" | "failed">("idle");
   const dirty = useRef(false);
 
   // ── position: a rAF loop reads the live selection box(es) (.tqe-sel) and writes
@@ -734,6 +735,31 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
     dirty.current = true;
     force((n) => n + 1);
   };
+  // Enhance with AI (paid): restore a carried original PHOTO. The server stores
+  // the result as a new asset; the original stays for "Restore original".
+  const assetSrc = kind === "image" ? (target.getAttribute("src") ?? "") : "";
+  const assetRef = target.hasAttribute("data-asset") ? /^\/api\/assets\/([A-Za-z0-9]+)\/([A-Za-z0-9-]+)$/.exec(assetSrc) : null;
+  const enhanceWithAi = async () => {
+    if (!assetRef || aiState === "working") return;
+    setAiState("working");
+    try {
+      const res = await fetch(`/api/projects/${assetRef[1]}/assets/${assetRef[2]}/restore`, { method: "POST" });
+      const data = (await res.json().catch(() => null)) as { assetId?: string; src?: string; error?: string } | null;
+      if (!res.ok || !data?.assetId || !data.src) {
+        setAiState(data?.error === "not_a_photo" ? "notPhoto" : data?.error === "photo_enhance_locked" ? "locked" : "failed");
+        return;
+      }
+      if (!target.hasAttribute("data-asset-original")) target.setAttribute("data-asset-original", assetSrc);
+      target.removeAttribute("srcset");
+      target.setAttribute("src", data.src);
+      target.setAttribute("data-asset", data.assetId);
+      dirty.current = true;
+      setAiState("idle");
+      force((n) => n + 1);
+    } catch {
+      setAiState("failed");
+    }
+  };
   // Fill (cover) vs show whole (contain), for any picture.
   const fitWhole =
     kind === "image" && (target.ownerDocument.defaultView?.getComputedStyle(target).objectFit ?? "") === "contain";
@@ -1107,6 +1133,39 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
                 history
               </span>
               {t.restoreOriginal}
+            </button>
+          )}
+          {/* Enhance with AI: only on a carried original picture (data-asset). */}
+          {assetRef && (
+            <button
+              type="button"
+              aria-label={t.aiEnhanceHint}
+              title={
+                aiState === "notPhoto"
+                  ? t.aiEnhanceNotPhoto
+                  : aiState === "locked"
+                    ? t.aiEnhanceLocked
+                    : aiState === "failed"
+                      ? t.aiEnhanceFailed
+                      : t.aiEnhanceHint
+              }
+              onClick={enhanceWithAi}
+              disabled={aiState === "working"}
+              className="inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[12px] text-foreground/85 transition-colors hover:text-foreground disabled:opacity-60"
+              style={{ background: "var(--tq-surface)", border: "1px solid var(--tq-border-hairline)", marginInlineStart: 6 }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 15 }} aria-hidden>
+                {aiState === "working" ? "progress_activity" : "auto_fix_high"}
+              </span>
+              {aiState === "working"
+                ? t.aiEnhancing
+                : aiState === "notPhoto"
+                  ? t.aiEnhanceNotPhoto
+                  : aiState === "locked"
+                    ? t.aiEnhanceLocked
+                    : aiState === "failed"
+                      ? t.aiEnhanceFailed
+                      : t.aiEnhance}
             </button>
           )}
           {/* §19 — Regenerate an AI image with an edited prompt. Only for AI

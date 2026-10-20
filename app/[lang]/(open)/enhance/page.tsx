@@ -35,6 +35,7 @@
 
 import { STYLE_REQUIRES_IMAGES } from "@/components/create/OutputCards";
 import { AIImagesPanel } from "@/components/brand/AIImagesPanel";
+import { PhotoRefreshPanel } from "@/components/brand/PhotoRefreshPanel";
 import { isImagesLocked } from "@/lib/images/images-gating";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -385,6 +386,8 @@ export default function EnhanceContentPage() {
   // here (2026-10-10): with it off every photo became an "Upload your
   // picture" placeholder, which read as a broken deck. Users can switch it off.
   const [imagesMode, setImagesMode] = useState<boolean>(true);
+  // "Refresh my photos" (default off = keep every original photo).
+  const [refreshPhotos, setRefreshPhotos] = useState(false);
   // Region-limited free accounts can't use generated images (lib/images/images-
   // gating.ts): the default-ON state must not reach the server for them, or the
   // run would be refused with images_locked. Everyone else keeps the toggle.
@@ -785,6 +788,7 @@ export default function EnhanceContentPage() {
     googleFamily: guestFont.googleFamily,
     uploadedFonts: guestFont.uploadedFonts,
     imagesMode,
+    refreshPhotos,
   };
   const guestSettingsJson = JSON.stringify(guestSettings);
   // A visitor who comes back still signed out gets their draft back too
@@ -858,6 +862,7 @@ export default function EnhanceContentPage() {
         setLoadedLogo(null);
       }
       setImagesMode(!!d.imagesMode);
+      setRefreshPhotos(!!d.refreshPhotos);
       // Starts the upload + analysis when signed in (a visitor's file waits).
       if (draft.files.content) validateAndSetFile(draft.files.content);
       setStep(mode === "generate" ? ENHANCE_LAST_STEP : Math.min(ENHANCE_LAST_STEP, Math.max(0, d.step)));
@@ -1028,6 +1033,7 @@ export default function EnhanceContentPage() {
           language: extracted.language ?? "ar",
           saveBrandKit,
           imagesMode: imagesOn,
+          ...(refreshPhotos ? { refreshPhotos: true } : {}),
           slideCount: resolvedSlideCount,
           quality,
           ...(templateId ? { templateId } : {}),
@@ -1421,6 +1427,13 @@ export default function EnhanceContentPage() {
               <AIImagesPanel
                 value={imagesOn}
                 onChange={setImagesMode}
+                disabled={stage === "submitting"}
+              />
+            </div>
+            <div className="border-t border-[var(--tq-border-hairline)] pt-4 stage:pt-3 stage-tight:pt-2">
+              <PhotoRefreshPanel
+                value={refreshPhotos}
+                onChange={setRefreshPhotos}
                 disabled={stage === "submitting"}
               />
             </div>

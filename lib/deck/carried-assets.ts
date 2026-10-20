@@ -114,6 +114,9 @@ export function enforceCarriedAssetImgs(
   projectId: string,
   // assetId -> the picture's own aspect (width / height)
   assets: ReadonlyMap<string, number>,
+  // Photo refresh: new assetId -> the original it replaced, stamped as
+  // data-asset-original so the studio's "Restore original" works.
+  originals?: ReadonlyMap<string, string>,
 ): string {
   if (!/<img\b/i.test(html)) return html;
   return html.replace(IMG_RE, (tag) => {
@@ -124,7 +127,11 @@ export function enforceCarriedAssetImgs(
       const fit = fitFor(style, assets.get(id));
       const nextStyle = `${style}${style && !style.endsWith(";") ? ";" : ""}object-fit:${fit}`;
       const aspect = assets.get(id);
-      const stamped = aspect && Number.isFinite(aspect) ? setAttr(tag, "data-asset-aspect", String(aspect)) : tag;
+      let stamped = aspect && Number.isFinite(aspect) ? setAttr(tag, "data-asset-aspect", String(aspect)) : tag;
+      const orig = originals?.get(id);
+      if (orig && attr(stamped, "data-asset-original") === null) {
+        stamped = setAttr(stamped, "data-asset-original", `/api/assets/${projectId}/${orig}`);
+      }
       return setAttr(setAttr(stamped, "src", `/api/assets/${projectId}/${id}`), "style", nextStyle);
     }
     const src = attr(tag, "src") ?? "";
@@ -142,6 +149,10 @@ export type CarriedPictureRef = {
   // "page": a page-sized artwork (PDF) shown full-bleed as the slide background.
   cls: "content" | "small" | "page" | "backdrop";
   box?: { x: number; y: number; w: number; h: number };
+  // Content pictures: a real photo, or a graphic (diagram, scanned page,
+  // screenshot). Absent on decks generated before 2026-10-20.
+  kind?: "photo" | "graphic" | "document";
+  originalAssetId?: string;
   aspect: number;
   altText: string | null;
 };
@@ -151,7 +162,7 @@ export const CARRIED_TABLES_RULE = `  • ORIGINAL TABLES: FIRST RULE for tables
 
 export const CARRIED_CHARTS_RULE = `  • ORIGINAL CHARTS: FIRST RULE for charts, overrides the "complex charts" placeholder rule below for every chart it covers. A slide may list "ORIGINAL CHARTS" in the same block as its tables. For each listed chart put ONE EMPTY <div data-chart="ID" style="width:...px;height:...px"></div> where the chart belongs (start from the suggested size; give it real room, charts need at least 700x420px). Never draw the chart, write its numbers, labels or a legend yourself, and never repeat its values as text, cards or bullets elsewhere (they also appear in the exact-text block; that is the chart): the system fills the box with the EXACT chart, in the slide's text colour and brand colours. A title or a short caption above it is fine.`;
 
-export const CARRIED_PICTURES_RULE = `  • ORIGINAL PICTURES: FIRST RULE, overrides the photo, logo and placeholder rules below for every picture it covers. A slide may come with an "ORIGINAL PICTURES" block: the user's own pictures from that slide, already extracted. Put EVERY listed picture on its redesigned slide, exactly once, as the given <img> tag with its data-asset and src attributes UNCHANGED (never write any other /api/assets URL). Give the img an inline style with an explicit width and height in px whose ratio matches the listed aspect (scale the example size; never square a wide picture), so nothing is cut off. Move, resize, round, frame or shadow it to suit the new design; never crop away its subject, recolour it with filters, cover it with text, or replace it with a generated image, a photo slot, an icon or an SVG drawing. "small" entries are icons, logos or badges: keep them small. Pictures NOT listed (template backgrounds, frame art) are not carried: do not recreate them. A "FULL-PAGE ARTWORK" or "FULL-SLIDE PHOTO" entry is different: it OVERRIDES this whole rule for that slide (follow its own instructions). Each picture entry also states its ORIGINAL size and place: keep the picture's visual weight, do not turn every photo into a small thumbnail. CONTRAST: every word must stay readable on what it sits on. If the original showed light text on a dark picture, panel or bar, and that backing is not carried over or has moved away from the text, give the text its own dark filled shape or switch it to a dark colour; never leave light text on a light slide ground.`;
+export const CARRIED_PICTURES_RULE = `  • ORIGINAL PICTURES: FIRST RULE, overrides the photo, logo and placeholder rules below for every picture it covers. A slide may come with an "ORIGINAL PICTURES" block: the user's own pictures from that slide, already extracted. Put EVERY listed picture on its redesigned slide, exactly once, as the given <img> tag with its data-asset and src attributes UNCHANGED (never write any other /api/assets URL). Give the img an inline style with an explicit width and height in px whose ratio matches the listed aspect (scale the example size; never square a wide picture), so nothing is cut off. PLACEMENT IS FREE: the goal is the best-looking slide, so put each picture wherever the new layout works best and size it for the design; the original place is not a constraint. Never crop away its subject, cover it with text, or replace it with a generated image, a photo slot, an icon or an SVG drawing. PHOTO TREATMENT (entries marked "photo"): pick ONE treatment for the whole deck and apply it to every photo: the same corner radius, the same frame or border (for example a thin brand-colour frame, or the photo set on a soft brand-tinted panel), the same shadow or none. Mixed old photos then read as one set. A uniform gentle grade on every photo is allowed (style="filter:saturate(1.05) contrast(1.05)"); never heavy filters, sepia, blur or colour changes. A weak photo may be shown smaller and framed, or as one tile in a tidy photo grid, rather than stretched as a hero. GRAPHICS AND DOCUMENTS (entries marked "graphic" or "document": diagrams, illustrations, scanned pages, screenshots): shown whole, never cropped, tinted or filtered, never used as a background, on a clean light card when the slide is dark; give them enough size that their labels stay readable. "small" entries are icons, logos or badges: keep them small. Pictures NOT listed (template backgrounds, frame art) are not carried: do not recreate them. A "FULL-PAGE ARTWORK" or "FULL-SLIDE PHOTO" entry is different: it OVERRIDES this whole rule for that slide (follow its own instructions). Each entry also states how much of the source slide it filled: a hint of its importance (a picture that filled most of the slide is the slide's main visual and should stay prominent), not a position to copy. CONTRAST: every word must stay readable on what it sits on. If the original showed light text on a dark picture, panel or bar, and that backing is not carried over or has moved away from the text, give the text its own dark filled shape or switch it to a dark colour; never leave light text on a light slide ground.`;
 
 /** The ORIGINAL PICTURES / ORIGINAL TABLES block for one slide ("" when none). */
 export function carriedSlideBlock(
@@ -186,9 +197,10 @@ export function carriedSlideBlock(
           // Start from the picture's ORIGINAL size on the slide (1920 px canvas),
           // so a hero photo stays a hero photo; fixed examples shrank them all.
           const w = p.cls === "small" ? 120 : p.box ? Math.max(200, Math.min(1800, Math.round(p.box.w * 1920))) : 720;
+          const kind = p.kind ? `; ${p.kind}` : "";
           const where = p.box
-            ? `; ORIGINAL: ${Math.round(p.box.w * 100)}% of the slide width x ${Math.round(p.box.h * 100)}% of its height, at ${Math.round(Math.max(0, p.box.x) * 100)}% from the left / ${Math.round(Math.max(0, p.box.y) * 100)}% from the top. Keep about this visual weight; resize only when the new layout needs it, and never shrink a main photo below ~70% of this`
-            : "";
+            ? `${kind}; filled ${Math.round(Math.min(1, p.box.w) * 100)}% x ${Math.round(Math.min(1, p.box.h) * 100)}% of the source slide (importance hint, place it freely)`
+            : kind;
           return `<img data-asset="${p.assetId}" src="/api/assets/${projectId}/${p.assetId}" alt="${(p.altText ?? "").replace(/["<>&]/g, "")}">  aspect ${p.aspect} (e.g. ${w}x${Math.round(w / p.aspect)}px)${p.cls === "small" ? "  small: icon / logo / badge" : where}`;
         })
         .join("\n") +

@@ -14,6 +14,15 @@ import { extractPptxVisuals, classifyPptxPictures } from "@/lib/extract/pptx-vis
 import { buildPptxAssets } from "@/lib/extract/pptx-asset-crops";
 import { buildPdfAssets, classifyPdfPictures, extractPdfPictures, type PdfAsset } from "@/lib/extract/pdf-visuals";
 import { uploadSourceAsset } from "@/lib/storage/source-assets";
+import { analyzeAndEnhance, type PictureKind } from "@/lib/extract/photo-enhance";
+import {
+  makeReplacements,
+  refreshPool,
+  selectPhotoReplacements,
+  tagPhotos,
+  type RefreshCandidate,
+} from "@/lib/extract/photo-refresh";
+import { createHash } from "crypto";
 import type { TableSpec } from "@/lib/deck/visuals/table";
 import type { ChartSpec } from "@/lib/deck/visuals/chart";
 
@@ -32,6 +41,12 @@ export type CarriedPicture = {
   // redesign keeps about the same visual weight (before 2026-10-20 every
   // picture was suggested at one fixed size, which shrank full-bleed photos).
   box?: { x: number; y: number; w: number; h: number };
+  // Content pictures only: a real photo, or a graphic (diagram, scanned page,
+  // screenshot) whose pixels must stay exact.
+  kind?: PictureKind;
+  // Photo refresh: this picture is a NEW photo replacing that original asset
+  // (kept stored; the studio's "Restore original" puts it back).
+  originalAssetId?: string;
   aspect: number; // width / height on the original slide
   altText: string | null;
 };
@@ -53,6 +68,10 @@ export type CarriedPictures = {
   // Pictures found but not storable here (EMF / WMF / undecodable): left to
   // the existing photo-slot handling until page crops land.
   skipped: number;
+  // Photos cleaned up / upscaled before storing (lib/extract/photo-enhance.ts).
+  enhancedPhotos?: number;
+  // Opt-in photo refresh: photos tagged, pictures replaced.
+  refresh?: { tagged: number; replaced: number };
   tables: CarriedTable[];
 };
 
@@ -60,6 +79,8 @@ export async function prepareCarriedPictures(opts: {
   projectId: string;
   sourcePath: string;
   sourceMime: string;
+  // "Refresh my photos" (opt-in): see lib/extract/photo-refresh.ts.
+  refresh?: { slideCount: number; paid: boolean; styleHint: string; palette: readonly string[] } | null;
 }): Promise<CarriedPictures> {
   if (opts.sourceMime !== PPTX_MIME && opts.sourceMime !== PDF_MIME) {
     return { hasContentImages: false, pictures: [], skipped: 0, tables: [] };
@@ -88,7 +109,25 @@ export async function prepareCarriedPictures(opts: {
   }
 
   const storable = assets.filter((a) => a.file.kind === "image");
-  const backdropIds = fullSlidePhotos(storable);
+  // Photo vs graphic, and the free clean-up of washed-out / small photos
+  // (lib/extract/photo-enhance.ts). Graphics and icons are stored untouched.
+  const kinds = new Map<string, PictureKind>();
+  const badness = new Map<string, number>();
+  const mediaKeys = new Map<string, string>();
+  let enhancedCount = 0;
+  for (const a of storable) {
+    if (a.file.kind !== "image" || a.cls !== "content") continue;
+    // Key on the ORIGINAL bytes: the same picture on several slides is one picture.
+    mediaKeys.set(a.assetId, createHash("sha1").update(a.file.bytes).digest("hex"));
+    const r = await analyzeAndEnhance(a.file);
+    kinds.set(a.assetId, r.kind);
+    badness.set(a.assetId, r.badness);
+    if (r.enhanced) {
+      enhancedCount++;
+      a.file = { kind: "image", bytes: r.bytes, contentType: r.contentType, width: r.width, height: r.height };
+    }
+  }
+  const backdropIds = fullSlidePhotos(storable, kinds);
   for (let i = 0; i < storable.length; i += UPLOAD_PARALLEL) {
     await Promise.all(
       storable.slice(i, i + UPLOAD_PARALLEL).map((a) => {
@@ -103,12 +142,67 @@ export async function prepareCarriedPictures(opts: {
     );
   }
 
+  // ─── Opt-in photo refresh ───
+  const replaced = new Map<string, string>(); // original assetId -> new assetId
+  let refreshTagged = 0;
+  if (opts.refresh) {
+    const visibleArea = (a: PdfAsset) =>
+      Math.max(0, Math.min(1, a.box.x + a.box.w) - Math.max(0, a.box.x)) *
+      Math.max(0, Math.min(1, a.box.y + a.box.h) - Math.max(0, a.box.y));
+    const photos = storable.filter((a) => kinds.get(a.assetId) === "photo");
+    const cands: RefreshCandidate[] = photos.map((a) => {
+      const onSlide = photos.filter((b) => b.slideIndex === a.slideIndex);
+      return {
+        assetId: a.assetId,
+        slideIndex: a.slideIndex,
+        cls: backdropIds.has(a.assetId) ? "backdrop" : a.cls,
+        kind: kinds.get(a.assetId),
+        area: visibleArea(a),
+        badness: badness.get(a.assetId) ?? 0,
+        mediaKey: mediaKeys.get(a.assetId) ?? a.assetId,
+        photosOnSlide: onSlide.length,
+        largestOnSlide: onSlide.every((b) => visibleArea(b) <= visibleArea(a)),
+      };
+    });
+    // Tag the best candidates once each (by picture, not by slide).
+    const byKey = new Map<string, PdfAsset>();
+    for (const c of refreshPool(cands)) {
+      const a = storable.find((x) => x.assetId === c.assetId);
+      if (a && !byKey.has(c.mediaKey)) byKey.set(c.mediaKey, a);
+    }
+    const tagged = await tagPhotos(
+      [...byKey].map(([mediaKey, a]) => ({ mediaKey, bytes: a.file.kind === "image" ? a.file.bytes : Buffer.alloc(0) })),
+    );
+    refreshTagged = tagged.size;
+    const tags = new Map([...tagged].map(([k, v]) => [k, v.tag] as const));
+    const picks = selectPhotoReplacements(cands, tags, { slideCount: opts.refresh.slideCount, paid: opts.refresh.paid });
+    const made = await makeReplacements({
+      projectId: opts.projectId,
+      styleHint: opts.refresh.styleHint,
+      palette: opts.refresh.palette,
+      picks: picks.flatMap((mediaKey) => {
+        const a = byKey.get(mediaKey);
+        const t = tagged.get(mediaKey);
+        if (!a || !t || a.file.kind !== "image") return [];
+        return [{ mediaKey, assetId: a.assetId, bytes: a.file.bytes, contentType: a.file.contentType, width: a.file.width, height: a.file.height, tag: t.tag, desc: t.desc }];
+      }),
+    });
+    for (const a of storable) {
+      const key = mediaKeys.get(a.assetId);
+      const next = key ? made.get(key) : undefined;
+      if (next) replaced.set(a.assetId, next);
+    }
+  }
+
   return {
     hasContentImages,
+    ...(opts.refresh ? { refresh: { tagged: refreshTagged, replaced: replaced.size } } : {}),
     pictures: storable.map((a) => ({
-      assetId: a.assetId,
+      assetId: replaced.get(a.assetId) ?? a.assetId,
+      ...(replaced.has(a.assetId) ? { originalAssetId: a.assetId } : {}),
       slideIndex: a.slideIndex,
       cls: backdropIds.has(a.assetId) ? ("backdrop" as const) : a.cls,
+      ...(kinds.has(a.assetId) ? { kind: kinds.get(a.assetId) } : {}),
       box: { x: round3(a.box.x), y: round3(a.box.y), w: round3(a.box.w), h: round3(a.box.h) },
       // The PICTURE's own proportions (after the slide's crop), not the shape's:
       // a stretched source shape would otherwise make object-fit: cover cut it.
@@ -116,18 +210,23 @@ export async function prepareCarriedPictures(opts: {
       altText: a.altText ? a.altText.slice(0, 200) : null,
     })),
     skipped: assets.length - storable.length,
+    enhancedPhotos: enhancedCount,
     tables,
   };
 }
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
-// A content picture that covers the slide (visible share >= 85%, see below) is that
+// A content picture (photo or texture, not a document) that covers the slide (visible share >= 85%, see below) is that
 // slide's photo background, not a picture to frame. One per slide: the largest.
-export function fullSlidePhotos(assets: readonly PdfAsset[]): Set<string> {
+export function fullSlidePhotos(assets: readonly PdfAsset[], kinds?: ReadonlyMap<string, PictureKind>): Set<string> {
   const best = new Map<number, { id: string; area: number }>();
   for (const a of assets) {
     if (a.cls !== "content") continue;
+    // A scanned page is content to show whole, never a backdrop for the slide's
+    // text (2026-10-20, textbook scans under the titles). A texture (graphic,
+    // e.g. marble) is fine as a backdrop.
+    if (kinds && kinds.get(a.assetId) === "document") continue;
     const vw = Math.max(0, Math.min(1, a.box.x + a.box.w) - Math.max(0, a.box.x));
     const vh = Math.max(0, Math.min(1, a.box.y + a.box.h) - Math.max(0, a.box.y));
     const area = vw * vh;

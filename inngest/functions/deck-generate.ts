@@ -9,6 +9,7 @@ import { generationCost } from "@/lib/credits/cost";
 import { type Quality } from "@/lib/types/quality";
 import { clampChars, MAX_SLIDE_TEXT_CHARS } from "@/lib/types/brief-limits";
 import { prisma } from "@/lib/prisma";
+import { isPaidPlan } from "@/lib/plan";
 import { deckFlowFor } from "@/lib/project/flow";
 import {
   SlideManifestSchema,
@@ -477,6 +478,14 @@ function ruleLines(rules: Rules, keepSourcePagination = false): string[] {
 // can't live in the cached system prompt without breaking the prefix cache).
 // Prefixed with the style's English NAME so Claude leans on the named tradition,
 // then STYLE_LEAD (universal forcing scaffold) + the per-style directive.
+// The look's own image direction ("When generating images: ..."), for the
+// Enhance photo refresh. Empty when no look is picked.
+function imageStyleHint(name: string | null): string {
+  const directive = name ? DESIGN_STYLE_DIRECTIVES[name] : undefined;
+  const m = directive?.match(/When generating images:\s*([^]*)$/);
+  return m ? m[1].trim() : "";
+}
+
 // Returns [] when no style is picked → the neutral B.2 substrate dictates
 // nothing, exactly as before.
 function styleDirectiveBlock(rules: Rules): string[] {
@@ -1525,6 +1534,7 @@ function buildSourceTextDirective(
       ``,
       `YOUR JOB — redesign each slide to editorial quality:`,
       `  • Produce EXACTLY ${slideCount} slides — one per source slide, in the SAME order. Do not merge, split, drop, add, or reorder.`,
+      `  • Your slide 1 IS source slide 1 and your slide ${slideCount} IS source slide ${slideCount}, whatever they contain: never add a cover or a closing slide of your own, and never move the source's title slide to the front (if the title slide is source slide 3, it stays slide 3; give it the cover treatment there).`,
       `  • Re-execute typography, hierarchy, whitespace, layout, and visual rhythm to editorial quality.`,
       ``,
       `CONTENT FIDELITY (hard limits):`,
@@ -1556,8 +1566,8 @@ function buildSourceTextDirective(
       `  • ONE headline system for the whole deck: a given role's heading (section title, content headline, stat caption) uses the SAME size, weight, colour, and placement on every slide of that role. Do NOT reinvent the headline treatment slide to slide — flipping through should feel like one designer on one grid, not ${slideCount} different takes on the same brand.`,
       `  • Content margins are consistent — every slide's body starts at the same edges (you pick the inset) so nothing jumps frame to frame.`,
       ``,
-      `COMPOSITION — KEEP EACH SLIDE'S OWN ROLE (the chrome lock above does not mean one layout for every slide; if a DESIGN template is attached, its layout system takes over instead):`,
-      `  • Look at what each source slide IS and keep that composition, only executed better: a full-bleed cover or photo slide stays a full-bleed photo slide, a photo collage stays a collage, a photo + text split stays a split, a big-number / stat slide stays a big-number slide, a table or chart slide stays a table or chart slide, an agenda stays a list. Do NOT turn every slide into the same eyebrow + title + underline + white cards layout.`,
+      `COMPOSITION — THE MAIN JOB IS A BETTER-LOOKING SLIDE (the chrome lock above does not mean one layout for every slide; if a DESIGN template is attached, its layout system takes over instead):`,
+      `  • Start from what each source slide IS (a full-bleed cover or photo slide, a photo collage, a photo + text split, a big-number / stat slide, a table or chart slide, an agenda) and design the best layout for that content. Keeping the source's arrangement ON THE SLIDE is NOT required: change positions, sizes and structure within the slide whenever a different layout looks better; only the content and its meaning are fixed. The slide LIST is fixed: every source slide gets its own redesigned slide, in the same order, none dropped or merged. Do NOT turn every slide into the same eyebrow + title + underline + white cards layout.`,
       `  • Across the deck the compositions should visibly differ wherever the source slides differ; what stays identical is the chrome, the type scale, the palette and the spacing system. A photo-led source slide must stay photo-led: the pictures keep their visual weight (see ORIGINAL PICTURES), they are not shrunk into thumbnails to make room for cards.`,
       `  • Cards, borders and tinted panels are an option for grouped text, not a default wrapper for every element.`,
       ``,
@@ -2204,7 +2214,23 @@ export const deckGenerate = inngest.createFunction(
       // (photo slots / AI photos), never fails the deck.
       const carried = await step.run("carry-source-pictures", async () => {
         try {
-          const result = await prepareCarriedPictures({ projectId, sourcePath, sourceMime });
+          // "Refresh my photos" (Enhance, opt-in, default off): a capped set of
+          // the most important generic photos is re-made in the deck's style.
+          const briefForRefresh = data.brief as {
+            refreshPhotos?: boolean;
+            rules?: { designStyle?: string | null } | null;
+            brand?: { colors?: string[] } | null;
+          } | null;
+          const refresh =
+            briefForRefresh?.refreshPhotos === true
+              ? {
+                  slideCount: Math.max(pageCount, textPerSlide.length),
+                  paid: isPaidPlan(data.tier ?? null),
+                  styleHint: imageStyleHint(briefForRefresh.rules?.designStyle ?? null),
+                  palette: Array.isArray(briefForRefresh.brand?.colors) ? briefForRefresh.brand.colors : [],
+                }
+              : null;
+          const result = await prepareCarriedPictures({ projectId, sourcePath, sourceMime, refresh });
           // Durable copy for the free-plan UNLOCK, which runs later (often after
           // the 24h source purge) and authors the locked tail: it reads which
           // picture / table belongs to which slide from here. Job.inputJson is
@@ -2229,6 +2255,8 @@ export const deckGenerate = inngest.createFunction(
             pictures: result.pictures.length,
             tables: result.tables?.length ?? 0,
             skipped: result.skipped,
+            enhancedPhotos: result.enhancedPhotos ?? 0,
+            ...(result.refresh ? { refreshTagged: result.refresh.tagged, refreshReplaced: result.refresh.replaced } : {}),
             hasContentImages: result.hasContentImages,
           });
           if (result.hasContentImages && (data.brief as { imagesMode?: boolean } | null)?.imagesMode === true) {
@@ -2554,6 +2582,10 @@ export const deckGenerate = inngest.createFunction(
             .filter((p) => p.cls !== "page" && p.cls !== "backdrop")
             .map((p) => [p.assetId, p.aspect] as const),
         );
+        // Photo refresh: new asset -> the original it replaced ("Restore original").
+        const carriedOriginals = new Map(
+          (enhanceImages?.pictures ?? []).flatMap((p) => (p.originalAssetId ? [[p.assetId, p.originalAssetId] as const] : [])),
+        );
         // Single full-slide photos: the slide's photo background (data-bg-asset).
         const carriedBackdropIds = new Set(
           (enhanceImages?.pictures ?? []).filter((p) => p.cls === "backdrop").map((p) => p.assetId),
@@ -2582,6 +2614,7 @@ export const deckGenerate = inngest.createFunction(
                 stripTextDashes(rawParsed.html),
                 projectId,
                 carriedAssetIds,
+                carriedOriginals,
               ),
               carriedTables,
             ),
@@ -2677,7 +2710,15 @@ export const deckGenerate = inngest.createFunction(
           // vocabulary reserves "cover" for the single opening slide -
           // mid-deck dividers are role="section" - so any later cover IS a
           // restart. Keep the refined second pass: drop everything before it.
-          if (parsed.role === "cover" && slides.length > 0) {
+          // Enhance redesigns the source slide by slide, and the source's
+          // title slide is often not its first (2026-10-20: a cover at slide 3
+          // wiped slides 1-2). There a later cover is a restart only when it
+          // re-emits an id the deck already has.
+          if (
+            parsed.role === "cover" &&
+            slides.length > 0 &&
+            (!enhanceImages || slides.some((s) => s.slideId === parsed.slideId))
+          ) {
             logger.warn("deck_restart_detected", {
               droppedSlides: slides.length,
               atSlideId: parsed.slideId,

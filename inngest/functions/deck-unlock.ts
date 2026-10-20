@@ -283,6 +283,9 @@ export const deckUnlock = inngest.createFunction(
       carried.pictures.filter((x) => x.cls !== "page" && x.cls !== "backdrop").map((x) => [x.assetId, x.aspect] as const),
     );
     const carriedPageIds = new Set(carried.pictures.filter((x) => x.cls === "page").map((x) => x.assetId));
+    const carriedOriginals = new Map(
+      carried.pictures.flatMap((x) => (x.originalAssetId ? [[x.assetId, x.originalAssetId] as const] : [])),
+    );
     const carriedBackdropIds = new Set(carried.pictures.filter((x) => x.cls === "backdrop").map((x) => x.assetId));
     const pageAssetAt = new Map(
       carried.pictures.filter((x) => x.cls === "page").map((x) => [x.slideIndex, x.assetId] as const),
@@ -379,7 +382,7 @@ export const deckUnlock = inngest.createFunction(
       // foreign (lib/deck/carried-assets.ts), same as generation's ingest.
       const decl = parseFrameSlide(
         enforceCarriedTables(
-          enforceCarriedAssetImgs(stripTextDashes(noStyles), projectId, carriedAssets),
+          enforceCarriedAssetImgs(stripTextDashes(noStyles), projectId, carriedAssets, carriedOriginals),
           carriedTables,
         ),
       );
