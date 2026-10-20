@@ -35,7 +35,8 @@ export type FrameAuditFinding = {
     | "underfill"
     | "structure"
     | "contrast"
-    | "crowding";
+    | "crowding"
+    | "spill";
   detail: string;
 };
 
@@ -167,6 +168,81 @@ function __tqAuditWell(well, dir) {
     findings.push({
       type: "overflow",
       detail: "content clipped by the well: " + worstTag + " extends " + Math.round(worst) + "px past the well edge",
+    });
+  }
+
+  // ── spill: text escaping its OWN drawn shape (a card, pill, badge or
+  // circle). The overflow check above only knows the well edge, so a title
+  // wider than the gold circle it sits in passed (prod deck 2026-10-20,
+  // cmvgq4j04000l4i6dvwzw5uyu slide 3). Line boxes of each text node are
+  // tested against the nearest painted ancestor: its rectangle, or its
+  // ellipse when the corners are rounded to a circle / oval.
+  var spillWorst = 0;
+  var spillText = "";
+  var doc = well.ownerDocument;
+  var painted = function (el) {
+    var c = view.getComputedStyle(el);
+    if (el.hasAttribute("data-tq-lock")) return false;
+    var bg = c.backgroundColor && c.backgroundColor !== "rgba(0, 0, 0, 0)" && c.backgroundColor !== "transparent";
+    var bd = ["Top", "Right", "Bottom", "Left"].some(function (s) {
+      return c["border" + s + "Style"] !== "none" && parseFloat(c["border" + s + "Width"]) > 0;
+    });
+    return bg || bd || (c.backgroundImage && c.backgroundImage !== "none");
+  };
+  var tw = doc.createTreeWalker(well, 4 /* NodeFilter.SHOW_TEXT */);
+  for (var tn2 = tw.nextNode(); tn2; tn2 = tw.nextNode()) {
+    if (!tn2.textContent || !tn2.textContent.trim()) continue;
+    var host = tn2.parentElement;
+    if (!host) continue;
+    var hcs = view.getComputedStyle(host);
+    if (hcs.display === "none" || hcs.visibility === "hidden") continue;
+    var box = host;
+    while (box && box !== well && !painted(box)) box = box.parentElement;
+    if (!box || box === well) continue;
+    var sbcs = view.getComputedStyle(box);
+    // The INNER edge: text crossing a thick ring or border is already out.
+    var ob = box.getBoundingClientRect();
+    var bl = parseFloat(sbcs.borderLeftWidth) || 0;
+    var brw = parseFloat(sbcs.borderRightWidth) || 0;
+    var bt = parseFloat(sbcs.borderTopWidth) || 0;
+    var bb = parseFloat(sbcs.borderBottomWidth) || 0;
+    var sbr = { left: ob.left + bl, right: ob.right - brw, top: ob.top + bt, bottom: ob.bottom - bb, width: ob.width - bl - brw, height: ob.height - bt - bb };
+    if (sbr.width < 8 || sbr.height < 8) continue;
+    var rad = parseFloat(sbcs.borderTopLeftRadius) || 0;
+    if (String(sbcs.borderTopLeftRadius).indexOf("%") > -1) rad = (rad / 100) * Math.min(sbr.width, sbr.height);
+    var oval = rad >= 0.4 * Math.min(sbr.width, sbr.height);
+    var rg = doc.createRange();
+    rg.selectNodeContents(tn2);
+    var slines = rg.getClientRects();
+    for (var li = 0; li < slines.length; li++) {
+      var lr = slines[li];
+      if (lr.width < 1 || lr.height < 1) continue;
+      var o = 0;
+      if (oval) {
+        var cx = sbr.left + sbr.width / 2;
+        var cy = sbr.top + sbr.height / 2;
+        var dy = (lr.top + lr.height / 2 - cy) / (sbr.height / 2);
+        if (Math.abs(dy) >= 1) o = 0;
+        else {
+          var half = (sbr.width / 2) * Math.sqrt(1 - dy * dy);
+          o = Math.max(cx - half - lr.left, lr.right - (cx + half));
+        }
+      } else {
+        // Sideways only: glyphs of big display text and Arabic marks sit
+        // outside a tight line box vertically by design (false positives on
+        // every highlight pill); vertical clipping is the well check's job.
+        o = Math.max(sbr.left - lr.left, lr.right - sbr.right);
+      }
+      if (o > spillWorst) {
+        spillWorst = o;
+        spillText = tn2.textContent.trim().slice(0, 30);
+      }
+    }
+  }
+  if (spillWorst > 6) {
+    findings.push({
+      type: "spill",
+      detail: "text spills out of its own shape: '" + spillText + "' extends " + Math.round(spillWorst) + "px past the edge of the card / circle / badge holding it - make the shape bigger or the text smaller (or rewrap it) so every line sits fully inside",
     });
   }
 

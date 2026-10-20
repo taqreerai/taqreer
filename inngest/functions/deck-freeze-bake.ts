@@ -480,7 +480,8 @@ export const deckFreezeBake = inngest.createFunction(
             f.type === "anchor" ||
             f.type === "structure" ||
             f.type === "contrast" ||
-            f.type === "crowding",
+            f.type === "crowding" ||
+            f.type === "spill",
         ).length;
       for (const [sid, fs] of Object.entries(findings)) {
         if (fs.length > 0)
@@ -872,7 +873,8 @@ export const deckFreezeBake = inngest.createFunction(
                 f.type === "anchor" ||
                 f.type === "structure" ||
                 f.type === "contrast" ||
-                f.type === "crowding",
+                f.type === "crowding" ||
+            f.type === "spill",
             ).length;
             const before = observed.fixWorthyBefore[sid] ?? 0;
             // Overflow VETO (2026-07-11): a total-count comparison let a
