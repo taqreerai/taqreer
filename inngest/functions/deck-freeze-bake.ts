@@ -76,6 +76,7 @@ import { ownerGetsVisionReview } from "@/lib/deck/review-gate";
 import { FIT_SCRIPT, type FitCompressResult } from "@/lib/deck/fit-script";
 import { LEADING_NORMALIZE_SCRIPT } from "@/lib/deck/leading-normalize";
 import { EXPAND_TO_FILL_SCRIPT } from "@/lib/deck/expand-to-fill";
+import { EQUALIZE_PEERS_SCRIPT } from "@/lib/deck/equalize-peers";
 import {
   AUDIT_SCRIPT,
   type FrameAuditFinding,
@@ -1101,6 +1102,40 @@ export const deckFreezeBake = inngest.createFunction(
           }));
           await applyInkFixes(sid, fixes, "deck_contrast_css_backstop");
         }
+
+        // Equal-height peers (lib/deck/equalize-peers.ts): cards side by side
+        // share one height. Changed slides re-shoot their flow ground truth.
+        await page.evaluate(
+          `${EQUALIZE_PEERS_SCRIPT}; window.__tqEqualize = __tqEqualizePeers;`,
+        );
+        const equalized = (await page.evaluate((ids) => {
+          const out: Record<string, string> = {};
+          for (const sid of ids) {
+            const escaped = sid.replace(/[^a-zA-Z0-9_-]/g, "\\$&");
+            const sec = document
+              .querySelector(`[data-slide-id="${escaped}"]`)
+              ?.querySelector("section");
+            const well = sec?.querySelector(".tq-well");
+            if (!sec || !well) continue;
+            const res = (
+              window as unknown as { __tqEqualize: (w: Element) => { rows: number } }
+            ).__tqEqualize(well);
+            if (res.rows > 0) out[sid] = sec.outerHTML;
+          }
+          return out;
+        }, toFreeze)) as Record<string, string>;
+        // Into the composed html too, so a slide that ends kept-flow (freeze
+        // refused) still ships the equal heights.
+        for (const [sid, html] of Object.entries(equalized)) {
+          preShots.delete(sid);
+          const ci = composed.findIndex((s) => s.slideId === sid);
+          if (ci >= 0) composed[ci] = { ...composed[ci], html };
+        }
+        if (Object.keys(equalized).length > 0)
+          logger.info("deck_peers_equalized", {
+            versionId,
+            slides: Object.keys(equalized).length,
+          });
 
         // Flow ground-truth shots for the pixel gate (unmutated slides reuse
         // the earlier shots - same render state; backstop-fixed slides were
