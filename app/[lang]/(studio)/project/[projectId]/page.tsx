@@ -18,7 +18,8 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { isLocale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/dictionaries";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 import { DeckView } from "@/components/preview/DeckView";
 import { SharedDeckCta } from "@/components/preview/SharedDeckCta";
 import { loadProject } from "@/lib/project/load-project";
@@ -70,9 +71,9 @@ export async function generateMetadata({
 export default async function ProjectPage({
   params,
 }: {
-  params: Promise<{ projectId: string }>;
+  params: Promise<{ lang: string; projectId: string }>;
 }) {
-  const { projectId } = await params;
+  const { lang, projectId } = await params;
   // Role-aware gate (Phase 15.A). Owner, accepted invitee (any role),
   // or public-view link viewer pass. Anyone else gets the same 404
   // the layout serves for non-existent projects — never leaks the
@@ -80,7 +81,21 @@ export default async function ProjectPage({
   // into DeckView so the editor can hide save / regen / lock / etc.
   // affordances for non-edit viewers (Phase 15.B).
   const access = await resolveProjectAccess(projectId, "view");
-  if ("error" in access) notFound();
+  if ("error" in access) {
+    // Signed out: send them to sign in and straight back here, instead of a
+    // 404 (a deck link opened from an email on another device looked broken,
+    // 2026-10-21). Every signed-out miss redirects the same way, deck or not,
+    // so nothing about the deck's existence leaks. Signed in = the same 404.
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      const locale = isLocale(lang) ? lang : "ar";
+      redirect(`/${locale}/login?next=${encodeURIComponent(`/${locale}/project/${projectId}`)}`);
+    }
+    notFound();
+  }
   // Single-URL Studio (2026-06-07): /project serves EVERY deck state —
   // generating, completed, mid-regen. DeckView renders one shell that flips from
   // a disabled "generating" editor to the live editor in place, so there's no

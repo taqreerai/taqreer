@@ -11,8 +11,6 @@
 import { prisma } from "@/lib/prisma";
 import { sendInngestEventWithRetry, tierForUser } from "@/lib/inngest-helpers";
 import { toJson } from "@/lib/api/regen-helpers";
-import { ensureFresh } from "@/lib/config/runtime-config";
-import { regionFreePreset } from "@/lib/credits/region-model";
 
 export {
   DECK_UNLOCK_BRACKETS,
@@ -22,13 +20,11 @@ export {
   type DeckUnlockBracket,
 } from "@/lib/billing/deck-unlock-brackets";
 
-// Lowest Opus preset every paid tier affords. The unlocked tail is crafted on
-// Opus, for a subscriber and for a one-time buyer alike - EXCEPT a one-time
-// buyer from a region-limited country (still on the free plan): their tail is
-// written with the same Haiku preset as the free part (owner decision
-// 2026-10-12), so no Opus runs and both halves match. The bake's review is
-// already skipped for free owners (lib/deck/review-gate).
-const UNLOCK_PRESET = "opus-fast";
+// Every unlocked tail is written on Sonnet 5.5 (owner, 2026-10-21), for a
+// subscriber and a one-time buyer alike, region-limited accounts included:
+// the paid part of the deck is never written on the free-tier model. (Before:
+// Opus, and Haiku for one-time buyers from region-limited countries.)
+const UNLOCK_PRESET = "sonnet-fast";
 
 export type DispatchResult =
   | { ok: true; alreadyUnlocked?: boolean; alreadyRunning?: boolean }
@@ -70,13 +66,7 @@ export async function dispatchTeaserUnlock(
   });
   if (inFlight) return { ok: true, alreadyRunning: true };
 
-  // Region-limited one-time buyers get the Haiku tail (see UNLOCK_PRESET).
-  await ensureFresh();
-  const owner = await prisma.user.findUnique({
-    where: { id: project.userId },
-    select: { plan: true, role: true, signupCountry: true },
-  });
-  const unlockPreset = (owner && regionFreePreset(owner)) ?? UNLOCK_PRESET;
+  const unlockPreset = UNLOCK_PRESET;
 
   const presentation = project.presentation;
   const sourceVersionId = presentation.currentVersionId!;
