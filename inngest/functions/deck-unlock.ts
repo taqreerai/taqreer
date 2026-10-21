@@ -17,6 +17,7 @@
 
 import { toSdkThinking } from "@/lib/anthropic/model-thinking";
 import Anthropic from "@anthropic-ai/sdk";
+import { isEmptySlideHtml, readLockedPages, type LockedPage } from "@/lib/deck/locked-pages";
 import { NonRetriableError } from "inngest";
 import { inngest } from "@/inngest/client";
 import { prisma } from "@/lib/prisma";
@@ -255,6 +256,23 @@ export const deckUnlock = inngest.createFunction(
       }
       return { pictures: [] as CarriedPictureRef[], tables: [] as CarriedTableRef[], redesignSources };
     });
+    // Enhance teaser: the locked source pages kept at generation (PDF uploads
+    // have no per-slide text, so these pages ARE the content).
+    const lockedPages = await step.run("load-locked-pages", async () => {
+      const jobs = await prisma.job.findMany({
+        where: { projectId, type: "deck.generate" },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        select: { inputJson: true },
+      });
+      for (const j of jobs) {
+        const lp = (j.inputJson as { lockedPages?: LockedPage[] } | null)?.lockedPages;
+        if (Array.isArray(lp) && lp.length > 0) {
+          return lp.filter((p) => p.position > visibleCount && p.position <= total);
+        }
+      }
+      return [] as LockedPage[];
+    });
     const carriedBlock = (() => {
       if (carried.pictures.length === 0 && carried.tables.length === 0) return "";
       const blocks: string[] = [];
@@ -322,7 +340,25 @@ export const deckUnlock = inngest.createFunction(
         },
         sourceDeckCss,
       );
-      const userMessage = carriedBlock ? `${continuation}\n${carriedBlock}` : continuation;
+      const textMessage = carriedBlock ? `${continuation}\n${carriedBlock}` : continuation;
+      const pageImages = lockedPages.length > 0 ? await readLockedPages(projectId, lockedPages) : [];
+      const userMessage: Anthropic.Messages.ContentBlockParam[] | string =
+        pageImages.length > 0
+          ? [
+              {
+                type: "text",
+                text:
+                  "The ORIGINAL source slides you redesign are attached below as images, one per locked position. " +
+                  "Each image is the authoritative content of that slide: when its text block is empty or shorter, " +
+                  "read the slide's words from the image and reproduce them exactly (same language, same order, nothing invented, nothing dropped).",
+              },
+              ...pageImages.flatMap((p) => [
+                { type: "text" as const, text: `SOURCE SLIDE ${p.position} (your slide ${p.position}):` },
+                { type: "image" as const, source: { type: "base64" as const, media_type: "image/jpeg" as const, data: p.base64 } },
+              ]),
+              { type: "text", text: textMessage },
+            ]
+          : textMessage;
       const client = getClient();
       // STREAM (not create): a non-streaming call at this max_tokens trips the
       // SDK's ">10 minute operation" guard. finalMessage() still returns the
@@ -421,6 +457,17 @@ export const deckUnlock = inngest.createFunction(
         const s = newSlides[i];
         const html = neutralizeGenImages(s.html, seedable?.get(s.slideId));
         if (html !== s.html) newSlides[i] = { ...s, html };
+      }
+    }
+
+    // Never save an empty unlock (2026-10-20: 25 slides holding a page number,
+    // job "succeeded", payment kept). Fail instead: the deck stays locked and
+    // the owner's paid unlock can be retried at no charge.
+    {
+      const empty = newSlides.filter((s) => isEmptySlideHtml(s.html)).length;
+      if (empty >= Math.max(2, Math.ceil(newSlides.length * 0.2))) {
+        logger.error("deck_unlock_empty_slides", { projectId, empty, authored: newSlides.length, pages: lockedPages.length });
+        throw new Error(`unlock authored ${empty} of ${newSlides.length} slides with no content`);
       }
     }
 

@@ -9,6 +9,7 @@ import { generationCost } from "@/lib/credits/cost";
 import { type Quality } from "@/lib/types/quality";
 import { clampChars, MAX_SLIDE_TEXT_CHARS } from "@/lib/types/brief-limits";
 import { prisma } from "@/lib/prisma";
+import { storeLockedPages } from "@/lib/deck/locked-pages";
 import { isPaidPlan } from "@/lib/plan";
 import { deckFlowFor } from "@/lib/project/flow";
 import {
@@ -2171,6 +2172,32 @@ export const deckGenerate = inngest.createFunction(
         const fileIds = await uploadSlideImages(
           teaserVisible != null ? pngs.slice(0, teaserVisible) : pngs,
         );
+        // Teaser: keep the LOCKED pages for the unlock (lib/deck/locked-pages).
+        // It has no other source for them when the upload is a PDF (no
+        // per-slide text) - 2026-10-20 a paid unlock came back empty.
+        if (teaserVisible != null && jobId) {
+          try {
+            const lockedPages = await storeLockedPages(
+              projectId,
+              pngs,
+              teaserVisible,
+              teaserTotal ?? pngs.length,
+            );
+            if (lockedPages.length > 0) {
+              const job = await prisma.job.findUnique({ where: { id: jobId }, select: { inputJson: true } });
+              const input = (job?.inputJson ?? {}) as Record<string, unknown>;
+              await prisma.job.update({
+                where: { id: jobId },
+                data: { inputJson: { ...input, lockedPages } as Prisma.InputJsonValue },
+              });
+            }
+          } catch (err) {
+            logger.warn("enhance_locked_pages_store_failed", {
+              projectId,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
         // Stash the ids on the Job row so onFailure can flush them even
         // though Inngest's failure hook can't see step return values.
         // The success path overwrites Job.outputJson with the manifest

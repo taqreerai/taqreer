@@ -80,6 +80,10 @@ export async function dispatchTeaserUnlock(
 
   const presentation = project.presentation;
   const sourceVersionId = presentation.currentVersionId!;
+  // Earlier unlock attempts: part of the event id, so a retry after a failed
+  // unlock is a NEW event (Inngest drops a repeated id for 24h, which left a
+  // retry queued forever) while two concurrent dispatches still dedupe.
+  const attempt = await prisma.job.count({ where: { projectId, type: "deck.unlock" } });
   let jobId: string | null = null;
   try {
     const job = await prisma.job.create({
@@ -100,7 +104,7 @@ export async function dispatchTeaserUnlock(
       name: "deck.unlock.requested",
       // Deterministic id: two concurrent unlocks (button + webhook, or a
       // double click) dedup to ONE comped run.
-      id: `deck-unlock:${project.id}:${sourceVersionId}`,
+      id: `deck-unlock:${project.id}:${sourceVersionId}:${attempt}`,
       data: {
         projectId: project.id,
         presentationId: presentation.id,
