@@ -53,6 +53,7 @@ model User {
   creditHolds    CreditHold[]
   projectShares  ProjectShare[]
   comments       Comment[]
+  assistantMessages AssistantMessage[]
   // Notifications addressed TO this user (recipientUserId). The
   // `notificationsActed` back-relation tracks rows where this user
   // is the actor (someone else's bell entries). Kept separate so
@@ -142,6 +143,7 @@ model Project {
   presentation  Presentation?
   jobs          Job[]
   shares        ProjectShare[]
+  assistantMessages AssistantMessage[]
   notifications Notification[]
   flattenEvents FlattenEvent[]
   exportEvents  ExportEvent[]
@@ -338,6 +340,31 @@ model SlideVersion {
 
   @@unique([slideStateId, versionNumber])
   @@index([slideStateId, createdAt(sort: Desc)])
+}
+
+// Editor assistant thread (2026-10-21): what a user asked about a deck and
+// what the assistant answered or proposed. A "proposal" row is a priced edit
+// waiting for Confirm; applying it creates forAi comments for exactly its
+// slides and runs the normal partial regen. User rows also meter the free
+// daily question cap.
+model AssistantMessage {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  // "user" | "assistant"
+  role      String
+  content   String
+  // Assistant rows that propose an edit: the instruction, target slides, the
+  // quoted cost, the scope bounds (area edits), and the outcome.
+  proposalJson Json?
+  // "proposed" | "applied" | "cancelled" (edit proposals only)
+  status    String?
+  createdAt DateTime @default(now())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@index([userId, createdAt])
 }
 
 model Comment {

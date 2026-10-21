@@ -1250,6 +1250,60 @@ html.app-shell-scroll body {
    Wider blob fade (transparent at 70%) ensures consistent ring coverage
    even when a blob's centre sits well inside the button. White as one of
    the blob colours adds crispness against the dark UI backdrop. */
+/* Editor assistant field (2026-10-21): the always-visible AI prompt beside the
+   studio toolbar. The same moving blue mesh as .btn-gradient-anim (mx/my
+   keyframes, registered below), drawn as a 1.5px ring, slower so it drifts
+   rather than flickers, plus a soft breathing halo: the one place on the
+   screen that asks for attention. Reduced motion: a still ring, no halo pulse. */
+.ai-field {
+  position: relative;
+  isolation: isolate;
+  border-radius: 9999px;
+  background: var(--tq-surface);
+  animation:
+    mx1 2.0s ease-in-out infinite alternate,
+    my1 3.2s ease-in-out infinite alternate,
+    mx2 3.8s ease-in-out infinite alternate,
+    my2 2.6s ease-in-out infinite alternate,
+    mx3 5.0s ease-in-out infinite alternate,
+    my3 1.4s ease-in-out infinite alternate,
+    mx4 2.4s ease-in-out infinite alternate,
+    my4 3.6s ease-in-out infinite alternate,
+    mx6 4.0s ease-in-out infinite alternate,
+    my6 4.6s ease-in-out infinite alternate,
+    ai-field-halo 2.8s ease-in-out infinite alternate;
+}
+.ai-field::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background:
+    radial-gradient(circle at var(--mesh-x1) var(--mesh-y1), #0042E0 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x2) var(--mesh-y2), #66A3FF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x3) var(--mesh-y3), #1E6BFF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x4) var(--mesh-y4), #3380FF 0%, transparent 70%),
+    radial-gradient(circle at var(--mesh-x6) var(--mesh-y6), #FFFFFF 0%, transparent 70%),
+    #1E6BFF;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+@keyframes ai-field-halo {
+  from { box-shadow: 0 0 0 0 rgba(30, 107, 255, 0), 0 0 14px -6px rgba(30, 107, 255, 0.35); }
+  to   { box-shadow: 0 0 0 3px rgba(30, 107, 255, 0.10), 0 0 26px -4px rgba(30, 107, 255, 0.55); }
+}
+.ai-field:focus-within {
+  animation-play-state: running;
+  box-shadow: 0 0 0 3px rgba(30, 107, 255, 0.16), 0 0 28px -4px rgba(30, 107, 255, 0.6);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-field { animation: none; box-shadow: 0 0 0 3px rgba(30, 107, 255, 0.10); }
+}
+
 .btn-gradient-anim::before {
   content: '';
   position: absolute;

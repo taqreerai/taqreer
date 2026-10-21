@@ -25,8 +25,26 @@ import { canonicalFamily, googleFontUrl } from "@/lib/editor/font-search";
 import { hasOwnPaint } from "@/lib/editor/leaves";
 import { usePopoverPosition } from "@/lib/ui/use-popover-position";
 import { serializeSlideSection } from "@/lib/editor/serialize";
+import { useCreditBalance } from "@/lib/credits/store";
+import { isPaidPlan } from "@/lib/plan";
+import { IMAGE_CREDITS_PER_IMAGE } from "@/lib/credits/cost";
 import type { GenImageAspect } from "@/lib/images/slide-images";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
+
+// Image re-roll (2026-10-21). The server builds the new prompt from the stored
+// box (variant / change), or takes the user's own (prompt / restore), charges
+// it and returns it; only then is it written to data-genimage.
+export type RegenImageInput = {
+  genid: string;
+  slideId: string;
+  aspect: GenImageAspect;
+  mode: "variant" | "change" | "prompt" | "restore";
+  prompt?: string;
+  change?: string;
+};
+export type RegenImageResult =
+  | { ok: true; prompt: string; prevPrompt: string | null }
+  | { ok: false; error: string };
 
 type Props = {
   // The selection SET (plan-editor §20). Length 1 → the classic single-element
@@ -47,12 +65,7 @@ type Props = {
   // Regenerate button only for an AI image (data-genid + data-genimage); on
   // confirm it updates the box's data-genimage (committed like Replace) and
   // calls this, which fires the regen route + drives the live swap (DeckView).
-  onRegenImage?: (input: {
-    genid: string;
-    slideId: string;
-    prompt: string;
-    aspect: GenImageAspect;
-  }) => void;
+  onRegenImage?: (input: RegenImageInput) => Promise<RegenImageResult>;
   // Group / ungroup the current multi-selection (virtual grouping — a shared
   // data-tq-group id). The pill shows a Group button for a 2+ selection and an
   // Ungroup button once the set is already a group.
@@ -306,6 +319,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
   // UI locale (useDict / useLocale), not the deck language.
   const dict = useDict();
   const t = dict.editor.style;
+  const credit = useCreditBalance();
   const { dir } = useLocale();
   // True multi-element selection (the marquee picked 2+). When false this is the
   // classic single-element pill and every code path below collapses to `target`.
@@ -320,6 +334,18 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
   // draft is seeded from the box's data-genimage when the popover opens.
   const [regenOpen, setRegenOpen] = useState(false);
   const [regenPrompt, setRegenPrompt] = useState("");
+  const [regenChange, setRegenChange] = useState("");
+  const [regenAdvanced, setRegenAdvanced] = useState(false);
+  const [regenWorking, setRegenWorking] = useState<RegenImageInput["mode"] | null>(null);
+  const [regenError, setRegenError] = useState<string | null>(null);
+  // Still mounted when the server answers? (A closed pill already committed.)
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   // Whether the OPEN popover (colour picker / ⋯ menu) opens upward — set the
   // moment a popover opens, purely from which side of the pill the element is on
   // (see the layout effect below).
@@ -677,23 +703,60 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
     align: "end",
     dir,
   });
-  const handleRegenConfirm = useCallback(() => {
-    const newPrompt = regenPrompt.trim();
-    if (!newPrompt) return;
-    const genid = target.getAttribute("data-genid");
-    if (!genid) return;
-    target.setAttribute("data-genimage", newPrompt);
-    target.removeAttribute("srcset");
-    target.removeAttribute("src");
-    dirty.current = true;
-    const r = target.getBoundingClientRect();
-    const ratio = r.height > 0 ? r.width / r.height : 1;
-    const aspect: GenImageAspect =
-      ratio >= 1.15 ? "landscape" : ratio <= 0.87 ? "portrait" : "square";
-    onRegenImage?.({ genid, slideId, prompt: newPrompt, aspect });
-    setRegenOpen(false);
-    force((n) => n + 1);
-  }, [regenPrompt, target, slideId, onRegenImage]);
+  const runRegen = useCallback(
+    async (mode: RegenImageInput["mode"]) => {
+      const genid = target.getAttribute("data-genid");
+      if (!genid || !onRegenImage || regenWorking) return;
+      const current = target.getAttribute("data-genimage") ?? "";
+      const prev = target.getAttribute("data-genprev") ?? "";
+      const r0 = target.getBoundingClientRect();
+      const ratio = r0.height > 0 ? r0.width / r0.height : 1;
+      const aspect: GenImageAspect =
+        ratio >= 1.15 ? "landscape" : ratio <= 0.87 ? "portrait" : "square";
+      setRegenWorking(mode);
+      setRegenError(null);
+      const res = await onRegenImage({
+        genid,
+        slideId,
+        aspect,
+        mode,
+        prompt: mode === "prompt" ? regenPrompt.trim() : mode === "restore" ? prev : undefined,
+        change: mode === "change" ? regenChange.trim() : undefined,
+      });
+      if (mountedRef.current) setRegenWorking(null);
+      if (!res.ok) {
+        if (mountedRef.current) {
+          setRegenError(
+            res.error === "insufficient_credits" || res.error === "images_regen_locked"
+              ? null // DeckView opened the top-up / upgrade dialog
+              : res.error === "same_prompt"
+                ? t.regenSamePrompt
+                : t.regenFailed,
+          );
+        }
+        return;
+      }
+      // Only now does the box take the new prompt (a refused charge leaves it as is).
+      target.setAttribute("data-genimage", res.prompt);
+      target.setAttribute("data-genprev", mode === "restore" ? current : res.prevPrompt ?? current);
+      if (mode !== "restore") {
+        target.removeAttribute("srcset");
+        target.removeAttribute("src");
+      }
+      if (mountedRef.current) {
+        dirty.current = true;
+        setRegenOpen(false);
+        setRegenChange("");
+        setRegenAdvanced(false);
+        force((n) => n + 1);
+      } else {
+        // The pill closed while the server worked: commit the box here.
+        const sec = target.closest("section") as HTMLElement | null;
+        if (sec && target.isConnected) onCommit(slideId, serializeSlideSection(sec));
+      }
+    },
+    [target, slideId, onRegenImage, regenWorking, regenPrompt, regenChange, onCommit, t],
+  );
 
   // Click outside the prompt popover (but not on its toggle, which handles its
   // own open/close) closes it. Capture phase so it beats nested handlers.
@@ -772,6 +835,9 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
     kind === "image" &&
     !!target.getAttribute("data-genid") &&
     !!(target.getAttribute("data-genimage") ?? "").trim();
+  // Re-rolling a working image is a paid feature (the route enforces it).
+  const regenLocked = !!credit && !credit.isAdmin && !isPaidPlan(credit.plan);
+  const regenCostLabel = t.regenCost.replace("{n}", String(IMAGE_CREDITS_PER_IMAGE));
 
   const cs = getComputedStyle(target);
   const fontPx = Math.round(parseFloat(cs.fontSize) || 16);
@@ -1181,6 +1247,8 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
                 aria-label={t.regenImage}
                 onClick={() => {
                   setRegenPrompt(target.getAttribute("data-genimage") ?? "");
+                  setRegenError(null);
+                  setRegenAdvanced(false);
                   setRegenOpen((o) => !o);
                   setColorOpen(false);
                   setMoreOpen(false);
@@ -1197,7 +1265,7 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
                   ref={regenPopoverRef}
                   dir={dir}
                   onMouseDown={(e) => e.stopPropagation()}
-                  className="surface-popover z-20 rounded-xl p-2.5 text-foreground"
+                  className="surface-popover z-20 space-y-2.5 rounded-xl p-2.5 text-foreground"
                   // position:fixed + top/left from usePopoverPosition; start hidden
                   // (no flash) + hairline border so it reads over a light slide.
                   style={{
@@ -1206,36 +1274,112 @@ export function StylePill({ targets, slideId, onCommit, onDismiss, onRegenImage,
                     border: "1px solid var(--tq-border-hairline)",
                   }}
                 >
-                  <textarea
-                    autoFocus
-                    dir="auto"
-                    rows={3}
-                    value={regenPrompt}
-                    onChange={(e) => setRegenPrompt(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Escape") {
-                        e.preventDefault();
-                        setRegenOpen(false);
-                      } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                        e.preventDefault();
-                        handleRegenConfirm();
-                      }
-                    }}
-                    placeholder={t.regenPlaceholder}
-                    className="w-full resize-none rounded-lg border px-3 py-2 text-[13px] leading-relaxed text-foreground outline-none transition-colors placeholder:text-foreground/35 focus:border-foreground/40"
-                    style={{ borderColor: "var(--tq-border-hairline)", background: "var(--tq-surface)" }}
-                  />
-                  <div className="mt-2 flex items-center justify-between gap-2">
-                    <span className="text-[10px] text-foreground/40">{t.regenHint}</span>
+                  {regenLocked ? (
+                    <p className="px-1 text-[12px] leading-relaxed text-foreground/70">{t.regenLockedNote}</p>
+                  ) : null}
+                  {/* New version: same idea, a fresh image, one click. */}
+                  <button
+                    type="button"
+                    onClick={() => void runRegen("variant")}
+                    disabled={!!regenWorking}
+                    className="btn-gradient-anim inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-full px-3.5 text-[12px] font-medium text-foreground disabled:opacity-50"
+                  >
+                    <span className={`material-symbols-outlined text-[15px] leading-none ${regenWorking === "variant" ? "animate-spin" : ""}`} aria-hidden>
+                      {regenWorking === "variant" ? "progress_activity" : "autorenew"}
+                    </span>
+                    {regenLocked ? t.regenNewVersion : `${t.regenNewVersion} \u00b7 ${regenCostLabel}`}
+                  </button>
+                  {/* Describe the change, in the user's own language. */}
+                  <div className="space-y-1.5">
+                    <textarea
+                      dir="auto"
+                      rows={2}
+                      maxLength={300}
+                      value={regenChange}
+                      onChange={(e) => setRegenChange(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") {
+                          e.preventDefault();
+                          setRegenOpen(false);
+                        } else if (e.key === "Enter" && !e.shiftKey && regenChange.trim()) {
+                          e.preventDefault();
+                          void runRegen("change");
+                        }
+                      }}
+                      placeholder={t.regenChangePlaceholder}
+                      disabled={!!regenWorking}
+                      className="w-full resize-none rounded-lg border px-3 py-2 text-[12px] leading-relaxed text-foreground outline-none transition-colors placeholder:text-foreground/35 focus:border-foreground/40"
+                      style={{ borderColor: "var(--tq-border-hairline)", background: "var(--tq-surface)" }}
+                    />
                     <button
                       type="button"
-                      onClick={handleRegenConfirm}
-                      disabled={!regenPrompt.trim()}
-                      className="btn-gradient-anim inline-flex h-7 items-center rounded-full px-3.5 text-[12px] font-medium text-foreground disabled:opacity-40"
+                      onClick={() => void runRegen("change")}
+                      disabled={!regenChange.trim() || !!regenWorking}
+                      className="btn-pill w-full disabled:opacity-40"
                     >
-                      {t.generate}
+                      {regenWorking === "change"
+                        ? t.regenWorking
+                        : regenLocked
+                          ? t.regenApplyChange
+                          : `${t.regenApplyChange} \u00b7 ${regenCostLabel}`}
                     </button>
                   </div>
+                  <div className="flex items-center justify-between gap-2 px-1">
+                    {target.getAttribute("data-genprev") ? (
+                      <button
+                        type="button"
+                        onClick={() => void runRegen("restore")}
+                        disabled={!!regenWorking}
+                        className="inline-flex items-center gap-1 text-[11px] text-foreground/65 hover:text-foreground disabled:opacity-40"
+                      >
+                        <span className="material-symbols-outlined text-[14px] leading-none" aria-hidden>undo</span>
+                        {t.regenBack}
+                      </button>
+                    ) : (
+                      <span />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRegenPrompt(target.getAttribute("data-genimage") ?? "");
+                        setRegenAdvanced((v) => !v);
+                      }}
+                      className="text-[11px] text-foreground/50 underline-offset-2 hover:text-foreground/80 hover:underline"
+                    >
+                      {t.regenAdvanced}
+                    </button>
+                  </div>
+                  {regenAdvanced ? (
+                    <div className="space-y-1.5">
+                      <textarea
+                        dir="auto"
+                        rows={4}
+                        value={regenPrompt}
+                        onChange={(e) => setRegenPrompt(e.target.value)}
+                        placeholder={t.regenPlaceholder}
+                        disabled={!!regenWorking}
+                        className="w-full resize-none rounded-lg border px-3 py-2 text-[12px] leading-relaxed text-foreground outline-none transition-colors placeholder:text-foreground/35 focus:border-foreground/40"
+                        style={{ borderColor: "var(--tq-border-hairline)", background: "var(--tq-surface)" }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void runRegen("prompt")}
+                        disabled={
+                          !regenPrompt.trim() ||
+                          regenPrompt.trim() === (target.getAttribute("data-genimage") ?? "").trim() ||
+                          !!regenWorking
+                        }
+                        className="btn-pill w-full disabled:opacity-40"
+                      >
+                        {regenWorking === "prompt"
+                          ? t.regenWorking
+                          : regenLocked
+                            ? t.generate
+                            : `${t.generate} \u00b7 ${regenCostLabel}`}
+                      </button>
+                    </div>
+                  ) : null}
+                  {regenError ? <p className="px-1 text-[11px] text-[var(--tq-text-danger)]">{regenError}</p> : null}
                 </div>
               )}
             </div>

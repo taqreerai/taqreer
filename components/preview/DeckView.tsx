@@ -40,7 +40,7 @@ import {
 import { teaserVisibleForFlow } from "@/lib/credits/cost";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import { SlideEditor } from "@/components/preview/editor/SlideEditor";
-import { StylePill } from "@/components/preview/editor/StylePill";
+import { StylePill, type RegenImageInput, type RegenImageResult } from "@/components/preview/editor/StylePill";
 import { PhotoSlotOverlay, PHOTO_SLOT_SELECTOR } from "@/components/preview/editor/PhotoSlotOverlay";
 import { GenImageFailedOverlay } from "@/components/preview/editor/GenImageFailedOverlay";
 import { LayersPanel } from "@/components/preview/editor/LayersPanel";
@@ -57,7 +57,7 @@ import {
   GenImagePendingProvider,
   type GenImageFills,
 } from "@/components/slides/gen-image-context";
-import { scanGenImages, injectImgSrc, type GenImageAspect } from "@/lib/images/slide-images";
+import { scanGenImages, injectImgSrc } from "@/lib/images/slide-images";
 import { ParagraphWriteIcon } from "@/components/preview/ParagraphWriteIcon";
 import { HistoryPopover, type HistoryRow } from "@/components/preview/HistoryPopover";
 import type { InitialSlideState } from "@/lib/project/load-project";
@@ -1923,74 +1923,50 @@ export function DeckView({
   );
 
   const handleRegenImage = useCallback(
-    async (input: {
-      genid: string;
-      slideId: string;
-      prompt: string;
-      aspect: GenImageAspect;
-    }) => {
-      // Drop the stale fill for this box immediately — matches the StylePill's
-      // optimistic `src` removal. Otherwise `exportManifest` keeps baking the
-      // OLD asset, and the iframe-sync effect below can re-inject the old `src`
-      // (re-painting the box the StylePill just blanked) on the next
-      // filledImages change. The fresh URL re-populates on `slide.image.ready`.
-      setFilledImages((prev) => {
-        if (!(input.genid in prev)) return prev;
-        const next = { ...prev };
-        delete next[input.genid];
-        return next;
-      });
-      // A retry leaves the failed state — back to the shimmer. If it fails
-      // again, `slide.image.failed` / the restarted poll re-flags it. The
-      // pre-retry failed flag is remembered so a retry whose POST never
-      // reaches the worker can put the retry overlay straight back (CR
-      // PR #185 round 3) instead of leaving the box on the bare static
-      // placeholder until a poll tick heals it.
+    async (input: RegenImageInput): Promise<RegenImageResult> => {
+      const restoring = input.mode === "restore";
+      // Remembered so a regen that never starts can put the box back as it was.
+      const prevFill = filledImages[input.genid];
       const wasFailed = failedImages.has(input.genid);
-      setFailedImages((prev) => {
-        if (!prev.has(input.genid)) return prev;
-        const next = new Set(prev);
-        next.delete(input.genid);
-        return next;
-      });
-      // Mark the box "retrying" so the mirror effect shows the editor's
-      // loading shimmer while THIS regen runs — the settled-deck default is
-      // the static placeholder glyph (PR #185 follow-up).
-      setRetryingImages((prev) => {
-        if (prev.has(input.genid)) return prev;
-        const next = new Set(prev);
-        next.add(input.genid);
-        return next;
-      });
-      try {
-        const res = await fetch(
-          `/api/projects/${projectId}/slides/${encodeURIComponent(
-            input.slideId,
-          )}/images/${encodeURIComponent(input.genid)}/regen`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt: input.prompt, aspect: input.aspect }),
-          },
-        );
-        if (!res.ok) {
-          const data = (await res.json().catch(() => null)) as
-            | { error?: string }
-            | null;
-          throw new Error(data?.error ?? `regen image: ${res.status}`);
-        }
-      } catch (err) {
-        console.error("[image-regen] failed", err);
-        // The regen never started server-side — end the retry shimmer so the
-        // box falls back to the honest static placeholder / failed state.
+      if (!restoring) {
+        // Drop the stale fill for this box immediately. Otherwise
+        // `exportManifest` keeps baking the OLD asset, and the iframe-sync
+        // effect below can re-inject the old `src` on the next filledImages
+        // change. The fresh URL re-populates on `slide.image.ready`.
+        setFilledImages((prev) => {
+          if (!(input.genid in prev)) return prev;
+          const next = { ...prev };
+          delete next[input.genid];
+          return next;
+        });
+        // A retry leaves the failed state, back to the shimmer. If it fails
+        // again, `slide.image.failed` / the restarted poll re-flags it.
+        setFailedImages((prev) => {
+          if (!prev.has(input.genid)) return prev;
+          const next = new Set(prev);
+          next.delete(input.genid);
+          return next;
+        });
+        // Mark the box "retrying" so the mirror effect shows the editor's
+        // loading shimmer while THIS regen runs (PR #185 follow-up).
+        setRetryingImages((prev) => {
+          if (prev.has(input.genid)) return prev;
+          const next = new Set(prev);
+          next.add(input.genid);
+          return next;
+        });
+      }
+      const undo = () => {
+        if (restoring) return;
+        // The regen never started server-side: end the shimmer and put the box
+        // back exactly as it was (its fill, or the failed / retry overlay).
         setRetryingImages((prev) => {
           if (!prev.has(input.genid)) return prev;
           const next = new Set(prev);
           next.delete(input.genid);
           return next;
         });
-        // ...and restore the failed flag the retry optimistically cleared,
-        // so the retry overlay stays available immediately.
+        if (prevFill) setFilledImages((prev) => ({ ...prev, [input.genid]: prevFill }));
         if (wasFailed) {
           setFailedImages((prev) => {
             if (prev.has(input.genid)) return prev;
@@ -1999,15 +1975,107 @@ export function DeckView({
             return next;
           });
         }
+      };
+      try {
+        const res = await fetch(
+          `/api/projects/${projectId}/slides/${encodeURIComponent(
+            input.slideId,
+          )}/images/${encodeURIComponent(input.genid)}/regen`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              mode: input.mode,
+              prompt: input.prompt,
+              change: input.change,
+              aspect: input.aspect,
+            }),
+          },
+        );
+        const data = (await res.json().catch(() => null)) as
+          | { prompt?: string; prevPrompt?: string | null; url?: string; error?: string }
+          | CreditGatePayload
+          | null;
+        if (!res.ok) {
+          undo();
+          if (res.status === 402 && isCreditGatePayload(data)) {
+            setCreditGate(data);
+            return { ok: false, error: "insufficient_credits" };
+          }
+          const code = (data as { error?: string } | null)?.error ?? `http_${res.status}`;
+          if (code === "images_regen_locked") {
+            // Re-rolling images is a paid feature: the same upgrade dialog as AI edits.
+            setCreditGate({
+              error: "ai_edit_locked",
+              balance: 0,
+              slideCap: null,
+              minFlowTier: "plus",
+              options: { reducedSlides: null, reducedCredits: null, cheaperPresets: [], topupGap: 0 },
+            } as CreditGatePayload);
+          }
+          return { ok: false, error: code };
+        }
+        const ok = data as { prompt: string; prevPrompt?: string | null; url?: string };
+        if (restoring && ok.url) {
+          setFilledImages((prev) => ({ ...prev, [input.genid]: ok.url! }));
+        }
+        return { ok: true, prompt: ok.prompt, prevPrompt: ok.prevPrompt ?? null };
+      } catch (err) {
+        console.error("[image-regen] failed", err);
+        undo();
+        return { ok: false, error: "network" };
       } finally {
         // Restart the catch-up poll AFTER the regen route committed its
-        // "generating" upsert — bumping before the POST landed made the
-        // restarted poll's first tick read the still-"failed" row and
-        // re-flag the box the user just retried.
-        setImagePollNonce((n) => n + 1);
+        // "generating" upsert (bumping before the POST landed made the
+        // restarted poll's first tick read the still-"failed" row).
+        if (!restoring) setImagePollNonce((n) => n + 1);
       }
     },
-    [projectId, failedImages],
+    [projectId, failedImages, filledImages],
+  );
+
+  // Editor assistant, AI image proposal (2026-10-21): re-roll the box with the
+  // described change through the image regen route (charged + gated there),
+  // then write the new prompt into the slide like the pill does: in the live
+  // editor DOM when that slide is open, else in the stored html.
+  const handleAssistantImage = useCallback(
+    async (r: { slideId: string; genid: string; change: string }): Promise<boolean> => {
+      // The editor document holds only the open slide, and genids are unique per
+      // deck: finding the box there means that slide is open.
+      const open = (editorDoc?.querySelector(`[data-genid="${CSS.escape(r.genid)}"]`) as HTMLElement | null) ?? null;
+      let aspect: RegenImageInput["aspect"] = "landscape";
+      if (open) {
+        const b = open.getBoundingClientRect();
+        const ratio = b.height > 0 ? b.width / b.height : 1;
+        aspect = ratio >= 1.15 ? "landscape" : ratio <= 0.87 ? "portrait" : "square";
+      }
+      const res = await handleRegenImage({ genid: r.genid, slideId: r.slideId, aspect, mode: "change", change: r.change });
+      if (!res.ok) return false;
+      const stamp = (el: Element) => {
+        const prev = el.getAttribute("data-genimage") ?? "";
+        el.setAttribute("data-genimage", res.prompt);
+        el.setAttribute("data-genprev", res.prevPrompt ?? prev);
+        el.removeAttribute("srcset");
+        el.removeAttribute("src");
+      };
+      if (open) {
+        stamp(open);
+        const sec = open.closest("section") as HTMLElement | null;
+        if (sec) handleSlideEdit(r.slideId, serializeSlideSection(sec));
+        return true;
+      }
+      const html = manifestRef.current?.slides.find((s) => s.slideId === r.slideId)?.html;
+      if (!html) return true;
+      const doc = new DOMParser().parseFromString(html, "text/html");
+      const el = doc.querySelector(`[data-genid="${CSS.escape(r.genid)}"]`);
+      const sec = doc.body.firstElementChild;
+      if (el && sec) {
+        stamp(el);
+        handleSlideEdit(r.slideId, sec.outerHTML);
+      }
+      return true;
+    },
+    [editorDoc, handleRegenImage, handleSlideEdit],
   );
 
   // Keep the editor iframe's gen-image <img>s in sync with `filledImages`
@@ -4410,130 +4478,11 @@ export function DeckView({
   );
 
   // Apply button (in CommentsPanel footer) = just exit comment mode.
-  // Drafts persist; the toolbar's regen button — which morphs to an
-  // AI icon when drafts are armed — is what fires the actual partial
-  // regen via handleFirePartialRegen below.
+  // Drafts persist. AI edits run through the editor assistant (AssistantBar).
   const handleApplyComments = useCallback(() => {
     if (comments.length === 0) return;
     setCommentMode(false);
   }, [comments.length]);
-
-  // Toolbar regen button when commentsArmed = true. Fires the partial
-  // regen on every slide that has draft comments. Optimistic
-  // `applying` state surfaces the per-slide overlay within one frame;
-  // authoritative versionId arrives when the API resolves.
-  const handleFirePartialRegen = useCallback(async (
-    // §17: the AI composer fires this right after POSTing its forAi comment.
-    // That comment isn't in the client `comments` state yet (setComments hasn't
-    // re-rendered), so the comments-derived guard below would wrongly bail —
-    // the caller passes the focused slide's id explicitly instead. The server
-    // (regenerate-partial) is the source of truth for which slides regenerate;
-    // these ids only seed the optimistic overlay.
-    explicitTargetIds?: string[],
-  ) => {
-    if (applying) return;
-    // Only AI comments are applied (§16 Chunk 4) — scope the guard + the
-    // optimistic overlay to forAi slides so they match what the server promotes.
-    let optimisticTargetIds: string[];
-    if (explicitTargetIds && explicitTargetIds.length > 0) {
-      optimisticTargetIds = explicitTargetIds;
-    } else {
-      const aiComments = comments.filter((c) => c.forAi);
-      if (aiComments.length === 0) return;
-      optimisticTargetIds = Array.from(
-        new Set(aiComments.map((c) => c.slideId)),
-      );
-    }
-    setApplying({ versionId: "__pending__", targetSlideIds: optimisticTargetIds });
-    try {
-      const res = await fetch(
-        `/api/projects/${projectId}/regenerate-partial`,
-        { method: "POST" },
-      );
-      if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as
-          | { error?: string }
-          | CreditGatePayload
-          | null;
-        // Out of credits: open the upgrade/top-up gate instead of failing
-        // silently. Clear the optimistic overlay first so no spinner strands.
-        // Return `true` so the AI-composer caller can roll back the comment it
-        // optimistically created (it must not persist as a hidden draft).
-        if (res.status === 402 && isCreditGatePayload(data)) {
-          setApplying(null);
-          setCreditGate(data);
-          return true;
-        }
-        throw new Error(
-          (data as { error?: string } | null)?.error ??
-            "Failed to fire partial regen",
-        );
-      }
-      const data = (await res.json()) as {
-        versionId: string;
-        targetSlideIds: string[];
-      };
-      setApplying({
-        versionId: data.versionId,
-        targetSlideIds: data.targetSlideIds,
-      });
-    } catch (err) {
-      console.error(err);
-      setApplying(null);
-    }
-  }, [applying, comments, projectId]);
-
-  // AI composer submit (§17) — the bottom-bar send. Creates the forAi comment
-  // (drawn region as bounds, or null = whole slide) via the existing /comments
-  // POST, then fires the partial regen scoped to the focused slide. forAi is
-  // derived from `studioMode` inside handleCreateComment, so we only supply
-  // content + bounds. The explicit target id is REQUIRED: the freshly-created
-  // comment isn't in the client `comments` state yet (setComments hasn't
-  // re-rendered), so handleFirePartialRegen's comments-derived guard would
-  // wrongly bail — the server reads the comment from the DB regardless. The
-  // focused slide is recomputed here (not via the late `focusedSlide`, which is
-  // declared after this component's early returns) from manifest +
-  // currentSlideIndex. On a thrown create/regen the error propagates so
-  // PreviewActionBar keeps the typed text for a retry.
-  const handleAiSubmit = useCallback(
-    async (text: string) => {
-      const trimmed = text.trim();
-      if (!trimmed || applying) return;
-      const slides = manifest?.slides;
-      if (!slides || slides.length === 0) return;
-      const idx = Math.min(Math.max(currentSlideIndex, 0), slides.length - 1);
-      const target = slides[idx];
-      if (!target) return;
-      const targetId = target.slideId;
-      if (slideStates[targetId]?.lockedAt != null) return;
-      const created = await handleCreateComment({
-        slideId: targetId,
-        bounds: pendingAiBounds,
-        content: trimmed,
-      });
-      // Region consumed, clear it; the optimistic regen overlay takes over.
-      setPendingAiBounds(null);
-      const gated = await handleFirePartialRegen([targetId]);
-      if (gated) {
-        // The credit gate refused the run (CreditGateDialog is now open). Roll
-        // back the forAi comment we just created so it isn't stranded as a
-        // hidden draft (or duplicated on a post-topup retry), then rethrow so
-        // PreviewActionBar keeps the composer text for that retry.
-        await handleDeleteComment(created.id).catch(() => {});
-        throw new Error("regen blocked by credit gate");
-      }
-    },
-    [
-      applying,
-      manifest,
-      currentSlideIndex,
-      slideStates,
-      pendingAiBounds,
-      handleCreateComment,
-      handleFirePartialRegen,
-      handleDeleteComment,
-    ],
-  );
 
   // Drop the drawn AI region when the user leaves AI mode or the focused slide
   // changes — a region only means something for the slide it was drawn on while
@@ -5564,13 +5513,28 @@ export function DeckView({
                   }
                   // AI composer (§17) — the instruction send. The drawn region
                   // (pendingAiBounds) lives on the canvas marker; the bar just
-                  // collects + submits the instruction. `hasAiRegion` flips the
-                  // input placeholder once a region is drawn.
-                  hasAiRegion={pendingAiBounds != null}
                   // Bumps on each valid region-draw release → the bar bounces
                   // to point the user at the instruction input.
                   aiRegionNudge={aiRegionNudge}
-                  onAiSubmit={handleAiSubmit}
+                  // The editor assistant (AssistantBar): always visible to editors,
+                  // phones included (questions and slide / deck edits work in the
+                  // view-first posture; area drawing is desktop only).
+                  assistant={
+                    canEdit
+                      ? {
+                          projectId,
+                          lang: locale === "en" ? "en" : "ar",
+                          slideId: focusedSlide?.slideId ?? null,
+                          slideNumber: focusedSlide ? focusedIndex + 1 : null,
+                          area: pendingAiBounds,
+                          onClearArea: () => setPendingAiBounds(null),
+                          onApplied: (r) => setApplying(r),
+                          onGate: (g) => setCreditGate(g),
+                          onImageEdit: handleAssistantImage,
+                          busy: apiActive,
+                        }
+                      : undefined
+                  }
                   // Locked focused slide → PreviewActionBar disables
                   // the Comment button (only the toggle-out path
                   // stays live if commentMode is already on; see
@@ -5954,7 +5918,8 @@ export function DeckView({
                 editorDoc={editorDoc}
                 failed={failedImages}
                 slideId={focusedSlide!.slideId}
-                onRetry={handleRegenImage}
+                // A failed box retries with its own prompt: free (regen route).
+                onRetry={(r) => void handleRegenImage({ ...r, mode: "prompt" })}
                 onUpload={handleUploadForFailed}
               />
             ) : null}

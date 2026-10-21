@@ -11,11 +11,11 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useAnimationControls, useReducedMotion } from "framer-motion";
-import { SegmentedToggle } from "@/components/create/controls";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
-import { PremiumCrown } from "@/components/billing/PremiumCrown";
 import { useCreditBalance } from "@/lib/credits/store";
+import { AssistantBar } from "@/components/preview/AssistantBar";
+import type { AssistantContext } from "@/components/preview/AssistantThread";
 import {
   isCreditGatePayload,
   type CreditGatePayload,
@@ -268,9 +268,8 @@ export function PreviewActionBar({
   onToggleLock,
   onRegenSlide,
   onCreditGate,
-  hasAiRegion,
+  assistant,
   aiRegionNudge,
-  onAiSubmit,
   historyOpen,
   applying,
   currentVersionId,
@@ -341,18 +340,15 @@ export function PreviewActionBar({
   // route returns a 402 insufficient-credits gate, hand the payload up so
   // DeckView opens the shared CreditGateDialog instead of a generic error toast.
   onCreditGate?: (gate: CreditGatePayload) => void;
-  // AI composer (§17) — the persistent bottom-bar instruction input. The user
-  // scopes a region by dragging on the canvas (its on-canvas marker is the
-  // only indicator now); submitting hands the typed instruction to `onAiSubmit`,
-  // which creates the forAi comment + fires the partial regen. `hasAiRegion`
-  // (a region is drawn) only flips the placeholder copy from "select a region"
-  // to "write your edits".
-  hasAiRegion?: boolean;
+  // Editor assistant (components/preview/AssistantBar, 2026-10-21): the
+  // always-visible AI prompt beside the toolbar; it replaced the AI-mode
+  // instruction input. A region drawn in AI mode scopes it. Omitted for users
+  // who can't edit.
+  assistant?: AssistantContext;
   // Increments on each completed region-draw (mouse release). A change plays a
   // one-shot dock-style bounce on the pill so the user notices the bar and
   // knows to type the instruction here. Ignore the value; only changes matter.
   aiRegionNudge?: number;
-  onAiSubmit?: (text: string) => Promise<void> | void;
   historyOpen?: boolean;
   // Partial regen in flight. Locks the toolbar buttons so the user
   // can't kick off a second job while one is running.
@@ -418,38 +414,13 @@ export function PreviewActionBar({
   // no flash; the transition is armed only after the first measure so the slot
   // doesn't grow-in on mount.
   const editSlotRef = useRef<HTMLDivElement>(null);
-  const aiSlotRef = useRef<HTMLDivElement>(null);
   const [modeWidth, setModeWidth] = useState<number>();
   const [widthAnimatable, setWidthAnimatable] = useState(false);
 
-  // AI composer (§17) — the bottom-bar instruction input. Local text state;
-  // `aiSending` covers the brief POST window before `applying` (the optimistic
-  // partial-regen flag) takes over, so the busy treatment never flickers off
-  // between the two. `aiBusy` drives the "يطبق…" collapse.
-  const [aiInput, setAiInput] = useState("");
-  const [aiSending, setAiSending] = useState(false);
   // True only while the mode-content width is mid-spring. Drives `overflow-x:
   // clip` so the active content REVEALS (expands open) as the slot grows; at
   // rest we revert to `visible` so the count-badge + tooltips aren't clipped.
   const [widthAnimating, setWidthAnimating] = useState(false);
-  const aiBusy = applying || aiSending;
-  const handleAiSend = async () => {
-    const text = aiInput.trim();
-    if (!text || aiBusy || !onAiSubmit) return;
-    setAiSending(true);
-    try {
-      await onAiSubmit(text);
-      // Clear only on success; a thrown submit keeps the text so the user can
-      // retry without re-typing. DeckView's optimistic `applying` keeps the
-      // bar busy from here until the regen settles.
-      setAiInput("");
-    } catch (err) {
-      console.error("AI submit failed", err);
-    } finally {
-      setAiSending(false);
-    }
-  };
-
   // Capability flags from role (Phase 15.B). Edit/owner sees all
   // mutation buttons. Comment sees only the Comment toggle (flat,
   // non-gradient because regen isn't available to them). View
@@ -457,9 +428,10 @@ export function PreviewActionBar({
   const canEdit = role === "owner" || role === "edit";
   const canComment = canEdit || role === "comment";
   // Non-editors have no AI mode — they're effectively always in "edit".
-  const effectiveMode: StudioMode = canEdit ? studioMode : "edit";
-  // The AI slot shows a slide-regen button only when DeckView wires one.
-  const showSlideRegen = canEdit && !!onRegenSlide;
+  // The Edit / AI toggle is gone (2026-10-21): the toolbar always shows the edit
+  // tools, and studioMode "ai" is only the canvas's area-draw mode, started from
+  // the AI field (AssistantBar).
+  const effectiveMode: StudioMode = "edit";
   // AI edits after generation are a paid feature (2026-10-02). The server
   // refuses them for a Free owner too (regenCreditGate -> ai_edit_locked).
   const creditData = useCreditBalance();
@@ -469,12 +441,12 @@ export function PreviewActionBar({
     !creditData.isAdmin &&
     creditData.plan === "free";
 
-  // Measure the active mode content (pre-paint) so the slot animates to its
-  // pixel width. Re-measures when the mode or the AI button set changes.
+  // Measure the tool slot (pre-paint) so it springs to its pixel width when its
+  // button set changes (editing posture, role).
   useIsoLayoutEffect(() => {
-    const el = effectiveMode === "ai" ? aiSlotRef.current : editSlotRef.current;
+    const el = editSlotRef.current;
     if (el) setModeWidth(el.offsetWidth);
-  }, [effectiveMode, canEdit, canComment, showSlideRegen]);
+  }, [canEdit, canComment, editing]);
   // Arm the width transition only AFTER the first measure (this runs post-paint,
   // after the layout-effect above set the initial width), so the slot doesn't
   // animate its initial width in from zero on mount. One-shot mount flag.
@@ -568,10 +540,51 @@ export function PreviewActionBar({
       aria-disabled={disabled || undefined}
       // Generation phase: the whole bar is present but inert + dimmed; it lights
       // up the moment the deck completes (no reflow).
-      className={`flex items-center gap-3 transition-opacity duration-300 ${
-        horizontal ? "flex-row" : "flex-col"
+      className={`flex items-center transition-opacity duration-300 ${
+        horizontal ? "flex-col gap-2 lg:flex-row lg:gap-3" : "flex-col gap-3"
       } ${disabled ? "pointer-events-none opacity-50" : ""}`}
     >
+      {/* The AI field. Below lg it stacks full width ABOVE the toolbar (first in
+          this column); on desktop it sits at the reading end of the row: left of
+          the toolbar in Arabic, right of it in English (this row is dir=ltr). */}
+      {assistant && horizontal ? (
+        <div
+          className={`w-[min(600px,calc(100vw-1rem))] lg:w-auto ${dir === "rtl" ? "" : "lg:order-last"}`}
+        >
+          <AssistantBar
+            ctx={assistant}
+            dir={dir}
+            actions={{
+              drawing: studioMode === "ai",
+              onToggleArea: () => {
+                if (studioMode === "ai") {
+                  onSetStudioMode("edit");
+                  return;
+                }
+                // Area edits are AI edits: a free plan gets the upgrade popup.
+                if (aiEditLocked) {
+                  onCreditGate?.({
+                    error: "ai_edit_locked",
+                    balance: 0,
+                    slideCap: null,
+                    minFlowTier: "plus",
+                    options: null,
+                  });
+                  return;
+                }
+                onSetStudioMode("ai");
+              },
+              onRegenSlide: editing && onRegenSlide ? onRegenSlide : undefined,
+              onRegenAll: editing ? () => void handleRegenerate() : undefined,
+              regenAllRunning: regen.status === "running",
+              onToggleLock: editing ? onToggleLock : undefined,
+              locked: focusedSlideLocked,
+              applying,
+            }}
+          />
+        </div>
+      ) : null}
+
       {/* Toolbar column — Photoshop-style icon stack, grouped into
           three visual categories by horizontal dividers. Categories
           (top → bottom):
@@ -603,47 +616,6 @@ export function PreviewActionBar({
           horizontal ? "flex-row" : "flex-col"
         }`}
       >
-        {/* Edit ⇄ AI mode toggle — owners/edit only (others have no AI mode). */}
-        {canEdit ? (
-          <div className="flex items-center gap-1">
-            <SegmentedToggle
-              options={[
-                // Icon-only on phones (labels hidden) so the toggle stops being
-                // the pill's widest element and AI mode fits with Home visible.
-                { value: "edit", label: <span className="max-md:hidden">{dict.editor.toolbar.edit}</span>, icon: "edit" },
-                {
-                  value: "ai",
-                  label: (
-                    <span className="flex items-center gap-1">
-                      <span className="max-md:hidden">{dict.editor.toolbar.ai}</span>
-                      {aiEditLocked ? <PremiumCrown size={13} /> : null}
-                    </span>
-                  ),
-                  icon: "auto_awesome",
-                },
-              ]}
-              value={studioMode}
-              onChange={(next) => {
-                // Free plan: AI edits are paid (2026-10-02); the tab upsells
-                // instead of switching mode. Manual editing stays open.
-                if (next === "ai" && aiEditLocked) {
-                  onCreditGate?.({
-                    error: "ai_edit_locked",
-                    balance: 0,
-                    slideCap: null,
-                    minFlowTier: "plus",
-                    options: null,
-                  });
-                  return;
-                }
-                onSetStudioMode(next);
-              }}
-              ariaLabel={dict.editor.toolbar.editorMode}
-              size="comfortable"
-            />
-            <ToolbarDivider horizontal={horizontal} />
-          </div>
-        ) : null}
         {/* Mode content — Edit (Comment) ↔ AI (composer). The two contents are
             absolutely STACKED and right-anchored; the slot's WIDTH springs
             between their measured pixel widths (spring 500/35, the design-
@@ -671,111 +643,6 @@ export function PreviewActionBar({
               overflowY: "visible",
             }}
           >
-            {/* AI — composer + regen. Owners/edit only. */}
-            {canEdit ? (
-              <motion.div
-                ref={aiSlotRef}
-                aria-hidden={effectiveMode !== "ai"}
-                animate={{ opacity: effectiveMode === "ai" ? 1 : 0 }}
-                // Incoming: snap opaque (duration 0) so the width-clip reveal
-                // does the work — it expands open, never fades. Outgoing: a
-                // quick fade so it clears before the incoming content reveals
-                // over the same right-anchored spot.
-                transition={{ duration: effectiveMode === "ai" ? 0 : 0.12 }}
-                className="absolute inset-y-0 right-0 flex items-center gap-1"
-                style={{
-                  pointerEvents: effectiveMode === "ai" ? "auto" : "none",
-                }}
-              >
-                {/* AI composer (§17) — scope chip · sparkle · instruction input
-                    · send. The region is scoped by dragging on the canvas (→
-                    `pendingAiBounds`); the instruction is typed here. The mesh
-                    gradient lives ONLY on this AI hero (the sparkle + the send
-                    button), per the frontend consult. */}
-                <div className="surface-popover flex h-9 items-center gap-1.5 rounded-full px-1">
-                  {/* Instruction input — single line; Enter submits. Stays the
-                      SAME width while applying (never shrinks); it just disables.
-                      No scope chip / sparkle: the drawn region's on-canvas marker
-                      is enough signal, so the composer stays a clean input + send
-                      (user direction — don't over-explain). */}
-                  <input
-                    type="text"
-                    // Empty input: dir=auto resolves LTR even under a dir=rtl
-                    // parent (it ignores the placeholder), so the Arabic
-                    // placeholder + caret left-align on /ar. Anchor the empty
-                    // state to the locale dir; once the user types, hand back
-                    // to auto so a typed EN instruction on /ar still flips LTR.
-                    dir={aiInput ? "auto" : dir}
-                    value={aiInput}
-                    onChange={(e) => setAiInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        void handleAiSend();
-                      }
-                    }}
-                    placeholder={
-                      hasAiRegion
-                        ? dict.editor.toolbar.aiPlaceholderRegion
-                        : dict.editor.toolbar.aiPlaceholderNoRegion
-                    }
-                    disabled={focusedSlideLocked || aiBusy}
-                    className="w-[min(32vw,250px)] bg-transparent px-1 text-sm text-foreground outline-none placeholder:text-foreground/35 disabled:opacity-50 max-md:text-base"
-                  />
-                  {/* Send (توليد) — the one mesh button. While applying it keeps
-                      its exact shape; the up-arrow morphs into a spinner in place
-                      (no separate spinner chrome / background). */}
-                  <button
-                    type="button"
-                    onClick={() => void handleAiSend()}
-                    disabled={!aiBusy && (!aiInput.trim() || focusedSlideLocked)}
-                    aria-label={
-                      aiBusy
-                        ? dict.editor.toolbar.applying
-                        : dict.editor.toolbar.generate
-                    }
-                    aria-busy={aiBusy || undefined}
-                    className={`btn-gradient-anim flex h-7 w-7 shrink-0 items-center justify-center rounded-full disabled:opacity-40 ${
-                      aiBusy ? "pointer-events-none" : ""
-                    }`}
-                  >
-                    <span
-                      className={`material-symbols-outlined text-[16px] leading-none ${
-                        aiBusy ? "animate-spin" : ""
-                      }`}
-                    >
-                      {aiBusy ? "progress_activity" : "arrow_upward"}
-                    </span>
-                  </button>
-                </div>
-                {/* Regenerate THIS slide — clean, no-instruction redesign.
-                    View-first (mobile): dropped so the AI slot is just the
-                    composer + send and Home stays on-screen; the instruction
-                    input covers "redesign this" via a typed prompt. */}
-                {editing && onRegenSlide ? (
-                  <ToolButton
-                    icon="auto_fix_high"
-                    label={dict.editor.toolbar.redesignSlide}
-                    onClick={onRegenSlide}
-                    disabled={applying || focusedSlideLocked}
-                  />
-                ) : null}
-                {/* Regen the whole deck. Applying AI comments is NOT here
-                    anymore — it lives on the obvious in-canvas button in the
-                    comment overlay (user direction). This button always means
-                    "redesign the whole deck". Desktop-only (view-first): a
-                    full-deck redesign is a heavy action, not a phone tap. */}
-                {editing ? (
-                  <ToolButton
-                    icon="autorenew"
-                    label={dict.editor.toolbar.redesignAll}
-                    running={regen.status === "running"}
-                    onClick={handleRegenerate}
-                    disabled={applying || commentMode}
-                  />
-                ) : null}
-              </motion.div>
-            ) : null}
             {/* Edit — user comments. Plain comment glyph for ALL roles now; the
                 AI-flavored `assistant` glyph (comment + sparkle) moved onto the
                 AI-mode "apply comments" regen button. */}
@@ -888,17 +755,6 @@ export function PreviewActionBar({
                 buttonProps={{ "data-history-trigger": "true" }}
               />
             ) : null}
-            {onToggleLock && effectiveMode === "ai" ? (
-              <ToolButton
-                icon={focusedSlideLocked ? "lock" : "lock_open"}
-                label={
-                  focusedSlideLocked ? dict.editor.toolbar.unlockSlide : dict.editor.toolbar.lockSlide
-                }
-                active={focusedSlideLocked}
-                iconFilled={focusedSlideLocked}
-                onClick={onToggleLock}
-              />
-            ) : null}
             {/* Save = one cloud: empty (unsaved edits) → small circular spinner
                 (saving) → cloud-checkmark (saved), offline-cloud on failure. No text.
                 It auto-fires on leave-canvas; clicking it saves on demand. */}
@@ -933,6 +789,7 @@ export function PreviewActionBar({
           />
         </div>
       </motion.div>
+
 
       {/* Status toast below the toolbar — error (red) or info (muted).
           The `success` variant was only set by the legacy save-template
