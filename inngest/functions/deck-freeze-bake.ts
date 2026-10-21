@@ -270,13 +270,13 @@ export const deckFreezeBake = inngest.createFunction(
           versionId,
           pending: pendingIds.length,
         });
-        // Enhance skips the vision render, so no leading normalization here
-        // either (it would need its own render); the freeze uses stored html.
-        // A review the DISPATCHER wanted but the free-plan gate skipped is
-        // different: the model is off, the deterministic Arabic-leading fix
-        // is not (it needs no model and the freeze composes its result).
+        // The model is off, the deterministic fixes are not: Arabic leading
+        // and expand-to-fill need one render and no model, and the freeze
+        // composes their result. Every no-review bake gets them: the free-
+        // plan gate, Haiku and Enhance (2026-10-21: those two dispatch
+        // review:false and used to skip them, shipping half-empty slides).
         const normalizedNoReview: Record<string, string> = {};
-        if (reviewRequested && pendingIds.length > 0) {
+        if (pendingIds.length > 0) {
           const browser = await launchGuardedBrowser();
           try {
             const page = await openRenderedDeck(browser, manifest, dims, projectId);

@@ -371,6 +371,16 @@ function __tqAuditWell(well, dir) {
     if (parts.length < 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) return null;
     return [parts[0], parts[1], parts[2], parts.length > 3 && !isNaN(parts[3]) ? parts[3] : 1];
   };
+  // WCAG contrast ratio of two rgb triples.
+  var LOW_RATIO = 2;
+  var relLum = function (c) {
+    var ch = function (v) { v = v / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    return 0.2126 * ch(c[0]) + 0.7152 * ch(c[1]) + 0.0722 * ch(c[2]);
+  };
+  var wcagRatio = function (a, b) {
+    var la = relLum(a), lb = relLum(b);
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+  };
   if (sec) {
     // The slide's GROUND: the tq-bg layer's solid color (photo/gradient
     // grounds are ambiguous - the scrim owns legibility there), falling
@@ -464,6 +474,23 @@ function __tqAuditWell(well, dir) {
       }
       var dist =
         Math.abs(ink[0] - bg[0]) + Math.abs(ink[1] - bg[1]) + Math.abs(ink[2] - bg[2]);
+      // Hue-different but too light to read (2026-10-21: #F5C400 table headers
+      // on white, 1.6:1). Not a finding (the review and expand-to-fill gates
+      // stay as they were); the bake's CSS backstop recolours it. Huge type
+      // (100px+) is left alone: a faint watermark numeral is deliberate.
+      if (dist >= 60 && parseFloat(ccs.fontSize) < 100 && hostRect && cssInvisible.length < 24 && wcagRatio(ink, bg) < LOW_RATIO) {
+        var lr = cel.getBoundingClientRect();
+        if (lr.width >= 1 && lr.height >= 1) {
+          cssInvisible.push({
+            x: lr.left - hostRect.left,
+            y: lr.top - hostRect.top,
+            w: lr.width,
+            h: lr.height,
+            ink: [ink[0], ink[1], ink[2]],
+            bg: [bg[0], bg[1], bg[2]],
+          });
+        }
+      }
       if (dist < 60) {
         contrastCount++;
         if (hostRect && cssInvisible.length < 24) {
