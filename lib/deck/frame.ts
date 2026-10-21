@@ -398,7 +398,9 @@ export function assembleFramedSlide(
   let wellStyle = "";
   if (decl.bgAssetSrc) {
     // A carried page artwork (Enhance, PDF): the user's own picture, full-bleed.
-    panelHtml = `<div class="tq-bg" data-tq-lock="1"><img data-asset-bg="1" src="${esc(decl.bgAssetSrc)}" alt="" style="width:100%;height:100%;object-fit:cover;display:block"/></div>`;
+    // Page artworks carry scrim "none"; a carried PHOTO backdrop (or the cover
+    // photo) keeps its scrim, which used to be dropped here (2026-10-21).
+    panelHtml = `<div class="tq-bg" data-tq-lock="1"><img data-asset-bg="1" src="${esc(decl.bgAssetSrc)}" alt="" style="width:100%;height:100%;object-fit:cover;display:block"/>${scrimDiv}</div>`;
   } else if (decl.bg === "image" && decl.bgPrompt) {
     panelHtml = `<div class="tq-bg" data-tq-lock="1">${bgImg("landscape")}${scrimDiv}</div>`;
   } else if (
@@ -601,6 +603,26 @@ RULES:
 - Preserve numerals as Latin digits (0-9). In RTL decks a digit-only block with dir="ltr" renders text-align:start as LEFT - set text-align explicitly to place numerals where the composition needs them.`;
 }
 
+// Enhance layout menu (2026-10-21), shared by generation and the unlock: the
+// abstract "design the best layout for that content" rule still gave Haiku one
+// list + thumbnails skeleton on every slide (project cmvh5a1up003x4i6dfkvi1t9n).
+// A concrete menu keyed by what the content IS gives every model a layout.
+export const ENHANCE_LAYOUT_MENU: readonly string[] = [
+  `COMPOSITION, THE LAYOUT MENU. The main job is a better-looking slide (the chrome lock above does not mean one layout for every slide; if a DESIGN template is attached, its layout system takes over instead):`,
+  `  • Read what each source slide's content IS and use the matching layout below, even when the source drew it as a plain list. Positions, sizes and structure on the slide are free; only the content and its meaning are fixed. The slide LIST is fixed: every source slide gets its own redesigned slide, in the same order, none dropped or merged.`,
+  `    - Title, cover or section divider: a cover treatment, a very large title, generous space, the deck's strongest colour field or photo.`,
+  `    - Agenda or table of contents: a numbered agenda, each item with a big numeral (01, 02, ...) in the accent colour, laid out as a row of tiles or a 2-column grid that fills the slide; never a plain list of underlined lines.`,
+  `    - "Label: value" facts (Owner: X, Location: Y, Duration: Z): a fact grid of 2 or 3 columns, each fact as a small label (the source's own label word, accent or muted colour) above a larger value; a number, count, range or duration among them becomes a big stat value (72px or more).`,
+  `    - Dated items, phases or ordered steps (years, dates, step 1, 2, 3): a timeline or process row, markers on one line in the accent colour, the date or step number large; when the items have pictures, each picture sits on its own marker.`,
+  `    - Several photos with captions: a gallery, an even grid of equal-size tiles that fills the free space, each caption under its tile.`,
+  `    - Photo + text: a split, the photo large on one side (at least 40% of the slide width, its ratio kept), the text on the other; never a column of thumbnails beside a long list.`,
+  `    - One key number or claim: a stat or statement slide, the number or line huge, its context small beneath.`,
+  `    - Table or chart: the table or chart large, with its title and nothing competing.`,
+  `    - Dense paragraphs: a 2-column editorial layout with the first sentence set larger as the lead.`,
+  `  • Neighbours differ: when two adjacent slides fall in the same menu row, vary the second (photo on the other side, grid instead of split). Never turn every slide into the same eyebrow + title + underline + white cards layout, or the same text-left, pictures-right layout.`,
+  `  • Use the accent colour as structure (numerals, stat values, timeline markers, fact labels, one coloured panel), not only as thin rules.`,
+];
+
 // Enhance unlock: the deck is a slide-by-slide REDESIGN of the user's own
 // file, so the locked slides are NOT a story to continue. Position N redesigns
 // source slide N with that slide's exact words (the same fidelity contract the
@@ -636,7 +658,10 @@ RULES:
 - Reply with EXACTLY ${input.lockedCount} <section> elements in the generation contract, in ORDER (position ${firstNew} first, ${input.total} last): position N is the redesign of SOURCE SLIDE N above. Each section declares its data attributes (data-label, data-role, data-bg, and any bg-css / bg-prompt / bg-scrim per the system rules) and contains exactly one <div class="well"> authored in PURE FLOW. No <style> block, no data-revises, no prose, no fences - the FIRST character of your reply is the < of the first section.
 - CONTENT FIDELITY (hard limits): each slide's words come from its source slide's exact text: keep the wording, the facts and their order (fix only an obvious typo). Never invent: no new headline, subtitle, statistic, example, summary, thank-you, call-to-action or closing that is not on that source slide, and never add an eyebrow, kicker, tag or section label whose words are not on it (a plain step or page number is fine). Never drop real information. Keep the slide's own language and script.
 - The deck ends where the source ends: a slide is a closing only if its source slide is one. Do not turn the last slide into a recap or a thank-you.
-- Match the established design system: reuse the deck stylesheet's classes, the same headline/type treatment, and the same chrome the finished slides use, so the whole deck reads as one designer on one grid.
+- Match the established design system: reuse the deck stylesheet's classes, the same headline/type treatment, and the same chrome the finished slides use, so the whole deck reads as one designer on one grid. That locks the look, not the layout:
+
+${ENHANCE_LAYOUT_MENU.join("\n")}
+- A colon that ends a heading ("About the Firm:") is punctuation of the old layout: drop it, keep the words.
 - Preserve numerals as Latin digits (0-9). In RTL decks a digit-only block with dir="ltr" renders text-align:start as LEFT - set text-align explicitly to place numerals where the composition needs them.`;
 }
 

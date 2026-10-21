@@ -164,14 +164,57 @@ export const CARRIED_CHARTS_RULE = `  • ORIGINAL CHARTS: FIRST RULE for charts
 
 export const CARRIED_PICTURES_RULE = `  • ORIGINAL PICTURES: FIRST RULE, overrides the photo, logo and placeholder rules below for every picture it covers. A slide may come with an "ORIGINAL PICTURES" block: the user's own pictures from that slide, already extracted. Put EVERY listed picture on its redesigned slide, exactly once, as the given <img> tag with its data-asset and src attributes UNCHANGED (never write any other /api/assets URL). Give the img an inline style with an explicit width and height in px whose ratio matches the listed aspect (scale the example size; never square a wide picture), so nothing is cut off. PLACEMENT IS FREE: the goal is the best-looking slide, so put each picture wherever the new layout works best and size it for the design; the original place is not a constraint. Never crop away its subject, cover it with text, or replace it with a generated image, a photo slot, an icon or an SVG drawing. PHOTO TREATMENT (entries marked "photo"): pick ONE treatment for the whole deck and apply it to every photo: the same corner radius, the same frame or border (for example a thin brand-colour frame, or the photo set on a soft brand-tinted panel), the same shadow or none. Mixed old photos then read as one set. A uniform gentle grade on every photo is allowed (style="filter:saturate(1.05) contrast(1.05)"); never heavy filters, sepia, blur or colour changes. A weak photo may be shown smaller and framed, or as one tile in a tidy photo grid, rather than stretched as a hero. GRAPHICS AND DOCUMENTS (entries marked "graphic" or "document": diagrams, illustrations, scanned pages, screenshots): shown whole, never cropped, tinted or filtered, never used as a background, on a clean light card when the slide is dark; give them enough size that their labels stay readable. "small" entries are icons, logos or badges: keep them small. Pictures NOT listed (template backgrounds, frame art) are not carried: do not recreate them. A "FULL-PAGE ARTWORK" or "FULL-SLIDE PHOTO" entry is different: it OVERRIDES this whole rule for that slide (follow its own instructions). Each entry also states how much of the source slide it filled: a hint of its importance (a picture that filled most of the slide is the slide's main visual and should stay prominent), not a position to copy. CONTRAST: every word must stay readable on what it sits on. If the original showed light text on a dark picture, panel or bar, and that backing is not carried over or has moved away from the text, give the text its own dark filled shape or switch it to a dark colour; never leave light text on a light slide ground.`;
 
+/**
+ * Cover photo (2026-10-21): a source cover with no photo of its own opens the
+ * redesign on the deck's strongest photo instead (a plain black title card made
+ * a deck of good architecture photos look flat). The largest real photo from
+ * any other slide, used as the cover's background; it stays on its own slide.
+ * Null when the cover already has a photo, backdrop or page artwork, or the
+ * deck has no usable photo (graphics, documents and narrow strips never qualify).
+ */
+export function coverPhotoCandidates<T extends CarriedPictureRef>(pictures: readonly T[]): T[] {
+  const onCover = pictures.filter((p) => p.slideIndex === 0);
+  if (onCover.some((p) => p.cls === "page" || p.cls === "backdrop" || (p.cls === "content" && p.kind === "photo"))) {
+    return [];
+  }
+  const area = (p: T) => (p.box ? Math.min(1, p.box.w) * Math.min(1, p.box.h) : 0);
+  return pictures
+    .filter((p) => p.slideIndex !== 0 && p.cls === "content" && p.kind === "photo" && p.aspect >= 1 && p.aspect <= 2.4)
+    .sort((a, b) => area(b) - area(a));
+}
+
+/**
+ * The cover photo chosen at extraction (carried.coverPhotoId; the pixel
+ * classifier calls a colourful floor plan a photo, so the pick is confirmed by
+ * the Haiku tagger there). Null when none was chosen or the cover has its own.
+ */
+export function pickCoverPhoto(
+  pictures: readonly CarriedPictureRef[],
+  coverPhotoId: string | null | undefined,
+): CarriedPictureRef | null {
+  if (!coverPhotoId) return null;
+  return coverPhotoCandidates(pictures).find((p) => p.assetId === coverPhotoId) ?? null;
+}
+
+function coverPhotoBlock(p: CarriedPictureRef): string {
+  return (
+    `── SLIDE 1: COVER PHOTO (asset "${p.assetId}", aspect ${p.aspect}, the deck's own photo from source slide ${p.slideIndex + 1}) ──
+` +
+    `The source cover has no photo. Open the deck on this one: make it the cover's WHOLE background, so the opening tag includes data-bg="image" data-bg-asset="${p.assetId}" and data-bg-scrim="strong" (no data-bg-prompt, no data-bg-css, no <img> of this asset on this slide). Every word of the source cover stays, in light type over the scrim; the photo still appears on its own slide.
+
+`
+  );
+}
+
 /** The ORIGINAL PICTURES / ORIGINAL TABLES block for one slide ("" when none). */
 export function carriedSlideBlock(
   slideNumber: number, // 1-based
   projectId: string,
   allPictures: readonly CarriedPictureRef[],
   tables: readonly CarriedTableRef[],
+  coverPhoto?: CarriedPictureRef | null,
 ): string {
-  let out = "";
+  let out = slideNumber === 1 && coverPhoto ? coverPhotoBlock(coverPhoto) : "";
   const pictures = allPictures.filter((p) => p.cls !== "page" && p.cls !== "backdrop");
   for (const p of allPictures.filter((q) => q.cls === "backdrop")) {
     out +=

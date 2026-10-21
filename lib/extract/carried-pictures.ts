@@ -14,6 +14,7 @@ import { extractPptxVisuals, classifyPptxPictures } from "@/lib/extract/pptx-vis
 import { buildPptxAssets } from "@/lib/extract/pptx-asset-crops";
 import { buildPdfAssets, classifyPdfPictures, extractPdfPictures, type PdfAsset } from "@/lib/extract/pdf-visuals";
 import { uploadSourceAsset } from "@/lib/storage/source-assets";
+import { coverPhotoCandidates } from "@/lib/deck/carried-assets";
 import { analyzeAndEnhance, type PictureKind } from "@/lib/extract/photo-enhance";
 import {
   makeReplacements,
@@ -72,6 +73,8 @@ export type CarriedPictures = {
   enhancedPhotos?: number;
   // Opt-in photo refresh: photos tagged, pictures replaced.
   refresh?: { tagged: number; replaced: number };
+  // A photo from another slide for a cover that has none (Haiku-confirmed).
+  coverPhotoId?: string;
   tables: CarriedTable[];
 };
 
@@ -194,10 +197,7 @@ export async function prepareCarriedPictures(opts: {
     }
   }
 
-  return {
-    hasContentImages,
-    ...(opts.refresh ? { refresh: { tagged: refreshTagged, replaced: replaced.size } } : {}),
-    pictures: storable.map((a) => ({
+  const pictures: CarriedPicture[] = storable.map((a) => ({
       assetId: replaced.get(a.assetId) ?? a.assetId,
       ...(replaced.has(a.assetId) ? { originalAssetId: a.assetId } : {}),
       slideIndex: a.slideIndex,
@@ -208,12 +208,44 @@ export async function prepareCarriedPictures(opts: {
       // a stretched source shape would otherwise make object-fit: cover cut it.
       aspect: Math.round((a.file.kind === "image" ? a.file.width / a.file.height : a.aspect) * 100) / 100,
       altText: a.altText ? a.altText.slice(0, 200) : null,
-    })),
+  }));
+
+  // ─── Cover photo (lib/deck/carried-assets pickCoverPhoto) ───
+  // A cover with no photo opens on the deck's strongest photo. The pixel
+  // classifier calls a colourful floor plan a photo, so the largest few
+  // candidates are confirmed by the Haiku tagger; drawings never qualify.
+  let coverPhotoId: string | undefined;
+  const coverCands = coverPhotoCandidates(pictures)
+    .filter((p) => !p.originalAssetId)
+    .slice(0, COVER_CANDIDATES);
+  if (coverCands.length > 0) {
+    const coverTags = await tagPhotos(
+      coverCands.flatMap((p) => {
+        const a = storable.find((x) => x.assetId === p.assetId);
+        return a && a.file.kind === "image" ? [{ mediaKey: p.assetId, bytes: a.file.bytes }] : [];
+      }),
+    );
+    const rank = (t: string | undefined) => (t === "subject" || t === "mood" || t === "specific" ? 0 : t === "person" ? 1 : 2);
+    const usable = coverCands.filter((p) => {
+      const t = coverTags.get(p.assetId)?.tag;
+      return t !== undefined && t !== "diagram";
+    });
+    usable.sort((x, y) => rank(coverTags.get(x.assetId)?.tag) - rank(coverTags.get(y.assetId)?.tag));
+    coverPhotoId = usable[0]?.assetId;
+  }
+
+  return {
+    hasContentImages,
+    ...(opts.refresh ? { refresh: { tagged: refreshTagged, replaced: replaced.size } } : {}),
+    pictures,
+    ...(coverPhotoId ? { coverPhotoId } : {}),
     skipped: assets.length - storable.length,
     enhancedPhotos: enhancedCount,
     tables,
   };
 }
+
+const COVER_CANDIDATES = 4;
 
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 

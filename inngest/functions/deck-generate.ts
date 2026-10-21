@@ -44,6 +44,7 @@ import {
   parseFrameSlide,
   parseFrameRevises,
   assembleFramedSlide,
+  ENHANCE_LAYOUT_MENU,
   type FrameDeckCtx,
 } from "@/lib/deck/frame";
 import { gulfWardrobeSystemBlocks } from "@/inngest/prompts/gulf-wardrobe";
@@ -76,6 +77,7 @@ import {
   CARRIED_CHARTS_RULE,
   carriedSlideBlock,
   enforceCarriedAssetImgs,
+  pickCoverPhoto,
   enforceCarriedTables,
   applyPageBackdrop,
 } from "@/lib/deck/carried-assets";
@@ -151,6 +153,8 @@ type EnhanceImages = {
   pictures?: CarriedPicture[];
   // Native PPTX tables, carried as exact cells (step 3).
   tables?: CarriedTable[];
+  // A photo from another slide for a cover that has none (pickCoverPhoto).
+  coverPhotoId?: string;
 };
 
 // ─── Shared prompt fragments (DRY) ───────────────────────────────────
@@ -1414,6 +1418,7 @@ function buildSourceContentBlocks(
     // image (those are the only ones built now); the rest of the planned deck
     // comes as text only, so the model still plans the whole arc.
     const total = Math.max(fileIds.length, textPerSlide.length);
+    const coverPhoto = pickCoverPhoto(enhanceImages.pictures ?? [], enhanceImages.coverPhotoId);
     for (let i = 0; i < total; i++) {
       const fileId = fileIds[i];
       if (fileId) {
@@ -1434,7 +1439,7 @@ function buildSourceContentBlocks(
       blocks.push({
         type: "text",
         text:
-          carriedSlideBlock(i + 1, event.projectId, slidePictures, slideTables) +
+          carriedSlideBlock(i + 1, event.projectId, slidePictures, slideTables, coverPhoto) +
           `── SLIDE ${i + 1} / ${total} — exact text (verbatim, authoritative) ──\n` +
           (text.length > 0
             ? text
@@ -1546,6 +1551,7 @@ function buildSourceTextDirective(
       // ("Annual report", "BUDGET"). The design prompt invites small labels,
       // so the redesign rule has to say where their words come from.
       `  • No added labels: never add an eyebrow, kicker, tag, chip, category word or section label (e.g. "Overview", "Budget", "Annual report", "Key results") whose words are not on that source slide. A small label is allowed only when it repeats text the source slide already has (its own heading, a heading of the same deck, the deck title as running chrome) or is a plain number (step, page). When a slide needs a label and the source has none, design without one.`,
+      `  • A colon that ends a heading ("About the Firm:") is punctuation of the old layout: drop it, keep the words.`,
       `  • Keep each slide's own language and script (Arabic stays Arabic, English stays English, mixed stays mixed) — do NOT translate or transliterate.`,
       ``,
       ...(source.designAnthropicFileId
@@ -1567,9 +1573,8 @@ function buildSourceTextDirective(
       `  • ONE headline system for the whole deck: a given role's heading (section title, content headline, stat caption) uses the SAME size, weight, colour, and placement on every slide of that role. Do NOT reinvent the headline treatment slide to slide — flipping through should feel like one designer on one grid, not ${slideCount} different takes on the same brand.`,
       `  • Content margins are consistent — every slide's body starts at the same edges (you pick the inset) so nothing jumps frame to frame.`,
       ``,
-      `COMPOSITION — THE MAIN JOB IS A BETTER-LOOKING SLIDE (the chrome lock above does not mean one layout for every slide; if a DESIGN template is attached, its layout system takes over instead):`,
-      `  • Start from what each source slide IS (a full-bleed cover or photo slide, a photo collage, a photo + text split, a big-number / stat slide, a table or chart slide, an agenda) and design the best layout for that content. Keeping the source's arrangement ON THE SLIDE is NOT required: change positions, sizes and structure within the slide whenever a different layout looks better; only the content and its meaning are fixed. The slide LIST is fixed: every source slide gets its own redesigned slide, in the same order, none dropped or merged. Do NOT turn every slide into the same eyebrow + title + underline + white cards layout.`,
-      `  • Across the deck the compositions should visibly differ wherever the source slides differ; what stays identical is the chrome, the type scale, the palette and the spacing system. A photo-led source slide must stay photo-led: the pictures keep their visual weight (see ORIGINAL PICTURES), they are not shrunk into thumbnails to make room for cards.`,
+      ...ENHANCE_LAYOUT_MENU,
+      `  • A photo-led source slide stays photo-led: the pictures keep their visual weight (see ORIGINAL PICTURES), they are not shrunk into thumbnails to make room for text or cards.`,
       `  • Cards, borders and tinted panels are an option for grouped text, not a default wrapper for every element.`,
       ``,
       `VISUAL HANDLING — placeholders over redraws (saves time, looks honest):`,
@@ -2270,7 +2275,7 @@ export const deckGenerate = inngest.createFunction(
               data: {
                 inputJson: {
                   ...input,
-                  carried: { pictures: result.pictures, tables: result.tables },
+                  carried: { pictures: result.pictures, tables: result.tables, coverPhotoId: result.coverPhotoId },
                 } as Prisma.InputJsonValue,
               },
             });
@@ -2283,6 +2288,7 @@ export const deckGenerate = inngest.createFunction(
             tables: result.tables?.length ?? 0,
             skipped: result.skipped,
             enhancedPhotos: result.enhancedPhotos ?? 0,
+            coverPhoto: result.coverPhotoId ?? null,
             ...(result.refresh ? { refreshTagged: result.refresh.tagged, refreshReplaced: result.refresh.replaced } : {}),
             hasContentImages: result.hasContentImages,
           });
@@ -2314,6 +2320,7 @@ export const deckGenerate = inngest.createFunction(
           teaserTotal != null ? textPerSlide.slice(0, teaserTotal) : textPerSlide,
         pictures: carried?.pictures ?? [],
         tables: carried?.tables ?? [],
+        coverPhotoId: carried?.coverPhotoId,
       };
     }
 
@@ -2617,6 +2624,9 @@ export const deckGenerate = inngest.createFunction(
         const carriedBackdropIds = new Set(
           (enhanceImages?.pictures ?? []).filter((p) => p.cls === "backdrop").map((p) => p.assetId),
         );
+        // The cover may borrow the deck's best photo as its background.
+        const coverPhotoId = pickCoverPhoto(enhanceImages?.pictures ?? [], enhanceImages?.coverPhotoId)?.assetId;
+        if (coverPhotoId) carriedBackdropIds.add(coverPhotoId);
         const carriedPageIds = new Set(
           (enhanceImages?.pictures ?? []).filter((p) => p.cls === "page").map((p) => p.assetId),
         );
