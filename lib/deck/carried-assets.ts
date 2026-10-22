@@ -186,7 +186,7 @@ export function reworkPicturesRule(imagesOn: boolean): string {
     imagesOn
       ? "Never show a SWAPPABLE picture as it is: replace it with a generated-image box of the same idea in the deck's single image style when the slide needs a visual, otherwise leave it out."
       : "Leave a SWAPPABLE picture out when it does not fit the new design; keep it when it still helps."
-  } Every picture NOT marked SWAPPABLE is content: place it as the ORIGINAL PICTURES rule says. LABELS AND PICTURES: when a slide pairs words with pictures (a name under each object), pair them by each entry's "shows": a label goes only with the picture that shows that thing. A "group" picture shows several objects: keep it as one picture with its labels around or beside it, never under a single label. A label with no matching picture stays as text, never on a wrong picture. A "blank" picture is decoration: leave it out.`;
+  } Every picture NOT marked SWAPPABLE is content and appears exactly once, as the ORIGINAL PICTURES rule says; a photo of a person (a leader, a teacher, a student) is never left out. LABELS AND PICTURES: when a slide pairs words with pictures (a name under each object), pair them by each entry's "shows": a label goes only with the picture that shows that thing. A "group" picture shows several objects: keep it as one picture with its labels around or beside it, never under a single label. A label with no matching picture stays as text, never on a wrong picture. A "blank" picture is decoration: leave it out.`;
 }
 
 export function coverPhotoCandidates<T extends CarriedPictureRef>(pictures: readonly T[]): T[] {

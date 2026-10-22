@@ -1,4 +1,4 @@
-import { missingSourceNumbers } from "@/lib/deck/essence-check";
+import { missingCarriedPictures, missingSourceNumbers, missingSourceSlides } from "@/lib/deck/essence-check";
 import { imageCreditsForPlan } from "@/lib/images/images-gating";
 import Anthropic from "@anthropic-ai/sdk";
 import { toSdkThinking } from "@/lib/anthropic/model-thinking";
@@ -215,7 +215,7 @@ function reworkJobLines(slideCount: number, ceiling: boolean): string[] {
   return [
     `YOUR JOB: FREE REDESIGN. The user chose "Redesign freely". Rebuild this deck as one good-looking, consistent deck that keeps the ESSENCE of the source. Content first, design second: a beautiful slide that loses content is a failure.`,
     ceiling
-      ? `  • Slides: AT MOST ${slideCount}. Merge consecutive thin slides that serve one idea; split a crowded slide in two when that reads better; leave out a source slide that holds only decoration (no words, no content picture).`
+      ? `  • Slides: AT MOST ${slideCount} (a hard cap). Every source slide that has words or a content picture appears in the deck, merged or on its own: never leave one out. Merge consecutive thin slides that serve one idea. Split a crowded slide in two only when merges elsewhere leave room under the cap; when they do not, do not split. Only a source slide that holds nothing but decoration (no words, no content picture) may be left out.`
       : `  • Produce EXACTLY ${slideCount} slides, one per source slide, in the SAME order (the count is fixed for this deck); inside each slide you are free as described below.`,
     `  • ORDER IS FIXED (hard rule): content appears in the source's slide order. Slide 1 is source slide 1: its heading is the deck's title and the slide gets the cover treatment, whatever source slide 1 holds (an exercise, a question). The lesson-info strip (template chrome below) may join slide 1. Source slide 2's content starts on slide 2 or later, never on slide 1, and never becomes a title. A slide never shows content from a later source slide before an earlier one.`,
     `  • Re-execute typography, hierarchy, whitespace, layout, and visual rhythm to editorial quality; restructure each slide's content freely (cards, steps, tables, comparisons) when that explains it better.`,
@@ -3221,13 +3221,20 @@ export const deckGenerate = inngest.createFunction(
         // Free redesign: a source number missing from the deck is lost content
         // (lib/deck/essence-check.ts). Logged for tuning; never fails the run.
         if ((data.brief as { reworkDeck?: boolean } | null)?.reworkDeck === true && enhanceImages) {
-          const missing = missingSourceNumbers(enhanceImages.textPerSlide, slides.map((sl) => sl.html ?? ""));
+          const html = slides.map((sl) => sl.html ?? "");
+          const missing = missingSourceNumbers(enhanceImages.textPerSlide, html);
+          const missingPictures = missingCarriedPictures(
+            (enhanceImages.pictures ?? []).filter((p) => p.cls !== "page" && !p.swap).map((p) => p.assetId),
+            html,
+          );
           logger.info("enhance_rework_essence", {
             projectId,
             sourceSlides: enhanceImages.textPerSlide.length,
             slides: slides.length,
             missingNumbers: missing.slice(0, 40),
             missingCount: missing.length,
+            missingSourceSlides: missingSourceSlides(enhanceImages.textPerSlide, html),
+            missingPictures,
           });
         }
 
