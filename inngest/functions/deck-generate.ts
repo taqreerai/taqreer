@@ -217,7 +217,7 @@ function reworkJobLines(slideCount: number, ceiling: boolean): string[] {
     ceiling
       ? `  • Slides: AT MOST ${slideCount}. Merge consecutive thin slides that serve one idea; split a crowded slide in two when that reads better; leave out a source slide that holds only decoration (no words, no content picture).`
       : `  • Produce EXACTLY ${slideCount} slides, one per source slide, in the SAME order (the count is fixed for this deck); inside each slide you are free as described below.`,
-    `  • ORDER IS FIXED (hard rule): content appears in the source's slide order. Your slide 1 opens with source slide 1's content; a slide never shows content from a later source slide before an earlier one; never pull a later slide forward to make a cover or an introduction. A lesson-info opening (the template chrome below) may sit on slide 1 together with source slide 1's content.`,
+    `  • ORDER IS FIXED (hard rule): content appears in the source's slide order. Slide 1 is source slide 1: its heading is the deck's title and the slide gets the cover treatment, whatever source slide 1 holds (an exercise, a question). The lesson-info strip (template chrome below) may join slide 1. Source slide 2's content starts on slide 2 or later, never on slide 1, and never becomes a title. A slide never shows content from a later source slide before an earlier one.`,
     `  • Re-execute typography, hierarchy, whitespace, layout, and visual rhythm to editorial quality; restructure each slide's content freely (cards, steps, tables, comparisons) when that explains it better.`,
     ``,
     `ESSENCE (hard limits):`,
@@ -2647,9 +2647,14 @@ export const deckGenerate = inngest.createFunction(
         // Page-sized artworks (cls "page") are NOT well pictures: a slide shows one
         // only as its full-bleed backdrop (data-bg-asset), so an <img data-asset>
         // of one inside the well is removed like any unknown asset.
+        // Free redesign with AI images on: a SWAPPABLE picture (generic clip-art)
+        // is never shown as it is; the prompt says so and the model still kept
+        // one (local test 2026-10-22), so it is removed here like an unknown asset.
+        const dropSwappable =
+          (data.brief as { reworkDeck?: boolean } | null)?.reworkDeck === true && isImagesMode(data);
         const carriedAssetIds = new Map(
           (enhanceImages?.pictures ?? [])
-            .filter((p) => p.cls !== "page" && p.cls !== "backdrop")
+            .filter((p) => p.cls !== "page" && p.cls !== "backdrop" && !(dropSwappable && p.swap))
             .map((p) => [p.assetId, p.aspect] as const),
         );
         // Photo refresh: new asset -> the original it replaced ("Restore original").
