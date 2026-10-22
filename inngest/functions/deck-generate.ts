@@ -7,7 +7,7 @@ import {
 } from "@/lib/deck/essence-check";
 import { imageCreditsForPlan } from "@/lib/images/images-gating";
 import Anthropic from "@anthropic-ai/sdk";
-import { toSdkThinking } from "@/lib/anthropic/model-thinking";
+import { requiresThinking, thinkingOffFor, toSdkThinking } from "@/lib/anthropic/model-thinking";
 import { Prisma } from "@prisma/client";
 import { NonRetriableError } from "inngest";
 import { inngest } from "@/inngest/client";
@@ -3240,7 +3240,11 @@ export const deckGenerate = inngest.createFunction(
               const repair = await client.messages.create({
                 model: callParams.model,
                 max_tokens: Math.min(callParams.maxTokens, 2_000 + 5_000 * broken.length),
-                thinking: { type: "disabled" },
+                // The lowest thinking the model takes: Sonnet 5.5 rejects
+                // "disabled" (a 400 that silently skipped every repair).
+                thinking: requiresThinking(callParams.model)
+                  ? { type: "adaptive" }
+                  : toSdkThinking(thinkingOffFor(callParams.model)),
                 system: gulfWardrobeSystemBlocks(htmlSystem, {
                   imagesMode: isImagesMode(data),
                   imageRegion: (data.brief as { imageRegion?: string } | null)?.imageRegion ?? null,
