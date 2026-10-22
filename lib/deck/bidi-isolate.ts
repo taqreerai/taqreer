@@ -30,15 +30,22 @@ const ENTITY_SPLIT = /(&#?[A-Za-z0-9]+;)/;
 
 // One LTR run: optional leading symbol, an alphanumeric word, then any number
 // of (connector or space) + alphanumeric word, optional trailing percent.
-const WORD = "[A-Za-z0-9][A-Za-z0-9²³°µ]*";
+// Letters are ALL of Latin script, accents included, and an apostrophe between
+// letters stays in the word (l’entreprise). Basic [A-Za-z] split "Présentation"
+// into Pr|é|sentation and the RTL paragraph reordered the pieces (prod
+// 2026-10-22, a French deck: "sentationéPr").
+const LATIN = "\\p{Script=Latin}";
+const WORD = `[${LATIN}0-9][${LATIN}\\p{M}0-9²³°µ]*(?:['’][${LATIN}][${LATIN}\\p{M}0-9]*)*`;
 const CONNECTOR = "(?:\\s?[-–−/.,:+&=×÷*<>≈≤≥]\\s?|\\s)";
 const RUN_RE = new RegExp(
   `(?:[~≈<>≤≥±√]\\s?)?${WORD}(?:${CONNECTOR}${WORD})*%?`,
-  "g",
+  "gu",
 );
+const HAS_LATIN = /\p{Script=Latin}/u;
+const HAS_LATIN_OR_DIGIT = /[\p{Script=Latin}0-9]/u;
 
 function worthWrapping(run: string): boolean {
-  if (/[A-Za-z]/.test(run)) return true;
+  if (HAS_LATIN.test(run)) return true;
   if (run.includes("%")) return true;
   // digits only: wrap when a connector joins them (a bare integer is fine)
   return /\d\s?[-–−/.,:+=×÷*]\s?\d/.test(run);
@@ -83,7 +90,7 @@ export function isolateLatinRuns(html: string): string {
 
   const flushText = (text: string) => {
     if (!text) return;
-    if (rawName || isoDepth > 0 || !/[A-Za-z0-9]/.test(text)) {
+    if (rawName || isoDepth > 0 || !HAS_LATIN_OR_DIGIT.test(text)) {
       out += text;
       return;
     }

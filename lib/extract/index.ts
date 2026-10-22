@@ -37,6 +37,7 @@ import { extractFontsFromPptx } from "./fonts-pptx";
 import { extractColorsFromPptx } from "./colors-pptx";
 import { detectPptxLanguage } from "./language-pptx";
 import { detectStringLanguage } from "./language-text";
+import { detectLanguageFromPages } from "./language-vision";
 import { extractTextPerSlide } from "./text-pptx";
 import { pdfToText } from "./pdf-to-text";
 
@@ -226,6 +227,13 @@ export async function extract(
     }
     throw new Error(`Failed to parse normalized PDF metadata: ${message}`);
   }
+
+  // No text to count (slides pasted as pictures, a scanned PDF): ask Haiku to
+  // read the first pages rather than letting the flow default to Arabic.
+  if (language === null && textPerSlide.length > 0) {
+    language = detectStringLanguage(textPerSlide.join(" "));
+  }
+  if (language === null) language = await detectLanguageFromPages(pdfBytes);
 
   return {
     pdfBytes,

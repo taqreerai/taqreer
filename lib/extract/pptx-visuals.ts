@@ -13,6 +13,9 @@
 //   background full-bleed AND reused on many slides (a template backdrop)
 //   repeated   the same media file at the same place on many slides (frame
 //              art, a corner logo strip)
+//   capture    a screenshot of a whole slide: the deck is mostly slides that
+//              are ONE full-slide picture and no text (slides pasted in as
+//              images). Not a photo to carry: the model reads the page itself.
 //
 // Picture bytes are the ORIGINAL embedded media (full resolution, no slide
 // background baked in); the source crop (a:srcRect) is kept so the caller can
@@ -137,12 +140,14 @@ function readTable(graphicData: XmlElement): PptxTable | undefined {
 
 export type PptxVisuals = {
   slideCount: number;
+  // Letters typed on each slide (text runs, tables included), by slide index.
+  slideTextLetters: number[];
   slideSize: { cx: number; cy: number };
   pictures: PptxPicture[];
   frames: PptxFrame[];
 };
 
-export type PictureClass = "content" | "small" | "background" | "repeated";
+export type PictureClass = "content" | "small" | "background" | "repeated" | "capture";
 
 type Xfrm = { x: number; y: number; cx: number; cy: number; rot: number; flipH: boolean; flipV: boolean };
 // Maps a child's EMU coordinates into slide EMU (group transforms compose).
@@ -349,11 +354,16 @@ export async function extractPptxVisuals(buffer: Buffer): Promise<PptxVisuals> {
   const pictures: PptxPicture[] = [];
   const frames: PptxFrame[] = [];
   const phCache = new Map<string, XmlElement | null>();
+  const slideTextLetters: number[] = [];
 
   for (let slideIndex = 0; slideIndex < order.length; slideIndex++) {
     const slidePath = order[slideIndex];
     const xml = await zip.files[slidePath]?.async("string");
+    slideTextLetters[slideIndex] = 0;
     if (!xml) continue;
+    for (const m of xml.matchAll(/<a:t[^>]*>([^<]*)<\/a:t>/g)) {
+      slideTextLetters[slideIndex] += (m[1].match(/\p{L}/gu) ?? []).length;
+    }
     const dir = slidePath.slice(0, slidePath.lastIndexOf("/"));
     const relsXml = (await zip.files[relsPathOf(slidePath)]?.async("string")) ?? "";
     const rels = parseRels(relsXml);
@@ -540,7 +550,7 @@ export async function extractPptxVisuals(buffer: Buffer): Promise<PptxVisuals> {
     }
   }
 
-  return { slideCount: order.length, slideSize, pictures, frames };
+  return { slideCount: order.length, slideTextLetters, slideSize, pictures, frames };
 }
 
 /** Classify every picture; see the header for the classes. */
@@ -555,7 +565,12 @@ export function classifyPptxPictures(v: PptxVisuals): Map<PptxPicture, PictureCl
     (slidesByMediaPlace.get(place(p)) ?? slidesByMediaPlace.set(place(p), new Set()).get(place(p))!).add(p.slideIndex);
   }
   const many = (n: number) => n >= MIN_REPEAT_SLIDES && n >= v.slideCount * REPEAT_SHARE;
+  const captures = slideCaptures(v);
   for (const p of v.pictures) {
+    if (captures.has(p)) {
+      out.set(p, "capture");
+      continue;
+    }
     const vw = Math.max(0, Math.min(1, p.box.x + p.box.w) - Math.max(0, p.box.x));
     const vh = Math.max(0, Math.min(1, p.box.y + p.box.h) - Math.max(0, p.box.y));
     const area = vw * vh; // visible share of the slide
@@ -566,6 +581,31 @@ export function classifyPptxPictures(v: PptxVisuals): Map<PptxPicture, PictureCl
     else out.set(p, "content");
   }
   return out;
+}
+
+// Slides pasted in as screenshots (prod 2026-10-22: 38 slides, each one
+// picture and no text). Each such picture held a whole old slide, text and
+// all, and was carried in as a photo or a backdrop (ghost text under the new
+// title). Only when MOST of the deck looks like that: one photo slide with no
+// title in a normal deck is a real photo.
+const CAPTURE_MAX_LETTERS = 10;
+function slideCaptures(v: PptxVisuals): Set<PptxPicture> {
+  const bySlide = new Map<number, PptxPicture[]>();
+  for (const p of v.pictures) (bySlide.get(p.slideIndex) ?? bySlide.set(p.slideIndex, []).get(p.slideIndex)!).push(p);
+  const found = new Set<PptxPicture>();
+  for (const [slide, pics] of bySlide) {
+    if ((v.slideTextLetters[slide] ?? 0) > CAPTURE_MAX_LETTERS) continue;
+    const big = pics.filter((p) => {
+      const vw = Math.max(0, Math.min(1, p.box.x + p.box.w) - Math.max(0, p.box.x));
+      const vh = Math.max(0, Math.min(1, p.box.y + p.box.h) - Math.max(0, p.box.y));
+      return vw * vh >= FULL_BLEED_AREA;
+    });
+    if (big.length === 1) found.add(big[0]);
+  }
+  return many(found.size, v.slideCount) ? found : new Set();
+  function many(n: number, of: number) {
+    return n >= MIN_REPEAT_SLIDES && n >= of * REPEAT_SHARE;
+  }
 }
 
 /** Per-file AI images rule (owner, 2026-10-15): any content picture = no AI images. */
