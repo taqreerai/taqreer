@@ -40,6 +40,7 @@ import {
   teaserVisibleForFlow,
   teaserVisibleFor,
   estimateSlides,
+  teaserMinTotalForFlow,
   slideCapForFlow,
 } from "@/lib/credits/cost";
 import { normalizePlan } from "@/lib/plan";
@@ -969,7 +970,10 @@ export async function POST(request: Request) {
     // The flow's own cap (social carousels stop at 20) bounds the plan, so
     // the comped unlock never writes more than a paid user could create.
     const wanted = Math.min(
-      est.slides ?? teaserDefaultTotalForFlow(creditFlow),
+      Math.max(
+        est.slides ?? teaserDefaultTotalForFlow(creditFlow),
+        teaserMinTotalForFlow(creditFlow),
+      ),
       slideCapForFlow(creditFlow, getTier("free").slideCap),
     );
     if (wanted > teaserFreeMax) teaserPlannedTotal = wanted;

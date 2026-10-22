@@ -30,7 +30,7 @@ export async function detectLanguageFromPages(
     const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
     const msg = await client.messages.create({
       model: "claude-haiku-5-5",
-      max_tokens: 10,
+      max_tokens: 400, // thinking can eat a small budget and leave no text
       system:
         "You identify the script of the main text on presentation pages. Reply with exactly one word: " +
         "ar if most of the text is Arabic script, en if most of it is Latin script (English, French, Spanish and so on), none if the pages carry almost no text.",

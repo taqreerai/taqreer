@@ -971,6 +971,7 @@ export const deckFreezeBake = inngest.createFunction(
             afterPx: res.afterPx,
             wsFactor: res.wsFactor,
             fontFactor: res.fontFactor,
+            imgFactor: res.imgFactor,
           });
           // The DOM changed: the cached shot is stale (flow shot re-taken
           // below), and the composed html must carry the compression so the

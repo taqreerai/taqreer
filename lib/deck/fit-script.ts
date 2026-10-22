@@ -23,7 +23,9 @@
 //   1. whitespace (floor WS_FLOOR): proportionally shrink vertical paddings,
 //      vertical margins, and flex/grid row gaps across the well subtree.
 //      This is the per-cell table fix the vision model could not express.
-//   2. type (floor FONT_FLOOR), only if whitespace alone cannot fit:
+//   2. carried pictures (floor IMG_FLOOR), only if whitespace alone cannot fit:
+//      width and height scale together, aspect untouched.
+//   3. type (floor FONT_FLOOR), only if whitespace and pictures cannot fit:
 //      scale font-size and resolved px line-heights uniformly.
 //
 // Each phase binary-searches for the LARGEST factor (least compression)
@@ -58,12 +60,14 @@ export type FitCompressResult = {
   afterPx: number;
   wsFactor: number;
   fontFactor: number;
+  imgFactor: number;
 };
 
 export const FIT_SCRIPT = `
 function __tqCompressOverflow(well) {
   var WS_FLOOR = 0.6;
   var FONT_FLOOR = 0.75;
+  var IMG_FLOOR = 0.55;
   var view = well.ownerDocument.defaultView;
   var wr = well.getBoundingClientRect();
 
@@ -126,7 +130,7 @@ function __tqCompressOverflow(well) {
 
   var before = overflowBottomPx();
   if (before <= 1) {
-    return { changed: false, beforePx: Math.round(before), afterPx: Math.round(before), wsFactor: 1, fontFactor: 1 };
+    return { changed: false, beforePx: Math.round(before), afterPx: Math.round(before), wsFactor: 1, fontFactor: 1, imgFactor: 1 };
   }
 
   // Capture originals ONCE (factors always scale these, never the current
@@ -195,9 +199,29 @@ function __tqCompressOverflow(well) {
     return { f: lo, fit: true };
   };
 
+  // Carried pictures carry the model's fixed px size (the original's size on
+  // the slide), so a tall one can be the whole overflow (prod 2026-10-22: a
+  // 684px infographic under a title pushed past the canvas and was cut).
+  // Scaled together, width and height, so the aspect never changes.
+  var pics = [];
+  var imgEls = well.querySelectorAll("img[data-asset]");
+  for (var k = 0; k < imgEls.length; k++) {
+    var ir = imgEls[k].getBoundingClientRect();
+    if (ir.width >= 1 && ir.height >= 1) pics.push({ el: imgEls[k], w: ir.width, h: ir.height });
+  }
+  var applyImg = function (f) {
+    for (var i = 0; i < pics.length; i++) {
+      var st = pics[i].el.style;
+      st.setProperty("width", (pics[i].w * f).toFixed(2) + "px");
+      st.setProperty("height", (pics[i].h * f).toFixed(2) + "px");
+    }
+  };
+
   var ws = search(applyWs, WS_FLOOR);
-  var font = { f: 1, fit: ws.fit };
-  if (!ws.fit) font = search(applyFont, FONT_FLOOR);
+  var img = { f: 1, fit: ws.fit };
+  if (!ws.fit && pics.length > 0) img = search(applyImg, IMG_FLOOR);
+  var font = { f: 1, fit: ws.fit || img.fit };
+  if (!font.fit) font = search(applyFont, FONT_FLOOR);
   var after = overflowBottomPx();
   return {
     changed: true,
@@ -205,6 +229,7 @@ function __tqCompressOverflow(well) {
     afterPx: Math.round(after),
     wsFactor: Math.round(ws.f * 1000) / 1000,
     fontFactor: Math.round(font.f * 1000) / 1000,
+    imgFactor: Math.round(img.f * 1000) / 1000,
   };
 }
 `;

@@ -145,6 +145,14 @@ export function teaserVisibleFor(flow: Flow, total: number): number {
   return Math.max(1, Math.min(visible, total - TEASER_MIN_LOCKED));
 }
 
+/** The shortest plan a free teaser may have (2026-10-22): the visible count
+ *  plus TEASER_MIN_LOCKED, so picking "3 slides" can no longer skip the
+ *  paywall. Enhance is exempt: it rebuilds the source 1:1, so its page count
+ *  is the deck and cannot be padded. */
+export function teaserMinTotalForFlow(flow: Flow): number {
+  return flow === "enhance" ? 0 : teaserVisibleForFlow(flow) + TEASER_MIN_LOCKED;
+}
+
 /** The planned length of a free auto deck / carousel for this flow. */
 export function teaserDefaultTotalForFlow(flow: Flow): number {
   return flow === "social" ? SOCIAL_TEASER_DEFAULT_TOTAL : TEASER_DEFAULT_TOTAL;

@@ -43,6 +43,10 @@ const FULL_BLEED_AREA = 0.85;
 // MIN_REPEAT_SLIDES of them) is template art, not content.
 const REPEAT_SHARE = 0.5;
 const MIN_REPEAT_SLIDES = 3;
+// Ornament: one media file on at least MIN_REPEAT_SLIDES slides, never drawn
+// bigger than this share of the slide (prod 2026-10-22: a "طبقي ما اكتشفت"
+// ribbon on 4 of 20 slides, once as large as a section header).
+const ORNAMENT_MAX_AREA = 0.2;
 
 // Shared with the PDF path (lib/extract/pdf-visuals.ts): same classes, same limits.
 export const PICTURE_THRESHOLDS = {
@@ -147,7 +151,10 @@ export type PptxVisuals = {
   frames: PptxFrame[];
 };
 
-export type PictureClass = "content" | "small" | "background" | "repeated" | "capture";
+// "ornament": the same small picture (a ribbon, badge or sticker) on a few
+// slides at different places. Dropped like "repeated"; when it holds a short
+// label the label is carried as text instead (lib/extract/ornament-labels.ts).
+export type PictureClass = "content" | "small" | "background" | "repeated" | "capture" | "ornament";
 
 type Xfrm = { x: number; y: number; cx: number; cy: number; rot: number; flipH: boolean; flipV: boolean };
 // Maps a child's EMU coordinates into slide EMU (group transforms compose).
@@ -565,6 +572,8 @@ export function classifyPptxPictures(v: PptxVisuals): Map<PptxPicture, PictureCl
     (slidesByMediaPlace.get(place(p)) ?? slidesByMediaPlace.set(place(p), new Set()).get(place(p))!).add(p.slideIndex);
   }
   const many = (n: number) => n >= MIN_REPEAT_SLIDES && n >= v.slideCount * REPEAT_SHARE;
+  const ornamentMedia = new Set<string>();
+  for (const [media, slides] of slidesByMedia) if (slides.size >= MIN_REPEAT_SLIDES) ornamentMedia.add(media);
   const captures = slideCaptures(v);
   for (const p of v.pictures) {
     if (captures.has(p)) {
@@ -577,6 +586,10 @@ export function classifyPptxPictures(v: PptxVisuals): Map<PptxPicture, PictureCl
     const reused = many(slidesByMedia.get(p.mediaPath)!.size);
     if (area >= FULL_BLEED_AREA && reused) out.set(p, "background");
     else if (many(slidesByMediaPlace.get(place(p))!.size)) out.set(p, "repeated");
+    // The same picture on most of the deck is template art even when it moves
+    // from slide to slide (prod 2026-10-22: a chalkboard frame on 18 of 27).
+    else if (reused) out.set(p, "repeated");
+    else if (ornamentMedia.has(p.mediaPath) && area < ORNAMENT_MAX_AREA) out.set(p, "ornament");
     else if (area < SMALL_AREA) out.set(p, "small");
     else out.set(p, "content");
   }

@@ -34,6 +34,9 @@ function setAttr(tag: string, name: string, value: string): string {
   return tag.replace(/^<img\b/i, `<img ${name}="${value}"`);
 }
 
+// Tallest example size shown for a carried picture (px, 1920x1080 canvas).
+const EXAMPLE_MAX_HEIGHT = 560;
+
 function px(style: string, prop: "width" | "height"): number | null {
   const m = style.match(new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*([\\d.]+)px`, "i"));
   return m ? Number(m[1]) : null;
@@ -239,7 +242,10 @@ export function carriedSlideBlock(
         .map((p) => {
           // Start from the picture's ORIGINAL size on the slide (1920 px canvas),
           // so a hero photo stays a hero photo; fixed examples shrank them all.
-          const w = p.cls === "small" ? 120 : p.box ? Math.max(200, Math.min(1800, Math.round(p.box.w * 1920))) : 720;
+          const w0 = p.cls === "small" ? 120 : p.box ? Math.max(200, Math.min(1800, Math.round(p.box.w * 1920))) : 720;
+          // A slide's well is ~1060px tall and holds a title too: a tall example
+          // size was copied as-is and ran past the canvas (prod 2026-10-22).
+          const w = Math.min(w0, Math.round(EXAMPLE_MAX_HEIGHT * p.aspect));
           const kind = p.kind ? `; ${p.kind}` : "";
           const where = p.box
             ? `${kind}; filled ${Math.round(Math.min(1, p.box.w) * 100)}% x ${Math.round(Math.min(1, p.box.h) * 100)}% of the source slide (importance hint, place it freely)`

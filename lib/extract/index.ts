@@ -38,6 +38,7 @@ import { extractColorsFromPptx } from "./colors-pptx";
 import { detectPptxLanguage } from "./language-pptx";
 import { detectStringLanguage } from "./language-text";
 import { detectLanguageFromPages } from "./language-vision";
+import { readOrnamentLabels } from "./ornament-labels";
 import { extractTextPerSlide } from "./text-pptx";
 import { pdfToText } from "./pdf-to-text";
 
@@ -167,6 +168,15 @@ export async function extract(
     if (colorsResult.status === "fulfilled") themeColors = colorsResult.value;
     if (langResult.status === "fulfilled") language = langResult.value;
     if (textResult.status === "fulfilled") textPerSlide = textResult.value;
+    // A repeated ribbon / badge picture is dropped from the carried pictures;
+    // its words join the slide's text so the generator rebuilds it as a styled
+    // label (and the unlocked tail, which reads this text, gets it too).
+    if (textPerSlide.length > 0) {
+      const labels = await readOrnamentLabels(buffer);
+      for (const [slide, texts] of labels) {
+        if (slide < textPerSlide.length) textPerSlide[slide] = [textPerSlide[slide], ...texts].join("\n").trim();
+      }
+    }
   } else if (isPdf || isDocx) {
     // PDF (native) + DOCX (already converted to pdfBytes above) text
     // layer → language + the full content text. Best-effort like the
