@@ -39,7 +39,7 @@ import { detectPptxLanguage } from "./language-pptx";
 import { detectStringLanguage } from "./language-text";
 import { detectLanguageFromPages } from "./language-vision";
 import { readOrnamentLabels } from "./ornament-labels";
-import { classifyPptxPictures, extractPptxVisuals, type PptxVisuals } from "./pptx-visuals";
+import { chromeTables, classifyPptxPictures, extractPptxVisuals, type PptxVisuals } from "./pptx-visuals";
 import { decideRework, type ReworkDecision } from "./rework-score";
 import { extractTextPerSlide } from "./text-pptx";
 import { pdfToText } from "./pdf-to-text";
@@ -111,22 +111,13 @@ export type ExtractionResult = {
   rework: ReworkDecision;
 };
 
-// Tables and charts that carry content: a table whose header row repeats on 3+
-// slides (a lesson header with unit / page / skill columns) is template chrome.
+// Tables and charts that carry content (template chrome tables excluded).
 function contentTables(visuals: PptxVisuals | null): number {
   if (!visuals) return 0;
-  const slidesBySig = new Map<string, Set<number>>();
-  let charts = 0;
-  for (const f of visuals.frames) {
-    if (f.kind === "chart" && f.chart) charts++;
-    if (f.kind !== "table" || !f.table) continue;
-    // Keyed on the header row: the values under it change slide to slide.
-    const sig = JSON.stringify(f.table.rows[0]?.map((c) => c.text) ?? []);
-    (slidesBySig.get(sig) ?? slidesBySig.set(sig, new Set()).get(sig)!).add(f.slideIndex);
-  }
-  let tables = 0;
-  for (const slides of slidesBySig.values()) if (slides.size < 3) tables += slides.size;
-  return tables + charts;
+  const chrome = chromeTables(visuals);
+  return visuals.frames.filter(
+    (f) => (f.kind === "chart" && f.chart) || (f.kind === "table" && f.table && !chrome.has(f)),
+  ).length;
 }
 
 // ─── Public API ────────────────────────────────────────────────────

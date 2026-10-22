@@ -11,7 +11,7 @@
 
 import { findSwappablePictures } from "@/lib/extract/rework-pictures";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { extractPptxVisuals, classifyPptxPictures } from "@/lib/extract/pptx-visuals";
+import { chromeTables, extractPptxVisuals, classifyPptxPictures, type PptxFrame } from "@/lib/extract/pptx-visuals";
 import { buildPptxAssets } from "@/lib/extract/pptx-asset-crops";
 import { buildPdfAssets, classifyPdfPictures, extractPdfPictures, type PdfAsset } from "@/lib/extract/pdf-visuals";
 import { uploadSourceAsset } from "@/lib/storage/source-assets";
@@ -114,7 +114,8 @@ export async function prepareCarriedPictures(opts: {
     const classes = classifyPptxPictures(visuals);
     hasContentImages = [...classes.values()].includes("content");
     assets = await buildPptxAssets(buffer, visuals, classes);
-    tables = opts.rework ? withoutRepeatedHeaders(tablesOf(visuals)) : tablesOf(visuals);
+    // Rework: lesson-info strips are template chrome; the redesign shows them once.
+    tables = tablesOf(visuals, opts.rework ? chromeTables(visuals) : undefined);
   }
 
   const storable = assets.filter((a) => a.file.kind === "image");
@@ -287,23 +288,8 @@ export function fullSlidePhotos(assets: readonly PdfAsset[], kinds?: ReadonlyMap
   return new Set([...best.values()].map((b) => b.id));
 }
 
-// Rework decks: a table whose header row repeats on 3+ slides is a lesson-info
-// strip from the template; the redesign shows that information once instead.
-function withoutRepeatedHeaders(tables: CarriedTable[]): CarriedTable[] {
-  const header = (t: CarriedTable) => ("rows" in t.spec ? JSON.stringify(t.spec.rows[0]?.map((c) => c.text) ?? []) : null);
-  const slides = new Map<string, Set<number>>();
-  for (const t of tables) {
-    const h = header(t);
-    if (h) (slides.get(h) ?? slides.set(h, new Set()).get(h)!).add(t.slideIndex);
-  }
-  return tables.filter((t) => {
-    const h = header(t);
-    return !h || (slides.get(h)?.size ?? 0) < 3;
-  });
-}
-
 // Native tables, numbered per slide in document order.
-function tablesOf(visuals: Awaited<ReturnType<typeof extractPptxVisuals>>): CarriedTable[] {
+function tablesOf(visuals: Awaited<ReturnType<typeof extractPptxVisuals>>, skip?: ReadonlySet<PptxFrame>): CarriedTable[] {
   const perSlide = new Map<number, number>();
   const perSlideCharts = new Map<number, number>();
   const out: CarriedTable[] = [];
@@ -315,7 +301,7 @@ function tablesOf(visuals: Awaited<ReturnType<typeof extractPptxVisuals>>): Carr
       out.push({ tableId: `s${sl}-c${n}`, slideIndex: f.slideIndex, spec: f.chart });
       continue;
     }
-    if (f.kind !== "table" || !f.table) continue;
+    if (f.kind !== "table" || !f.table || skip?.has(f)) continue;
     const n = (perSlide.get(f.slideIndex) ?? 0) + 1;
     perSlide.set(f.slideIndex, n);
     out.push({ tableId: `s${sl}-t${n}`, slideIndex: f.slideIndex, spec: f.table });

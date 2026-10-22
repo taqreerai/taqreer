@@ -621,6 +621,27 @@ function slideCaptures(v: PptxVisuals): Set<PptxPicture> {
   }
 }
 
+// Template chrome tables (2026-10-22): a lesson-info strip (unit / page /
+// skill columns) is a short table across the top of the slide, and it repeats.
+// Either shape is chrome: a 1-2 row table in the top band, or a header row
+// that repeats on 3+ slides (the values under it change slide to slide).
+const CHROME_TOP = 0.2;
+export function chromeTables(v: PptxVisuals): Set<PptxFrame> {
+  const tables = v.frames.filter((f) => f.kind === "table" && f.table);
+  const slidesByHeader = new Map<string, Set<number>>();
+  const header = (f: PptxFrame) => JSON.stringify(f.table!.rows[0]?.map((c) => c.text) ?? []);
+  for (const f of tables) {
+    const h = header(f);
+    (slidesByHeader.get(h) ?? slidesByHeader.set(h, new Set()).get(h)!).add(f.slideIndex);
+  }
+  const out = new Set<PptxFrame>();
+  for (const f of tables) {
+    const strip = f.table!.rows.length <= 2 && f.box.y < CHROME_TOP;
+    if (strip || (slidesByHeader.get(header(f))?.size ?? 0) >= 3) out.add(f);
+  }
+  return out;
+}
+
 /** Per-file AI images rule (owner, 2026-10-15): any content picture = no AI images. */
 export function fileHasContentImages(v: PptxVisuals): boolean {
   for (const c of classifyPptxPictures(v).values()) if (c === "content") return true;
