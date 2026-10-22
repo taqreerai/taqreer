@@ -15,7 +15,11 @@ import JSZip from "jszip";
 import sharp from "sharp";
 import type { PictureClass, PptxPicture, PptxVisuals } from "@/lib/extract/pptx-visuals";
 
-const MAX_EDGE = 2400;
+const MAX_EDGE = 1920;
+// Stored at about twice the size it filled on the source slide (the redesign
+// may show it larger), never under this. A 27-slide lesson deck carried 29 MB
+// of full-size clip-art and the export gave up waiting for it (prod 2026-10-22).
+const MIN_EDGE = 640;
 const JPEG_QUALITY = 85;
 
 export type PptxAsset = {
@@ -79,10 +83,12 @@ export async function buildPptxAssets(
       }
       if (p.flipH) img = img.flop();
       if (p.flipV) img = img.flip();
-      img = img.resize({ width: MAX_EDGE, height: MAX_EDGE, fit: "inside", withoutEnlargement: true });
+      const shown = Math.max(p.box.w * 1920, p.box.h * 1080);
+      const edge = Math.round(Math.min(MAX_EDGE, Math.max(MIN_EDGE, 2 * shown)));
+      img = img.resize({ width: edge, height: edge, fit: "inside", withoutEnlargement: true });
       const hasAlpha = Boolean(meta.hasAlpha);
       const { data, info } = hasAlpha
-        ? await img.png({ compressionLevel: 9 }).toBuffer({ resolveWithObject: true })
+        ? await img.png({ palette: true, quality: 90, compressionLevel: 9 }).toBuffer({ resolveWithObject: true })
         : await img.flatten({ background: "#ffffff" }).jpeg({ quality: JPEG_QUALITY, mozjpeg: true }).toBuffer({ resolveWithObject: true });
       out.push({
         ...base,

@@ -23,11 +23,11 @@
 
 import { useDeckPurchased } from "@/lib/billing/deck-purchase-context";
 import { FREE_PLAN_FEATURE_LOCKS } from "@/lib/free-trial";
-import { useState, useSyncExternalStore } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import posthog from "posthog-js";
 import type { SlideManifest, SlideFormat } from "@/lib/schema/slide";
 import { isPdfPngOnlyFormat } from "@/lib/export/export-gating";
-import { exportManifestAsPptx } from "@/lib/export/html-export";
+import { ExportImagesMissingError, exportManifestAsPptx } from "@/lib/export/html-export";
 import {
   ensureDriveToken,
   uploadPptxAsGoogleSlides,
@@ -177,6 +177,30 @@ export function useExportActions({
   // the defensive path (plan changed mid-session, devtools, etc.).
   const gatedExportMessage = dict.components.creditGate.exportLockedTitle;
 
+  // PPTX / Slides wait for the slides' pictures with a progress line. When
+  // some never arrive the first attempt stops and says so; the next click
+  // exports with what loaded (by then most are cached).
+  const allowMissingImages = useRef(false);
+  const imageOpts = (setState: (s: ExportButtonState) => void) => ({
+    allowMissingImages: allowMissingImages.current,
+    onImagesProgress: (loaded: number, total: number) =>
+      setState({
+        status: "running",
+        message: dict.components.exportImages.loading
+          .replace("{loaded}", String(loaded))
+          .replace("{total}", String(total)),
+      }),
+  });
+  const exportErrorMessage = (error: unknown) => {
+    if (error instanceof ExportImagesMissingError) {
+      allowMissingImages.current = true;
+      return dict.components.exportImages.missing
+        .replace("{missing}", String(error.missing))
+        .replace("{total}", String(error.total));
+    }
+    return error instanceof Error ? error.message : "تعذر التصدير";
+  };
+
   // Cross-instance busy — subscribes both this instance (which sets
   // it inside each runner) AND any OTHER `useExportActions` hook
   // mounted with the same projectId. So the toolbar's PPTX click
@@ -250,16 +274,18 @@ export function useExportActions({
           // Free plan, locked mode: a present-ready PPTX built from the
           // server's PNG renders (watermark baked into the pictures).
           const imageSlides = await fetchWatermarkedSlideImages();
-          await exportManifestAsPptx(exportManifest, fileName, { imageSlides });
+          await exportManifestAsPptx(exportManifest, fileName, { imageSlides, ...imageOpts(setState) });
         } else if (freeBranding) {
           // Free trial (lib/free-trial): the EDITABLE deck, with the quiet
           // watermark picture on slides 2+ and the file credits.
           await exportManifestAsPptx(exportManifest, fileName, {
             freeWatermark: exportManifest.language === "en" ? "en" : "ar",
+            ...imageOpts(setState),
           });
         } else {
-          await exportManifestAsPptx(exportManifest, fileName);
+          await exportManifestAsPptx(exportManifest, fileName, imageOpts(setState));
         }
+        allowMissingImages.current = false;
         // Conversion-funnel export step, client-side: PPTX is generated in the
         // browser (no server route, unlike pdf/png). Consent-gated like all
         // client capture; distinct_id is the identified user (= Supabase uid),
@@ -274,7 +300,7 @@ export function useExportActions({
       } catch (error) {
         setState({
           status: "error",
-          message: error instanceof Error ? error.message : "تعذر التصدير",
+          message: exportErrorMessage(error),
         });
       }
     });
@@ -305,7 +331,8 @@ export function useExportActions({
         // a blocked or unreachable GIS script (plain Error). The upload
         // path below owns the post-token failures.
         try {
-          await exportManifestAsPptx(exportManifest, `${title}.pptx`, freeWatermarkOpts);
+          await exportManifestAsPptx(exportManifest, `${title}.pptx`, { ...freeWatermarkOpts, ...imageOpts(setExportGslides) });
+          allowMissingImages.current = false;
           posthog.capture("deck_exported", {
             format: "gslides_fallback_pptx",
             project_id: projectId,
@@ -316,10 +343,7 @@ export function useExportActions({
         } catch (fallbackError) {
           setExportGslides({
             status: "error",
-            message:
-              fallbackError instanceof Error
-                ? fallbackError.message
-                : "تعذر التصدير",
+            message: exportErrorMessage(fallbackError),
           });
         }
         return;
@@ -328,9 +352,10 @@ export function useExportActions({
         const { blob } = await exportManifestAsPptx(
           exportManifest,
           `${title}.pptx`,
-          { skipDownload: true, aliasFonts: false, ...freeWatermarkOpts },
+          { skipDownload: true, aliasFonts: false, ...freeWatermarkOpts, ...imageOpts(setExportGslides) },
         );
         if (!blob) throw new Error("PPTX build produced no blob");
+        allowMissingImages.current = false;
         // Slides can't render SVG - swap the upload copy to the raster
         // fallbacks (see rasterizeSvgsForSlides). Download path untouched.
         const slidesSafe = await rasterizeSvgsForSlides(blob);
@@ -346,7 +371,7 @@ export function useExportActions({
       } catch (error) {
         setExportGslides({
           status: "error",
-          message: error instanceof Error ? error.message : "تعذر التصدير",
+          message: exportErrorMessage(error),
         });
       }
     });

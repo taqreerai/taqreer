@@ -504,6 +504,22 @@ function splitMixedScriptFlexChildren(root: HTMLElement): void {
  * prompt so Claude emits HTML directly and this manifest-rendering hop
  * goes away.
  */
+// Longest the export waits for the slides' pictures, and the extra wait each
+// picture earns on top of RESOURCE_TIMEOUT_MS.
+const IMAGES_MAX_WAIT_MS = 60_000;
+const IMAGE_WAIT_PER_MS = 400;
+
+/** Some pictures had not loaded when the wait ran out; nothing was exported. */
+export class ExportImagesMissingError extends Error {
+  constructor(
+    readonly missing: number,
+    readonly total: number,
+  ) {
+    super(`${missing} of ${total} images did not load`);
+    this.name = "ExportImagesMissingError";
+  }
+}
+
 export async function exportManifestAsPptx(
   manifest: SlideManifest,
   fileName: string,
@@ -524,6 +540,10 @@ export async function exportManifestAsPptx(
     // upload turns it off (Slides ignores embedded fonts and needs the real
     // family name to find it in Google Fonts).
     aliasFonts?: boolean;
+    // Called as the slides' pictures arrive, so the button can show progress.
+    onImagesProgress?: (loaded: number, total: number) => void;
+    // Second attempt after ExportImagesMissingError: export with what loaded.
+    allowMissingImages?: boolean;
   }
 ): Promise<{ stats: BiDiPostprocessStats; slideCount: number; blob?: Blob }> {
   // Slide canvas dimensions from the manifest's format (16:9 → 1920×1080;
@@ -679,28 +699,41 @@ export async function exportManifestAsPptx(
     // Wait for every <img> inside the offscreen tree to finish loading.
     // If we hand the DOM to dom-to-pptx while images are still loading,
     // they'll have 0×0 bounding rects and the library will skip them.
+    // The wait grows with the picture count: a fixed 8 s silently dropped
+    // most of a 119-picture lesson deck on a slow connection (prod 2026-10-22).
     const images = Array.from(container.querySelectorAll("img"));
     if (images.length > 0) {
-      await raceWithTimeout(
+      const loadedOk = (img: HTMLImageElement) => img.complete && img.naturalWidth > 0;
+      let settled = images.filter(loadedOk).length;
+      opts?.onImagesProgress?.(settled, images.length);
+      const budgetMs = Math.min(IMAGES_MAX_WAIT_MS, RESOURCE_TIMEOUT_MS + images.length * IMAGE_WAIT_PER_MS);
+      await Promise.race([
         Promise.all(
           images.map(
             (img) =>
               new Promise<void>((resolve) => {
-                if (img.complete && img.naturalWidth > 0) {
+                if (loadedOk(img)) {
                   resolve();
                   return;
                 }
                 const done = () => {
                   img.removeEventListener("load", done);
                   img.removeEventListener("error", done);
+                  settled++;
+                  opts?.onImagesProgress?.(settled, images.length);
                   resolve();
                 };
                 img.addEventListener("load", done);
                 img.addEventListener("error", done);
               })
           )
-        )
-      );
+        ),
+        new Promise<void>((r) => setTimeout(r, budgetMs)),
+      ]);
+      const missing = images.filter((img) => !loadedOk(img)).length;
+      if (missing > 0 && !opts?.allowMissingImages) {
+        throw new ExportImagesMissingError(missing, images.length);
+      }
     }
 
     // One more paint frame after everything's loaded, so the browser

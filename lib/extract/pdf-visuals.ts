@@ -476,7 +476,7 @@ async function cutPicture(p: PdfPicture): Promise<Cut> {
   const hasAlpha = alphaMin < 250;
   const encode = (i: sharp.Sharp) =>
     hasAlpha
-      ? i.png({ compressionLevel: 9 }).toBuffer({ resolveWithObject: true })
+      ? i.png({ palette: true, quality: 90, compressionLevel: 9 }).toBuffer({ resolveWithObject: true })
       : i.flatten({ background: "#ffffff" }).jpeg({ quality: JPEG_QUALITY, mozjpeg: true }).toBuffer({ resolveWithObject: true });
   let enc = await encode(img);
   if (enc.data.length > MAX_ASSET_BYTES) enc = await encode(sharpOf(enc.data).resize({ width: 1600, height: 1600, fit: "inside" }));

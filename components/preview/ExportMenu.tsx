@@ -92,6 +92,11 @@ export function ExportMenu({
     formatFallback,
     isSocial,
   });
+  // The PPTX / Slides build reports picture progress and a missing-pictures
+  // stop (use-export-actions); the menu is closed by then, so show it here.
+  const pptxStatus = [states.pptx, states.gslides].find(
+    (s) => s.message && (s.status === "running" || s.status === "error"),
+  );
   const run: Record<ExportKind, () => Promise<void>> = {
     pptx: runPptx,
     pdf: runPdf,
@@ -179,6 +184,7 @@ export function ExportMenu({
 
   return (
     <>
+      <span className="relative inline-flex">
       <button
         ref={triggerRef}
         type="button"
@@ -206,6 +212,19 @@ export function ExportMenu({
           expand_more
         </span>
       </button>
+      {pptxStatus ? (
+        <span
+          role="status"
+          className="surface-popover absolute end-0 top-full z-[1050] mt-1.5 w-max max-w-[min(320px,80vw)] rounded-lg px-3 py-1.5 text-xs"
+          style={{
+            border: `1px solid ${pptxStatus.status === "error" ? "var(--tq-border-danger)" : "var(--tq-border-hairline)"}`,
+            color: pptxStatus.status === "error" ? "var(--tq-text-danger)" : undefined,
+          }}
+        >
+          {pptxStatus.message}
+        </span>
+      ) : null}
+      </span>
 
       {typeof document !== "undefined"
         ? createPortal(
