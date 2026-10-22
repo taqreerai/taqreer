@@ -71,3 +71,70 @@ export function missingCarriedPictures(assetIds: readonly string[], slideHtml: r
   const all = slideHtml.join(" ");
   return assetIds.filter((id) => !all.includes(id));
 }
+
+export type BrokenSlide = {
+  slide: number; // 1-based
+  kept: number; // share of the source slide's own words found on its slide
+  missingPictures: string[]; // carried content pictures not on its slide
+};
+
+/**
+ * A free redesign is one slide per source slide, so slide N is checked against
+ * source slide N alone: under KEPT_BELOW of the source slide's own words (4+
+ * letters; words on 3+ source slides are template chrome and do not count),
+ * or any of its content pictures missing, is a broken slide. A slide the deck
+ * does not have at all counts as broken with nothing kept.
+ */
+export function brokenReworkSlides(
+  sourceTexts: readonly string[],
+  // 0-based source slide -> carried content picture ids that belong on it
+  picturesBySlide: ReadonlyMap<number, readonly string[]>,
+  slideHtml: readonly string[],
+  checkCount: number,
+): BrokenSlide[] {
+  const perSource = sourceTexts.map((t) => new Set(words(t).filter((w) => w.length >= 4)));
+  const seenOn = new Map<string, number>();
+  for (const set of perSource) for (const w of set) seenOn.set(w, (seenOn.get(w) ?? 0) + 1);
+  const out: BrokenSlide[] = [];
+  for (let i = 0; i < checkCount; i++) {
+    const html = slideHtml[i];
+    const pictures = picturesBySlide.get(i) ?? [];
+    if (html === undefined) {
+      out.push({ slide: i + 1, kept: 0, missingPictures: [...pictures] });
+      continue;
+    }
+    const own = [...(perSource[i] ?? [])].filter((w) => (seenOn.get(w) ?? 0) < 3);
+    const have = new Set(words(htmlText(html)));
+    const kept = own.length < MIN_WORDS ? 1 : own.filter((w) => have.has(w)).length / own.length;
+    const missingPictures = pictures.filter((id) => !html.includes(id));
+    if (kept < KEPT_BELOW || missingPictures.length > 0) {
+      out.push({ slide: i + 1, kept: Math.round(kept * 100) / 100, missingPictures });
+    }
+  }
+  return out;
+}
+
+/**
+ * The follow-up turn that asks the model to re-emit only the broken slides,
+ * in place (data-revises), with each one's full source text and the pictures
+ * it must place. `pictureBlocks` holds the ORIGINAL PICTURES block per slide.
+ */
+export function reworkRepairMessage(
+  broken: readonly BrokenSlide[],
+  sourceTexts: readonly string[],
+  pictureBlocks: ReadonlyMap<number, string>,
+): string {
+  const parts = broken.map((b) => {
+    const text = (sourceTexts[b.slide - 1] ?? "").trim() || "(no text on this source slide)";
+    const why = [
+      b.kept < 1 ? `only ${Math.round(b.kept * 100)}% of its words made it` : "",
+      b.missingPictures.length > 0 ? `content pictures left out: ${b.missingPictures.join(", ")}` : "",
+    ]
+      .filter(Boolean)
+      .join("; ");
+    return `── SLIDE ${b.slide}: ${why} ──\nSource slide ${b.slide} text (every fact, term, exercise item and number must appear):\n${text}\n${pictureBlocks.get(b.slide - 1) ?? ""}`;
+  });
+  return `REPAIR PASS. Your deck above lost content on ${broken.length === 1 ? "one slide" : `${broken.length} slides`}: slide N must carry the content of source slide N. Re-emit ONLY the slides listed below, each as ONE complete corrected <section> with the same data-label, data-role and background attributes as your version of that slide, PLUS data-revises="N" (N = the slide number). Keep the deck's design system and look; rebuild the slide so all of its source content and every listed picture (tag unchanged) fit. No <style> block, no prose, no fences: the first character of your reply is the < of the first section.
+
+${parts.join("\n\n")}`;
+}

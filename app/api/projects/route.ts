@@ -263,9 +263,9 @@ type CreateProjectPayload = {
   // Enhance "Refresh my photos" (opt-in): deck-generate re-makes a capped set
   // of the most important generic photos (lib/extract/photo-refresh.ts).
   refreshPhotos?: boolean;
-  // Enhance "How much to change": "keep" = the classic 1:1 redesign, "rework" =
-  // keep the essence and redesign freely (merge / split up to the source
-  // count), "auto" = what the file's analysis recorded (resolved below).
+  // Enhance "How much to change": "keep" = the classic redesign, "rework" =
+  // keep the essence and redesign each slide freely (still one slide per
+  // source slide), "auto" = what the file's analysis recorded (resolved below).
   // Absent (an older page) = keep.
   changeLevel?: "auto" | "keep" | "rework";
   slideCount?: number | null;
@@ -1113,10 +1113,7 @@ export async function POST(request: Request) {
     // authors what the content calls for, up to it (deck-generate appends
     // the matching directive after the Brief JSON). The stream's slide-cap
     // abort at holdSlides stays the hard enforcement either way.
-    // A free-redesign (rework) deck may merge thin slides, so the source page
-    // count is its ceiling; a free teaser keeps 1:1 so the locked tail and
-    // the unlock still line up with the source pages.
-    slideCountMode: preflight.exact && !(reworkDeck && !isTeaser) ? "exact" : "ceiling",
+    slideCountMode: preflight.exact ? "exact" : "ceiling",
     // Social: the auto ("ceiling") length never goes under the floor.
     ...(creditFlow === "social"
       ? { slideCountMin: SOCIAL_MIN_POSTS, slideCountAim: SOCIAL_AUTO_AIM }

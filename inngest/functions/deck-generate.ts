@@ -1,4 +1,10 @@
-import { missingCarriedPictures, missingSourceNumbers, missingSourceSlides } from "@/lib/deck/essence-check";
+import {
+  brokenReworkSlides,
+  missingCarriedPictures,
+  missingSourceNumbers,
+  missingSourceSlides,
+  reworkRepairMessage,
+} from "@/lib/deck/essence-check";
 import { imageCreditsForPlan } from "@/lib/images/images-gating";
 import Anthropic from "@anthropic-ai/sdk";
 import { toSdkThinking } from "@/lib/anthropic/model-thinking";
@@ -208,16 +214,14 @@ const ENHANCE_IMG_ADDENDUM = `ENHANCE IMAGES: images mode is ON for this redesig
 // just redirects the base prompt toward it. Appended AFTER so it wins.
 const ENHANCE_TEMPLATE_ADDENDUM = `ENHANCE + TEMPLATE — the user picked a deck TEMPLATE for this redesign. Override "improve only layout, hierarchy, typography, spacing, and rhythm" and any instruction to invent your own visual system: REPRODUCE the attached DESIGN reference's visual language (layout system, type hierarchy, spacing, shapes, grids, decorative motifs) on every slide, recoloured to the injected brand variables. Everything else in ENHANCE MODE still holds: exactly one redesigned slide per source slide, same order, each slide's content from its own exact-text block, never the template's words.`;
 
-// "Redesign freely" (owner, 2026-10-22): replaces the 1:1 job and the exact-
-// content rules of the Enhance prompt. The essence survives; the design, the
-// wording and (when the count is a ceiling) the slide boundaries may change.
-function reworkJobLines(slideCount: number, ceiling: boolean): string[] {
+// "Redesign freely" (owner, 2026-10-22): replaces the exact-content rules of
+// the Enhance prompt. The essence survives; the design and the wording may
+// change; the slide count and order never do (owner, 2026-10-22: no merging).
+function reworkJobLines(slideCount: number): string[] {
   return [
-    `YOUR JOB: FREE REDESIGN. The user chose "Redesign freely". Rebuild this deck as one good-looking, consistent deck that keeps the ESSENCE of the source. Content first, design second: a beautiful slide that loses content is a failure.`,
-    ceiling
-      ? `  • Slides: AT MOST ${slideCount} (a hard cap). Every source slide that has words or a content picture appears in the deck, merged or on its own: never leave one out. Merge consecutive thin slides that serve one idea. Split a crowded slide in two only when merges elsewhere leave room under the cap; when they do not, do not split. Only a source slide that holds nothing but decoration (no words, no content picture) may be left out.`
-      : `  • Produce EXACTLY ${slideCount} slides, one per source slide, in the SAME order (the count is fixed for this deck); inside each slide you are free as described below.`,
-    `  • ORDER IS FIXED (hard rule): content appears in the source's slide order. Slide 1 is source slide 1: its heading is the deck's title and the slide gets the cover treatment, whatever source slide 1 holds (an exercise, a question). The lesson-info strip (template chrome below) may join slide 1. Source slide 2's content starts on slide 2 or later, never on slide 1, and never becomes a title. A slide never shows content from a later source slide before an earlier one.`,
+    `YOUR JOB: FREE REDESIGN. The user chose "Redesign freely". Rebuild each slide as part of one good-looking, consistent deck that keeps the ESSENCE of its source slide. Content first, design second: a beautiful slide that loses content is a failure.`,
+    `  • Produce EXACTLY ${slideCount} slides: slide N is the redesign of source slide N, in the SAME order. Never merge, split, drop, add or reorder slides (owner rule: the deck keeps its slide count). Inside each slide you are free as described below.`,
+    `  • Slide 1 is source slide 1: its heading is the deck's title and the slide gets the cover treatment, whatever source slide 1 holds (an exercise, a question). The lesson-info strip (template chrome below) may join slide 1. Never put another slide's content on slide 1.`,
     `  • Re-execute typography, hierarchy, whitespace, layout, and visual rhythm to editorial quality; restructure each slide's content freely (cards, steps, tables, comparisons) when that explains it better.`,
     ``,
     `ESSENCE (hard limits):`,
@@ -1556,18 +1560,15 @@ function buildSourceTextDirective(
     const slideCount = Math.max(imageCount, enhanceImages?.textPerSlide.length ?? 0);
     const { colors } = readBriefBrandColors(event.brief);
     // "Redesign freely" (lib/extract/rework-score.ts): the essence, not the
-    // exact words. Merging is allowed only when the count is a ceiling (a free
-    // teaser keeps 1:1 so its locked tail lines up with the source pages).
-    const reworkBrief = event.brief as { reworkDeck?: boolean; slideCountMode?: string } | null;
-    const rework = reworkBrief?.reworkDeck === true;
-    const reworkCeiling = rework && reworkBrief?.slideCountMode === "ceiling";
+    // exact words, one slide per source slide.
+    const rework = (event.brief as { reworkDeck?: boolean } | null)?.reworkDeck === true;
     lines.push(
       `SOURCE — Enhance flow (per-slide redesign)`,
       imageCount < slideCount
         ? `${slideCount} source slides are attached BEFORE this text, IN ORDER. Slides 1-${imageCount} each come as the rendered ORIGINAL image IMMEDIATELY FOLLOWED by a text block holding that slide's EXACT words; slides ${imageCount + 1}-${slideCount} come as their text block only (no image). The image shows you the visual to improve; the text block is the authoritative content.`
         : `${slideCount} slide images are attached BEFORE this text, IN ORDER. Each image is the rendered ORIGINAL of one slide and is IMMEDIATELY FOLLOWED by a text block holding that slide's EXACT words. The image shows you the visual to improve; the paired text block is the authoritative content.`,
       ``,
-      ...(rework ? reworkJobLines(slideCount, reworkCeiling) : [
+      ...(rework ? reworkJobLines(slideCount) : [
       `YOUR JOB — redesign each slide to editorial quality:`,
       `  • Produce EXACTLY ${slideCount} slides — one per source slide, in the SAME order. Do not merge, split, drop, add, or reorder.`,
       `  • Your slide 1 IS source slide 1 and your slide ${slideCount} IS source slide ${slideCount}, whatever they contain: never add a cover or a closing slide of your own, and never move the source's title slide to the front (if the title slide is source slide 3, it stays slide 3; give it the cover treatment there).`,
@@ -3200,6 +3201,89 @@ export const deckGenerate = inngest.createFunction(
           slides: slides.length,
         });
 
+        // ── Free redesign: repair lost content (owner, 2026-10-22) ──
+        // Slide N is the redesign of source slide N. A slide that kept under
+        // 60% of its source's words, or left out one of its content pictures,
+        // is re-emitted in place (data-revises, through ingestSlide like a
+        // self-correction) by one follow-up turn with the deck so far as
+        // context. Comped: the user never pays for the model's loss. One round;
+        // what is still broken after it is logged below.
+        const reworkRun = (data.brief as { reworkDeck?: boolean } | null)?.reworkDeck === true && enhanceImages != null;
+        if (reworkRun && enhanceImages) {
+          const checkCount = enhanceImages.fileIds.length || slides.length;
+          const picturesBySlide = new Map<number, string[]>();
+          for (const p of enhanceImages.pictures ?? []) {
+            if (p.cls === "page" || p.cls === "backdrop" || p.swap) continue;
+            (picturesBySlide.get(p.slideIndex) ?? picturesBySlide.set(p.slideIndex, []).get(p.slideIndex)!).push(p.assetId);
+          }
+          const broken = brokenReworkSlides(
+            enhanceImages.textPerSlide,
+            picturesBySlide,
+            slides.map((sl) => sl.html ?? ""),
+            checkCount,
+          ).filter((b) => b.slide <= slides.length);
+          if (broken.length > 0) {
+            const pictureBlocks = new Map<number, string>();
+            for (const b of broken) {
+              const i = b.slide - 1;
+              pictureBlocks.set(
+                i,
+                carriedSlideBlock(
+                  b.slide,
+                  projectId,
+                  (enhanceImages.pictures ?? []).filter((p) => p.slideIndex === i),
+                  (enhanceImages.tables ?? []).filter((t) => t.slideIndex === i),
+                ),
+              );
+            }
+            try {
+              const repair = await client.messages.create({
+                model: callParams.model,
+                max_tokens: Math.min(callParams.maxTokens, 2_000 + 5_000 * broken.length),
+                thinking: { type: "disabled" },
+                system: gulfWardrobeSystemBlocks(htmlSystem, {
+                  imagesMode: isImagesMode(data),
+                  imageRegion: (data.brief as { imageRegion?: string } | null)?.imageRegion ?? null,
+                }),
+                messages: [
+                  {
+                    role: "user",
+                    content: hasDocBlocks ? [...docBlocks, { type: "text", text: userText }] : userText,
+                  },
+                  { role: "assistant", content: rawBuffer },
+                  {
+                    role: "user",
+                    content: reworkRepairMessage(broken, enhanceImages.textPerSlide, pictureBlocks),
+                  },
+                ],
+              });
+              const repairText = repair.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+              const repairSplitter = new StreamingHtmlSplitter();
+              let revised = 0;
+              for (const parsed of [...repairSplitter.push(repairText), ...repairSplitter.flush()]) {
+                if (parseFrameRevises(parsed.html) === null) continue; // never grows the deck
+                ingestSlide(parsed);
+                revised++;
+              }
+              usage.inputTokens += repair.usage.input_tokens ?? 0;
+              usage.outputTokens += repair.usage.output_tokens ?? 0;
+              usage.cacheReadTokens += repair.usage.cache_read_input_tokens ?? 0;
+              usage.cacheCreationTokens += repair.usage.cache_creation_input_tokens ?? 0;
+              logger.info("enhance_rework_repair", {
+                projectId,
+                broken: broken.map((b) => ({ slide: b.slide, kept: b.kept, missingPictures: b.missingPictures.length })),
+                revised,
+                stop: repair.stop_reason,
+              });
+            } catch (err) {
+              logger.warn("enhance_rework_repair_failed", {
+                projectId,
+                error: err instanceof Error ? err.message : String(err),
+              });
+            }
+          }
+        }
+
         // ── Timing (always) — the JSON↔HTML speed comparison number. ──
         const tEnd = Date.now();
         const timing = {
@@ -3220,11 +3304,11 @@ export const deckGenerate = inngest.createFunction(
 
         // Free redesign: a source number missing from the deck is lost content
         // (lib/deck/essence-check.ts). Logged for tuning; never fails the run.
-        if ((data.brief as { reworkDeck?: boolean } | null)?.reworkDeck === true && enhanceImages) {
+        if (reworkRun && enhanceImages) {
           const html = slides.map((sl) => sl.html ?? "");
           const missing = missingSourceNumbers(enhanceImages.textPerSlide, html);
           const missingPictures = missingCarriedPictures(
-            (enhanceImages.pictures ?? []).filter((p) => p.cls !== "page" && !p.swap).map((p) => p.assetId),
+            (enhanceImages.pictures ?? []).filter((p) => p.cls !== "page" && p.cls !== "backdrop" && !p.swap).map((p) => p.assetId),
             html,
           );
           logger.info("enhance_rework_essence", {
