@@ -1037,8 +1037,9 @@ export async function POST(request: Request) {
       ? resolvedSlideCount
       : preflight.holdSlides;
 
+  // An Enhance deck is known by its source (the /enhance page sends no
+  // `type`, so projectType reads "create" for it).
   const reworkDeck =
-    projectType === "enhance" &&
     validatedSource?.kind === "enhance" &&
     (payload.changeLevel === "rework" ||
       (payload.changeLevel === "auto" &&
@@ -1144,7 +1145,7 @@ export async function POST(request: Request) {
     // (and the prompt built from it) stays byte-for-byte unchanged.
     ...(payload.imagesMode === true ? { imagesMode: true } : {}),
     // Refresh my photos belongs to Keep exact (a free redesign swaps on its own).
-    ...(payload.refreshPhotos === true && projectType === "enhance" && !reworkDeck ? { refreshPhotos: true } : {}),
+    ...(payload.refreshPhotos === true && validatedSource?.kind === "enhance" && !reworkDeck ? { refreshPhotos: true } : {}),
     ...(reworkDeck ? { reworkDeck: true } : {}),
     // Regional people descriptor for generated lifestyle images (only when
     // resolvable). buildUserMessage turns this into the cast directive.
