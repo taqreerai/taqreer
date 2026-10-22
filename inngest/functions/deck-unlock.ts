@@ -295,7 +295,7 @@ export const deckUnlock = inngest.createFunction(
         ...(carried.tables.length > 0 ? [CARRIED_TABLES_RULE] : []),
         ...(carried.tables.some((x) => "kind" in x.spec) ? [CARRIED_CHARTS_RULE] : []),
         ...(carried.pictures.length > 0 ? [CARRIED_PICTURES_RULE] : []),
-        ...(carried.rework && carried.pictures.some((x) => x.swap) ? [reworkPicturesRule(false)] : []),
+        ...(carried.rework && carried.pictures.some((x) => x.swap || x.shows) ? [reworkPicturesRule(false)] : []),
         "",
         ...blocks,
       ].join("\n");

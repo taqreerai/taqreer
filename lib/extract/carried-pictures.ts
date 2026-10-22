@@ -9,7 +9,7 @@
 // purged after 24h by source-files-cleanup). PDF uploads go through
 // lib/extract/pdf-visuals.ts (phase 2); a PDF has no native tables here yet.
 
-import { findSwappablePictures } from "@/lib/extract/rework-pictures";
+import { tagReworkPictures, type PictureTag } from "@/lib/extract/rework-pictures";
 import { extractTextPerSlide } from "@/lib/extract/text-pptx";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { chromeTables, extractPptxVisuals, classifyPptxPictures, type PptxFrame } from "@/lib/extract/pptx-visuals";
@@ -51,8 +51,10 @@ export type CarriedPicture = {
   // (kept stored; the studio's "Restore original" puts it back).
   originalAssetId?: string;
   // Rework decks: generic clip-art / decoration the redesign may leave out or
-  // replace with a generated image (lib/extract/rework-pictures.ts).
+  // replace with a generated image, and what the picture shows (so labels are
+  // matched to the right picture). lib/extract/rework-pictures.ts.
   swap?: boolean;
+  shows?: string;
   aspect: number; // width / height on the original slide
   altText: string | null;
 };
@@ -139,16 +141,19 @@ export async function prepareCarriedPictures(opts: {
     }
   }
   const backdropIds = fullSlidePhotos(storable, kinds);
-  // Rework: once per distinct picture (same bytes on several slides = one).
-  let swapKeys = new Set<string>();
+  // Rework: once per distinct picture (same bytes on several slides = one),
+  // small ones included (a labelled icon still needs its description).
+  let tags = new Map<string, PictureTag>();
   if (opts.rework) {
     const slideText = opts.sourceMime === PPTX_MIME ? await extractTextPerSlide(buffer).catch(() => [] as string[]) : [];
     const byKey = new Map<string, { bytes: Buffer; context?: string }>();
     for (const a of storable) {
-      const key = mediaKeys.get(a.assetId);
-      if (key && a.file.kind === "image" && !byKey.has(key)) byKey.set(key, { bytes: a.file.bytes, context: slideText[a.slideIndex] });
+      if (a.file.kind !== "image") continue;
+      const key = mediaKeys.get(a.assetId) ?? createHash("sha1").update(a.file.bytes).digest("hex");
+      mediaKeys.set(a.assetId, key);
+      if (!byKey.has(key)) byKey.set(key, { bytes: a.file.bytes, context: slideText[a.slideIndex] });
     }
-    swapKeys = await findSwappablePictures([...byKey].map(([mediaKey, v]) => ({ mediaKey, ...v })));
+    tags = await tagReworkPictures([...byKey].map(([mediaKey, v]) => ({ mediaKey, ...v })));
   }
   for (let i = 0; i < storable.length; i += UPLOAD_PARALLEL) {
     await Promise.all(
@@ -222,7 +227,8 @@ export async function prepareCarriedPictures(opts: {
       slideIndex: a.slideIndex,
       cls: backdropIds.has(a.assetId) ? ("backdrop" as const) : a.cls,
       ...(kinds.has(a.assetId) ? { kind: kinds.get(a.assetId) } : {}),
-      ...(swapKeys.has(mediaKeys.get(a.assetId) ?? "") ? { swap: true } : {}),
+      ...(tags.get(mediaKeys.get(a.assetId) ?? "")?.swap ? { swap: true } : {}),
+      ...(tags.get(mediaKeys.get(a.assetId) ?? "")?.shows ? { shows: tags.get(mediaKeys.get(a.assetId) ?? "")!.shows! } : {}),
       box: { x: round3(a.box.x), y: round3(a.box.y), w: round3(a.box.w), h: round3(a.box.h) },
       // The PICTURE's own proportions (after the slide's crop), not the shape's:
       // a stretched source shape would otherwise make object-fit: cover cut it.

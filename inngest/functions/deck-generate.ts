@@ -1620,7 +1620,7 @@ function buildSourceTextDirective(
       ...((enhanceImages?.pictures?.length ?? 0) > 0
         ? [
             CARRIED_PICTURES_RULE,
-            ...(rework && enhanceImages?.pictures?.some((p) => p.swap) ? [reworkPicturesRule(isImagesMode(event))] : []),
+            ...(rework && enhanceImages?.pictures?.some((p) => p.swap || p.shows) ? [reworkPicturesRule(isImagesMode(event))] : []),
           ]
         : []),
       `  • LOGOS / BRAND MARKS — never recreate. If anything in a slide image looks like a logo, brand mark, monogram, or stylized identifier, do NOT draw it in SVG (approximations look off and bloat the output). Two options: (a) brand name is readable as text → styled text matching the weight/colour you can read; (b) otherwise → a styled placeholder <div> with a short label (the brand name if readable, else "Logo"). The user swaps it post-generation.`,
