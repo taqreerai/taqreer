@@ -21,6 +21,10 @@ const MAX_EDGE = 1920;
 // of full-size clip-art and the export gave up waiting for it (prod 2026-10-22).
 const MIN_EDGE = 640;
 const JPEG_QUALITY = 85;
+// An animated GIF (a waving flag) is stored as the original file so it keeps
+// playing; re-encoding keeps only its first frame. Not when the slide crops or
+// flips it (that needs re-encoding) or it is bigger than this.
+const MAX_ANIMATED_BYTES = 2 * 1024 * 1024;
 
 export type PptxAsset = {
   assetId: string; // "s07-a1": slide 7 (1-based), first asset on it
@@ -33,7 +37,15 @@ export type PptxAsset = {
   rotationDeg: number;
   altText: string | null;
   file:
-    | { kind: "image"; bytes: Buffer; contentType: "image/jpeg" | "image/png"; width: number; height: number }
+    | {
+        kind: "image";
+        bytes: Buffer;
+        contentType: "image/jpeg" | "image/png" | "image/gif";
+        width: number;
+        height: number;
+        // An animated GIF stored as the original file (it plays in the viewer).
+        animated?: boolean;
+      }
     | { kind: "needsPageCrop" };
 };
 
@@ -70,6 +82,16 @@ export async function buildPptxAssets(
     }
     try {
       const media = Buffer.from(await zip.files[p.mediaPath].async("uint8array"));
+      if (/\.gif$/i.test(p.mediaPath) && !p.srcRect && !p.flipH && !p.flipV && media.length <= MAX_ANIMATED_BYTES) {
+        const gif = await sharp(media, { animated: true, failOn: "none" }).metadata();
+        if ((gif.pages ?? 1) > 1 && gif.width && gif.pageHeight) {
+          out.push({
+            ...base,
+            file: { kind: "image", bytes: media, contentType: "image/gif", width: gif.width, height: gif.pageHeight, animated: true },
+          });
+          continue;
+        }
+      }
       // .rotate() with no argument applies EXIF orientation (phone photos).
       let img = sharp(media, { failOn: "none" }).rotate();
       const meta = await sharp(await img.toBuffer()).metadata();

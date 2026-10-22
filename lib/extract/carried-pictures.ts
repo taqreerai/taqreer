@@ -55,6 +55,8 @@ export type CarriedPicture = {
   // matched to the right picture). lib/extract/rework-pictures.ts.
   swap?: boolean;
   shows?: string;
+  // An animated GIF, stored as the original file so it plays.
+  animated?: boolean;
   aspect: number; // width / height on the original slide
   altText: string | null;
 };
@@ -132,7 +134,13 @@ export async function prepareCarriedPictures(opts: {
     if (a.file.kind !== "image" || a.cls !== "content") continue;
     // Key on the ORIGINAL bytes: the same picture on several slides is one picture.
     mediaKeys.set(a.assetId, createHash("sha1").update(a.file.bytes).digest("hex"));
-    const r = await analyzeAndEnhance(a.file);
+    // An animated GIF is kept exactly as it is (a clean-up would flatten it).
+    const file = a.file;
+    if (file.contentType === "image/gif") {
+      kinds.set(a.assetId, "graphic");
+      continue;
+    }
+    const r = await analyzeAndEnhance({ ...file, contentType: file.contentType });
     kinds.set(a.assetId, r.kind);
     badness.set(a.assetId, r.badness);
     if (r.enhanced) {
@@ -227,7 +235,9 @@ export async function prepareCarriedPictures(opts: {
       slideIndex: a.slideIndex,
       cls: backdropIds.has(a.assetId) ? ("backdrop" as const) : a.cls,
       ...(kinds.has(a.assetId) ? { kind: kinds.get(a.assetId) } : {}),
-      ...(tags.get(mediaKeys.get(a.assetId) ?? "")?.swap ? { swap: true } : {}),
+      // An animated picture is never swapped: a generated image cannot move.
+      ...(tags.get(mediaKeys.get(a.assetId) ?? "")?.swap && !(a.file.kind === "image" && a.file.animated) ? { swap: true } : {}),
+      ...(a.file.kind === "image" && a.file.animated ? { animated: true } : {}),
       ...(tags.get(mediaKeys.get(a.assetId) ?? "")?.shows ? { shows: tags.get(mediaKeys.get(a.assetId) ?? "")!.shows! } : {}),
       box: { x: round3(a.box.x), y: round3(a.box.y), w: round3(a.box.w), h: round3(a.box.h) },
       // The PICTURE's own proportions (after the slide's crop), not the shape's:

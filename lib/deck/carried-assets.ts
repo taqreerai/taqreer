@@ -160,6 +160,8 @@ export type CarriedPictureRef = {
   // the picture shows (labels are matched to pictures by it).
   swap?: boolean;
   shows?: string;
+  // An animated GIF: shown whole as a picture, never a background or replaced.
+  animated?: boolean;
   aspect: number;
   altText: string | null;
 };
@@ -264,7 +266,7 @@ export function carriedSlideBlock(
           const where = p.box
             ? `${kind}; filled ${Math.round(Math.min(1, p.box.w) * 100)}% x ${Math.round(Math.min(1, p.box.h) * 100)}% of the source slide (importance hint, place it freely)`
             : kind;
-          return `<img data-asset="${p.assetId}" src="/api/assets/${projectId}/${p.assetId}" alt="${(p.altText ?? "").replace(/["<>&]/g, "")}">  aspect ${p.aspect} (e.g. ${w}x${Math.round(w / p.aspect)}px)${p.cls === "small" ? "  small: icon / logo / badge" : where}${p.shows ? `  shows: "${p.shows.replace(/["<>&]/g, "")}"` : ""}${p.swap ? "  SWAPPABLE: generic clip-art (free redesign: may be left out or replaced, see FREE REDESIGN)" : ""}`;
+          return `<img data-asset="${p.assetId}" src="/api/assets/${projectId}/${p.assetId}" alt="${(p.altText ?? "").replace(/["<>&]/g, "")}">  aspect ${p.aspect} (e.g. ${w}x${Math.round(w / p.aspect)}px)${p.cls === "small" ? "  small: icon / logo / badge" : where}${p.shows ? `  shows: "${p.shows.replace(/["<>&]/g, "")}"` : ""}${p.animated ? "  ANIMATED: a moving picture; show it whole as a picture (never a background, never cropped, never replaced by a generated image)" : ""}${p.swap ? "  SWAPPABLE: generic clip-art (free redesign: may be left out or replaced, see FREE REDESIGN)" : ""}`;
         })
         .join("\n") +
       "\n\n";

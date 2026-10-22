@@ -62,7 +62,7 @@ export async function uploadSourceAsset(opts: {
   projectId: string;
   assetId: string;
   bytes: Buffer;
-  contentType: "image/png" | "image/jpeg" | "image/webp" | "image/svg+xml";
+  contentType: "image/png" | "image/jpeg" | "image/webp" | "image/svg+xml" | "image/gif";
 }): Promise<void> {
   const { error } = await getSupabaseAdmin()
     .storage.from(SOURCE_ASSETS_BUCKET)
