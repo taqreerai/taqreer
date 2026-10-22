@@ -23,8 +23,7 @@ export type PictureTag = { swap: boolean; shows: string | null };
 /** mediaKey -> whether it may be swapped, and what it shows. */
 export async function tagReworkPictures(
   // context: the words on the slide the picture sits on, so a picture an
-  // exercise asks about (appliances to name) reads as content, not clip-art,
-  // and its description uses the slide's own words and language.
+  // exercise asks about (appliances to name) reads as content, not clip-art.
   pictures: readonly { mediaKey: string; bytes: Buffer; context?: string }[],
 ): Promise<Map<string, PictureTag>> {
   const out = new Map<string, PictureTag>();
@@ -52,8 +51,8 @@ export async function tagReworkPictures(
         `- swap: generic clip-art, a cartoon or mascot, a stock icon or sticker, a decorative frame, border, texture or ornament, that only decorates and could be replaced by a different picture of the same idea\n` +
         `When unsure, answer keep.\n` +
         `Also say whether the image has any written words on it (any language, any size, including a title or a saying), ` +
-        `and what it shows in at most 6 words, in the language of its slide's words (English when there are none). ` +
-        `Name the object the way the slide would (one object: its name; several objects in one picture: "group: " and their names; a blank or texture: "blank").\n` +
+        `and what it shows in at most 6 plain English words ` +
+        `(one object: its name; several objects in one picture: "group: " and their names; a blank or texture: "blank").\n` +
         `Reply with one line per image, exactly: <number>|<words: yes or no>|<keep or swap>|<what it shows>`,
     });
     const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
