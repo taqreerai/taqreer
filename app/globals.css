@@ -2823,7 +2823,7 @@ body:has(.tq-support-toolbar) .support-fab-anchor {
 /* Multiline variant: let a sentence-length label wrap into a small
    paragraph instead of one huge nowrap line (Tooltip `multiline` prop). */
 .sidebar-tooltip.is-multiline {
-  white-space: normal;
+  white-space: pre-line; /* keeps a label's own line breaks */
   max-width: 280px;
   text-align: start;
   line-height: 1.5;

@@ -46,7 +46,7 @@ import {
 import { normalizePlan } from "@/lib/plan";
 import { mintTemplateDesignFile } from "@/lib/template/mint-design";
 import { pickAutoStyle } from "@/lib/create/auto-style";
-import { uploadedSourceText } from "@/lib/create/source-sample";
+import { uploadedReworkMode, uploadedSourceText } from "@/lib/create/source-sample";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
 import { REFERRAL_COOKIE } from "@/lib/referral-code";
 import { clientIp, rateLimited } from "@/lib/api/rate-limit";
@@ -263,9 +263,11 @@ type CreateProjectPayload = {
   // Enhance "Refresh my photos" (opt-in): deck-generate re-makes a capped set
   // of the most important generic photos (lib/extract/photo-refresh.ts).
   refreshPhotos?: boolean;
-  // Enhance "Redesign freely" (lib/extract/rework-score.ts): keep the essence,
-  // not the exact words; merge / split slides up to the source count.
-  reworkDeck?: boolean;
+  // Enhance "How much to change": "keep" = the classic 1:1 redesign, "rework" =
+  // keep the essence and redesign freely (merge / split up to the source
+  // count), "auto" = what the file's analysis recorded (resolved below).
+  // Absent (an older page) = keep.
+  changeLevel?: "auto" | "keep" | "rework";
   slideCount?: number | null;
   quality?: Quality | null;
   // User-picked on /create/content (2026-05-20). Drives Project.language
@@ -1035,7 +1037,13 @@ export async function POST(request: Request) {
       ? resolvedSlideCount
       : preflight.holdSlides;
 
-  const reworkDeck = payload.reworkDeck === true && projectType === "enhance";
+  const reworkDeck =
+    projectType === "enhance" &&
+    validatedSource?.kind === "enhance" &&
+    (payload.changeLevel === "rework" ||
+      (payload.changeLevel === "auto" &&
+        typeof validatedSource.sourcePath === "string" &&
+        (await uploadedReworkMode(user.id, validatedSource.sourcePath)) === "rework"));
 
   // Teaser plan: computed above, before the preflight (isTeaser,
   // teaserPlannedTotal, teaserLockedCount).
@@ -1135,7 +1143,8 @@ export async function POST(request: Request) {
     // generated-image boxes. OMITTED when off, so a normal deck's brief
     // (and the prompt built from it) stays byte-for-byte unchanged.
     ...(payload.imagesMode === true ? { imagesMode: true } : {}),
-    ...(payload.refreshPhotos === true && projectType === "enhance" ? { refreshPhotos: true } : {}),
+    // Refresh my photos belongs to Keep exact (a free redesign swaps on its own).
+    ...(payload.refreshPhotos === true && projectType === "enhance" && !reworkDeck ? { refreshPhotos: true } : {}),
     ...(reworkDeck ? { reworkDeck: true } : {}),
     // Regional people descriptor for generated lifestyle images (only when
     // resolvable). buildUserMessage turns this into the cast directive.

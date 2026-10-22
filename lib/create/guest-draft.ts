@@ -75,6 +75,8 @@ export type EnhanceGuestSettings = {
   uploadedFonts: { name: string; weights: number[] }[];
   imagesMode: boolean;
   refreshPhotos?: boolean;
+  // Enhance "How much to change" (auto is the default and is not stored).
+  changeLevel?: "auto" | "keep" | "rework";
 };
 
 // /mimic's setup (content file -> `content`, reference deck -> `design`).

@@ -35,7 +35,7 @@
 
 import { STYLE_REQUIRES_IMAGES } from "@/components/create/OutputCards";
 import { AIImagesPanel } from "@/components/brand/AIImagesPanel";
-import { ReworkModePanel } from "@/components/brand/ReworkModePanel";
+import { ChangeLevelPanel, type ChangeLevel } from "@/components/brand/ChangeLevelPanel";
 import type { ReworkDecision } from "@/lib/extract/rework-score";
 import { PhotoRefreshPanel } from "@/components/brand/PhotoRefreshPanel";
 import { isImagesLocked } from "@/lib/images/images-gating";
@@ -392,10 +392,12 @@ export default function EnhanceContentPage() {
   const [imagesMode, setImagesMode] = useState<boolean>(true);
   // "Refresh my photos" (default off = keep every original photo).
   const [refreshPhotos, setRefreshPhotos] = useState(false);
-  // "Redesign freely": null follows the file's analysis (extracted.rework),
-  // a boolean is the user's own pick for this file.
-  const [reworkChoice, setReworkChoice] = useState<boolean | null>(null);
-  const reworkOn = reworkChoice ?? extracted?.rework?.mode === "rework";
+  // "How much to change": Auto follows the file's analysis, which the server
+  // applies at generation (a visitor's file is read only after sign-in).
+  // Refresh my photos belongs to Keep exact (Redesign freely refreshes on its own).
+  const [changeLevel, setChangeLevel] = useState<ChangeLevel>("auto");
+  const keepExact =
+    changeLevel === "keep" || (changeLevel === "auto" && extracted?.rework?.mode === "preserve");
   // Region-limited free accounts can't use generated images (lib/images/images-
   // gating.ts): the default-ON state must not reach the server for them, or the
   // run would be refused with images_locked. Everyone else keeps the toggle.
@@ -557,7 +559,6 @@ export default function EnhanceContentPage() {
     pollCancelledRef.current = false;
     setFile(next);
     setExtracted(null);
-    setReworkChoice(null);
     // A visitor's file waits in the browser (analysed after sign-in), so it
     // is "ready" right away.
     setStage(guest ? "ready" : "extracting");
@@ -571,7 +572,6 @@ export default function EnhanceContentPage() {
     pollCancelledRef.current = true;
     setFile(null);
     setExtracted(null);
-    setReworkChoice(null);
     setStage("idle");
     setPrepPercent(0);
     setPrepStage(null);
@@ -799,6 +799,7 @@ export default function EnhanceContentPage() {
     uploadedFonts: guestFont.uploadedFonts,
     imagesMode,
     refreshPhotos,
+    changeLevel,
   };
   const guestSettingsJson = JSON.stringify(guestSettings);
   // A visitor who comes back still signed out gets their draft back too
@@ -873,6 +874,7 @@ export default function EnhanceContentPage() {
       }
       setImagesMode(!!d.imagesMode);
       setRefreshPhotos(!!d.refreshPhotos);
+      if (d.changeLevel === "keep" || d.changeLevel === "rework") setChangeLevel(d.changeLevel);
       // Starts the upload + analysis when signed in (a visitor's file waits).
       if (draft.files.content) validateAndSetFile(draft.files.content);
       setStep(mode === "generate" ? ENHANCE_LAST_STEP : Math.min(ENHANCE_LAST_STEP, Math.max(0, d.step)));
@@ -1043,8 +1045,8 @@ export default function EnhanceContentPage() {
           language: extracted.language ?? "ar",
           saveBrandKit,
           imagesMode: imagesOn,
-          ...(refreshPhotos ? { refreshPhotos: true } : {}),
-          ...(reworkOn ? { reworkDeck: true } : {}),
+          ...(refreshPhotos && keepExact ? { refreshPhotos: true } : {}),
+          changeLevel,
           slideCount: resolvedSlideCount,
           quality,
           ...(templateId ? { templateId } : {}),
@@ -1442,18 +1444,18 @@ export default function EnhanceContentPage() {
               />
             </div>
             <div className="border-t border-[var(--tq-border-hairline)] pt-4 stage:pt-3 stage-tight:pt-2">
-              <PhotoRefreshPanel
-                value={refreshPhotos}
-                onChange={setRefreshPhotos}
+              <ChangeLevelPanel
+                value={changeLevel}
+                onChange={setChangeLevel}
+                decision={extracted?.rework ?? null}
                 disabled={stage === "submitting"}
               />
             </div>
-            {extracted?.rework ? (
+            {keepExact ? (
               <div className="border-t border-[var(--tq-border-hairline)] pt-4 stage:pt-3 stage-tight:pt-2">
-                <ReworkModePanel
-                  value={reworkOn}
-                  onChange={setReworkChoice}
-                  reason={extracted.rework.reason}
+                <PhotoRefreshPanel
+                  value={refreshPhotos}
+                  onChange={setRefreshPhotos}
                   disabled={stage === "submitting"}
                 />
               </div>

@@ -35,3 +35,31 @@ export async function uploadedSourceText(
     return "";
   }
 }
+
+/**
+ * Enhance "Auto" change level: the Rework / Preserve decision the extract job
+ * recorded for this user's uploaded source (lib/extract/rework-score.ts).
+ * Null when the job is missing or older than the field.
+ */
+export async function uploadedReworkMode(
+  supabaseUserId: string,
+  sourcePath: string,
+): Promise<"rework" | "preserve" | null> {
+  try {
+    const job = await prisma.job.findFirst({
+      where: {
+        type: "source-extract",
+        status: "completed",
+        createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+        inputJson: { path: ["supabaseUserId"], equals: supabaseUserId },
+        outputJson: { path: ["sourcePath"], equals: sourcePath },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { outputJson: true },
+    });
+    const mode = (job?.outputJson as { rework?: { mode?: unknown } } | null)?.rework?.mode;
+    return mode === "rework" || mode === "preserve" ? mode : null;
+  } catch {
+    return null;
+  }
+}
