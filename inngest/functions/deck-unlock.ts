@@ -52,6 +52,7 @@ import {
 import { frameKindFor } from "@/lib/deck/frame-kind";
 import {
   CARRIED_PICTURES_RULE,
+  reworkPicturesRule,
   CARRIED_TABLES_RULE,
   CARRIED_CHARTS_RULE,
   carriedSlideBlock,
@@ -233,9 +234,11 @@ export const deckUnlock = inngest.createFunction(
       // Enhance redesign text: every source slide's exact words live on the
       // generation job's brief (the durable home; the raw upload is purged).
       let redesignSources: { position: number; text: string }[] = [];
+      let rework = false;
       for (const j of jobs) {
         const src = (j.inputJson as { brief?: { source?: { kind?: string; textPerSlide?: unknown } } } | null)?.brief?.source;
         if (src?.kind !== "enhance" || !Array.isArray(src.textPerSlide)) continue;
+        rework = (j.inputJson as { brief?: { reworkDeck?: boolean } } | null)?.brief?.reworkDeck === true;
         const texts = src.textPerSlide as unknown[];
         redesignSources = [];
         for (let idx = visibleCount; idx < total; idx++) {
@@ -252,9 +255,10 @@ export const deckUnlock = inngest.createFunction(
           pictures: (c.pictures ?? []).filter((x) => inTail(x.slideIndex)),
           tables: (c.tables ?? []).filter((x) => inTail(x.slideIndex)),
           redesignSources,
+          rework,
         };
       }
-      return { pictures: [] as CarriedPictureRef[], tables: [] as CarriedTableRef[], redesignSources };
+      return { pictures: [] as CarriedPictureRef[], tables: [] as CarriedTableRef[], redesignSources, rework };
     });
     // Enhance teaser: the locked source pages kept at generation (PDF uploads
     // have no per-slide text, so these pages ARE the content).
@@ -291,6 +295,7 @@ export const deckUnlock = inngest.createFunction(
         ...(carried.tables.length > 0 ? [CARRIED_TABLES_RULE] : []),
         ...(carried.tables.some((x) => "kind" in x.spec) ? [CARRIED_CHARTS_RULE] : []),
         ...(carried.pictures.length > 0 ? [CARRIED_PICTURES_RULE] : []),
+        ...(carried.rework && carried.pictures.some((x) => x.swap) ? [reworkPicturesRule(false)] : []),
         "",
         ...blocks,
       ].join("\n");
@@ -336,7 +341,7 @@ export const deckUnlock = inngest.createFunction(
           brief: briefText,
           existingSlides,
           // Enhance: redesign each locked source slide with its exact words.
-          ...(carried.redesignSources.length > 0 ? { redesignSources: carried.redesignSources } : {}),
+          ...(carried.redesignSources.length > 0 ? { redesignSources: carried.redesignSources, rework: carried.rework } : {}),
         },
         sourceDeckCss,
       );

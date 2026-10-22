@@ -567,6 +567,8 @@ export type FrameContinuationInput = {
   // position N redesigns SOURCE slide N with its exact words, instead of
   // inventing a continuation. Absent = the create / social continuation.
   redesignSources?: { position: number; text: string }[];
+  // "Redesign freely" (rework) decks: keep the essence, not the exact words.
+  rework?: boolean;
 };
 
 export function frameContinuationUserMessage(
@@ -627,6 +629,12 @@ export const ENHANCE_LAYOUT_MENU: readonly string[] = [
 // file, so the locked slides are NOT a story to continue. Position N redesigns
 // source slide N with that slide's exact words (the same fidelity contract the
 // Enhance generation follows); nothing is added to "complete an arc".
+const EXACT_FIDELITY_LINE = `- CONTENT FIDELITY (hard limits): each slide's words come from its source slide's exact text: keep the wording, the facts and their order (fix only an obvious typo). Never invent: no new headline, subtitle, statistic, example, summary, thank-you, call-to-action or closing that is not on that source slide, and never add an eyebrow, kicker, tag or section label whose words are not on it (a plain step or page number is fine). Never drop real information. Keep the slide's own language and script.`;
+
+// The user chose "Redesign freely" (inngest deck-generate reworkJobLines): the
+// unlocked tail keeps the same freedom as the slides already built.
+const REWORK_FIDELITY_LINE = `- ESSENCE (hard limits, free redesign): every fact, term, definition, rule, example, question, exercise item, answer choice, blank and number on the source slide survives with the same meaning; you may condense, reorder and rephrase for clarity. Keep word for word: key terms, names, quotes, verses, formulas, numbers and exercise items. Never invent a fact, number, example or claim that is not on that source slide. A lesson-info strip or header repeated on most slides is template chrome: leave it out. Keep the slide's own language and script.`;
+
 function frameRedesignContinuationMessage(
   input: FrameContinuationInput,
   sources: { position: number; text: string }[],
@@ -656,7 +664,7 @@ ${deckCss}
 
 RULES:
 - Reply with EXACTLY ${input.lockedCount} <section> elements in the generation contract, in ORDER (position ${firstNew} first, ${input.total} last): position N is the redesign of SOURCE SLIDE N above. Each section declares its data attributes (data-label, data-role, data-bg, and any bg-css / bg-prompt / bg-scrim per the system rules) and contains exactly one <div class="well"> authored in PURE FLOW. No <style> block, no data-revises, no prose, no fences - the FIRST character of your reply is the < of the first section.
-- CONTENT FIDELITY (hard limits): each slide's words come from its source slide's exact text: keep the wording, the facts and their order (fix only an obvious typo). Never invent: no new headline, subtitle, statistic, example, summary, thank-you, call-to-action or closing that is not on that source slide, and never add an eyebrow, kicker, tag or section label whose words are not on it (a plain step or page number is fine). Never drop real information. Keep the slide's own language and script.
+${input.rework ? REWORK_FIDELITY_LINE : EXACT_FIDELITY_LINE}
 - The deck ends where the source ends: a slide is a closing only if its source slide is one. Do not turn the last slide into a recap or a thank-you.
 - Match the established design system: reuse the deck stylesheet's classes, the same headline/type treatment, and the same chrome the finished slides use, so the whole deck reads as one designer on one grid. That locks the look, not the layout:
 

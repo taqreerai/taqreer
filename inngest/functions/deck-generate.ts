@@ -1,3 +1,4 @@
+import { missingSourceNumbers } from "@/lib/deck/essence-check";
 import { imageCreditsForPlan } from "@/lib/images/images-gating";
 import Anthropic from "@anthropic-ai/sdk";
 import { toSdkThinking } from "@/lib/anthropic/model-thinking";
@@ -73,6 +74,7 @@ import {
 import { frameKindFor } from "@/lib/deck/frame-kind";
 import {
   CARRIED_PICTURES_RULE,
+  reworkPicturesRule,
   CARRIED_TABLES_RULE,
   CARRIED_CHARTS_RULE,
   carriedSlideBlock,
@@ -205,6 +207,26 @@ const ENHANCE_IMG_ADDENDUM = `ENHANCE IMAGES: images mode is ON for this redesig
 // brief lives in the user message (buildSourceTextDirective enhance branch); this
 // just redirects the base prompt toward it. Appended AFTER so it wins.
 const ENHANCE_TEMPLATE_ADDENDUM = `ENHANCE + TEMPLATE — the user picked a deck TEMPLATE for this redesign. Override "improve only layout, hierarchy, typography, spacing, and rhythm" and any instruction to invent your own visual system: REPRODUCE the attached DESIGN reference's visual language (layout system, type hierarchy, spacing, shapes, grids, decorative motifs) on every slide, recoloured to the injected brand variables. Everything else in ENHANCE MODE still holds: exactly one redesigned slide per source slide, same order, each slide's content from its own exact-text block, never the template's words.`;
+
+// "Redesign freely" (owner, 2026-10-22): replaces the 1:1 job and the exact-
+// content rules of the Enhance prompt. The essence survives; the design, the
+// wording and (when the count is a ceiling) the slide boundaries may change.
+function reworkJobLines(slideCount: number, ceiling: boolean): string[] {
+  return [
+    `YOUR JOB: FREE REDESIGN. The user chose "Redesign freely". Rebuild this deck as one good-looking, consistent deck that keeps the ESSENCE of the source. Content first, design second: a beautiful slide that loses content is a failure.`,
+    ceiling
+      ? `  • Slides: AT MOST ${slideCount}, following the source's order of ideas. Merge consecutive thin slides that serve one idea; split a crowded slide in two when that reads better; leave out a source slide that holds only decoration (no words, no content picture). Never reorder ideas.`
+      : `  • Produce EXACTLY ${slideCount} slides, one per source slide, in the SAME order (the count is fixed for this deck); inside each slide you are free as described below.`,
+    `  • Re-execute typography, hierarchy, whitespace, layout, and visual rhythm to editorial quality; restructure each slide's content freely (cards, steps, tables, comparisons) when that explains it better.`,
+    ``,
+    `ESSENCE (hard limits):`,
+    `  • The paired text blocks are the source of the content; the images show the old visuals only.`,
+    `  • Every fact, term, definition, rule, example, question, exercise item, answer choice, blank and number in the source must survive somewhere in the deck with the same meaning. You may condense, merge, reorder within a slide, and rephrase for clarity.`,
+    `  • Keep word for word: key terms, names, quotes, verses, formulas, numbers, and every exercise item (a question, its choices and its blanks stay usable as an exercise).`,
+    `  • Never invent: no fact, number, example or claim that is not in the source.`,
+    `  • Template chrome is not content: a lesson-info strip or header table repeated on most slides, page furniture and decorative frames. Show that information once (on the opening slide) instead of on every slide.`,
+  ];
+}
 
 const ENHANCE_HTML_ADDENDUM = `ENHANCE MODE — this is a REDESIGN of an EXISTING deck, not a fresh original. Override "Design a complete, ORIGINAL slide deck — your own visual system, fresh for this brief" and "VARY the composition slide to slide" above: follow the per-slide redesign brief in the user message instead. PRESERVE each source slide's CONTENT and the brand's VISUAL IDENTITY (palette, fonts, logo); improve only layout, hierarchy, typography, spacing, and rhythm. LOCK one consistent chrome + type system across every slide — a single coherent redesign, not a set of unrelated layouts. The lock covers chrome, type, colour and spacing, NOT the composition: each slide keeps the composition ROLE of its own source slide (see COMPOSITION in the user message), so the deck does not collapse into one repeated card layout. (Output format is unchanged: one \`<style>\` then the \`<section>\` slides.)`;
 
@@ -1532,12 +1554,19 @@ function buildSourceTextDirective(
     const imageCount = enhanceImages?.fileIds.length ?? 0;
     const slideCount = Math.max(imageCount, enhanceImages?.textPerSlide.length ?? 0);
     const { colors } = readBriefBrandColors(event.brief);
+    // "Redesign freely" (lib/extract/rework-score.ts): the essence, not the
+    // exact words. Merging is allowed only when the count is a ceiling (a free
+    // teaser keeps 1:1 so its locked tail lines up with the source pages).
+    const reworkBrief = event.brief as { reworkDeck?: boolean; slideCountMode?: string } | null;
+    const rework = reworkBrief?.reworkDeck === true;
+    const reworkCeiling = rework && reworkBrief?.slideCountMode === "ceiling";
     lines.push(
       `SOURCE — Enhance flow (per-slide redesign)`,
       imageCount < slideCount
         ? `${slideCount} source slides are attached BEFORE this text, IN ORDER. Slides 1-${imageCount} each come as the rendered ORIGINAL image IMMEDIATELY FOLLOWED by a text block holding that slide's EXACT words; slides ${imageCount + 1}-${slideCount} come as their text block only (no image). The image shows you the visual to improve; the text block is the authoritative content.`
         : `${slideCount} slide images are attached BEFORE this text, IN ORDER. Each image is the rendered ORIGINAL of one slide and is IMMEDIATELY FOLLOWED by a text block holding that slide's EXACT words. The image shows you the visual to improve; the paired text block is the authoritative content.`,
       ``,
+      ...(rework ? reworkJobLines(slideCount, reworkCeiling) : [
       `YOUR JOB — redesign each slide to editorial quality:`,
       `  • Produce EXACTLY ${slideCount} slides — one per source slide, in the SAME order. Do not merge, split, drop, add, or reorder.`,
       `  • Your slide 1 IS source slide 1 and your slide ${slideCount} IS source slide ${slideCount}, whatever they contain: never add a cover or a closing slide of your own, and never move the source's title slide to the front (if the title slide is source slide 3, it stays slide 3; give it the cover treatment there).`,
@@ -1547,6 +1576,7 @@ function buildSourceTextDirective(
       `  • Each slide's paired exact-text block is the authoritative source for that slide's facts — read the words from it, not off the image (avoids OCR drift); the image is for LAYOUT + VISUAL identity only.`,
       `  • Never invent — every number, name, claim, and fact on a slide must come from that source text; do not add statistics, examples, or detail that isn't there.`,
       `  • Never drop real information — every distinct fact in the source must survive somewhere in the deck; you may relocate, compress, or reword it, but not delete it.`,
+      ]),
       // 2026-10-15: test redesigns added eyebrows that were not in the source
       // ("Annual report", "BUDGET"). The design prompt invites small labels,
       // so the redesign rule has to say where their words come from.
@@ -1589,6 +1619,7 @@ function buildSourceTextDirective(
       ...((enhanceImages?.pictures?.length ?? 0) > 0
         ? [
             CARRIED_PICTURES_RULE,
+            ...(rework && enhanceImages?.pictures?.some((p) => p.swap) ? [reworkPicturesRule(isImagesMode(event))] : []),
           ]
         : []),
       `  • LOGOS / BRAND MARKS — never recreate. If anything in a slide image looks like a logo, brand mark, monogram, or stylized identifier, do NOT draw it in SVG (approximations look off and bloat the output). Two options: (a) brand name is readable as text → styled text matching the weight/colour you can read; (b) otherwise → a styled placeholder <div> with a short label (the brand name if readable, else "Logo"). The user swaps it post-generation.`,
@@ -2262,7 +2293,8 @@ export const deckGenerate = inngest.createFunction(
                   palette: Array.isArray(briefForRefresh.brand?.colors) ? briefForRefresh.brand.colors : [],
                 }
               : null;
-          const result = await prepareCarriedPictures({ projectId, sourcePath, sourceMime, refresh });
+          const rework = (data.brief as { reworkDeck?: boolean } | null)?.reworkDeck === true;
+          const result = await prepareCarriedPictures({ projectId, sourcePath, sourceMime, refresh, rework });
           // Durable copy for the free-plan UNLOCK, which runs later (often after
           // the 24h source purge) and authors the locked tail: it reads which
           // picture / table belongs to which slide from here. Job.inputJson is
@@ -2310,7 +2342,8 @@ export const deckGenerate = inngest.createFunction(
         // also charges nothing for images. Re-applied on every replay (the
         // function restarts with the original brief); the logs live in the step.
         const brief = data.brief as { imagesMode?: boolean } | null;
-        if (carried.hasContentImages && brief?.imagesMode === true) {
+        // A free redesign keeps images mode: swapped clip-art becomes generated images.
+        if (carried.hasContentImages && brief?.imagesMode === true && !(data.brief as { reworkDeck?: boolean } | null)?.reworkDeck) {
           brief.imagesMode = false;
         }
       }
@@ -3176,6 +3209,19 @@ export const deckGenerate = inngest.createFunction(
           cacheRead: usage.cacheReadTokens,
           stop: message.stop_reason,
         });
+
+        // Free redesign: a source number missing from the deck is lost content
+        // (lib/deck/essence-check.ts). Logged for tuning; never fails the run.
+        if ((data.brief as { reworkDeck?: boolean } | null)?.reworkDeck === true && enhanceImages) {
+          const missing = missingSourceNumbers(enhanceImages.textPerSlide, slides.map((sl) => sl.html ?? ""));
+          logger.info("enhance_rework_essence", {
+            projectId,
+            sourceSlides: enhanceImages.textPerSlide.length,
+            slides: slides.length,
+            missingNumbers: missing.slice(0, 40),
+            missingCount: missing.length,
+          });
+        }
 
         // ── Gated raw dump (DECK_DEBUG=1) — offline inspection. Never throws. ──
         if (process.env.DECK_DEBUG === "1") {

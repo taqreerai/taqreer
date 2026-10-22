@@ -35,6 +35,8 @@
 
 import { STYLE_REQUIRES_IMAGES } from "@/components/create/OutputCards";
 import { AIImagesPanel } from "@/components/brand/AIImagesPanel";
+import { ReworkModePanel } from "@/components/brand/ReworkModePanel";
+import type { ReworkDecision } from "@/lib/extract/rework-score";
 import { PhotoRefreshPanel } from "@/components/brand/PhotoRefreshPanel";
 import { isImagesLocked } from "@/lib/images/images-gating";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -139,6 +141,8 @@ type ExtractCompletedResponse = {
     textPerSlide: string[];
     sourcePath: string;
     sourceMime: string;
+    // Rework or Preserve, preselected below (absent on older extractions).
+    rework?: ReworkDecision;
   };
   fileName?: string;
   flowKind?: string;
@@ -388,6 +392,10 @@ export default function EnhanceContentPage() {
   const [imagesMode, setImagesMode] = useState<boolean>(true);
   // "Refresh my photos" (default off = keep every original photo).
   const [refreshPhotos, setRefreshPhotos] = useState(false);
+  // "Redesign freely": null follows the file's analysis (extracted.rework),
+  // a boolean is the user's own pick for this file.
+  const [reworkChoice, setReworkChoice] = useState<boolean | null>(null);
+  const reworkOn = reworkChoice ?? extracted?.rework?.mode === "rework";
   // Region-limited free accounts can't use generated images (lib/images/images-
   // gating.ts): the default-ON state must not reach the server for them, or the
   // run would be refused with images_locked. Everyone else keeps the toggle.
@@ -549,6 +557,7 @@ export default function EnhanceContentPage() {
     pollCancelledRef.current = false;
     setFile(next);
     setExtracted(null);
+    setReworkChoice(null);
     // A visitor's file waits in the browser (analysed after sign-in), so it
     // is "ready" right away.
     setStage(guest ? "ready" : "extracting");
@@ -562,6 +571,7 @@ export default function EnhanceContentPage() {
     pollCancelledRef.current = true;
     setFile(null);
     setExtracted(null);
+    setReworkChoice(null);
     setStage("idle");
     setPrepPercent(0);
     setPrepStage(null);
@@ -1034,6 +1044,7 @@ export default function EnhanceContentPage() {
           saveBrandKit,
           imagesMode: imagesOn,
           ...(refreshPhotos ? { refreshPhotos: true } : {}),
+          ...(reworkOn ? { reworkDeck: true } : {}),
           slideCount: resolvedSlideCount,
           quality,
           ...(templateId ? { templateId } : {}),
@@ -1437,6 +1448,16 @@ export default function EnhanceContentPage() {
                 disabled={stage === "submitting"}
               />
             </div>
+            {extracted?.rework ? (
+              <div className="border-t border-[var(--tq-border-hairline)] pt-4 stage:pt-3 stage-tight:pt-2">
+                <ReworkModePanel
+                  value={reworkOn}
+                  onChange={setReworkChoice}
+                  reason={extracted.rework.reason}
+                  disabled={stage === "submitting"}
+                />
+              </div>
+            ) : null}
           </WizardCard>
         </SplitStep>
 

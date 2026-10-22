@@ -38,6 +38,7 @@
 // projectId is nullable, which fits: extraction runs BEFORE the
 // project exists.
 
+import type { ReworkDecision } from "@/lib/extract/rework-score";
 import type { Prisma } from "@prisma/client";
 import { inngest } from "@/inngest/client";
 import { NonRetriableError } from "inngest";
@@ -104,6 +105,8 @@ type ExtractCompletedOutput = {
    * (older in-flight jobs) → the client keeps the vision-block path.
    */
   fullText?: string;
+  // Rework or Preserve, preselected on /enhance (lib/extract/rework-score.ts).
+  rework?: ReworkDecision;
   /**
    * Supabase staging object key + MIME of the ORIGINAL upload.
    * deck-generate re-fetches it to rasterize the per-slide PNGs at
@@ -268,6 +271,7 @@ async function runExtractionPipeline(args: {
     language: ext.language,
     textPerSlide: ext.textPerSlide,
     fullText: ext.fullText,
+    rework: ext.rework,
     // Re-fetch keys for generation-time rasterization (transient).
     sourcePath: fileBucketPath,
     sourceMime: mime,

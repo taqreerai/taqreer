@@ -9,6 +9,7 @@
 // purged after 24h by source-files-cleanup). PDF uploads go through
 // lib/extract/pdf-visuals.ts (phase 2); a PDF has no native tables here yet.
 
+import { findSwappablePictures } from "@/lib/extract/rework-pictures";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { extractPptxVisuals, classifyPptxPictures } from "@/lib/extract/pptx-visuals";
 import { buildPptxAssets } from "@/lib/extract/pptx-asset-crops";
@@ -48,6 +49,9 @@ export type CarriedPicture = {
   // Photo refresh: this picture is a NEW photo replacing that original asset
   // (kept stored; the studio's "Restore original" puts it back).
   originalAssetId?: string;
+  // Rework decks: generic clip-art / decoration the redesign may leave out or
+  // replace with a generated image (lib/extract/rework-pictures.ts).
+  swap?: boolean;
   aspect: number; // width / height on the original slide
   altText: string | null;
 };
@@ -84,6 +88,8 @@ export async function prepareCarriedPictures(opts: {
   sourceMime: string;
   // "Refresh my photos" (opt-in): see lib/extract/photo-refresh.ts.
   refresh?: { slideCount: number; paid: boolean; styleHint: string; palette: readonly string[] } | null;
+  // "Redesign freely": tag the pictures that may be swapped.
+  rework?: boolean;
 }): Promise<CarriedPictures> {
   if (opts.sourceMime !== PPTX_MIME && opts.sourceMime !== PDF_MIME) {
     return { hasContentImages: false, pictures: [], skipped: 0, tables: [] };
@@ -108,7 +114,7 @@ export async function prepareCarriedPictures(opts: {
     const classes = classifyPptxPictures(visuals);
     hasContentImages = [...classes.values()].includes("content");
     assets = await buildPptxAssets(buffer, visuals, classes);
-    tables = tablesOf(visuals);
+    tables = opts.rework ? withoutRepeatedHeaders(tablesOf(visuals)) : tablesOf(visuals);
   }
 
   const storable = assets.filter((a) => a.file.kind === "image");
@@ -131,6 +137,16 @@ export async function prepareCarriedPictures(opts: {
     }
   }
   const backdropIds = fullSlidePhotos(storable, kinds);
+  // Rework: once per distinct picture (same bytes on several slides = one).
+  let swapKeys = new Set<string>();
+  if (opts.rework) {
+    const byKey = new Map<string, Buffer>();
+    for (const a of storable) {
+      const key = mediaKeys.get(a.assetId);
+      if (key && a.file.kind === "image" && !byKey.has(key)) byKey.set(key, a.file.bytes);
+    }
+    swapKeys = await findSwappablePictures([...byKey].map(([mediaKey, bytes]) => ({ mediaKey, bytes })));
+  }
   for (let i = 0; i < storable.length; i += UPLOAD_PARALLEL) {
     await Promise.all(
       storable.slice(i, i + UPLOAD_PARALLEL).map((a) => {
@@ -203,6 +219,7 @@ export async function prepareCarriedPictures(opts: {
       slideIndex: a.slideIndex,
       cls: backdropIds.has(a.assetId) ? ("backdrop" as const) : a.cls,
       ...(kinds.has(a.assetId) ? { kind: kinds.get(a.assetId) } : {}),
+      ...(swapKeys.has(mediaKeys.get(a.assetId) ?? "") ? { swap: true } : {}),
       box: { x: round3(a.box.x), y: round3(a.box.y), w: round3(a.box.w), h: round3(a.box.h) },
       // The PICTURE's own proportions (after the slide's crop), not the shape's:
       // a stretched source shape would otherwise make object-fit: cover cut it.
@@ -268,6 +285,21 @@ export function fullSlidePhotos(assets: readonly PdfAsset[], kinds?: ReadonlyMap
     if (hero && area > (best.get(a.slideIndex)?.area ?? 0)) best.set(a.slideIndex, { id: a.assetId, area });
   }
   return new Set([...best.values()].map((b) => b.id));
+}
+
+// Rework decks: a table whose header row repeats on 3+ slides is a lesson-info
+// strip from the template; the redesign shows that information once instead.
+function withoutRepeatedHeaders(tables: CarriedTable[]): CarriedTable[] {
+  const header = (t: CarriedTable) => ("rows" in t.spec ? JSON.stringify(t.spec.rows[0]?.map((c) => c.text) ?? []) : null);
+  const slides = new Map<string, Set<number>>();
+  for (const t of tables) {
+    const h = header(t);
+    if (h) (slides.get(h) ?? slides.set(h, new Set()).get(h)!).add(t.slideIndex);
+  }
+  return tables.filter((t) => {
+    const h = header(t);
+    return !h || (slides.get(h)?.size ?? 0) < 3;
+  });
 }
 
 // Native tables, numbered per slide in document order.

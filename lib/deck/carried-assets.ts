@@ -156,6 +156,8 @@ export type CarriedPictureRef = {
   // screenshot). Absent on decks generated before 2026-10-20.
   kind?: "photo" | "graphic" | "document";
   originalAssetId?: string;
+  // Rework decks: generic clip-art the redesign may drop or replace.
+  swap?: boolean;
   aspect: number;
   altText: string | null;
 };
@@ -175,6 +177,16 @@ export const CARRIED_PICTURES_RULE = `  • ORIGINAL PICTURES: FIRST RULE, overr
  * Null when the cover already has a photo, backdrop or page artwork, or the
  * deck has no usable photo (graphics, documents and narrow strips never qualify).
  */
+// "Redesign freely" decks (lib/extract/rework-pictures.ts): pictures marked
+// SWAPPABLE are generic clip-art the redesign may leave out or replace.
+export function reworkPicturesRule(imagesOn: boolean): string {
+  return `  • FREE REDESIGN PICTURES: overrides "put EVERY listed picture" for entries marked SWAPPABLE only (generic clip-art and decoration). ${
+    imagesOn
+      ? "Replace a SWAPPABLE picture with a generated-image box of the same idea in the deck's single image style when the slide needs a visual, or leave it out."
+      : "Leave a SWAPPABLE picture out when it does not fit the new design; keep it when it still helps."
+  } Every picture NOT marked SWAPPABLE is content: place it as the ORIGINAL PICTURES rule says.`;
+}
+
 export function coverPhotoCandidates<T extends CarriedPictureRef>(pictures: readonly T[]): T[] {
   const onCover = pictures.filter((p) => p.slideIndex === 0);
   if (onCover.some((p) => p.cls === "page" || p.cls === "backdrop" || (p.cls === "content" && p.kind === "photo"))) {
@@ -250,7 +262,7 @@ export function carriedSlideBlock(
           const where = p.box
             ? `${kind}; filled ${Math.round(Math.min(1, p.box.w) * 100)}% x ${Math.round(Math.min(1, p.box.h) * 100)}% of the source slide (importance hint, place it freely)`
             : kind;
-          return `<img data-asset="${p.assetId}" src="/api/assets/${projectId}/${p.assetId}" alt="${(p.altText ?? "").replace(/["<>&]/g, "")}">  aspect ${p.aspect} (e.g. ${w}x${Math.round(w / p.aspect)}px)${p.cls === "small" ? "  small: icon / logo / badge" : where}`;
+          return `<img data-asset="${p.assetId}" src="/api/assets/${projectId}/${p.assetId}" alt="${(p.altText ?? "").replace(/["<>&]/g, "")}">  aspect ${p.aspect} (e.g. ${w}x${Math.round(w / p.aspect)}px)${p.cls === "small" ? "  small: icon / logo / badge" : where}${p.swap ? "  SWAPPABLE: generic clip-art (free redesign: may be left out or replaced, see FREE REDESIGN)" : ""}`;
         })
         .join("\n") +
       "\n\n";

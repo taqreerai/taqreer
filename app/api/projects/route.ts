@@ -263,6 +263,9 @@ type CreateProjectPayload = {
   // Enhance "Refresh my photos" (opt-in): deck-generate re-makes a capped set
   // of the most important generic photos (lib/extract/photo-refresh.ts).
   refreshPhotos?: boolean;
+  // Enhance "Redesign freely" (lib/extract/rework-score.ts): keep the essence,
+  // not the exact words; merge / split slides up to the source count.
+  reworkDeck?: boolean;
   slideCount?: number | null;
   quality?: Quality | null;
   // User-picked on /create/content (2026-05-20). Drives Project.language
@@ -1032,6 +1035,8 @@ export async function POST(request: Request) {
       ? resolvedSlideCount
       : preflight.holdSlides;
 
+  const reworkDeck = payload.reworkDeck === true && projectType === "enhance";
+
   // Teaser plan: computed above, before the preflight (isTeaser,
   // teaserPlannedTotal, teaserLockedCount).
 
@@ -1099,7 +1104,10 @@ export async function POST(request: Request) {
     // authors what the content calls for, up to it (deck-generate appends
     // the matching directive after the Brief JSON). The stream's slide-cap
     // abort at holdSlides stays the hard enforcement either way.
-    slideCountMode: preflight.exact ? "exact" : "ceiling",
+    // A free-redesign (rework) deck may merge thin slides, so the source page
+    // count is its ceiling; a free teaser keeps 1:1 so the locked tail and
+    // the unlock still line up with the source pages.
+    slideCountMode: preflight.exact && !(reworkDeck && !isTeaser) ? "exact" : "ceiling",
     // Social: the auto ("ceiling") length never goes under the floor.
     ...(creditFlow === "social"
       ? { slideCountMin: SOCIAL_MIN_POSTS, slideCountAim: SOCIAL_AUTO_AIM }
@@ -1128,6 +1136,7 @@ export async function POST(request: Request) {
     // (and the prompt built from it) stays byte-for-byte unchanged.
     ...(payload.imagesMode === true ? { imagesMode: true } : {}),
     ...(payload.refreshPhotos === true && projectType === "enhance" ? { refreshPhotos: true } : {}),
+    ...(reworkDeck ? { reworkDeck: true } : {}),
     // Regional people descriptor for generated lifestyle images (only when
     // resolvable). buildUserMessage turns this into the cast directive.
     ...(imageRegion ? { imageRegion } : {}),

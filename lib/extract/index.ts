@@ -39,6 +39,8 @@ import { detectPptxLanguage } from "./language-pptx";
 import { detectStringLanguage } from "./language-text";
 import { detectLanguageFromPages } from "./language-vision";
 import { readOrnamentLabels } from "./ornament-labels";
+import { classifyPptxPictures, extractPptxVisuals, type PptxVisuals } from "./pptx-visuals";
+import { decideRework, type ReworkDecision } from "./rework-score";
 import { extractTextPerSlide } from "./text-pptx";
 import { pdfToText } from "./pdf-to-text";
 
@@ -105,7 +107,27 @@ export type ExtractionResult = {
    * source document's own boxes/layout as content.
    */
   fullText: string;
+  /** Rework or Preserve (lib/extract/rework-score.ts), preselected on /enhance. */
+  rework: ReworkDecision;
 };
+
+// Tables and charts that carry content: a table whose header row repeats on 3+
+// slides (a lesson header with unit / page / skill columns) is template chrome.
+function contentTables(visuals: PptxVisuals | null): number {
+  if (!visuals) return 0;
+  const slidesBySig = new Map<string, Set<number>>();
+  let charts = 0;
+  for (const f of visuals.frames) {
+    if (f.kind === "chart" && f.chart) charts++;
+    if (f.kind !== "table" || !f.table) continue;
+    // Keyed on the header row: the values under it change slide to slide.
+    const sig = JSON.stringify(f.table.rows[0]?.map((c) => c.text) ?? []);
+    (slidesBySig.get(sig) ?? slidesBySig.set(sig, new Set()).get(sig)!).add(f.slideIndex);
+  }
+  let tables = 0;
+  for (const slides of slidesBySig.values()) if (slides.size < 3) tables += slides.size;
+  return tables + charts;
+}
 
 // ─── Public API ────────────────────────────────────────────────────
 
@@ -156,6 +178,7 @@ export async function extract(
   let language: "ar" | "en" | null = null;
   let textPerSlide: string[] = [];
   let fullText = "";
+  let visuals: PptxVisuals | null = null;
   if (isPptx) {
     const [fontsResult, colorsResult, langResult, textResult] =
       await Promise.allSettled([
@@ -171,8 +194,13 @@ export async function extract(
     // A repeated ribbon / badge picture is dropped from the carried pictures;
     // its words join the slide's text so the generator rebuilds it as a styled
     // label (and the unlocked tail, which reads this text, gets it too).
+    try {
+      visuals = await extractPptxVisuals(buffer);
+    } catch (err) {
+      console.error("[extract] pptx visuals failed:", err);
+    }
     if (textPerSlide.length > 0) {
-      const labels = await readOrnamentLabels(buffer);
+      const labels = await readOrnamentLabels(buffer, visuals);
       for (const [slide, texts] of labels) {
         if (slide < textPerSlide.length) textPerSlide[slide] = [textPerSlide[slide], ...texts].join("\n").trim();
       }
@@ -245,6 +273,21 @@ export async function extract(
   }
   if (language === null) language = await detectLanguageFromPages(pdfBytes);
 
+  const pictureClasses = visuals ? [...classifyPptxPictures(visuals).values()] : [];
+  const rework = decideRework({
+    sourceKind: isPptx ? "pptx" : isDocx ? "docx" : "pdf",
+    portrait: format === "9:16",
+    slideCount: pageCount,
+    lettersPerSlide: isPptx
+      ? textPerSlide.map((t) => t.replace(/\s/g, "").length)
+      : [fullText.replace(/\s/g, "").length],
+    tablesAndCharts: contentTables(visuals),
+    captureSlides: pictureClasses.filter((c) => c === "capture").length,
+    // Screenshots of whole slides are neither content nor decoration here.
+    decorPictures: pictureClasses.filter((c) => c === "repeated" || c === "background" || c === "ornament").length,
+    allPictures: pictureClasses.filter((c) => c !== "capture").length,
+  });
+
   return {
     pdfBytes,
     pageCount,
@@ -254,5 +297,6 @@ export async function extract(
     language,
     textPerSlide,
     fullText,
+    rework,
   };
 }

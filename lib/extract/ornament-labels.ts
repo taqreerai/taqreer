@@ -9,7 +9,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import JSZip from "jszip";
-import { extractPptxVisuals, classifyPptxPictures } from "@/lib/extract/pptx-visuals";
+import { extractPptxVisuals, classifyPptxPictures, type PptxVisuals } from "@/lib/extract/pptx-visuals";
 
 const MAX_MEDIA = 6;
 const MAX_LABEL_CHARS = 40;
@@ -47,12 +47,16 @@ async function readLabel(client: Anthropic, mediaType: string, data: string): Pr
 }
 
 /** Source slide index -> the label texts of its dropped ornament pictures. */
-export async function readOrnamentLabels(buffer: Buffer): Promise<Map<number, string[]>> {
+export async function readOrnamentLabels(
+  buffer: Buffer,
+  // Already read by the caller; read here when not.
+  known?: PptxVisuals | null,
+): Promise<Map<number, string[]>> {
   const out = new Map<number, string[]>();
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return out;
   try {
-    const visuals = await extractPptxVisuals(buffer);
+    const visuals = known ?? (await extractPptxVisuals(buffer));
     const classes = classifyPptxPictures(visuals);
     const slidesByMedia = new Map<string, Set<number>>();
     for (const p of visuals.pictures) {
