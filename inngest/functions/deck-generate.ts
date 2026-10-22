@@ -1,3 +1,4 @@
+import { mustNotGenerate, stripNeverGenerated } from "@/lib/images/never-generate";
 import {
   brokenReworkSlides,
   missingCarriedPictures,
@@ -49,6 +50,7 @@ import {
   frameSystemPrompt,
   frameSystemCss,
   parseFrameSlide,
+  type FrameSlideDecl,
   parseFrameRevises,
   assembleFramedSlide,
   ENHANCE_LAYOUT_MENU,
@@ -217,6 +219,13 @@ const ENHANCE_TEMPLATE_ADDENDUM = `ENHANCE + TEMPLATE — the user picked a deck
 // "Redesign freely" (owner, 2026-10-22): replaces the exact-content rules of
 // the Enhance prompt. The essence survives; the design and the wording may
 // change; the slide count and order never do (owner, 2026-10-22: no merging).
+// A background-image prompt the image model must not draw (a flag, an emblem):
+// the slide keeps its colour background instead (lib/images/never-generate.ts).
+function dropNeverGeneratedBg(decl: FrameSlideDecl): FrameSlideDecl {
+  if (!decl.bgPrompt || !mustNotGenerate(decl.bgPrompt)) return decl;
+  return { ...decl, bg: "color", bgPrompt: null };
+}
+
 function reworkJobLines(slideCount: number): string[] {
   return [
     `YOUR JOB: FREE REDESIGN. The user chose "Redesign freely". Rebuild each slide as part of one good-looking, consistent deck that keeps the ESSENCE of its source slide. Content first, design second: a beautiful slide that loses content is a failure.`,
@@ -731,6 +740,7 @@ function dispatchImageWarm(
   const addedKeys: string[] = [];
   const addedGenids: string[] = [];
   for (const m of scanGenImages(slideHtml)) {
+    if (mustNotGenerate(m.prompt)) continue;
     // Identity folds the product ref (when stamped): a ref'd box must never
     // adopt - or be adopted by - a same-prompt no-ref image at the same path.
     const hash = genImageIdentityHash(m.prompt, m.ref);
@@ -2690,7 +2700,9 @@ export const deckGenerate = inngest.createFunction(
             // other /api/assets reference removed (lib/deck/carried-assets.ts).
             html: enforceCarriedTables(
               enforceCarriedAssetImgs(
-                stripTextDashes(rawParsed.html),
+                // A flag / emblem / sacred-text image box is never generated
+                // (lib/images/never-generate.ts).
+                stripNeverGenerated(stripTextDashes(rawParsed.html)),
                 projectId,
                 carriedAssetIds,
                 carriedOriginals,
@@ -2711,7 +2723,7 @@ export const deckGenerate = inngest.createFunction(
             const revises = parseFrameRevises(parsed.html);
             if (revises !== null && revises < slides.length) {
               const target = slides[revises];
-              const decl = parseFrameSlide(parsed.html);
+              const decl = dropNeverGeneratedBg(parseFrameSlide(parsed.html));
               applyPageBackdrop(decl, projectId, carriedPageIds, pageAssetAt.get(revises), carriedBackdropIds);
               if (decl.deckTitle) frameCtx.deckTitle = decl.deckTitle;
               if (productImageUrl && decl.bgSource === "product") {
@@ -2837,7 +2849,7 @@ export const deckGenerate = inngest.createFunction(
           // The cover's data-deck-title lands in frameCtx for the deck.
           // slides.length is the 0-based index of THIS slide (pre-push);
           // the restart guard resets it.
-          const decl = parseFrameSlide(parsed.html);
+          const decl = dropNeverGeneratedBg(parseFrameSlide(parsed.html));
           applyPageBackdrop(decl, projectId, carriedPageIds, pageAssetAt.get(slides.length), carriedBackdropIds);
           if (decl.deckTitle) frameCtx.deckTitle = decl.deckTitle;
           // AUTO nav total: the cover declares the model's intended count
@@ -3910,7 +3922,10 @@ export const deckGenerate = inngest.createFunction(
     // Opus review - for every owner, admins included, so a test deck shows
     // exactly what a Haiku user gets.
     const isHaikuRun = paramsForQuality(data.quality).model.startsWith("claude-haiku");
-    const review = data.type !== "enhance" && !isHaikuRun;
+    // An Enhance deck reaches here as type "create" (the /enhance page sends
+    // no type), so the 2026-07-11 skip never applied: read the source kind.
+    const isEnhanceDeck = data.type === "enhance" || readSource(data)?.kind === "enhance";
+    const review = !isEnhanceDeck && !isHaikuRun;
     if (isImagesMode(data)) {
       await inngest
         .send({

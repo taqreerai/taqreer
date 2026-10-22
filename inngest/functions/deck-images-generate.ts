@@ -22,6 +22,7 @@
 // Realtime progressive swap (placeholder→spinner→image) is layered on top
 // in Phase 2b; this server-fill phase is verified by refresh-to-see.
 
+import { mustNotGenerate } from "@/lib/images/never-generate";
 import { Prisma } from "@prisma/client";
 import { inngest } from "@/inngest/client";
 import { SlideManifestSchema } from "@/lib/schema/slide";
@@ -146,6 +147,7 @@ export const deckImagesGenerate = inngest.createFunction(
       const seenGenids = new Set<string>();
       for (const slide of parsed.data.slides) {
         for (const marker of scanGenImages(slide.html)) {
+          if (mustNotGenerate(marker.prompt)) continue; // flags, emblems, sacred text
           if (seenGenids.has(marker.genid)) continue;
           seenGenids.add(marker.genid);
           collected.push({

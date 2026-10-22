@@ -19,6 +19,8 @@
 // lookup is attribute-name-keyed, and tag boundaries are found with a
 // quote-aware scan (a prompt value may legitimately contain a `>`).
 
+import { mustNotGenerate } from "@/lib/images/never-generate";
+
 // Hard ceiling on generated images per deck — a cost guard enforced
 // server-side only (the prompt no longer states a cap; Claude reserves
 // boxes freely and the dispatcher stops warming past this count). Shared
@@ -238,6 +240,8 @@ export function collectSeedableGenImages(
   for (const slide of slides) {
     if (seen.size >= MAX_GENERATED_IMAGES) break;
     for (const marker of scanGenImages(slide.html)) {
+      // Lockstep with deck-images-generate: never-generate prompts are not seeded.
+      if (mustNotGenerate(marker.prompt)) continue;
       if (seen.has(marker.genid)) continue; // cross-slide dupe — first wins
       seen.add(marker.genid);
       const set = keep.get(slide.slideId) ?? new Set<string>();
