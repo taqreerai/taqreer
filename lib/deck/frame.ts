@@ -127,7 +127,8 @@ BACKGROUND KINDS -
 IN-WELL CONTENT IMAGES - inside the well you may reserve FRAMED photo slots as content blocks (photo cards, gallery tiles, a portrait beside a quote):
   <img data-genimage="<textless photo prompt - SUBJECT/SCENE/MOOD>" data-genid="<unique-id>" alt="" style="width:…px;height:…px;object-fit:cover;display:block;background:<a brand-tinted placeholder gradient>;"/>
   • NO src - the system generates and fills it. Set width/height in px (the system reads the shape). Round corners/borders welcome.
-  • data-genimage describes SUBJECT / SCENE / MOOD only - never text, letters, numbers, logos, signage, charts, or UI inside the image (stripped server-side); keep it trademark-safe (no real brand / person / team / character names). Never ask for a flag, a national emblem, a coat of arms, a seal or sacred text (the image model cannot draw them faithfully; such a box is removed): use the deck's own picture or a real flag image (see GRAPHICS). One consistent medium + mood across the whole deck.
+  • data-genimage describes SUBJECT / SCENE / MOOD only - never text, letters, numbers, logos, signage, charts, or UI inside the image (stripped server-side); keep it trademark-safe (no real brand / person / team / character names). Never ask for a flag, a national emblem, a coat of arms, a seal or sacred text (the image model cannot draw them faithfully; such a box is removed): use the deck's own picture, a real flag image (see GRAPHICS) or a STOCK photo. One consistent medium + mood across the whole deck.
+  • STOCK PHOTOS - for a REAL, SPECIFIC subject the image model would only imitate (a country's flag waving, a named landmark or city, a real animal or plant species, a specific machine or object: a tank, a microscope, a blender), add data-gensource="stock" to the box and write data-genimage as a short ENGLISH search query of 2 to 6 words naming the subject ("Saudi Arabia flag", "Riyadh skyline", "Arabian oryx"). The system fills it with a real photo. On a background, use data-bg-source="stock" with the query in data-bg-prompt. Use stock ONLY for such subjects; illustrative, conceptual and mood pictures stay generated so the deck keeps one look.
   • ‼️ NEVER place text on top of a well image, and never draw a scrim/overlay on one - text-over-photo happens ONLY via data-bg="image" or a split/band panel. Well images are clean framed blocks BESIDE/AROUND text.
 
 REAL PEOPLE, TEAMS AND BRANDS (every photo prompt, background or in-well) - the image generator cannot and must not depict a real, named person. When a slide is about one (a footballer, a CEO, a founder, a historical figure) or a real team / brand, picture THEIR WORLD instead: the arena, stadium, pitch, stage, workplace, city, era, equipment or trophy, in their colours and setting. Never a stand-in or lookalike person, never an unrelated metaphor (a random child, a stranger), and no identifiable face meant to read as them; people in that scene are an anonymous crowd, distant or from behind. Real PLACES and landmarks are fine to depict as they are.
@@ -384,9 +385,10 @@ export function assembleFramedSlide(
   // generates + injects the src (aspect via explicit data-genaspect - these
   // boxes are %-sized so px derivation has nothing to read).
   const isProductBg = decl.bgSource === "product";
+  const isStockBg = decl.bgSource === "stock";
   const bgImg = (aspect: "landscape" | "portrait") =>
     `<img data-genimage="${esc(decl.bgPrompt ?? "")}" data-genid="${bgGenId(slideIndex)}" data-genaspect="${aspect}"` +
-    (isProductBg ? ` data-gensource="product"` : "") +
+    (isProductBg ? ` data-gensource="product"` : isStockBg ? ` data-gensource="stock"` : "") +
     (isProductBg && decl.bgRef ? ` data-genref="${esc(decl.bgRef)}"` : "") +
     ` alt="" style="width:100%;height:100%;object-fit:cover;display:block;${placeholder}"/>`;
 

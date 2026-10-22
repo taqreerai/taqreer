@@ -55,6 +55,8 @@ type ImageBox = {
   // Product-photo reference URL (data-genref, re-scanned from the saved
   // manifest) - the gpt-image images.edit input. null for ordinary boxes.
   ref: string | null;
+  // data-gensource="stock": `prompt` is a Pexels search query (lib/images/pexels.ts).
+  stock?: boolean;
   // sha256→12hex identity of `prompt` (+ ref when present -
   // genImageIdentityHash). Folds the identity into the storage path so this
   // reconcile adopts ONLY a warm image whose prompt AND reference match the
@@ -147,7 +149,7 @@ export const deckImagesGenerate = inngest.createFunction(
       const seenGenids = new Set<string>();
       for (const slide of parsed.data.slides) {
         for (const marker of scanGenImages(slide.html)) {
-          if (mustNotGenerate(marker.prompt)) continue; // flags, emblems, sacred text
+          if (!marker.stock && mustNotGenerate(marker.prompt)) continue; // flags, emblems, sacred text
           if (seenGenids.has(marker.genid)) continue;
           seenGenids.add(marker.genid);
           collected.push({
@@ -294,6 +296,7 @@ export const deckImagesGenerate = inngest.createFunction(
               prompt: b.prompt,
               aspect: b.aspect,
               referenceUrl: b.ref,
+              stock: b.stock,
             });
             const url = await storeGeneratedImage({
               projectId,

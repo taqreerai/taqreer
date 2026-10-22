@@ -9,6 +9,8 @@
 // forbid ALL typography; words always stay as real HTML overlaid on the
 // box, never baked into the generated pixels.
 
+import { findStockPhoto } from "@/lib/images/pexels";
+import { mustNotGenerate } from "@/lib/images/never-generate";
 import OpenAI, { toFile } from "openai";
 
 import { isAllowedProductRefUrl } from "@/lib/images/product-ref";
@@ -227,9 +229,20 @@ function isTransientImageError(err: unknown): boolean {
  * three identical-theme prompts succeeded — a one-off 429).
  */
 export async function generateImageWithRetry(
-  opts: { prompt: string; aspect: ImageAspect; referenceUrl?: string | null },
+  opts: { prompt: string; aspect: ImageAspect; referenceUrl?: string | null; stock?: boolean },
   attempts = 3,
 ): Promise<GeneratedImageResult> {
+  // A stock box: a real photo from Pexels (size "pexels:<id>"). With no key or
+  // no result it falls back to the image model, except for subjects the model
+  // must never draw (a flag): those fail and the box keeps its placeholder.
+  if (opts.stock) {
+    const photo = await findStockPhoto(opts.prompt, opts.aspect);
+    if (photo) {
+      console.info("[images] stock photo", { query: opts.prompt.slice(0, 80), id: photo.size, photographer: photo.photographer });
+      return { b64: photo.b64, size: photo.size };
+    }
+    if (mustNotGenerate(opts.prompt)) throw new Error("no stock photo found for a subject that is never generated");
+  }
   // Clamp to ≥1 so a 0/negative `attempts` can't skip the loop and fall through
   // to `throw lastErr` while it's still undefined.
   const total = Math.max(1, Math.floor(attempts));

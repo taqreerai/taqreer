@@ -41,6 +41,8 @@ type WarmBox = {
   // Product-photo reference URL (data-genref) - sent to gpt-image as the
   // images.edit input. Absent/null for ordinary prompt-only boxes.
   ref?: string | null;
+  // data-gensource="stock": `prompt` is a Pexels search query (lib/images/pexels.ts).
+  stock?: boolean;
   // sha256→12hex identity of `prompt` (+ ref when present) - lib/images/store
   // genImageIdentityHash. Folded into the storage path AND the idempotency
   // key so a drift's changed prompt (or a ref'd vs no-ref box) is a distinct
@@ -101,6 +103,7 @@ export const deckImageWarm = inngest.createFunction(
           prompt: box.prompt,
           aspect: box.aspect,
           referenceUrl: box.ref ?? null,
+          stock: box.stock === true,
         });
         const url = await storeGeneratedImage({
           projectId,

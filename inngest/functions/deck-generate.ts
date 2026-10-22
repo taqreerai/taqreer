@@ -222,7 +222,7 @@ const ENHANCE_TEMPLATE_ADDENDUM = `ENHANCE + TEMPLATE — the user picked a deck
 // A background-image prompt the image model must not draw (a flag, an emblem):
 // the slide keeps its colour background instead (lib/images/never-generate.ts).
 function dropNeverGeneratedBg(decl: FrameSlideDecl): FrameSlideDecl {
-  if (!decl.bgPrompt || !mustNotGenerate(decl.bgPrompt)) return decl;
+  if (!decl.bgPrompt || decl.bgSource === "stock" || !mustNotGenerate(decl.bgPrompt)) return decl;
   return { ...decl, bg: "color", bgPrompt: null };
 }
 
@@ -740,7 +740,7 @@ function dispatchImageWarm(
   const addedKeys: string[] = [];
   const addedGenids: string[] = [];
   for (const m of scanGenImages(slideHtml)) {
-    if (mustNotGenerate(m.prompt)) continue;
+    if (!m.stock && mustNotGenerate(m.prompt)) continue;
     // Identity folds the product ref (when stamped): a ref'd box must never
     // adopt - or be adopted by - a same-prompt no-ref image at the same path.
     const hash = genImageIdentityHash(m.prompt, m.ref);

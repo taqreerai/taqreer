@@ -4,7 +4,8 @@
 // writing (the Saudi flag's Shahada and sword) comes out as plain green cloth,
 // and a misdrawn sacred text or state emblem is worse than none. Flags,
 // emblems, coats of arms, seals and sacred text come from the deck's own
-// pictures, a real flag image (flagcdn) or a stock photo, never a generation.
+// pictures, a real flag image (flagcdn) or a stock photo, never a generation
+// (a stock box is exempt everywhere: it is filled with a real photo).
 // The prompt says so; this is the code-side check, because prompt rules alone
 // keep slipping. Negated phrases ("no text, no logos, no flags") are ignored.
 
@@ -21,8 +22,14 @@ export function mustNotGenerate(prompt: string): boolean {
 
 const GEN_BOX = /<img\b[^>]*\bdata-genimage\s*=\s*"([^"]*)"[^>]*>/gi;
 
-/** Remove every in-slide generated-image box whose prompt must not be generated. */
+/**
+ * Remove every in-slide generated-image box whose prompt must not be
+ * generated. A stock box (data-gensource="stock") stays: it is filled with a
+ * real photo (lib/images/pexels.ts), which is exactly what such subjects need.
+ */
 export function stripNeverGenerated(html: string): string {
   if (!/data-genimage/i.test(html)) return html;
-  return html.replace(GEN_BOX, (tag, prompt: string) => (mustNotGenerate(prompt.replace(/&quot;/g, '"')) ? "" : tag));
+  return html.replace(GEN_BOX, (tag, prompt: string) =>
+    !/\bdata-gensource\s*=\s*"stock"/i.test(tag) && mustNotGenerate(prompt.replace(/&quot;/g, '"')) ? "" : tag,
+  );
 }

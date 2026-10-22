@@ -46,6 +46,9 @@ export interface GenImageMarker {
    *  (Claude only writes the bare data-gensource="product" marker, never
    *  the URL). null for ordinary prompt-only boxes. */
   ref: string | null;
+  /** data-gensource="stock": `prompt` is a search query for a real photo
+   *  (lib/images/pexels.ts), not an image-model prompt. */
+  stock: boolean;
 }
 
 // Accept only safe genids. The genid flows into a Supabase storage path
@@ -189,7 +192,7 @@ export function scanGenImages(html: string): GenImageMarker[] {
         ? (aspectRaw as GenImageAspect)
         : (deriveAspectFromStyle(tag) ?? "landscape");
     seen.add(genid);
-    out.push({ genid, prompt, role, aspect, ref: readGenRef(tag) });
+    out.push({ genid, prompt, role, aspect, ref: readGenRef(tag), stock: readAttr(tag, "data-gensource") === "stock" });
   }
   return out;
 }
@@ -240,8 +243,9 @@ export function collectSeedableGenImages(
   for (const slide of slides) {
     if (seen.size >= MAX_GENERATED_IMAGES) break;
     for (const marker of scanGenImages(slide.html)) {
-      // Lockstep with deck-images-generate: never-generate prompts are not seeded.
-      if (mustNotGenerate(marker.prompt)) continue;
+      // Lockstep with deck-images-generate: never-generate prompts are not seeded
+      // (a stock photo of the same subject is fine: it is a real photo).
+      if (!marker.stock && mustNotGenerate(marker.prompt)) continue;
       if (seen.has(marker.genid)) continue; // cross-slide dupe — first wins
       seen.add(marker.genid);
       const set = keep.get(slide.slideId) ?? new Set<string>();
