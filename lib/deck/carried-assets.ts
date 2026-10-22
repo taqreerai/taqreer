@@ -182,7 +182,7 @@ export const CARRIED_PICTURES_RULE = `  • ORIGINAL PICTURES: FIRST RULE, overr
 export function reworkPicturesRule(imagesOn: boolean): string {
   return `  • FREE REDESIGN PICTURES: overrides "put EVERY listed picture" for entries marked SWAPPABLE only (generic clip-art and decoration). ${
     imagesOn
-      ? "Replace a SWAPPABLE picture with a generated-image box of the same idea in the deck's single image style when the slide needs a visual, or leave it out."
+      ? "Never show a SWAPPABLE picture as it is: replace it with a generated-image box of the same idea in the deck's single image style when the slide needs a visual, otherwise leave it out."
       : "Leave a SWAPPABLE picture out when it does not fit the new design; keep it when it still helps."
   } Every picture NOT marked SWAPPABLE is content: place it as the ORIGINAL PICTURES rule says.`;
 }

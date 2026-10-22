@@ -10,6 +10,7 @@
 // lib/extract/pdf-visuals.ts (phase 2); a PDF has no native tables here yet.
 
 import { findSwappablePictures } from "@/lib/extract/rework-pictures";
+import { extractTextPerSlide } from "@/lib/extract/text-pptx";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { chromeTables, extractPptxVisuals, classifyPptxPictures, type PptxFrame } from "@/lib/extract/pptx-visuals";
 import { buildPptxAssets } from "@/lib/extract/pptx-asset-crops";
@@ -141,12 +142,13 @@ export async function prepareCarriedPictures(opts: {
   // Rework: once per distinct picture (same bytes on several slides = one).
   let swapKeys = new Set<string>();
   if (opts.rework) {
-    const byKey = new Map<string, Buffer>();
+    const slideText = opts.sourceMime === PPTX_MIME ? await extractTextPerSlide(buffer).catch(() => [] as string[]) : [];
+    const byKey = new Map<string, { bytes: Buffer; context?: string }>();
     for (const a of storable) {
       const key = mediaKeys.get(a.assetId);
-      if (key && a.file.kind === "image" && !byKey.has(key)) byKey.set(key, a.file.bytes);
+      if (key && a.file.kind === "image" && !byKey.has(key)) byKey.set(key, { bytes: a.file.bytes, context: slideText[a.slideIndex] });
     }
-    swapKeys = await findSwappablePictures([...byKey].map(([mediaKey, bytes]) => ({ mediaKey, bytes })));
+    swapKeys = await findSwappablePictures([...byKey].map(([mediaKey, v]) => ({ mediaKey, ...v })));
   }
   for (let i = 0; i < storable.length; i += UPLOAD_PARALLEL) {
     await Promise.all(

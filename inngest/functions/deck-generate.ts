@@ -215,8 +215,9 @@ function reworkJobLines(slideCount: number, ceiling: boolean): string[] {
   return [
     `YOUR JOB: FREE REDESIGN. The user chose "Redesign freely". Rebuild this deck as one good-looking, consistent deck that keeps the ESSENCE of the source. Content first, design second: a beautiful slide that loses content is a failure.`,
     ceiling
-      ? `  • Slides: AT MOST ${slideCount}, following the source's order of ideas. Merge consecutive thin slides that serve one idea; split a crowded slide in two when that reads better; leave out a source slide that holds only decoration (no words, no content picture). Never reorder ideas.`
+      ? `  • Slides: AT MOST ${slideCount}. Merge consecutive thin slides that serve one idea; split a crowded slide in two when that reads better; leave out a source slide that holds only decoration (no words, no content picture).`
       : `  • Produce EXACTLY ${slideCount} slides, one per source slide, in the SAME order (the count is fixed for this deck); inside each slide you are free as described below.`,
+    `  • ORDER IS FIXED (hard rule): content appears in the source's slide order. Your slide 1 opens with source slide 1's content; a slide never shows content from a later source slide before an earlier one; never pull a later slide forward to make a cover or an introduction. A lesson-info opening (the template chrome below) may sit on slide 1 together with source slide 1's content.`,
     `  • Re-execute typography, hierarchy, whitespace, layout, and visual rhythm to editorial quality; restructure each slide's content freely (cards, steps, tables, comparisons) when that explains it better.`,
     ``,
     `ESSENCE (hard limits):`,
@@ -2353,7 +2354,9 @@ export const deckGenerate = inngest.createFunction(
           teaserTotal != null ? textPerSlide.slice(0, teaserTotal) : textPerSlide,
         pictures: carried?.pictures ?? [],
         tables: carried?.tables ?? [],
-        coverPhotoId: carried?.coverPhotoId,
+        // A free redesign keeps the source order, so its cover is source
+        // slide 1: never borrow a later slide's photo for it.
+        coverPhotoId: (data.brief as { reworkDeck?: boolean } | null)?.reworkDeck === true ? undefined : carried?.coverPhotoId,
       };
     }
 
