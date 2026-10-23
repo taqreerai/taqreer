@@ -145,6 +145,12 @@ export async function prepareCarriedPictures(opts: {
       continue;
     }
     const r = await analyzeAndEnhance({ ...file, contentType: file.contentType });
+    if (r.cutout) {
+      // Template decoration: kept as a small, droppable piece, never a content
+      // photo or a picture with words (carried-assets isTextPicture).
+      a.cls = "small";
+      continue;
+    }
     kinds.set(a.assetId, r.kind);
     badness.set(a.assetId, r.badness);
     if (r.enhanced) {

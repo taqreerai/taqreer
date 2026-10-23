@@ -23,6 +23,9 @@ export type EnhancedPicture = {
   height: number;
   kind: PictureKind;
   enhanced: boolean;
+  // Cut-out artwork (a transparent PNG: template waves, swooshes, borders):
+  // template decoration, not a picture the user's content depends on.
+  cutout?: boolean;
   // 0 (crisp, rich, large) .. 1 (small, soft, faded): measured on the ORIGINAL
   // before any clean-up; ranks photos for the refresh (lib/extract/photo-refresh).
   badness: number;
@@ -132,6 +135,26 @@ function isWashedOut(s: Stats): boolean {
   return s.p98 - s.p2 < 190 || s.p2 > 40 || s.meanSat < 0.16;
 }
 
+// A PNG with this share of transparent pixels is cut-out artwork (owner,
+// 2026-10-23: a transparent template wave on a cover was classed a photo,
+// because removeAlpha() fills the cut-out with black and the gradients then
+// count as photo colours). Real photos with an alpha channel are opaque.
+const CUTOUT_TRANSPARENT_SHARE = 0.15;
+
+async function transparentShare(bytes: Buffer): Promise<number> {
+  const meta = await sharp(bytes).metadata();
+  if (!meta.hasAlpha) return 0;
+  const { data } = await sharp(bytes)
+    .resize(128, 128, { fit: "inside" })
+    .ensureAlpha()
+    .extractChannel(3)
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  let clear = 0;
+  for (const v of data) if (v < 128) clear++;
+  return data.length ? clear / data.length : 0;
+}
+
 /** Photo or graphic, from the bytes alone (the studio restore route refuses graphics). */
 export async function pictureKind(bytes: Buffer): Promise<PictureKind> {
   try {
@@ -148,6 +171,13 @@ export async function analyzeAndEnhance(input: {
   height: number;
 }): Promise<EnhancedPicture> {
   const keep: EnhancedPicture = { ...input, kind: "graphic", enhanced: false, badness: 0 };
+  if (input.contentType === "image/png") {
+    try {
+      if ((await transparentShare(input.bytes)) > CUTOUT_TRANSPARENT_SHARE) return { ...keep, cutout: true };
+    } catch {
+      // unreadable alpha: classify by colour as before
+    }
+  }
   let stats: Stats;
   try {
     stats = await sample(input.bytes);
