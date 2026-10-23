@@ -3286,11 +3286,18 @@ export const deckGenerate = inngest.createFunction(
         // context. Comped: the user never pays for the model's loss. One round;
         // what is still broken after it is logged below.
         const reworkRun = enhanceFlags(data.brief).textRework && enhanceImages != null;
-        if (reworkRun && enhanceImages) {
+        // Exact wording (owner, 2026-10-23: a deck that must keep every picture
+        // lost 14 of them with nothing to catch it): the same pass, but only
+        // for lost CONTENT pictures or unreadable text pictures. Words are
+        // kept as written, so the share-of-words test does not apply, and
+        // small icons, logos and badges are not worth a repair turn.
+        const exactRepair = !reworkRun && enhanceImages != null;
+        if ((reworkRun || exactRepair) && enhanceImages) {
           const checkCount = enhanceImages.fileIds.length || slides.length;
           const picturesBySlide = new Map<number, string[]>();
           for (const p of enhanceImages.pictures ?? []) {
             if (p.cls === "page" || p.cls === "backdrop" || p.swap) continue;
+            if (exactRepair && p.cls !== "content") continue;
             (picturesBySlide.get(p.slideIndex) ?? picturesBySlide.set(p.slideIndex, []).get(p.slideIndex)!).push(p.assetId);
           }
           const broken = brokenReworkSlides(
@@ -3299,7 +3306,10 @@ export const deckGenerate = inngest.createFunction(
             slides.map((sl) => sl.html ?? ""),
             checkCount,
             readableWidths(enhanceImages.pictures ?? []),
-          ).filter((b) => b.slide <= slides.length);
+          )
+            .filter((b) => b.slide <= slides.length)
+            .filter((b) => !exactRepair || b.missingPictures.length > 0 || (b.smallPictures ?? []).length > 0)
+            .map((b) => (exactRepair ? { ...b, kept: 1 } : b));
           if (broken.length > 0) {
             const pictureBlocks = new Map<number, string>();
             for (const b of broken) {
@@ -3355,6 +3365,7 @@ export const deckGenerate = inngest.createFunction(
               usage.cacheCreationTokens += repair.usage.cache_creation_input_tokens ?? 0;
               logger.info("enhance_rework_repair", {
                 projectId,
+                exact: exactRepair,
                 broken: broken.map((b) => ({ slide: b.slide, kept: b.kept, missingPictures: b.missingPictures.length })),
                 revised,
                 stop: repair.stop_reason,
@@ -3613,9 +3624,14 @@ export const deckGenerate = inngest.createFunction(
           const htmls = manifest.slides.slice(0, count).map((sl) => sl.html ?? "");
           const findings: MeasuredFinding[] = [];
           for (let i = 0; i < count; i++) {
-            const numbers = missingSourceNumbers([sourceTexts[i] ?? ""], [htmls[i]]);
+            // Source-text noise (runs of zeros, ids with a leading zero) is not a
+            // number the user wrote; small icons and badges may be dropped by a
+            // redesign, so only content pictures count as lost.
+            const numbers = missingSourceNumbers([sourceTexts[i] ?? ""], [htmls[i]]).filter(
+              (n) => !/0{5,}/.test(n) && !/^0\d/.test(n),
+            );
             const lostPictures = pictures.filter(
-              (p) => p.slideIndex === i && p.cls !== "page" && p.cls !== "backdrop" && !p.swap && !htmls[i].includes(p.assetId),
+              (p) => p.slideIndex === i && p.cls === "content" && !p.swap && !htmls[i].includes(p.assetId),
             ).length;
             if (numbers.length > 0 || lostPictures > 0) findings.push({ slide: i + 1, numbers, pictures: lostPictures });
           }
