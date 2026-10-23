@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useDict } from "@/components/i18n/LocaleProvider";
 import {
   AssistantBubble,
+  isCheckNote,
   useAssistantThread,
   type AssistantContext,
   type AssistantMessageRow,
@@ -42,7 +43,16 @@ export function AssistantBar({
   actions?: AssistantActions;
 }) {
   const t = useDict().editor.assistant;
-  const { messages, setMessages } = useAssistantThread(ctx.projectId);
+  // A run that just finished may have posted a note (Enhance "Slides to
+  // check"): reload the thread when busy turns off (state adjusted during
+  // render, the React pattern for reacting to a prop change).
+  const [reloadKey, setReloadKey] = useState(0);
+  const [wasBusy, setWasBusy] = useState(ctx.busy);
+  if (wasBusy !== ctx.busy) {
+    setWasBusy(ctx.busy);
+    if (!ctx.busy) setReloadKey((k) => k + 1);
+  }
+  const { messages, setMessages } = useAssistantThread(ctx.projectId, reloadKey);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -50,6 +60,17 @@ export function AssistantBar({
   // The card shows the latest exchange; "history" widens it to recent ones.
   const [cardOpen, setCardOpen] = useState(false);
   const [history, setHistory] = useState(false);
+  // The newest check note seen so far: one that arrives with a reload after a
+  // run opens the card once (the thread's first load only records it).
+  const [seenCheck, setSeenCheck] = useState<string | null>(null);
+  const latestCheck = messages.findLast(isCheckNote)?.id ?? null;
+  if (seenCheck !== latestCheck) {
+    setSeenCheck(latestCheck);
+    if (reloadKey > 0 && latestCheck) {
+      setCardOpen(true);
+      setHistory(false);
+    }
+  }
   const [picked, setPicked] = useState<Scope>("slide");
   const [menuOpen, setMenuOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -142,9 +163,12 @@ export function AssistantBar({
   }, [cardOpen, menuOpen]);
 
   const thread = pending ? [...messages, ...pending] : messages;
-  // Latest exchange = the last user message and what follows it.
+  // Latest exchange = the last user message and what follows it, or a check
+  // note posted after it.
   const lastUser = thread.map((m) => m.role).lastIndexOf("user");
-  const shown = history ? thread.slice(-8) : lastUser >= 0 ? thread.slice(lastUser) : [];
+  const lastCheck = thread.findLastIndex(isCheckNote);
+  const start = Math.max(lastUser, lastCheck);
+  const shown = history ? thread.slice(-8) : start >= 0 ? thread.slice(start) : [];
   const tail = `${shown.length}:${shown[shown.length - 1]?.status ?? ""}:${history}`;
   useEffect(() => {
     const el = scrollRef.current;

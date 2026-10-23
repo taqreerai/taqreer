@@ -28,6 +28,7 @@ export type PendingExtractEvent = {
   mime: string;
   flowKind: string;
   mimicRole?: string;
+  locale?: string;
 };
 
 type Pending = { event: PendingExtractEvent; firstFailedAt: string; attempts: number };

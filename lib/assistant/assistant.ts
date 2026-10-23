@@ -12,6 +12,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { CreditGate402 } from "@/lib/api/regen-helpers";
 import { scanGenImages } from "@/lib/images/slide-images";
+import { PICTURE_ASSET_ID_RE, pictureTextInstruction } from "@/lib/assistant/picture-text";
 
 export const ASSISTANT_MODEL = "claude-haiku-5-5";
 export const ASSISTANT_DAILY_CAP = 30;
@@ -45,7 +46,20 @@ export type AssistantReply = {
   edit: { instruction: string; slides: number[] } | null;
   // A different picture for ONE AI image (its id from the digest).
   image: { slide: number; genid: string; change: string } | null;
+  // Turn the words in ONE of the user's own pictures into slide text
+  // (lib/assistant/picture-text.ts); becomes `edit` in askAssistant.
+  pictureText?: { slide: number; asset: string } | null;
 };
+
+/** The user's own pictures on a slide: id, and whether it holds words. */
+function userPictures(html: string): { id: string; words: boolean }[] {
+  const out: { id: string; words: boolean }[] = [];
+  for (const m of html.matchAll(/<img\b[^>]*>/gi)) {
+    const id = m[0].match(/\sdata-asset\s*=\s*"([^"]+)"/i)?.[1];
+    if (id && PICTURE_ASSET_ID_RE.test(id)) out.push({ id, words: /\sdata-asset-text\s*=/i.test(m[0]) });
+  }
+  return out;
+}
 
 /** The visible text of one slide's html, collapsed and bounded. */
 export function slideText(html: string): string {
@@ -63,7 +77,7 @@ export function slideText(html: string): string {
     .trim();
 }
 
-export function deckDigest(slides: readonly { html: string }[]): string {
+export function deckDigest(slides: readonly { html: string }[], pictureNotes?: ReadonlyMap<string, string>): string {
   let out = "";
   for (let i = 0; i < slides.length; i++) {
     const label = slides[i].html.match(/data-label="([^"]{0,60})"/)?.[1] ?? "";
@@ -71,9 +85,15 @@ export function deckDigest(slides: readonly { html: string }[]): string {
     const ai = scanGenImages(slides[i].html)
       .map((g) => ` [AI image ${g.genid}: ${g.prompt.slice(0, 90)}]`)
       .join("");
+    const own = userPictures(slides[i].html)
+      .map((p) => {
+        const shows = pictureNotes?.get(p.id)?.replace(/[\[\]\n]/g, " ");
+        return ` [user picture ${p.id}${shows ? `: ${shows}` : ""}${p.words ? ", has words" : ""}]`;
+      })
+      .join("");
     let text = slideText(slides[i].html);
     if (text.length > MAX_SLIDE_CHARS) text = `${text.slice(0, MAX_SLIDE_CHARS)}...`;
-    const line = `Slide ${i + 1}${label ? ` (${label})` : ""}${pics ? ` [${pics} picture${pics > 1 ? "s" : ""}]` : ""}${ai}: ${text || "(no text)"}\n`;
+    const line = `Slide ${i + 1}${label ? ` (${label})` : ""}${pics ? ` [${pics} picture${pics > 1 ? "s" : ""}]` : ""}${ai}${own}: ${text || "(no text)"}\n`;
     if (out.length + line.length > MAX_DIGEST_CHARS) {
       out += `(slides ${i + 1} to ${slides.length} omitted for length)\n`;
       break;
@@ -104,6 +124,8 @@ You can do two things:
 
 3. CHANGE AN AI IMAGE: when the user wants a different picture for an image listed as [AI image ID], propose an image change: the slide number, that ID, and the change in a few words (the user's own words are fine; "a new version" when they just want another one). Only [AI image ...] entries can be changed this way; for the user's own pictures, tell them to click the picture and use Replace.
 
+4. PICTURE WORDS TO TEXT: when the user says the words in one of their own pictures (listed as [user picture ID], often "has words") are too small, hard to read, or should be editable text, propose turning that picture's words into real slide text: the slide number and that ID. The picture is then taken off the slide and its words rebuilt as text, so say so in the reply. Only for [user picture ...] entries; ask which one when the slide has several and the user did not say.
+
 You CANNOT add, delete, duplicate or reorder slides, change the deck's colours or font for the whole deck, export, share or upload: for those, ANSWER with where to do it in the editor.
 
 Scope: the message says which part the user selected. "area" or "slide" means that ONE slide; "deck" means you choose the slides the request is about (every slide when it is about the whole deck, only the named ones when the user names slides).
@@ -118,6 +140,8 @@ or
 {"reply": "<one sentence: what will change>", "edit": {"instruction": "<instruction>", "slides": [<1-based slide numbers>]}}
 or
 {"reply": "<one sentence: what the new picture will be>", "edit": null, "image": {"slide": <1-based slide number>, "id": "<AI image ID>", "change": "<the change>"}}
+or
+{"reply": "<one sentence: the picture's words become slide text and the picture is removed>", "edit": null, "pictureText": {"slide": <1-based slide number>, "id": "<user picture ID>"}}
 
 ${PRODUCT_HELP}`;
 }
@@ -132,7 +156,7 @@ function parseReply(raw: string, slideCount: number): AssistantReply | null {
   } catch {
     return null;
   }
-  const o = obj as { reply?: unknown; edit?: unknown; image?: unknown };
+  const o = obj as { reply?: unknown; edit?: unknown; image?: unknown; pictureText?: unknown };
   if (typeof o.reply !== "string" || !o.reply.trim()) return null;
   const reply = o.reply.replace(/[–—]/g, ", ").trim().slice(0, 2000);
   let edit: AssistantReply["edit"] = null;
@@ -155,11 +179,27 @@ function parseReply(raw: string, slideCount: number): AssistantReply | null {
     const change = typeof im.change === "string" && im.change.trim() ? im.change.trim().slice(0, 300) : "a new version";
     image = { slide: im.slide as number, genid: im.id, change };
   }
-  return { reply, edit, image };
+  let pictureText: AssistantReply["pictureText"] = null;
+  const pt = o.pictureText as { slide?: unknown; id?: unknown } | null | undefined;
+  if (
+    !edit &&
+    !image &&
+    pt &&
+    Number.isInteger(pt.slide) &&
+    (pt.slide as number) >= 1 &&
+    (pt.slide as number) <= slideCount &&
+    typeof pt.id === "string" &&
+    PICTURE_ASSET_ID_RE.test(pt.id)
+  ) {
+    pictureText = { slide: pt.slide as number, asset: pt.id };
+  }
+  return { reply, edit, image, pictureText };
 }
 
 export async function askAssistant(args: {
   slides: readonly { html: string }[];
+  // assetId -> what the picture shows (from the Enhance analysis).
+  pictureNotes?: ReadonlyMap<string, string>;
   scope: AssistantScope;
   scopeSlideNumber: number | null; // 1-based, for slide / area scopes
   message: string;
@@ -176,7 +216,7 @@ export async function askAssistant(args: {
   const messages: Anthropic.Messages.MessageParam[] = [
     {
       role: "user",
-      content: `THE DECK (${args.slides.length} slides, text only):\n${deckDigest(args.slides)}`,
+      content: `THE DECK (${args.slides.length} slides, text only):\n${deckDigest(args.slides, args.pictureNotes)}`,
     },
     { role: "assistant", content: "Understood. I have the deck." },
     // Recent turns, so "do the same for slide 5" works.
@@ -203,6 +243,15 @@ export async function askAssistant(args: {
     if (!parsed) console.warn("assistant_unparseable", { attempt, stop: msg.stop_reason, chars: raw.length });
   }
   if (!parsed) throw new Error("assistant: unparseable reply");
+  // Picture words to text: only a picture that is really on that slide (and
+  // the selected one, for a slide / area scope); it runs as a one-slide edit.
+  const pt = parsed.pictureText;
+  if (pt) {
+    parsed.pictureText = null;
+    const onSlide = userPictures(args.slides[pt.slide - 1]?.html ?? "").some((p) => p.id === pt.asset);
+    const inScope = args.scope.kind === "deck" || pt.slide === args.scopeSlideNumber;
+    if (onSlide && inScope) parsed.edit = { instruction: pictureTextInstruction(pt.asset), slides: [pt.slide] };
+  }
   // A slide / area scope pins the edit to that slide, whatever the model chose.
   if (parsed.edit && args.scope.kind !== "deck" && args.scopeSlideNumber) {
     parsed.edit.slides = [args.scopeSlideNumber];

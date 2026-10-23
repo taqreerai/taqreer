@@ -46,7 +46,8 @@ import {
 import { normalizePlan } from "@/lib/plan";
 import { mintTemplateDesignFile } from "@/lib/template/mint-design";
 import { pickAutoStyle } from "@/lib/create/auto-style";
-import { uploadedReworkMode, uploadedSourceText } from "@/lib/create/source-sample";
+import { uploadedEnhanceAnalysis, uploadedSourceText } from "@/lib/create/source-sample";
+import { parseEnhanceAnswers, recommendedAnswers, type BriefEnhanceAnswers } from "@/lib/enhance/answers";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
 import { REFERRAL_COOKIE } from "@/lib/referral-code";
 import { clientIp, rateLimited } from "@/lib/api/rate-limit";
@@ -263,10 +264,12 @@ type CreateProjectPayload = {
   // Enhance "Refresh my photos" (opt-in): deck-generate re-makes a capped set
   // of the most important generic photos (lib/extract/photo-refresh.ts).
   refreshPhotos?: boolean;
-  // Enhance "How much to change": "keep" = the classic redesign, "rework" =
-  // keep the essence and redesign each slide freely (still one slide per
-  // source slide), "auto" = what the file's analysis recorded (resolved below).
-  // Absent (an older page) = keep.
+  // Enhance's start questions (lib/enhance/answers.ts): wording / pictures /
+  // display, checked against the known values below. Supersedes the two
+  // older fields, which an open older page may still send.
+  enhanceAnswers?: unknown;
+  // Older /enhance page: "keep" = the classic redesign, "rework" = keep the
+  // essence, "auto" = what the file's analysis recorded. Absent = Auto.
   changeLevel?: "auto" | "keep" | "rework";
   slideCount?: number | null;
   quality?: Quality | null;
@@ -1037,14 +1040,32 @@ export async function POST(request: Request) {
       ? resolvedSlideCount
       : preflight.holdSlides;
 
-  // An Enhance deck is known by its source (the /enhance page sends no
-  // `type`, so projectType reads "create" for it).
-  const reworkDeck =
-    validatedSource?.kind === "enhance" &&
-    (payload.changeLevel === "rework" ||
-      (payload.changeLevel === "auto" &&
-        typeof validatedSource.sourcePath === "string" &&
-        (await uploadedReworkMode(user.id, validatedSource.sourcePath)) === "rework"));
+  // Enhance's start questions (lib/enhance/answers.ts). An Enhance deck is
+  // known by its source (the /enhance page sends no `type`, so projectType
+  // reads "create" for it). Only known values pass; an older page's
+  // changeLevel / refreshPhotos map onto the same answers, and nothing at all
+  // means Auto (the file's analysis). The audience comes from extraction,
+  // never from the request.
+  const enhanceAnalysis =
+    validatedSource?.kind === "enhance" && typeof validatedSource.sourcePath === "string"
+      ? await uploadedEnhanceAnalysis(user.id, validatedSource.sourcePath)
+      : null;
+  const enhanceAnswers: BriefEnhanceAnswers | null = (() => {
+    if (validatedSource?.kind !== "enhance") return null;
+    const imagesOn = payload.imagesMode === true;
+    const sent = parseEnhanceAnswers(payload.enhanceAnswers);
+    const answers =
+      sent ??
+      (payload.changeLevel === "keep" || payload.changeLevel === "rework"
+        ? recommendedAnswers({ mode: payload.changeLevel === "rework" ? "rework" : "preserve" }, null, imagesOn)
+        : recommendedAnswers(enhanceAnalysis?.mode ? { mode: enhanceAnalysis.mode } : null, null, imagesOn));
+    if (!sent && payload.refreshPhotos === true && answers.pictures === "keep") {
+      answers.pictures = "refresh";
+    }
+    // Redrawing pictures needs AI images; with them off it is a plain keep.
+    if (answers.pictures === "redraw" && !imagesOn) answers.pictures = "keep";
+    return enhanceAnalysis?.audience ? { ...answers, audience: enhanceAnalysis.audience } : answers;
+  })();
 
   // Teaser plan: computed above, before the preflight (isTeaser,
   // teaserPlannedTotal, teaserLockedCount).
@@ -1141,9 +1162,13 @@ export async function POST(request: Request) {
     // generated-image boxes. OMITTED when off, so a normal deck's brief
     // (and the prompt built from it) stays byte-for-byte unchanged.
     ...(payload.imagesMode === true ? { imagesMode: true } : {}),
-    // Refresh my photos belongs to Keep exact (a free redesign swaps on its own).
-    ...(payload.refreshPhotos === true && validatedSource?.kind === "enhance" && !reworkDeck ? { refreshPhotos: true } : {}),
-    ...(reworkDeck ? { reworkDeck: true } : {}),
+    // Enhance's start answers and the flags the generators read from them:
+    // tidy wording = the essence rules, redraw = swap decorative clip-art,
+    // refresh = replace the main generic photos.
+    ...(enhanceAnswers ? { enhanceAnswers } : {}),
+    ...(enhanceAnswers?.wording === "tidy" ? { reworkDeck: true } : {}),
+    ...(enhanceAnswers?.pictures === "redraw" ? { swapPictures: true } : {}),
+    ...(enhanceAnswers?.pictures === "refresh" ? { refreshPhotos: true } : {}),
     // Regional people descriptor for generated lifestyle images (only when
     // resolvable). buildUserMessage turns this into the cast directive.
     ...(imageRegion ? { imageRegion } : {}),

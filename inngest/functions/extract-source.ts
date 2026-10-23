@@ -39,6 +39,7 @@
 // project exists.
 
 import type { ReworkDecision } from "@/lib/extract/rework-score";
+import type { EnhanceQuestions } from "@/lib/enhance/answers";
 import type { Prisma } from "@prisma/client";
 import { inngest } from "@/inngest/client";
 import { NonRetriableError } from "inngest";
@@ -64,6 +65,8 @@ type ExtractRequestedEvent = {
   // so the upload is skipped for enhance to avoid orphaning a PDF on
   // every run. Optional for backward-compat with in-flight events.
   flowKind?: string;
+  // The page's language, for /enhance's start-question labels ("ar" | "en").
+  locale?: string;
   // /mimic file role ("content" | "design"). Lets the pipeline skip the
   // Anthropic upload for a content file consumed as text. Optional.
   mimicRole?: string;
@@ -107,6 +110,8 @@ type ExtractCompletedOutput = {
   fullText?: string;
   // Rework or Preserve, preselected on /enhance (lib/extract/rework-score.ts).
   rework?: ReworkDecision;
+  // /enhance's start questions (lib/extract/enhance-questions.ts).
+  questions?: EnhanceQuestions | null;
   /**
    * Supabase staging object key + MIME of the ORIGINAL upload.
    * deck-generate re-fetches it to rasterize the per-slide PNGs at
@@ -213,8 +218,9 @@ async function runExtractionPipeline(args: {
   mime: string;
   flowKind?: string;
   mimicRole?: string;
+  locale?: "ar" | "en";
 }): Promise<ExtractCompletedOutput> {
-  const { jobId, fileBucketPath, fileName, mime, flowKind, mimicRole } = args;
+  const { jobId, fileBucketPath, fileName, mime, flowKind, mimicRole, locale } = args;
   const admin = getSupabaseAdmin();
   const { data: download, error: dlError } = await admin.storage
     .from(SOURCE_FILES_BUCKET)
@@ -236,7 +242,11 @@ async function runExtractionPipeline(args: {
   //   • format    — from the PDF's first-page aspect ratio
   // Embedded image extraction was removed (2026-05-25); Claude
   // reads visuals from the PDF document block directly.
-  const ext = await extract({ buffer: sourceBuffer, mime });
+  const ext = await extract({
+    buffer: sourceBuffer,
+    mime,
+    ...(flowKind === "enhance" ? { enhanceLocale: locale ?? "ar" } : {}),
+  });
   await writeExtractProgress(jobId, 80, "analyzing");
 
   await writeExtractProgress(jobId, 92, "finishing");
@@ -272,6 +282,7 @@ async function runExtractionPipeline(args: {
     textPerSlide: ext.textPerSlide,
     fullText: ext.fullText,
     rework: ext.rework,
+    ...(ext.questions !== undefined ? { questions: ext.questions } : {}),
     // Re-fetch keys for generation-time rasterization (transient).
     sourcePath: fileBucketPath,
     sourceMime: mime,
@@ -343,6 +354,7 @@ export const extractSource = inngest.createFunction(
         mime,
         flowKind,
         mimicRole,
+        locale: data.locale === "en" ? "en" : "ar",
       }).catch((err: unknown) => {
         // A missing host program (LibreOffice / pdftoppm) can't be fixed
         // by a retry: fail now instead of after every backoff.

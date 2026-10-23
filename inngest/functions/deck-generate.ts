@@ -1,3 +1,6 @@
+import { enhanceAnswerLines, readBriefAnswers } from "@/lib/enhance/answers";
+import { checkRedesign, slideCheckMessage, type MeasuredFinding } from "@/lib/enhance/check";
+import { readRedesignPlan, redesignPlanLines, writeRedesignPlan, type RedesignPlan } from "@/lib/enhance/plan";
 import { mustNotGenerate, stripNeverGenerated } from "@/lib/images/never-generate";
 import {
   brokenReworkSlides,
@@ -86,6 +89,8 @@ import {
   CARRIED_TABLES_RULE,
   CARRIED_CHARTS_RULE,
   carriedSlideBlock,
+  readableWidths,
+  textPictureIds,
   enforceCarriedAssetImgs,
   pickCoverPhoto,
   enforceCarriedTables,
@@ -165,6 +170,9 @@ type EnhanceImages = {
   tables?: CarriedTable[];
   // A photo from another slide for a cover that has none (pickCoverPhoto).
   coverPhotoId?: string;
+  // The deck-specific redesign plan written after the start answers
+  // (lib/enhance/plan.ts); null when the plan call failed.
+  plan?: RedesignPlan | null;
 };
 
 // ─── Shared prompt fragments (DRY) ───────────────────────────────────
@@ -216,9 +224,6 @@ const ENHANCE_IMG_ADDENDUM = `ENHANCE IMAGES: images mode is ON for this redesig
 // just redirects the base prompt toward it. Appended AFTER so it wins.
 const ENHANCE_TEMPLATE_ADDENDUM = `ENHANCE + TEMPLATE — the user picked a deck TEMPLATE for this redesign. Override "improve only layout, hierarchy, typography, spacing, and rhythm" and any instruction to invent your own visual system: REPRODUCE the attached DESIGN reference's visual language (layout system, type hierarchy, spacing, shapes, grids, decorative motifs) on every slide, recoloured to the injected brand variables. Everything else in ENHANCE MODE still holds: exactly one redesigned slide per source slide, same order, each slide's content from its own exact-text block, never the template's words.`;
 
-// "Redesign freely" (owner, 2026-10-22): replaces the exact-content rules of
-// the Enhance prompt. The essence survives; the design and the wording may
-// change; the slide count and order never do (owner, 2026-10-22: no merging).
 // A background-image prompt the image model must not draw (a flag, an emblem):
 // the slide keeps its colour background instead (lib/images/never-generate.ts).
 function dropNeverGeneratedBg(decl: FrameSlideDecl): FrameSlideDecl {
@@ -226,9 +231,23 @@ function dropNeverGeneratedBg(decl: FrameSlideDecl): FrameSlideDecl {
   return { ...decl, bg: "color", bgPrompt: null };
 }
 
+// Enhance's start answers as the generator reads them (lib/enhance/answers.ts):
+// textRework = "tidy" wording (the essence rules, brief.reworkDeck),
+// swapPictures = "redraw" (decorative clip-art becomes generated images). A
+// deck queued before the questions carries reworkDeck alone, which meant both.
+function enhanceFlags(brief: unknown): { textRework: boolean; swapPictures: boolean } {
+  const b = brief as { reworkDeck?: boolean; swapPictures?: boolean; enhanceAnswers?: unknown } | null;
+  const textRework = b?.reworkDeck === true;
+  return { textRework, swapPictures: b?.swapPictures === true || (textRework && !b?.enhanceAnswers) };
+}
+
+// "Redesign freely" / tidy wording (owner, 2026-10-22): replaces the
+// exact-content rules of the Enhance prompt. The essence survives; the design
+// and the wording may change; the slide count and order never do (owner,
+// 2026-10-22: no merging).
 function reworkJobLines(slideCount: number): string[] {
   return [
-    `YOUR JOB: FREE REDESIGN. The user chose "Redesign freely". Rebuild each slide as part of one good-looking, consistent deck that keeps the ESSENCE of its source slide. Content first, design second: a beautiful slide that loses content is a failure.`,
+    `YOUR JOB: FREE REDESIGN. The user asked for the wording to be tidied. Rebuild each slide as part of one good-looking, consistent deck that keeps the ESSENCE of its source slide. Content first, design second: a beautiful slide that loses content is a failure.`,
     `  • Produce EXACTLY ${slideCount} slides: slide N is the redesign of source slide N, in the SAME order. Never merge, split, drop, add or reorder slides (owner rule: the deck keeps its slide count). Inside each slide you are free as described below.`,
     `  • Slide 1 is source slide 1: its heading is the deck's title and the slide gets the cover treatment, whatever source slide 1 holds (an exercise, a question). The lesson-info strip (template chrome below) may join slide 1. Never put another slide's content on slide 1.`,
     `  • Re-execute typography, hierarchy, whitespace, layout, and visual rhythm to editorial quality; restructure each slide's content freely (cards, steps, tables, comparisons) when that explains it better.`,
@@ -238,7 +257,7 @@ function reworkJobLines(slideCount: number): string[] {
     `  • Every fact, term, definition, rule, example, question, exercise item, answer choice, blank and number in the source must survive somewhere in the deck with the same meaning. You may condense, merge, reorder within a slide, and rephrase for clarity.`,
     `  • Keep word for word: key terms, names, quotes, verses, formulas, numbers, and every exercise item (a question, its choices and its blanks stay usable as an exercise).`,
     `  • Never invent: no fact, number, example or claim that is not in the source.`,
-    `  • Template chrome is not content: a lesson-info strip or header table repeated on most slides, page furniture and decorative frames. Show that information once (on the opening slide) instead of on every slide.`,
+    `  • Template chrome is not content: page furniture and decorative frames go. A lesson-info strip or header table repeated on several slides is split by field: a field whose value is the SAME on every slide that has it (subject, grade, unit, lesson) is shown once, on the opening slide; a field whose value CHANGES from slide to slide (the page, the stage, the skill or strategy) stays on its own slide as one small, quiet label, never dropped.`,
   ];
 }
 
@@ -1569,9 +1588,10 @@ function buildSourceTextDirective(
     const imageCount = enhanceImages?.fileIds.length ?? 0;
     const slideCount = Math.max(imageCount, enhanceImages?.textPerSlide.length ?? 0);
     const { colors } = readBriefBrandColors(event.brief);
-    // "Redesign freely" (lib/extract/rework-score.ts): the essence, not the
-    // exact words, one slide per source slide.
-    const rework = (event.brief as { reworkDeck?: boolean } | null)?.reworkDeck === true;
+    // Tidy wording (lib/enhance/answers.ts): the essence, not the exact words,
+    // one slide per source slide. Redraw: decorative clip-art may be swapped.
+    const { textRework: rework, swapPictures } = enhanceFlags(event.brief);
+    const answers = readBriefAnswers(event.brief);
     lines.push(
       `SOURCE — Enhance flow (per-slide redesign)`,
       imageCount < slideCount
@@ -1595,6 +1615,8 @@ function buildSourceTextDirective(
       `  • No added labels: never add an eyebrow, kicker, tag, chip, category word or section label (e.g. "Overview", "Budget", "Annual report", "Key results") whose words are not on that source slide. A small label is allowed only when it repeats text the source slide already has (its own heading, a heading of the same deck, the deck title as running chrome) or is a plain number (step, page). When a slide needs a label and the source has none, design without one.`,
       `  • A colon that ends a heading ("About the Firm:") is punctuation of the old layout: drop it, keep the words.`,
       `  • Keep each slide's own language and script (Arabic stays Arabic, English stays English, mixed stays mixed) — do NOT translate or transliterate.`,
+      ...(answers ? enhanceAnswerLines(answers) : []),
+      ...(enhanceImages?.plan ? redesignPlanLines(enhanceImages.plan) : []),
       ``,
       ...(source.designAnthropicFileId
         ? [
@@ -1631,7 +1653,9 @@ function buildSourceTextDirective(
       ...((enhanceImages?.pictures?.length ?? 0) > 0
         ? [
             CARRIED_PICTURES_RULE,
-            ...(rework && enhanceImages?.pictures?.some((p) => p.swap || p.shows) ? [reworkPicturesRule(isImagesMode(event))] : []),
+            ...((rework || swapPictures) && enhanceImages?.pictures?.some((p) => p.swap || p.shows)
+              ? [reworkPicturesRule(swapPictures && isImagesMode(event))]
+              : []),
           ]
         : []),
       `  • LOGOS / BRAND MARKS — never recreate. If anything in a slide image looks like a logo, brand mark, monogram, or stylized identifier, do NOT draw it in SVG (approximations look off and bloat the output). Two options: (a) brand name is readable as text → styled text matching the weight/colour you can read; (b) otherwise → a styled placeholder <div> with a short label (the brand name if readable, else "Logo"). The user swaps it post-generation.`,
@@ -2305,8 +2329,18 @@ export const deckGenerate = inngest.createFunction(
                   palette: Array.isArray(briefForRefresh.brand?.colors) ? briefForRefresh.brand.colors : [],
                 }
               : null;
-          const rework = (data.brief as { reworkDeck?: boolean } | null)?.reworkDeck === true;
-          const result = await prepareCarriedPictures({ projectId, sourcePath, sourceMime, refresh, rework });
+          const flags = enhanceFlags(data.brief);
+          const result = await prepareCarriedPictures({
+            projectId,
+            sourcePath,
+            sourceMime,
+            refresh,
+            rework: flags.textRework || flags.swapPictures,
+            dropChrome: flags.textRework,
+          });
+          // Only "redraw" lets a picture be swapped: otherwise every picture
+          // is the user's and stays (the tags still pair labels by "shows").
+          if (!flags.swapPictures) for (const p of result.pictures) delete p.swap;
           // Durable copy for the free-plan UNLOCK, which runs later (often after
           // the 24h source purge) and authors the locked tail: it reads which
           // picture / table belongs to which slide from here. Job.inputJson is
@@ -2354,8 +2388,8 @@ export const deckGenerate = inngest.createFunction(
         // also charges nothing for images. Re-applied on every replay (the
         // function restarts with the original brief); the logs live in the step.
         const brief = data.brief as { imagesMode?: boolean } | null;
-        // A free redesign keeps images mode: swapped clip-art becomes generated images.
-        if (carried.hasContentImages && brief?.imagesMode === true && !(data.brief as { reworkDeck?: boolean } | null)?.reworkDeck) {
+        // Redraw keeps images mode: swapped clip-art becomes generated images.
+        if (carried.hasContentImages && brief?.imagesMode === true && !enhanceFlags(data.brief).swapPictures) {
           brief.imagesMode = false;
         }
       }
@@ -2367,8 +2401,37 @@ export const deckGenerate = inngest.createFunction(
         tables: carried?.tables ?? [],
         // A free redesign keeps the source order, so its cover is source
         // slide 1: never borrow a later slide's photo for it.
-        coverPhotoId: (data.brief as { reworkDeck?: boolean } | null)?.reworkDeck === true ? undefined : carried?.coverPhotoId,
+        coverPhotoId: enhanceFlags(data.brief).textRework ? undefined : carried?.coverPhotoId,
       };
+      // The redesign plan (lib/enhance/plan.ts): written once from the
+      // rendered slides, the text, the picture tags and the start answers,
+      // and kept on the Job so the free-plan unlock follows the same plan.
+      // Best-effort: null leaves the prompt exactly as before.
+      const prepared = enhanceImages;
+      enhanceImages.plan = await step.run("enhance-redesign-plan", async () => {
+        const flags = enhanceFlags(data.brief);
+        const plan = await writeRedesignPlan({
+          fileIds: prepared.fileIds,
+          textPerSlide: prepared.textPerSlide,
+          pictures: prepared.pictures ?? [],
+          tables: prepared.tables ?? [],
+          answers: readBriefAnswers(data.brief),
+          textRework: flags.textRework,
+          swapPictures: flags.swapPictures,
+          imagesOn: isImagesMode(data),
+          instructions: (data.enhance as { instructions?: unknown } | null | undefined)?.instructions as string | undefined,
+        });
+        if (plan && jobId) {
+          const job = await prisma.job.findUnique({ where: { id: jobId }, select: { inputJson: true } });
+          const input = (job?.inputJson ?? {}) as Record<string, unknown>;
+          await prisma.job.update({
+            where: { id: jobId },
+            data: { inputJson: { ...input, enhancePlan: plan } as Prisma.InputJsonValue },
+          });
+        }
+        logger.info("enhance_redesign_plan", { projectId, ok: plan != null, checks: plan?.success.length ?? 0 });
+        return plan;
+      });
     }
 
     const validated = await step.run("call-claude-and-validate", async () => {
@@ -2661,8 +2724,7 @@ export const deckGenerate = inngest.createFunction(
         // Free redesign with AI images on: a SWAPPABLE picture (generic clip-art)
         // is never shown as it is; the prompt says so and the model still kept
         // one (local test 2026-10-22), so it is removed here like an unknown asset.
-        const dropSwappable =
-          (data.brief as { reworkDeck?: boolean } | null)?.reworkDeck === true && isImagesMode(data);
+        const dropSwappable = enhanceFlags(data.brief).swapPictures && isImagesMode(data);
         const carriedAssetIds = new Map(
           (enhanceImages?.pictures ?? [])
             .filter((p) => p.cls !== "page" && p.cls !== "backdrop" && !(dropSwappable && p.swap))
@@ -2672,6 +2734,8 @@ export const deckGenerate = inngest.createFunction(
         const carriedOriginals = new Map(
           (enhanceImages?.pictures ?? []).flatMap((p) => (p.originalAssetId ? [[p.assetId, p.originalAssetId] as const] : [])),
         );
+        // Pictures with words: never cropped, stamped data-asset-text.
+        const carriedTextIds = textPictureIds(enhanceImages?.pictures ?? []);
         // Single full-slide photos: the slide's photo background (data-bg-asset).
         const carriedBackdropIds = new Set(
           (enhanceImages?.pictures ?? []).filter((p) => p.cls === "backdrop").map((p) => p.assetId),
@@ -2706,6 +2770,7 @@ export const deckGenerate = inngest.createFunction(
                 projectId,
                 carriedAssetIds,
                 carriedOriginals,
+                carriedTextIds,
               ),
               carriedTables,
             ),
@@ -3220,7 +3285,7 @@ export const deckGenerate = inngest.createFunction(
         // self-correction) by one follow-up turn with the deck so far as
         // context. Comped: the user never pays for the model's loss. One round;
         // what is still broken after it is logged below.
-        const reworkRun = (data.brief as { reworkDeck?: boolean } | null)?.reworkDeck === true && enhanceImages != null;
+        const reworkRun = enhanceFlags(data.brief).textRework && enhanceImages != null;
         if (reworkRun && enhanceImages) {
           const checkCount = enhanceImages.fileIds.length || slides.length;
           const picturesBySlide = new Map<number, string[]>();
@@ -3233,6 +3298,7 @@ export const deckGenerate = inngest.createFunction(
             picturesBySlide,
             slides.map((sl) => sl.html ?? ""),
             checkCount,
+            readableWidths(enhanceImages.pictures ?? []),
           ).filter((b) => b.slide <= slides.length);
           if (broken.length > 0) {
             const pictureBlocks = new Map<number, string>();
@@ -3249,7 +3315,9 @@ export const deckGenerate = inngest.createFunction(
               );
             }
             try {
-              const repair = await client.messages.create({
+              // Streamed: the SDK refuses a non-streaming call whose max_tokens could
+              // run past 10 minutes.
+              const repair = await client.messages.stream({
                 model: callParams.model,
                 max_tokens: Math.min(callParams.maxTokens, 2_000 + 5_000 * broken.length),
                 // The lowest thinking the model takes: Sonnet 5.5 rejects
@@ -3272,7 +3340,7 @@ export const deckGenerate = inngest.createFunction(
                     content: reworkRepairMessage(broken, enhanceImages.textPerSlide, pictureBlocks),
                   },
                 ],
-              });
+              }).finalMessage();
               const repairText = repair.content.map((b) => (b.type === "text" ? b.text : "")).join("");
               const repairSplitter = new StreamingHtmlSplitter();
               let revised = 0;
@@ -3529,6 +3597,54 @@ export const deckGenerate = inngest.createFunction(
       manifest.slides = manifest.slides.map((s) => {
         const html = neutralizeGenImages(s.html, seedable?.get(s.slideId));
         return html === s.html ? s : { ...s, html };
+      });
+    }
+
+    // "Slides to check" (lib/enhance/check.ts): the plan's signs of success,
+    // checked against the finished text, posted to the studio assistant
+    // thread. Before the save, so the note is there when the deck completes.
+    const checkPlan = readRedesignPlan(enhanceImages?.plan ?? null);
+    if (checkPlan && enhanceImages && manifest.slides.length > 0) {
+      const sourceTexts = enhanceImages.textPerSlide;
+      const pictures = enhanceImages.pictures ?? [];
+      await step.run("enhance-slide-check", async () => {
+        try {
+          const count = Math.min(sourceTexts.length, manifest.slides.length);
+          const htmls = manifest.slides.slice(0, count).map((sl) => sl.html ?? "");
+          const findings: MeasuredFinding[] = [];
+          for (let i = 0; i < count; i++) {
+            const numbers = missingSourceNumbers([sourceTexts[i] ?? ""], [htmls[i]]);
+            const lostPictures = pictures.filter(
+              (p) => p.slideIndex === i && p.cls !== "page" && p.cls !== "backdrop" && !p.swap && !htmls[i].includes(p.assetId),
+            ).length;
+            if (numbers.length > 0 || lostPictures > 0) findings.push({ slide: i + 1, numbers, pictures: lostPictures });
+          }
+          const result = await checkRedesign({
+            plan: checkPlan,
+            sourceTexts: sourceTexts.slice(0, count),
+            slideHtml: htmls,
+            findings,
+            exactWording: !enhanceFlags(data.brief).textRework,
+          });
+          if (!result) return;
+          const project = await prisma.project.findUnique({ where: { id: projectId }, select: { userId: true } });
+          if (!project) return;
+          await prisma.assistantMessage.create({
+            data: {
+              projectId,
+              userId: project.userId,
+              role: "assistant",
+              content: slideCheckMessage(result, count),
+              proposalJson: { kind: "check", slides: result.issues.map((x) => x.slide) },
+            },
+          });
+          logger.info("enhance_slide_check", { projectId, issues: result.issues.length, findings: findings.length, dropped: result.dropped ?? 0 });
+        } catch (err) {
+          logger.warn("enhance_slide_check_failed", {
+            projectId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
       });
     }
 

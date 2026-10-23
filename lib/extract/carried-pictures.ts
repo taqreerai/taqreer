@@ -93,8 +93,12 @@ export async function prepareCarriedPictures(opts: {
   sourceMime: string;
   // "Refresh my photos" (opt-in): see lib/extract/photo-refresh.ts.
   refresh?: { slideCount: number; paid: boolean; styleHint: string; palette: readonly string[] } | null;
-  // "Redesign freely": tag the pictures that may be swapped.
+  // Enhance's free layout (tidy wording or redrawn pictures): tag what each
+  // picture shows and whether it may be swapped.
   rework?: boolean;
+  // Tidy wording: a header table repeated on most slides is template chrome,
+  // not a carried table (its information is shown once).
+  dropChrome?: boolean;
 }): Promise<CarriedPictures> {
   if (opts.sourceMime !== PPTX_MIME && opts.sourceMime !== PDF_MIME) {
     return { hasContentImages: false, pictures: [], skipped: 0, tables: [] };
@@ -120,7 +124,7 @@ export async function prepareCarriedPictures(opts: {
     hasContentImages = [...classes.values()].includes("content");
     assets = await buildPptxAssets(buffer, visuals, classes);
     // Rework: lesson-info strips are template chrome; the redesign shows them once.
-    tables = tablesOf(visuals, opts.rework ? chromeTables(visuals) : undefined);
+    tables = tablesOf(visuals, opts.dropChrome ? chromeTables(visuals) : undefined);
   }
 
   const storable = assets.filter((a) => a.file.kind === "image");

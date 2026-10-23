@@ -15,6 +15,8 @@
 // image-model call: net-new slides use no background image (consistent with a
 // non-images FRAME deck), so the frost's promise holds without gpt-image cost.
 
+import { enhanceAnswerLines, readBriefAnswers } from "@/lib/enhance/answers";
+import { readRedesignPlan, redesignPlanLines } from "@/lib/enhance/plan";
 import { toSdkThinking } from "@/lib/anthropic/model-thinking";
 import Anthropic from "@anthropic-ai/sdk";
 import { isEmptySlideHtml, readLockedPages, type LockedPage } from "@/lib/deck/locked-pages";
@@ -56,6 +58,7 @@ import {
   CARRIED_TABLES_RULE,
   CARRIED_CHARTS_RULE,
   carriedSlideBlock,
+  textPictureIds,
   enforceCarriedAssetImgs,
   enforceCarriedTables,
   applyPageBackdrop,
@@ -235,10 +238,19 @@ export const deckUnlock = inngest.createFunction(
       // generation job's brief (the durable home; the raw upload is purged).
       let redesignSources: { position: number; text: string }[] = [];
       let rework = false;
+      let answerLines: string[] = [];
       for (const j of jobs) {
         const src = (j.inputJson as { brief?: { source?: { kind?: string; textPerSlide?: unknown } } } | null)?.brief?.source;
         if (src?.kind !== "enhance" || !Array.isArray(src.textPerSlide)) continue;
-        rework = (j.inputJson as { brief?: { reworkDeck?: boolean } } | null)?.brief?.reworkDeck === true;
+        const brief = (j.inputJson as { brief?: { reworkDeck?: boolean } } | null)?.brief;
+        // Tidy wording (lib/enhance/answers.ts); the tail follows the same
+        // start answers as the visible slides.
+        rework = brief?.reworkDeck === true;
+        const answers = readBriefAnswers(brief);
+        answerLines = answers ? enhanceAnswerLines(answers) : [];
+        // The redesign plan the visible slides followed (lib/enhance/plan.ts).
+        const plan = readRedesignPlan((j.inputJson as { enhancePlan?: unknown } | null)?.enhancePlan);
+        if (plan) answerLines = [...answerLines, ...redesignPlanLines(plan)];
         const texts = src.textPerSlide as unknown[];
         redesignSources = [];
         for (let idx = visibleCount; idx < total; idx++) {
@@ -256,9 +268,10 @@ export const deckUnlock = inngest.createFunction(
           tables: (c.tables ?? []).filter((x) => inTail(x.slideIndex)),
           redesignSources,
           rework,
+          answerLines,
         };
       }
-      return { pictures: [] as CarriedPictureRef[], tables: [] as CarriedTableRef[], redesignSources, rework };
+      return { pictures: [] as CarriedPictureRef[], tables: [] as CarriedTableRef[], redesignSources, rework, answerLines };
     });
     // Enhance teaser: the locked source pages kept at generation (PDF uploads
     // have no per-slide text, so these pages ARE the content).
@@ -295,7 +308,7 @@ export const deckUnlock = inngest.createFunction(
         ...(carried.tables.length > 0 ? [CARRIED_TABLES_RULE] : []),
         ...(carried.tables.some((x) => "kind" in x.spec) ? [CARRIED_CHARTS_RULE] : []),
         ...(carried.pictures.length > 0 ? [CARRIED_PICTURES_RULE] : []),
-        ...(carried.rework && carried.pictures.some((x) => x.swap || x.shows) ? [reworkPicturesRule(false)] : []),
+        ...(carried.pictures.some((x) => x.swap || x.shows) ? [reworkPicturesRule(false)] : []),
         "",
         ...blocks,
       ].join("\n");
@@ -305,6 +318,7 @@ export const deckUnlock = inngest.createFunction(
     const carriedAssets = new Map(
       carried.pictures.filter((x) => x.cls !== "page" && x.cls !== "backdrop").map((x) => [x.assetId, x.aspect] as const),
     );
+    const carriedTextIds = textPictureIds(carried.pictures);
     const carriedPageIds = new Set(carried.pictures.filter((x) => x.cls === "page").map((x) => x.assetId));
     const carriedOriginals = new Map(
       carried.pictures.flatMap((x) => (x.originalAssetId ? [[x.assetId, x.originalAssetId] as const] : [])),
@@ -345,7 +359,8 @@ export const deckUnlock = inngest.createFunction(
         },
         sourceDeckCss,
       );
-      const textMessage = carriedBlock ? `${continuation}\n${carriedBlock}` : continuation;
+      const withAnswers = carried.answerLines.length > 0 ? `${continuation}\n${carried.answerLines.join("\n")}` : continuation;
+      const textMessage = carriedBlock ? `${withAnswers}\n${carriedBlock}` : withAnswers;
       const pageImages = lockedPages.length > 0 ? await readLockedPages(projectId, lockedPages) : [];
       const userMessage: Anthropic.Messages.ContentBlockParam[] | string =
         pageImages.length > 0
@@ -423,7 +438,7 @@ export const deckUnlock = inngest.createFunction(
       // foreign (lib/deck/carried-assets.ts), same as generation's ingest.
       const decl = parseFrameSlide(
         enforceCarriedTables(
-          enforceCarriedAssetImgs(stripTextDashes(noStyles), projectId, carriedAssets, carriedOriginals),
+          enforceCarriedAssetImgs(stripTextDashes(noStyles), projectId, carriedAssets, carriedOriginals, carriedTextIds),
           carriedTables,
         ),
       );

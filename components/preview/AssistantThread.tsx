@@ -52,7 +52,9 @@ export type AssistantMessageRow = {
   pending?: boolean;
 };
 
-export function useAssistantThread(projectId: string | null) {
+// reloadKey: bumped when a generation finishes, so a note the run posted
+// (an Enhance "Slides to check", lib/enhance/check.ts) appears in place.
+export function useAssistantThread(projectId: string | null, reloadKey = 0) {
   const [messages, setMessages] = useState<AssistantMessageRow[]>([]);
   useEffect(() => {
     if (!projectId) return;
@@ -66,8 +68,13 @@ export function useAssistantThread(projectId: string | null) {
     return () => {
       alive = false;
     };
-  }, [projectId]);
+  }, [projectId, reloadKey]);
   return { messages, setMessages };
+}
+
+/** An Enhance "Slides to check" note (posted by the generator, not a reply). */
+export function isCheckNote(m: AssistantMessageRow): boolean {
+  return m.role === "assistant" && (m.proposalJson as { kind?: unknown } | null)?.kind === "check";
 }
 
 function isProposal(p: AssistantMessageRow["proposalJson"]): p is Proposal {

@@ -9,6 +9,12 @@ import {
   snapshotCarried,
 } from "@/lib/deck/carried-assets";
 import { inngest } from "@/inngest/client";
+import {
+  pictureTextComment,
+  pictureTextFallback,
+  pictureTextTarget,
+  transcribePicture,
+} from "@/lib/assistant/picture-text";
 import { holdCredits, settleHold } from "@/lib/credits/server";
 import { regenCost } from "@/lib/credits/cost";
 import { ownerGetsVisionReview } from "@/lib/deck/review-gate";
@@ -855,6 +861,21 @@ export const deckRegeneratePartial = inngest.createFunction(
           const isFrame =
             frameRegenSystemPrompt !== null &&
             (sourceSlide?.html.includes("data-tq-frame") ?? false);
+          // Assistant "picture words to text" (lib/assistant/picture-text.ts):
+          // a PICTURE TEXT comment on a picture that is on this slide becomes
+          // the picture's own words, and the picture is not put back below.
+          const convertedPictures = new Set<string>();
+          const slideComments = await Promise.all(
+            comments.map(async (c) => {
+              const assetId = c.slideId === slideId ? pictureTextTarget(c.content) : null;
+              if (!assetId || !sourceSlide?.html.includes(`data-asset="${assetId}"`)) return c;
+              const words = await transcribePicture(projectId, assetId);
+              logger.info("partial_regen_picture_text", { projectId, slideId, assetId, ok: words != null });
+              if (!words) return { ...c, content: pictureTextFallback(assetId) };
+              convertedPictures.add(assetId);
+              return { ...c, content: pictureTextComment(assetId, words) };
+            }),
+          );
           const userMessage = isFrame
             ? frameRegenUserMessage(
                 {
@@ -869,7 +890,7 @@ export const deckRegeneratePartial = inngest.createFunction(
                     sourceSlide!.html
                       .slice(sourceSlide!.html.indexOf("</style>") + 8)
                       .slice(0, 12_000),
-                  comments: comments
+                  comments: slideComments
                     .filter((c) => c.slideId === slideId)
                     .map((c) => ({
                       content: c.content,
@@ -880,7 +901,7 @@ export const deckRegeneratePartial = inngest.createFunction(
                 },
                 sourceDeckCss,
               )
-            : buildPartialUserMessage(source, slideId, comments);
+            : buildPartialUserMessage(source, slideId, slideComments);
           // Mode mirrors what buildPartialUserMessage picks internally:
           // a slide with comments → apply-comments (strict preservation);
           // a slide without → redesign (variation required). Keeps the
@@ -964,6 +985,8 @@ export const deckRegeneratePartial = inngest.createFunction(
             // links, exact tables, and anything the model dropped is put back
             // (the bake's review then places it; it can no longer drop it).
             const carriedSnap = snapshotCarried(sourceSlide!.html);
+            // A picture turned into text leaves for good (an <img> of it is removed).
+            for (const id of convertedPictures) carriedSnap.assets.delete(id);
             if (hasCarried(carriedSnap)) {
               const restored = restoreCarried(regenBody, projectId, carriedSnap);
               regenBody = appendMissingCarried(restored.html, projectId, carriedSnap, restored.missing);

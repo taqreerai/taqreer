@@ -41,6 +41,8 @@ import { detectLanguageFromPages } from "./language-vision";
 import { readOrnamentLabels } from "./ornament-labels";
 import { chromeTables, classifyPptxPictures, extractPptxVisuals, type PptxVisuals } from "./pptx-visuals";
 import { decideRework, type ReworkDecision } from "./rework-score";
+import { writeEnhanceQuestions } from "./enhance-questions";
+import type { EnhanceQuestions } from "@/lib/enhance/answers";
 import { extractTextPerSlide } from "./text-pptx";
 import { pdfToText } from "./pdf-to-text";
 
@@ -49,6 +51,9 @@ import { pdfToText } from "./pdf-to-text";
 export type ExtractionInput = {
   buffer: Buffer;
   mime: string;
+  // /enhance: write the start questions' labels in this language
+  // (lib/extract/enhance-questions.ts). Absent for the other flows.
+  enhanceLocale?: "ar" | "en";
 };
 
 export type ExtractionResult = {
@@ -109,6 +114,8 @@ export type ExtractionResult = {
   fullText: string;
   /** Rework or Preserve (lib/extract/rework-score.ts), preselected on /enhance. */
   rework: ReworkDecision;
+  /** /enhance only: the start questions' labels (null when the call could not run). */
+  questions?: EnhanceQuestions | null;
 };
 
 // Tables and charts that carry content (template chrome tables excluded).
@@ -265,6 +272,7 @@ export async function extract(
   if (language === null) language = await detectLanguageFromPages(pdfBytes);
 
   const pictureClasses = visuals ? [...classifyPptxPictures(visuals).values()] : [];
+  const decorPictures = pictureClasses.filter((c) => c === "repeated" || c === "background" || c === "ornament").length;
   const rework = decideRework({
     sourceKind: isPptx ? "pptx" : isDocx ? "docx" : "pdf",
     portrait: format === "9:16",
@@ -275,9 +283,19 @@ export async function extract(
     tablesAndCharts: contentTables(visuals),
     captureSlides: pictureClasses.filter((c) => c === "capture").length,
     // Screenshots of whole slides are neither content nor decoration here.
-    decorPictures: pictureClasses.filter((c) => c === "repeated" || c === "background" || c === "ornament").length,
+    decorPictures,
     allPictures: pictureClasses.filter((c) => c !== "capture").length,
   });
+  const sourceKind = isPptx ? "pptx" : isDocx ? "docx" : "pdf";
+  const questions = input.enhanceLocale
+    ? await writeEnhanceQuestions({
+        textPerSlide: isPptx ? textPerSlide : [fullText],
+        contentPictures: pictureClasses.filter((c) => c === "content").length,
+        decorPictures,
+        sourceKind,
+        locale: input.enhanceLocale,
+      })
+    : undefined;
 
   return {
     pdfBytes,
@@ -289,5 +307,6 @@ export async function extract(
     textPerSlide,
     fullText,
     rework,
+    ...(questions !== undefined ? { questions } : {}),
   };
 }

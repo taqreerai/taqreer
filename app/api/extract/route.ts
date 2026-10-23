@@ -100,6 +100,8 @@ export async function POST(request: Request) {
     const file = formData.get("file");
     const rawFormat = String(formData.get("format") ?? "16:9");
     const rawKind = String(formData.get("kind") ?? "enhance");
+    // The page's language: /enhance's start questions are worded in it.
+    const locale = formData.get("locale") === "en" ? "en" : "ar";
 
     // Allowlist the flow kind. It is persisted to Job.inputJson.flowKind
     // and emitted to Inngest, where extract-source branches on it, so a
@@ -262,6 +264,7 @@ export async function POST(request: Request) {
       // "content" | "design" for /mimic: lets extract-source skip the upload for
       // a content file consumed as text (see route above).
       ...(mimicRole ? { mimicRole } : {}),
+      locale,
     };
     try {
       // Event-level id makes the trigger idempotent: re-firing with the same id

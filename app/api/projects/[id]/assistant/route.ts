@@ -109,10 +109,30 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     select: { role: true, content: true },
   });
 
+  // What each of the user's own pictures shows (Enhance analysis), so "the
+  // think, pair, share picture" can be matched to its id.
+  let pictureNotes: Map<string, string> | undefined;
+  if (slides.some((s) => s.html.includes("data-asset="))) {
+    const job = await prisma.job.findFirst({
+      where: { projectId: id, type: "deck.generate", status: "succeeded" },
+      orderBy: { createdAt: "desc" },
+      select: { inputJson: true },
+    });
+    const pictures = (job?.inputJson as { carried?: { pictures?: unknown } } | null)?.carried?.pictures;
+    if (Array.isArray(pictures)) {
+      pictureNotes = new Map(
+        pictures.flatMap((p: { assetId?: unknown; shows?: unknown }) =>
+          typeof p?.assetId === "string" && typeof p.shows === "string" ? [[p.assetId, p.shows.slice(0, 80)] as const] : [],
+        ),
+      );
+    }
+  }
+
   let answer;
   try {
     answer = await askAssistant({
       slides,
+      pictureNotes,
       scope,
       scopeSlideNumber,
       message,

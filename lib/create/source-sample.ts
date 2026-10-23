@@ -37,14 +37,16 @@ export async function uploadedSourceText(
 }
 
 /**
- * Enhance "Auto" change level: the Rework / Preserve decision the extract job
- * recorded for this user's uploaded source (lib/extract/rework-score.ts).
- * Null when the job is missing or older than the field.
+ * What extraction recorded for this user's /enhance upload: the Rework or
+ * Preserve call (lib/extract/rework-score.ts) and the audience the start
+ * questions read (lib/extract/enhance-questions.ts). Both null when the job
+ * is missing or older than the fields. The audience is read here, never taken
+ * from the request.
  */
-export async function uploadedReworkMode(
+export async function uploadedEnhanceAnalysis(
   supabaseUserId: string,
   sourcePath: string,
-): Promise<"rework" | "preserve" | null> {
+): Promise<{ mode: "rework" | "preserve" | null; audience: string | null }> {
   try {
     const job = await prisma.job.findFirst({
       where: {
@@ -57,9 +59,14 @@ export async function uploadedReworkMode(
       orderBy: { createdAt: "desc" },
       select: { outputJson: true },
     });
-    const mode = (job?.outputJson as { rework?: { mode?: unknown } } | null)?.rework?.mode;
-    return mode === "rework" || mode === "preserve" ? mode : null;
+    const out = job?.outputJson as { rework?: { mode?: unknown }; questions?: { audience?: unknown } | null } | null;
+    const mode = out?.rework?.mode;
+    const audience = out?.questions?.audience;
+    return {
+      mode: mode === "rework" || mode === "preserve" ? mode : null,
+      audience: typeof audience === "string" && audience ? audience.slice(0, 80) : null,
+    };
   } catch {
-    return null;
+    return { mode: null, audience: null };
   }
 }

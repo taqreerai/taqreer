@@ -76,7 +76,22 @@ export type BrokenSlide = {
   slide: number; // 1-based
   kept: number; // share of the source slide's own words found on its slide
   missingPictures: string[]; // carried content pictures not on its slide
+  // Pictures with words drawn narrower than they can be read: id -> floor px.
+  smallPictures?: { id: string; min: number }[];
 };
+
+// A drawn width this far under the floor still passes (rounding, a gap).
+const SMALL_SLACK = 0.9;
+
+/** The inline px width of the <img> carrying data-asset="id", or null. */
+function drawnWidth(html: string, id: string): number | null {
+  for (const m of html.matchAll(/<img\b[^>]*>/gi)) {
+    if (!new RegExp(`\\sdata-asset\\s*=\\s*["']${id}["']`, "i").test(m[0])) continue;
+    const w = m[0].match(/(?:^|[;"'\s])width\s*:\s*([\d.]+)px/i);
+    return w ? Number(w[1]) : null;
+  }
+  return null;
+}
 
 /**
  * A free redesign is one slide per source slide, so slide N is checked against
@@ -91,6 +106,8 @@ export function brokenReworkSlides(
   picturesBySlide: ReadonlyMap<number, readonly string[]>,
   slideHtml: readonly string[],
   checkCount: number,
+  // Pictures with words: assetId -> smallest readable width (px).
+  readable?: ReadonlyMap<string, number>,
 ): BrokenSlide[] {
   const perSource = sourceTexts.map((t) => new Set(words(t).filter((w) => w.length >= 4)));
   const seenOn = new Map<string, number>();
@@ -107,8 +124,13 @@ export function brokenReworkSlides(
     const have = new Set(words(htmlText(html)));
     const kept = own.length < MIN_WORDS ? 1 : own.filter((w) => have.has(w)).length / own.length;
     const missingPictures = pictures.filter((id) => !html.includes(id));
-    if (kept < KEPT_BELOW || missingPictures.length > 0) {
-      out.push({ slide: i + 1, kept: Math.round(kept * 100) / 100, missingPictures });
+    const smallPictures = pictures.flatMap((id) => {
+      const min = readable?.get(id);
+      const w = min ? drawnWidth(html, id) : null;
+      return min && w !== null && w < min * SMALL_SLACK ? [{ id, min }] : [];
+    });
+    if (kept < KEPT_BELOW || missingPictures.length > 0 || smallPictures.length > 0) {
+      out.push({ slide: i + 1, kept: Math.round(kept * 100) / 100, missingPictures, smallPictures });
     }
   }
   return out;
@@ -129,12 +151,15 @@ export function reworkRepairMessage(
     const why = [
       b.kept < 1 ? `only ${Math.round(b.kept * 100)}% of its words made it` : "",
       b.missingPictures.length > 0 ? `content pictures left out: ${b.missingPictures.join(", ")}` : "",
+      (b.smallPictures ?? []).length > 0
+        ? `pictures with words too small to read: ${b.smallPictures!.map((x) => `${x.id} (at least ${x.min}px wide)`).join(", ")}`
+        : "",
     ]
       .filter(Boolean)
       .join("; ");
     return `── SLIDE ${b.slide}: ${why} ──\nSource slide ${b.slide} text (every fact, term, exercise item and number must appear):\n${text}\n${pictureBlocks.get(b.slide - 1) ?? ""}`;
   });
-  return `REPAIR PASS. Your deck above lost content on ${broken.length === 1 ? "one slide" : `${broken.length} slides`}: slide N must carry the content of source slide N. Re-emit ONLY the slides listed below, each as ONE complete corrected <section> with the same data-label, data-role and background attributes as your version of that slide, PLUS data-revises="N" (N = the slide number). Keep the deck's design system and look; rebuild the slide so all of its source content and every listed picture (tag unchanged) fit. No <style> block, no prose, no fences: the first character of your reply is the < of the first section.
+  return `REPAIR PASS. Your deck above lost content or readability on ${broken.length === 1 ? "one slide" : `${broken.length} slides`}: slide N must carry the content of source slide N. Re-emit ONLY the slides listed below, each as ONE complete corrected <section> with the same data-label, data-role and background attributes as your version of that slide, PLUS data-revises="N" (N = the slide number). Keep the deck's design system and look; rebuild the slide so all of its source content and every listed picture (tag unchanged) fit. No <style> block, no prose, no fences: the first character of your reply is the < of the first section.
 
 ${parts.join("\n\n")}`;
 }

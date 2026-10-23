@@ -35,9 +35,9 @@
 
 import { STYLE_REQUIRES_IMAGES } from "@/components/create/OutputCards";
 import { AIImagesPanel } from "@/components/brand/AIImagesPanel";
-import { ChangeLevelPanel, type ChangeLevel } from "@/components/brand/ChangeLevelPanel";
+import { EnhanceQuestionsDialog } from "@/components/create/EnhanceQuestionsDialog";
+import { recommendedAnswers, type EnhanceAnswers, type EnhanceQuestions } from "@/lib/enhance/answers";
 import type { ReworkDecision } from "@/lib/extract/rework-score";
-import { PhotoRefreshPanel } from "@/components/brand/PhotoRefreshPanel";
 import { isImagesLocked } from "@/lib/images/images-gating";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -141,8 +141,10 @@ type ExtractCompletedResponse = {
     textPerSlide: string[];
     sourcePath: string;
     sourceMime: string;
-    // Rework or Preserve, preselected below (absent on older extractions).
+    // Rework or Preserve: preselects the start questions (absent on older extractions).
     rework?: ReworkDecision;
+    // The start questions' deck-specific labels (lib/extract/enhance-questions.ts).
+    questions?: EnhanceQuestions | null;
   };
   fileName?: string;
   flowKind?: string;
@@ -390,14 +392,10 @@ export default function EnhanceContentPage() {
   // here (2026-10-10): with it off every photo became an "Upload your
   // picture" placeholder, which read as a broken deck. Users can switch it off.
   const [imagesMode, setImagesMode] = useState<boolean>(true);
-  // "Refresh my photos" (default off = keep every original photo).
-  const [refreshPhotos, setRefreshPhotos] = useState(false);
-  // "How much to change": Auto follows the file's analysis, which the server
-  // applies at generation (a visitor's file is read only after sign-in).
-  // Refresh my photos belongs to Keep exact (Redesign freely refreshes on its own).
-  const [changeLevel, setChangeLevel] = useState<ChangeLevel>("auto");
-  const keepExact =
-    changeLevel === "keep" || (changeLevel === "auto" && extracted?.rework?.mode === "preserve");
+  // The start questions (components/create/EnhanceQuestionsDialog.tsx): Create
+  // opens them once the file is read; Start in the dialog runs the deck. They
+  // replace the old "How much to change" and "Refresh my photos" controls.
+  const [questionsOpen, setQuestionsOpen] = useState(false);
   // Region-limited free accounts can't use generated images (lib/images/images-
   // gating.ts): the default-ON state must not reach the server for them, or the
   // run would be refused with images_locked. Everyone else keeps the toggle.
@@ -648,6 +646,7 @@ export default function EnhanceContentPage() {
         formData.append("file", file);
         formData.append("kind", "enhance");
         formData.append("format", "16:9");
+        formData.append("locale", locale === "en" ? "en" : "ar");
 
         // Phase 1 — upload (real bytes → 0..35% of the prep bar).
         const { jobId } = await uploadExtract(
@@ -779,7 +778,7 @@ export default function EnhanceContentPage() {
       // shown, Next disabled). removeFile still sets the flag itself.
       controller.abort();
     };
-  }, [file, dict, guest]);
+  }, [file, dict, guest, locale]);
 
   // ─── Guest draft (2026-10-06) ──────────────────────────────────
   // Same model as /create: a visitor's setup is saved as they go, and back
@@ -798,8 +797,6 @@ export default function EnhanceContentPage() {
     googleFamily: guestFont.googleFamily,
     uploadedFonts: guestFont.uploadedFonts,
     imagesMode,
-    refreshPhotos,
-    changeLevel,
   };
   const guestSettingsJson = JSON.stringify(guestSettings);
   // A visitor who comes back still signed out gets their draft back too
@@ -873,8 +870,6 @@ export default function EnhanceContentPage() {
         setLoadedLogo(null);
       }
       setImagesMode(!!d.imagesMode);
-      setRefreshPhotos(!!d.refreshPhotos);
-      if (d.changeLevel === "keep" || d.changeLevel === "rework") setChangeLevel(d.changeLevel);
       // Starts the upload + analysis when signed in (a visitor's file waits).
       if (draft.files.content) validateAndSetFile(draft.files.content);
       setStep(mode === "generate" ? ENHANCE_LAST_STEP : Math.min(ENHANCE_LAST_STEP, Math.max(0, d.step)));
@@ -908,7 +903,22 @@ export default function EnhanceContentPage() {
   // 1. Upload optional logo + font files (parallel) to brand-assets
   // 2. Resolve font slots into the brand.fonts shape
   // 3. POST /api/projects with the merged brief
-  const handleGenerate = async () => {
+  // Create: the questions about this deck once its analysis wrote them; a file
+  // with none (the call failed, an older extraction) starts on the suggested
+  // answers, never on generic questions.
+  const startOrAsk = () => {
+    if (!extracted) return;
+    if (extracted.questions) {
+      setQuestionsOpen(true);
+      return;
+    }
+    void handleGenerate({
+      answers: recommendedAnswers(extracted.rework ?? null, null, imagesOn),
+      notes: "",
+    });
+  };
+
+  const handleGenerate = async (start: { answers: EnhanceAnswers; notes: string }) => {
     if (stage !== "ready" || !extracted || !file) return;
     setError("");
     setStage("submitting");
@@ -1019,6 +1029,8 @@ export default function EnhanceContentPage() {
         slideCount: output.slideCount ?? { mode: "auto", value: null },
       };
 
+      const designInstructions = [instructions.trim(), start.notes].filter(Boolean).join("\n\n");
+
       // Content stub — enhance flow has no text content; the source
       // file IS the content.
       const content = { type: "source" as const, fileName: file.name };
@@ -1045,16 +1057,16 @@ export default function EnhanceContentPage() {
           language: extracted.language ?? "ar",
           saveBrandKit,
           imagesMode: imagesOn,
-          ...(refreshPhotos && keepExact ? { refreshPhotos: true } : {}),
-          changeLevel,
+          enhanceAnswers: start.answers,
           slideCount: resolvedSlideCount,
           quality,
           ...(templateId ? { templateId } : {}),
           ...(source ? { source } : {}),
           // Optional user design instructions. Omitted when empty so an
           // instruction-less run's payload stays byte-for-byte unchanged.
-          ...(instructions.trim()
-            ? { enhance: { instructions: instructions.trim() } }
+          // The start questions' "Something else" text rides along with them.
+          ...(designInstructions
+            ? { enhance: { instructions: designInstructions } }
             : {}),
         }),
       });
@@ -1443,23 +1455,6 @@ export default function EnhanceContentPage() {
                 disabled={stage === "submitting"}
               />
             </div>
-            <div className="border-t border-[var(--tq-border-hairline)] pt-4 stage:pt-3 stage-tight:pt-2">
-              <ChangeLevelPanel
-                value={changeLevel}
-                onChange={setChangeLevel}
-                decision={extracted?.rework ?? null}
-                disabled={stage === "submitting"}
-              />
-            </div>
-            {keepExact ? (
-              <div className="border-t border-[var(--tq-border-hairline)] pt-4 stage:pt-3 stage-tight:pt-2">
-                <PhotoRefreshPanel
-                  value={refreshPhotos}
-                  onChange={setRefreshPhotos}
-                  disabled={stage === "submitting"}
-                />
-              </div>
-            ) : null}
           </WizardCard>
         </SplitStep>
 
@@ -1525,6 +1520,19 @@ export default function EnhanceContentPage() {
         </SplitStep>
         </WizardStage>
 
+        {questionsOpen && extracted?.questions ? (
+          <EnhanceQuestionsDialog
+            questions={extracted.questions}
+            decision={extracted.rework ?? null}
+            imagesOn={imagesOn}
+            onClose={() => setQuestionsOpen(false)}
+            onStart={(answers, notes) => {
+              setQuestionsOpen(false);
+              void handleGenerate({ answers, notes });
+            }}
+          />
+        ) : null}
+
         <WizardBar
           step={step}
           lastStep={ENHANCE_LAST_STEP}
@@ -1540,7 +1548,7 @@ export default function EnhanceContentPage() {
             <GenerateSplitButton
               guest={guest}
               autoStart={autoStart}
-              onGenerate={guest ? () => void openGuestSignup() : handleGenerate}
+              onGenerate={guest ? () => void openGuestSignup() : startOrAsk}
               quality={quality}
               onQualityChange={setQuality}
               slideCount={extracted?.pageCount ?? undefined}

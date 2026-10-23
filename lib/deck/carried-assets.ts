@@ -37,6 +37,44 @@ function setAttr(tag: string, name: string, value: string): string {
 // Tallest example size shown for a carried picture (px, 1920x1080 canvas).
 const EXAMPLE_MAX_HEIGHT = 560;
 
+// Pictures with words in them (owner, 2026-10-23: a strategy card and a
+// worksheet came out as thumbnails nobody could read when projected). The
+// smallest width that keeps their words readable: about 60% of the slide for
+// the only one on a slide, less when two or more share it, never below the
+// picture's own size in the source when it is alone, and never taller than the well allows.
+const READABLE_WIDTH_ALONE = 1150;
+const READABLE_WIDTH_SHARED = 860;
+const READABLE_MAX_HEIGHT = 700;
+const READABLE_MAX_WIDTH = 1700;
+
+/** A carried content picture whose words must stay readable. */
+export function isTextPicture(p: Pick<CarriedPictureRef, "cls" | "kind" | "swap">): boolean {
+  return p.cls === "content" && (p.kind === "graphic" || p.kind === "document") && !p.swap;
+}
+
+/** Ids of the pictures with words in them (graphics and documents). */
+export function textPictureIds(pictures: readonly CarriedPictureRef[]): Set<string> {
+  return new Set(pictures.filter(isTextPicture).map((p) => p.assetId));
+}
+
+/** Smallest readable width (px) for a picture with words, given how many such pictures share its slide. */
+export function readableMinWidth(p: Pick<CarriedPictureRef, "aspect" | "box">, onSlide: number): number {
+  const source = p.box ? Math.round(Math.min(1, p.box.w) * 1920) : 0;
+  // Shared: a fixed width that lets two sit side by side or stack under a title.
+  const target = onSlide > 1 ? READABLE_WIDTH_SHARED : Math.max(source, READABLE_WIDTH_ALONE);
+  const aspect = Number.isFinite(p.aspect) && p.aspect > 0 ? p.aspect : 1;
+  return Math.min(READABLE_MAX_WIDTH, target, Math.round(READABLE_MAX_HEIGHT * aspect));
+}
+
+/** assetId -> readable floor for every picture with words in the list. */
+export function readableWidths(pictures: readonly CarriedPictureRef[]): Map<string, number> {
+  const perSlide = new Map<number, number>();
+  for (const p of pictures) if (isTextPicture(p)) perSlide.set(p.slideIndex, (perSlide.get(p.slideIndex) ?? 0) + 1);
+  return new Map(
+    pictures.filter(isTextPicture).map((p) => [p.assetId, readableMinWidth(p, perSlide.get(p.slideIndex) ?? 1)] as const),
+  );
+}
+
 function px(style: string, prop: "width" | "height"): number | null {
   const m = style.match(new RegExp(`(?:^|;)\\s*${prop}\\s*:\\s*([\\d.]+)px`, "i"));
   return m ? Number(m[1]) : null;
@@ -120,6 +158,9 @@ export function enforceCarriedAssetImgs(
   // Photo refresh: new assetId -> the original it replaced, stamped as
   // data-asset-original so the studio's "Restore original" works.
   originals?: ReadonlyMap<string, string>,
+  // Pictures with words in them (graphics, documents): always shown whole,
+  // stamped data-asset-text so later rewrites keep knowing it.
+  textAssets?: ReadonlySet<string>,
 ): string {
   if (!/<img\b/i.test(html)) return html;
   return html.replace(IMG_RE, (tag) => {
@@ -127,10 +168,16 @@ export function enforceCarriedAssetImgs(
     if (id !== null) {
       if (!assets.has(id)) return "";
       const style = (attr(tag, "style") ?? "").replace(/;?\s*object-fit\s*:[^;]*/gi, "").trim();
-      const fit = fitFor(style, assets.get(id));
+      // A picture with words is never cropped (owner, 2026-10-23: a "think,
+      // pair, share" card lost its top and bottom): the box the model drew
+      // can be squeezed by the layout after this check, so "cover" is only
+      // safe for photos.
+      const textual = textAssets?.has(id) === true || attr(tag, "data-asset-text") !== null;
+      const fit = textual ? "contain" : fitFor(style, assets.get(id));
       const nextStyle = `${style}${style && !style.endsWith(";") ? ";" : ""}object-fit:${fit}`;
       const aspect = assets.get(id);
       let stamped = aspect && Number.isFinite(aspect) ? setAttr(tag, "data-asset-aspect", String(aspect)) : tag;
+      if (textual) stamped = setAttr(stamped, "data-asset-text", "1");
       const orig = originals?.get(id);
       if (orig && attr(stamped, "data-asset-original") === null) {
         stamped = setAttr(stamped, "data-asset-original", `/api/assets/${projectId}/${orig}`);
@@ -252,6 +299,7 @@ export function carriedSlideBlock(
 `;
   }
   if (pictures.length > 0) {
+    const readable = readableWidths(pictures);
     out +=
       `── SLIDE ${slideNumber}: ORIGINAL PICTURES (place each one, tag unchanged) ──\n` +
       pictures
@@ -261,12 +309,16 @@ export function carriedSlideBlock(
           const w0 = p.cls === "small" ? 120 : p.box ? Math.max(200, Math.min(1800, Math.round(p.box.w * 1920))) : 720;
           // A slide's well is ~1060px tall and holds a title too: a tall example
           // size was copied as-is and ran past the canvas (prod 2026-10-22).
-          const w = Math.min(w0, Math.round(EXAMPLE_MAX_HEIGHT * p.aspect));
+          const floor = readable.get(p.assetId);
+          const w = floor ?? Math.min(w0, Math.round(EXAMPLE_MAX_HEIGHT * p.aspect));
+          const words = floor
+            ? `  HAS WORDS: keep it readable from the back of a room, at least ${floor}px wide (never a thumbnail, never cropped); shorten or move the slide's other elements to make room`
+            : "";
           const kind = p.kind ? `; ${p.kind}` : "";
           const where = p.box
             ? `${kind}; filled ${Math.round(Math.min(1, p.box.w) * 100)}% x ${Math.round(Math.min(1, p.box.h) * 100)}% of the source slide (importance hint, place it freely)`
             : kind;
-          return `<img data-asset="${p.assetId}" src="/api/assets/${projectId}/${p.assetId}" alt="${(p.altText ?? "").replace(/["<>&]/g, "")}">  aspect ${p.aspect} (e.g. ${w}x${Math.round(w / p.aspect)}px)${p.cls === "small" ? "  small: icon / logo / badge" : where}${p.shows ? `  shows: "${p.shows.replace(/["<>&]/g, "")}"` : ""}${p.animated ? "  ANIMATED: a moving picture; show it whole as a picture (never a background, never cropped, never replaced by a generated image)" : ""}${p.swap ? "  SWAPPABLE: generic clip-art (free redesign: may be left out or replaced, see FREE REDESIGN)" : ""}`;
+          return `<img data-asset="${p.assetId}" src="/api/assets/${projectId}/${p.assetId}" alt="${(p.altText ?? "").replace(/["<>&]/g, "")}">  aspect ${p.aspect} (e.g. ${w}x${Math.round(w / p.aspect)}px)${p.cls === "small" ? "  small: icon / logo / badge" : where}${words}${p.shows ? `  shows: "${p.shows.replace(/["<>&]/g, "")}"` : ""}${p.animated ? "  ANIMATED: a moving picture; show it whole as a picture (never a background, never cropped, never replaced by a generated image)" : ""}${p.swap ? "  SWAPPABLE: generic clip-art (free redesign: may be left out or replaced, see FREE REDESIGN)" : ""}`;
         })
         .join("\n") +
       "\n\n";
@@ -306,20 +358,23 @@ export function carriedSlideBlock(
 export type CarriedSnapshot = {
   assets: Map<string, number>; // assetId -> aspect (NaN when unknown)
   tables: Map<string, string>; // tableId -> the filled table HTML
+  text?: Set<string>; // assets stamped data-asset-text (never cropped)
 };
 
 export function snapshotCarried(html: string): CarriedSnapshot {
   const assets = new Map<string, number>();
+  const text = new Set<string>();
   for (const m of html.matchAll(IMG_RE)) {
     const id = attr(m[0], "data-asset");
     if (id) assets.set(id, Number(attr(m[0], "data-asset-aspect") ?? NaN));
+    if (id && attr(m[0], "data-asset-text") !== null) text.add(id);
   }
   const tables = new Map<string, string>();
   mapTableBoxes(html, (id, _open, inner) => {
     if (id && /<(table|svg)\b/i.test(inner)) tables.set(id, inner);
     return inner;
   });
-  return { assets, tables };
+  return { assets, tables, text };
 }
 
 export function hasCarried(snap: CarriedSnapshot): boolean {
@@ -331,7 +386,7 @@ export function restoreCarried(
   projectId: string,
   snap: CarriedSnapshot,
 ): { html: string; missing: string[] } {
-  let out = enforceCarriedAssetImgs(html, projectId, snap.assets);
+  let out = enforceCarriedAssetImgs(html, projectId, snap.assets, undefined, snap.text);
   out = mapTableBoxes(out, (id) => snap.tables.get(id) ?? null);
   const present = snapshotCarried(out);
   const missing = [
@@ -359,8 +414,9 @@ export function appendMissingCarried(
       const aspect = snap.assets.get(id)!;
       const w = 520;
       const h = Number.isFinite(aspect) && aspect > 0 ? Math.round(w / aspect) : 390;
+      const textual = snap.text?.has(id) === true;
       parts.push(
-        `<img data-asset="${id}"${Number.isFinite(aspect) ? ` data-asset-aspect="${aspect}"` : ""} src="/api/assets/${projectId}/${id}" alt="" style="width:${w}px;height:${h}px;object-fit:cover;border-radius:16px">`,
+        `<img data-asset="${id}"${Number.isFinite(aspect) ? ` data-asset-aspect="${aspect}"` : ""}${textual ? ` data-asset-text="1"` : ""} src="/api/assets/${projectId}/${id}" alt="" style="width:${w}px;height:${h}px;object-fit:${textual ? "contain" : "cover"};border-radius:16px">`,
       );
     } else if (snap.tables.has(id)) {
       const inner = snap.tables.get(id)!;
