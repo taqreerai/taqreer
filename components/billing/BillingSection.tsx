@@ -310,12 +310,12 @@ export function BillingSection({
                     return (
                       <div
                         key={fi}
-                        className={`flex items-center gap-2.5 whitespace-nowrap text-[13px] ${
+                        className={`flex items-start gap-2.5 text-[13px] leading-5 ${
                           enabled ? "" : "text-muted opacity-60"
                         } ${gateRow === fi ? "gate-feature-row -mx-2 rounded-lg px-2 py-1.5" : ""}`}
                       >
                         <span
-                          className="material-symbols-outlined"
+                          className="material-symbols-outlined shrink-0"
                           style={{
                             fontSize: 18,
                             color: enabled ? "var(--tq-violet)" : undefined,
