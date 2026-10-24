@@ -6,7 +6,7 @@
 //
 // Every slide's pictures are stored, not only the visible ones of a free-plan
 // teaser, so an unlock later can place them too (the raw upload itself is
-// purged after 24h by source-files-cleanup). PDF uploads go through
+// purged after 7 days by source-files-cleanup). PDF uploads go through
 // lib/extract/pdf-visuals.ts (phase 2); a PDF has no native tables here yet.
 
 import { tagReworkPictures, type PictureTag } from "@/lib/extract/rework-pictures";

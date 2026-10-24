@@ -30,6 +30,7 @@ import { localizedExtractError } from "@/lib/extract/error-codes";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { Tooltip } from "@/components/common/Tooltip";
 import { AIImagesPanel } from "@/components/brand/AIImagesPanel";
+import { mentionsPictures } from "@/lib/images/mentions-pictures";
 import {
   BrandCard,
   SplitStep,
@@ -1169,7 +1170,7 @@ export default function MimicFlow({
             </div>
           </div>
           <div className="border-t border-[var(--tq-border-hairline)] pt-4 stage:pt-3 stage-tight:pt-2">
-            <AIImagesPanel value={imagesMode} onChange={setImagesMode} disabled={submitting} />
+            <AIImagesPanel value={imagesMode} onChange={setImagesMode} disabled={submitting} hint={mentionsPictures(contentText)} />
           </div>
           </WizardCard>
         </SplitStep>

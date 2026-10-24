@@ -1662,6 +1662,7 @@
       "savedKits": "Saved brand kits",
       "aiImagesTitle": "Smart photos for your content",
       "aiImagesDesc": "AI photos generated to fit each slide",
+      "aiImagesHint": "Your content asks for pictures. Turn this on, or the slides keep empty picture boxes.",
       "fontInstallHint": "To edit text in this font smoothly in PowerPoint, install it on your computer.",
       "fontInstallCta": "Download {font}"
     },

@@ -58,6 +58,7 @@ import {
   assembleFramedSlide,
   ENHANCE_LAYOUT_MENU,
   type FrameDeckCtx,
+  decodeAttrEntities,
 } from "@/lib/deck/frame";
 import { gulfWardrobeSystemBlocks } from "@/inngest/prompts/gulf-wardrobe";
 import { isGulfImageContext } from "@/lib/geo/image-region";
@@ -187,6 +188,10 @@ type EnhanceImages = {
 // design reference. Appended AFTER the frame base so this override wins (later
 // instructions outrank earlier ones). The OUTPUT contract is untouched.
 const MIMIC_HTML_ADDENDUM = `MIMIC MODE — this is NOT an original-design task. Override "Design a complete, ORIGINAL slide deck — your own visual system" above: instead REPRODUCE the visual language of the attached DESIGN reference as faithfully as you can — its layout system, type hierarchy, spacing rhythm, shapes, grids, and decorative motifs — applied to this deck's content and recoloured to the injected brand variables (\`var(--brand-1)\`…, \`var(--font-heading)\`/\`var(--font-body)\`). Match the reference's look; don't invent a new one. (Output format is unchanged: one \`<style>\` then the \`<section>\` slides.)`;
+
+// Mimic with images OFF (owner, 2026-10-23: a deck came out with only the
+// reference's empty picture boxes, which nothing ever fills).
+const MIMIC_NO_IMG_ADDENDUM = `MIMIC WITHOUT IMAGES: images mode is OFF for this mimic, so no picture will ever be placed in this deck. The DESIGN reference may show photos or empty image-placeholder boxes: do NOT copy them as empty boxes, gradient blocks or photo frames. In their place use the slide's own content, a simple on-theme icon or shape, or a large typographic element, or give the space to the text. A slide must never show a blank area that looks like a missing picture.`;
 
 // Mimic's image addendum — used INSTEAD of IMG_ADDENDUM when images mode is ON on
 // a mimic run (opt-in via the GPT-images toggle). The generic IMG_ADDENDUM says
@@ -2597,6 +2602,9 @@ export const deckGenerate = inngest.createFunction(
           isImagesMode(data) && htmlSourceKind === "mimic"
             ? MIMIC_IMG_ADDENDUM
             : null,
+          !isImagesMode(data) && htmlSourceKind === "mimic"
+            ? MIMIC_NO_IMG_ADDENDUM
+            : null,
           htmlSourceKind === "mimic" ? MIMIC_HTML_ADDENDUM : null,
           data.type === "enhance" ? ENHANCE_HTML_ADDENDUM : null,
           isImagesMode(data) && htmlSourceKind === "enhance"
@@ -2686,9 +2694,23 @@ export const deckGenerate = inngest.createFunction(
         // budget. null = legacy/uncharged job → no cap (preserve old
         // behavior). brief.slideCount is already pinned to holdSlides, so
         // an obedient deck lands exactly here and nothing truncates.
-        const slideCeiling =
+        // A free teaser also caps at its own visible count, so a job that lost
+        // its `credit` block still stops there (a retry once ran uncapped: the
+        // model had 5 pages and invented 25 number-only slides).
+        const holdCeiling =
           (data as { credit?: { holdSlides?: number } }).credit?.holdSlides ??
           null;
+        const capTeaser = (data.brief as {
+          teaser?: { plannedTotal?: number; lockedCount?: number } | null;
+        } | null)?.teaser;
+        const capVisible =
+          capTeaser && typeof capTeaser.plannedTotal === "number" && capTeaser.plannedTotal > 0
+            ? Math.max(1, capTeaser.plannedTotal - (capTeaser.lockedCount ?? 0))
+            : null;
+        const slideCeiling =
+          capVisible != null
+            ? Math.min(capVisible, holdCeiling ?? capVisible)
+            : holdCeiling;
         let cappedOut = false;
         let lastCancelCheckAt = 0;
         let lastThinkingWriteAt = 0;
@@ -3154,7 +3176,9 @@ export const deckGenerate = inngest.createFunction(
                 coverSlide.html,
               )
             : null;
-          const claudeTitle = (coverTitleMatch?.[2] ?? coverTitleMatch?.[3] ?? "")
+          const claudeTitle = decodeAttrEntities(
+            coverTitleMatch?.[2] ?? coverTitleMatch?.[3] ?? "",
+          )
             .trim()
             .slice(0, 160);
           const briefTitle = (data.brief as { title?: string } | null)?.title

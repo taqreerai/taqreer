@@ -274,6 +274,19 @@ const attr = (tag: string, name: string): string | null => {
   return m ? m[1] : null;
 };
 
+// Attribute values arrive entity-encoded ("A &amp; B"). Decode them to plain
+// text so the title is stored once-encoded: `esc` re-encodes on stamp, and
+// without this every pass stacked another layer ("&amp;amp;"). `&amp;` last.
+export function decodeAttrEntities(s: string): string {
+  return s
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0*39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
 const esc = (s: string) =>
   s
     .replace(/&/g, "&amp;")
@@ -317,7 +330,7 @@ export function parseFrameSlide(sectionHtml: string): FrameSlideDecl {
     bgAsset: attr(openTag, "data-bg-asset"),
     bgAssetSrc: ((v) => (isBgAssetSrc(v) ? v : null))(attr(openTag, "data-bg-asset-src")),
     bgScrim: scrim === "soft" || scrim === "strong" ? scrim : "none",
-    deckTitle: attr(openTag, "data-deck-title"),
+    deckTitle: ((v) => (v == null ? null : decodeAttrEntities(v)))(attr(openTag, "data-deck-title")),
     deckSlides: attr(openTag, "data-deck-slides"),
     wellHtml: wellMatch
       ? wellMatch[1]
@@ -487,7 +500,7 @@ export function frameCtxFromStoredCover(
   const tag = extractStoredSectionTag(coverHtml);
   return {
     direction,
-    deckTitle: attr(tag, "data-deck-title"),
+    deckTitle: ((v) => (v == null ? null : decodeAttrEntities(v)))(attr(tag, "data-deck-title")),
   };
 }
 

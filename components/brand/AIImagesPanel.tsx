@@ -28,10 +28,13 @@ export function AIImagesPanel({
   value,
   onChange,
   disabled = false,
+  hint = false,
 }: {
   value: boolean;
   onChange: (v: boolean) => void;
   disabled?: boolean;
+  // The brief asks for pictures: while the switch is off, say what that means.
+  hint?: boolean;
 }) {
   const dict = useDict();
   const credits = useCreditBalance();
@@ -87,6 +90,11 @@ export function AIImagesPanel({
         <span className="mt-1 block text-[11px] leading-4 text-foreground/50">
           {dict.flows.brand.aiImagesDesc}
         </span>
+        {hint && !value && !locked ? (
+          <span role="status" className="mt-1 block text-[11px] font-semibold leading-4 text-[var(--tq-violet)]">
+            {dict.flows.brand.aiImagesHint}
+          </span>
+        ) : null}
       </div>
       <div className="shrink-0">
         <Toggle

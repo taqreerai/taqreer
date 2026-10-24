@@ -73,6 +73,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { PersistentRow } from "@/components/brand/PersistentRow";
 import { AIImagesPanel } from "@/components/brand/AIImagesPanel";
+import { mentionsPictures } from "@/lib/images/mentions-pictures";
 import { type BrandKitOption } from "@/components/brand/BrandKitDropdown";
 import {
   InlineStepper,
@@ -1424,6 +1425,7 @@ export default function CreatePage() {
                   value={imagesMode}
                   onChange={setImagesMode}
                   disabled={submitting}
+                  hint={mentionsPictures(contentText)}
                 />
               </div>
 

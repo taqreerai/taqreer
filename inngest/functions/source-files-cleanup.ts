@@ -1,16 +1,16 @@
-// Hourly janitor: purge user-uploaded source files older than 24h.
+// Hourly janitor: purge user-uploaded source files older than 7 days.
 //
 // Uploaded deck CONTENT (PDF / PPTX / DOCX) is staged in the
 // `source-files` bucket only so the extraction pipeline can normalize
 // it to a PDF and hand it to Claude. Once the deck is generated the
 // original upload is dead weight, and keeping it forever is a privacy +
 // storage liability. Policy (product call 2026-06-25): nothing a user
-// uploads as deck content lives on our storage past one day.
+// uploads as deck content lives on our storage past seven days (was one day until 2026-10-23, so originals stay available for debugging).
 //
 // Why a bucket-age walk (not a Job-row join): the bucket is the single
 // source of truth and catches every producer (the /api/extract staging
 // path AND any direct /api/storage/upload writes) with no schema
-// coupling. Normal generation finishes minutes after upload, so a 24h
+// coupling. Normal generation finishes minutes after upload, so a 7 day
 // floor never races a live run, a retry, or a same-session regen. The
 // only thing it forecloses is regenerating a deck from its ORIGINAL
 // file more than a day later (the generated deck and its edit history
@@ -22,7 +22,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const SOURCE_FILES_BUCKET = "source-files";
-const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 1 day
+const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 // The bucket nests at most user/extract/<jobId>/<file> (and
 // user/create/<folder>/<file>); depth 5 covers it with headroom.
 const MAX_DEPTH = 5;
@@ -96,11 +96,11 @@ async function collectStaleObjects(
 export const sourceFilesCleanup = inngest.createFunction(
   {
     id: "source-files-cleanup",
-    name: "Source-files cleanup (purge user uploads > 24h)",
+    name: "Source-files cleanup (purge user uploads > 7 days)",
     retries: 2,
-    // Hourly. A daily sweep plus a 24h cutoff would let a file uploaded
-    // just after the run linger up to ~48h; running hourly bounds real
-    // retention to ~24-25h, honoring the "off storage past one day" policy.
+    // Hourly. A daily sweep plus a 7 day cutoff would let a file uploaded
+    // just after the run linger up to ~14 days; running hourly bounds real
+    // retention to ~7 days, honoring the "off storage past seven days" policy.
     triggers: [{ cron: "0 * * * *" }],
   },
   async ({ step, logger }) => {
