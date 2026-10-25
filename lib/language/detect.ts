@@ -196,6 +196,14 @@ const NAMES: Record<string, string> = {
   he: "Hebrew", el: "Greek", hi: "Hindi", th: "Thai", am: "Amharic",
 };
 
+/** Codes the detector can name, for a language picker. */
+export const LANGUAGE_CODES: readonly string[] = Object.keys(NAMES);
+
+/** True for right-to-left languages. */
+export function isRtlLanguage(code: string | null | undefined): boolean {
+  return code != null && RTL.has(code);
+}
+
 /** English name of a language code, or null for a code we do not name. */
 export function languageName(code: string | null | undefined): string | null {
   return (code && NAMES[code]) || null;

@@ -97,6 +97,8 @@ import {
 } from "@/lib/create/guest-draft";
 import { localizedExtractError } from "@/lib/extract/error-codes";
 import { readSource, clearSource } from "@/lib/types/source";
+import { ContentLanguageDropdown } from "@/components/create/ContentLanguageDropdown";
+import { isRtlLanguage } from "@/lib/language/detect";
 import { MAX_ENHANCE_INSTRUCTIONS_CHARS } from "@/lib/types/brief-limits";
 import { useDefaultQuality } from "@/lib/credits/use-default-quality";
 import { LockedFlowBanner } from "@/components/billing/LockedFlowBanner";
@@ -303,6 +305,8 @@ export default function EnhanceContentPage() {
   // `invisible` when inactive) so the frame height stays constant and
   // upload/extraction state survives step changes.
   const [step, setStep] = useState(0);
+  // The language picker: null = Auto (what extraction detected), else the user's pick.
+  const [langOverride, setLangOverride] = useState<string | null>(null);
   const [stage, setStage] = useState<Stage>("idle");
   const [extracted, setExtracted] = useState<
     ExtractCompletedResponse["result"] | null
@@ -559,6 +563,7 @@ export default function EnhanceContentPage() {
     pollCancelledRef.current = false;
     setFile(next);
     setExtracted(null);
+    setLangOverride(null);
     // A visitor's file waits in the browser (analysed after sign-in), so it
     // is "ready" right away.
     setStage(guest ? "ready" : "extracting");
@@ -572,6 +577,7 @@ export default function EnhanceContentPage() {
     pollCancelledRef.current = true;
     setFile(null);
     setExtracted(null);
+    setLangOverride(null);
     setStage("idle");
     setPrepPercent(0);
     setPrepStage(null);
@@ -1057,14 +1063,14 @@ export default function EnhanceContentPage() {
           // streaming preview's `streamingLanguage`, so the
           // SlideNavSidebar renders in the right direction from
           // first paint instead of flipping mid-stream.
-          language: extracted.language ?? "ar",
+          language: langOverride ? (isRtlLanguage(langOverride) ? "ar" : "en") : (extracted.language ?? "ar"),
           saveBrandKit,
           imagesMode: imagesOn,
           enhanceAnswers: start.answers,
           slideCount: resolvedSlideCount,
           quality,
           ...(templateId ? { templateId } : {}),
-          ...(source ? { source } : {}),
+          ...(source ? { source: langOverride ? { ...source, contentLang: langOverride } : source } : {}),
           // Optional user design instructions. Omitted when empty so an
           // instruction-less run's payload stays byte-for-byte unchanged.
           // The start questions' "Something else" text rides along with them.
@@ -1205,7 +1211,18 @@ export default function EnhanceContentPage() {
             ═══════════════════════════════════════════════════════ */}
         <SplitStep visible={step === 0} label={dict.flows.enhance.originalFile}>
           <motion.div animate={cardShake} className="flex min-h-0 min-w-0 flex-col [&>*]:flex-1">
-          <WizardCard title={dict.flows.enhance.originalFile}>
+          <WizardCard
+            title={dict.flows.enhance.originalFile}
+            end={
+              extracted && stage !== "submitting" ? (
+                <ContentLanguageDropdown
+                  value={langOverride}
+                  detected={extracted.contentLang ?? null}
+                  onChange={setLangOverride}
+                />
+              ) : undefined
+            }
+          >
             <input
               ref={fileInputRef}
               type="file"
@@ -1505,7 +1522,7 @@ export default function EnhanceContentPage() {
           onPickPreset={pickPalette}
           brandFont={brandFont}
           onBrandFont={setBrandFont}
-          sampleText={extracted?.language === "en" ? HEADING_SAMPLE_LATIN : HEADING_SAMPLE_AR}
+          sampleText={(langOverride ? !isRtlLanguage(langOverride) : extracted?.language === "en") ? HEADING_SAMPLE_LATIN : HEADING_SAMPLE_AR}
           logoFile={logoFile}
           logoPreviewUrl={loadedLogo?.displayUrl ?? null}
           onLogoSelect={(f) => {

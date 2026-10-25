@@ -1566,6 +1566,8 @@
       "title": "Enhance your presentation",
       "subtitle": "Upload a PDF or PowerPoint and we'll rebuild it with a professional design while keeping your content exactly.",
       "originalFile": "Original file",
+      "langAuto": "Auto",
+      "langAria": "Language of the file",
       "dragDrop": "Drag and drop the file here",
       "clickToSelect": "or click to choose a file",
       "fileHint": "PowerPoint, or a PDF exported from slides (.pptx, .ppt) · up to 100 MB",

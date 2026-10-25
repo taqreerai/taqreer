@@ -1566,6 +1566,8 @@
       "title": "حسن عرضك الحالي",
       "subtitle": "ارفع ملف PDF أو PowerPoint، وسنعيد تصميمه بشكل أوضح مع الحفاظ على المحتوى كما هو.",
       "originalFile": "العرض الأصلي",
+      "langAuto": "تلقائي",
+      "langAria": "لغة الملف",
       "dragDrop": "اسحب وأفلت الملف هنا",
       "clickToSelect": "أو انقر لاختيار ملف",
       "fileHint": "PowerPoint أو PDF مصدّر من شرائح (.pptx, .ppt) · حتى 100 ميجابايت",
