@@ -20,30 +20,15 @@
 //    frame. Mirrors what extract-source.ts does for the file path
 //    via detectPptxLanguage / detectPdfLanguage.
 //
-// Returns `null` when the signal is too weak (under 10 letters total,
-// or no >50% dominance). Callers fall back to "ar" — matches the
+// Returns `null` when the signal is too weak. Callers fall back to "ar" — matches the
 // default applied elsewhere when extraction is silent on language.
+//
+// 2026-10-25: delegates to lib/language/detect.ts (script + Latin-language
+// ranking). "en" still means "any left-to-right language" here; callers that
+// want the real language (French, Turkish ...) use detectLanguage directly.
 
-const ARABIC_RANGE = /[؀-ۿݐ-ݿﭐ-﷿ﹰ-﻿]/;
-// Basic Latin only — digits and punctuation aren't a language signal
-// (a number-heavy paragraph isn't English just because the digits are
-// Western). Includes both cases.
-const LATIN_RANGE = /[A-Za-z]/;
-
-const MIN_CHARS_FOR_DECISION = 10;
-const DOMINANCE_THRESHOLD = 0.5;
+import { detectLanguage, toLegacyLanguage } from "@/lib/language/detect";
 
 export function detectStringLanguage(text: string): "ar" | "en" | null {
-  if (!text) return null;
-  let arabicCount = 0;
-  let latinCount = 0;
-  for (const ch of text) {
-    if (ARABIC_RANGE.test(ch)) arabicCount++;
-    else if (LATIN_RANGE.test(ch)) latinCount++;
-  }
-  const total = arabicCount + latinCount;
-  if (total < MIN_CHARS_FOR_DECISION) return null;
-  if (arabicCount / total > DOMINANCE_THRESHOLD) return "ar";
-  if (latinCount / total > DOMINANCE_THRESHOLD) return "en";
-  return null;
+  return toLegacyLanguage(detectLanguage(text));
 }

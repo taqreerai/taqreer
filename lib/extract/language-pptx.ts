@@ -28,15 +28,9 @@
 // default (typically "ar").
 
 import JSZip from "jszip";
-
-const ARABIC_RANGE = /[؀-ۿݐ-ݿﭐ-﷿ﹰ-﻿]/;
-// Basic Latin only (avoids matching digits/punct that aren't a
-// language signal). Includes both cases.
-const LATIN_RANGE = /[A-Za-z]/;
+import { detectLanguage, toLegacyLanguage } from "@/lib/language/detect";
 
 const SAMPLE_SLIDE_LIMIT = 3;
-const MIN_CHARS_FOR_DECISION = 10;
-const DOMINANCE_THRESHOLD = 0.5;
 
 export async function detectPptxLanguage(
   buffer: Buffer,
@@ -44,8 +38,7 @@ export async function detectPptxLanguage(
   try {
     const zip = await JSZip.loadAsync(buffer);
 
-    let arabicCount = 0;
-    let latinCount = 0;
+    let sampled = "";
 
     // Slides are at `ppt/slides/slide1.xml` etc. Numeric-suffix sort
     // so slide1 < slide2 < slide10 — JS string sort would put
@@ -68,19 +61,11 @@ export async function detectPptxLanguage(
       // so the open tag matcher is permissive.
       const matches = xml.matchAll(/<a:t[^>]*>([^<]*)<\/a:t>/g);
       for (const m of matches) {
-        const text = m[1];
-        for (const c of text) {
-          if (ARABIC_RANGE.test(c)) arabicCount++;
-          else if (LATIN_RANGE.test(c)) latinCount++;
-        }
+        sampled += m[1] + " ";
       }
     }
 
-    const total = arabicCount + latinCount;
-    if (total < MIN_CHARS_FOR_DECISION) return null;
-    if (arabicCount / total > DOMINANCE_THRESHOLD) return "ar";
-    if (latinCount / total > DOMINANCE_THRESHOLD) return "en";
-    return null;
+    return toLegacyLanguage(detectLanguage(sampled));
   } catch {
     return null;
   }
