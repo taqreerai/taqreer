@@ -5034,8 +5034,12 @@ export function DeckView({
   if (effectiveTeaserLocked > 0) {
     const base = navItems.length;
     const bgSlide = viewSlides.length > 1 ? viewSlides[1] : viewSlides[0];
+    // Framed slides (Enhance, Mimic) carry their colour on data-bg-css, not on
+    // a .tq-canvas rule, so read that first; else the white deck fallback made
+    // the locked tiles a different colour from the real slides.
+    const framedBg = /\sdata-bg-css\s*=\s*"([^"]+)"/i.exec(bgSlide.html)?.[1]?.trim();
     const ghostBg = viewManifest
-      ? slideRootBackground(bgSlide.html, viewManifest.theme.background)
+      ? framedBg || slideRootBackground(bgSlide.html, viewManifest.theme.background)
       : null;
     for (let i = 0; i < effectiveTeaserLocked; i++) {
       const gradient = teaserGradient(teaserPalette, i);
