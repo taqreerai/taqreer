@@ -61,7 +61,7 @@ import {
   decodeAttrEntities,
 } from "@/lib/deck/frame";
 import { gulfWardrobeSystemBlocks } from "@/inngest/prompts/gulf-wardrobe";
-import { languageName } from "@/lib/language/detect";
+import { detectLanguage, languageName, toLegacyLanguage } from "@/lib/language/detect";
 import { isGulfImageContext } from "@/lib/geo/image-region";
 import { injectLogoMarkers, logoImgTag } from "@/lib/deck/logo-inject";
 import { scopeDeckCss } from "@/lib/deck/scope-css";
@@ -614,15 +614,23 @@ function detectDeckDirection(
 ): { language: "ar" | "en"; direction: "rtl" | "ltr" } {
   let arabic = 0;
   let latin = 0;
+  let all = "";
   for (const s of slides) {
     const text = s.html
       .replace(/<style[\s\S]*?<\/style>/gi, " ")
       .replace(/<svg[\s\S]*?<\/svg>/gi, " ")
       .replace(/<[^>]*>/g, " ");
+    all += text + " ";
     arabic += (text.match(/[؀-ۿݐ-ݿࢠ-ࣿ]/g) ?? [])
       .length;
     latin += (text.match(/[A-Za-z]/g) ?? []).length;
   }
+  // The real language of the slides (lib/language/detect.ts): a Hebrew or
+  // Persian deck reads right-to-left, a French one left-to-right. Too little
+  // text to tell falls through to the Arabic-vs-Latin count below.
+  const found = detectLanguage(all.replace(/&[a-z#0-9]+;/gi, " "));
+  const legacy = toLegacyLanguage(found);
+  if (legacy) return { language: legacy, direction: found.direction };
   return arabic >= latin
     ? { language: "ar", direction: "rtl" }
     : { language: "en", direction: "ltr" };
