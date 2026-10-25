@@ -105,6 +105,9 @@ export const SourceEnhanceSchema = z.object({
   // rather than the schema silently rejecting the whole stored source.
   sourcePath: z.string().min(1).optional(),
   sourceMime: z.string().min(1).optional(),
+  // ISO 639-1 code of the source text, from lib/language/detect.ts. Optional and
+  // shape-checked: a bad value is dropped, never a reason to reject the source.
+  contentLang: z.string().regex(/^[a-z]{2,3}$/).optional().catch(undefined),
 });
 
 // Mimic content can come from EITHER an uploaded file ("ugly" file

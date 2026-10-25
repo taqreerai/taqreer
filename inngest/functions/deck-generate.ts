@@ -61,6 +61,7 @@ import {
   decodeAttrEntities,
 } from "@/lib/deck/frame";
 import { gulfWardrobeSystemBlocks } from "@/inngest/prompts/gulf-wardrobe";
+import { languageName } from "@/lib/language/detect";
 import { isGulfImageContext } from "@/lib/geo/image-region";
 import { injectLogoMarkers, logoImgTag } from "@/lib/deck/logo-inject";
 import { scopeDeckCss } from "@/lib/deck/scope-css";
@@ -1597,12 +1598,19 @@ function buildSourceTextDirective(
     // one slide per source slide. Redraw: decorative clip-art may be swapped.
     const { textRework: rework, swapPictures } = enhanceFlags(event.brief);
     const answers = readBriefAnswers(event.brief);
+    // The source text's real language (lib/language/detect.ts), so a French or
+    // Turkish deck stays that language and is not read as "not Arabic = English".
+    const srcLangName = languageName((source as { contentLang?: string }).contentLang);
+    const srcLangLine = srcLangName
+      ? `SOURCE LANGUAGE: the deck is written in ${srcLangName}. Keep every word in ${srcLangName}: do not translate it, and do not switch any heading or label to English. Set lang="${(source as { contentLang?: string }).contentLang}" on the slides' text and follow ${srcLangName} typography (its quotation marks, number and punctuation spacing).`
+      : null;
     lines.push(
       `SOURCE — Enhance flow (per-slide redesign)`,
       imageCount < slideCount
         ? `${slideCount} source slides are attached BEFORE this text, IN ORDER. Slides 1-${imageCount} each come as the rendered ORIGINAL image IMMEDIATELY FOLLOWED by a text block holding that slide's EXACT words; slides ${imageCount + 1}-${slideCount} come as their text block only (no image). The image shows you the visual to improve; the text block is the authoritative content.`
         : `${slideCount} slide images are attached BEFORE this text, IN ORDER. Each image is the rendered ORIGINAL of one slide and is IMMEDIATELY FOLLOWED by a text block holding that slide's EXACT words. The image shows you the visual to improve; the paired text block is the authoritative content.`,
       ``,
+      ...(srcLangLine ? [srcLangLine, ``] : []),
       ...(rework ? reworkJobLines(slideCount) : [
       `YOUR JOB — redesign each slide to editorial quality:`,
       `  • Produce EXACTLY ${slideCount} slides — one per source slide, in the SAME order. Do not merge, split, drop, add, or reorder.`,

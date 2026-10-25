@@ -189,6 +189,18 @@ export function detectLanguage(raw: string): LangResult {
   };
 }
 
+const NAMES: Record<string, string> = {
+  ar: "Arabic", en: "English", fr: "French", es: "Spanish", pt: "Portuguese", it: "Italian",
+  de: "German", nl: "Dutch", tr: "Turkish", id: "Indonesian", pl: "Polish", ru: "Russian",
+  uk: "Ukrainian", zh: "Chinese", ja: "Japanese", ko: "Korean", fa: "Persian", ur: "Urdu",
+  he: "Hebrew", el: "Greek", hi: "Hindi", th: "Thai", am: "Amharic",
+};
+
+/** English name of a language code, or null for a code we do not name. */
+export function languageName(code: string | null | undefined): string | null {
+  return (code && NAMES[code]) || null;
+}
+
 /** The old two-value shape ("en" = any left-to-right language), for callers not yet migrated. */
 export function toLegacyLanguage(r: LangResult): "ar" | "en" | null {
   if (r.lang === null) return null;

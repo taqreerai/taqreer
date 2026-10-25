@@ -135,6 +135,8 @@ type ExtractCompletedResponse = {
     // the brief so the preview SlideNavSidebar opens in the right
     // direction from the first paint instead of flipping mid-stream.
     language: "ar" | "en" | null;
+    // ISO 639-1 code of the source text (fr, tr ...), null when unknown.
+    contentLang?: string | null;
     // Phase 18 — verbatim per-slide text + the source's Supabase
     // staging location, so deck-generate can rasterize per-slide PNGs
     // at generation time (transient).
@@ -709,6 +711,7 @@ export default function EnhanceContentPage() {
               : {}),
             fonts: result.fonts,
             textPerSlide: result.textPerSlide,
+            ...(result.contentLang ? { contentLang: result.contentLang } : {}),
             sourcePath: result.sourcePath,
             sourceMime: result.sourceMime,
           },

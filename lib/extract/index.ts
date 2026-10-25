@@ -38,6 +38,7 @@ import { extractColorsFromPptx } from "./colors-pptx";
 import { detectPptxLanguage } from "./language-pptx";
 import { detectStringLanguage } from "./language-text";
 import { detectLanguageFromPages } from "./language-vision";
+import { detectLanguage } from "@/lib/language/detect";
 import { readOrnamentLabels } from "./ornament-labels";
 import { chromeTables, classifyPptxPictures, extractPptxVisuals, type PptxVisuals } from "./pptx-visuals";
 import { decideRework, type ReworkDecision } from "./rework-score";
@@ -98,6 +99,8 @@ export type ExtractionResult = {
    * language/direction follow the SOURCE from the first paint.
    */
   language: "ar" | "en" | null;
+  /** ISO 639-1 code of the source text ("fr", "tr", "ar" ...), null when it has no text layer or too little. */
+  contentLang: string | null;
   /**
    * Verbatim text per slide in PRESENTATION order (PPTX only — empty
    * for PDFs). Index `i` maps to rendered page `i + 1`. Fed to Claude
@@ -271,6 +274,8 @@ export async function extract(
   }
   if (language === null) language = await detectLanguageFromPages(pdfBytes);
 
+  const contentLang = detectLanguage(isPptx ? textPerSlide.join(" ") : fullText).lang;
+
   const pictureClasses = visuals ? [...classifyPptxPictures(visuals).values()] : [];
   const decorPictures = pictureClasses.filter((c) => c === "repeated" || c === "background" || c === "ornament").length;
   const rework = decideRework({
@@ -304,6 +309,7 @@ export async function extract(
     fonts,
     colors: themeColors ?? [],
     language,
+    contentLang,
     textPerSlide,
     fullText,
     rework,

@@ -95,6 +95,8 @@ type ExtractCompletedOutput = {
    * right direction from the first paint.
    */
   language: "ar" | "en" | null;
+  /** ISO 639-1 code of the source text (French, Turkish ...), null when unknown. */
+  contentLang?: string | null;
   /**
    * Verbatim text per slide in presentation order (PPTX; empty for
    * PDF inputs). Index `i` ↔ rendered page `i + 1`. Handed to Claude
@@ -279,6 +281,7 @@ async function runExtractionPipeline(args: {
     pageCount: ext.pageCount,
     format: ext.format,
     language: ext.language,
+    contentLang: ext.contentLang,
     textPerSlide: ext.textPerSlide,
     fullText: ext.fullText,
     rework: ext.rework,
