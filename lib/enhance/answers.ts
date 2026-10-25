@@ -14,6 +14,8 @@
 //            tidy    -> "Redesign freely" essence rules (brief.reworkDeck)
 //   pictures keep    -> every content picture kept, template decoration dropped
 //            refresh -> keep, and replace the main generic photos (brief.refreshPhotos)
+//            replace -> replace EVERY generic photo with a new one (brief.refreshPhotos + refreshAll;
+//                       people, products and drawn diagrams are still kept; paid plans only)
 //            redraw  -> decorative clip-art becomes generated images (brief.swapPictures;
 //                       offered only with AI images on)
 //   display  projected / screen -> type size and density lines in the prompt
@@ -23,7 +25,7 @@
 // projects route and the generators, so it imports nothing server-only.
 
 export type WordingChoice = "exact" | "tidy";
-export type PicturesChoice = "keep" | "refresh" | "redraw";
+export type PicturesChoice = "keep" | "refresh" | "replace" | "redraw";
 export type DisplayChoice = "projected" | "screen";
 
 export type EnhanceAnswers = {
@@ -35,7 +37,7 @@ export type EnhanceAnswers = {
 export type QuestionKey = keyof EnhanceAnswers;
 
 export const WORDING_CHOICES: readonly WordingChoice[] = ["exact", "tidy"];
-export const PICTURES_CHOICES: readonly PicturesChoice[] = ["keep", "refresh", "redraw"];
+export const PICTURES_CHOICES: readonly PicturesChoice[] = ["keep", "refresh", "replace", "redraw"];
 export const DISPLAY_CHOICES: readonly DisplayChoice[] = ["projected", "screen"];
 
 export type EnhanceOptionKey = WordingChoice | PicturesChoice | DisplayChoice;

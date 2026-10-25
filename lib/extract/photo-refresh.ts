@@ -25,9 +25,12 @@ import { uploadSourceAsset } from "@/lib/storage/source-assets";
 
 export const CAP_PAID = 8;
 export const CAP_FREE = 2;
+// "Replace all": every photo that passes the gates, up to this many (cost bound).
+export const CAP_ALL = 24;
 const MIN_AREA = 0.08;
 const TAG_MODEL = "claude-haiku-4-5";
 const MAX_TAGGED = 16;
+const MAX_TAGGED_ALL = CAP_ALL + 8;
 const PARALLEL = 3;
 
 export type PhotoTag = "person" | "specific" | "diagram" | "subject" | "mood";
@@ -55,14 +58,14 @@ export function refreshScore(c: RefreshCandidate): number {
 }
 
 /** Candidates that pass every gate except the tag, best first (what gets tagged). */
-export function refreshPool(cands: readonly RefreshCandidate[]): RefreshCandidate[] {
+export function refreshPool(cands: readonly RefreshCandidate[], all = false): RefreshCandidate[] {
   return cands
     .filter(
       (c) =>
         c.kind === "photo" &&
         (c.cls === "content" || c.cls === "backdrop") &&
         c.area >= MIN_AREA &&
-        (c.photosOnSlide < 3 || c.largestOnSlide),
+        (all || c.photosOnSlide < 3 || c.largestOnSlide),
     )
     .sort((a, b) => refreshScore(b) - refreshScore(a));
 }
@@ -71,17 +74,18 @@ export function refreshPool(cands: readonly RefreshCandidate[]): RefreshCandidat
 export function selectPhotoReplacements(
   cands: readonly RefreshCandidate[],
   tags: ReadonlyMap<string, PhotoTag>, // by mediaKey
-  opts: { slideCount: number; paid: boolean },
+  opts: { slideCount: number; paid: boolean; all?: boolean },
 ): string[] {
-  const cap = Math.min(opts.paid ? CAP_PAID : CAP_FREE, Math.ceil(opts.slideCount / 3));
+  const all = opts.all === true && opts.paid;
+  const cap = all ? CAP_ALL : Math.min(opts.paid ? CAP_PAID : CAP_FREE, Math.ceil(opts.slideCount / 3));
   const usedSlides = new Set<number>();
   const picked: string[] = [];
-  for (const c of refreshPool(cands)) {
+  for (const c of refreshPool(cands, all)) {
     if (picked.length >= cap) break;
     const tag = tags.get(c.mediaKey);
     if (tag !== "subject" && tag !== "mood") continue;
     if (picked.includes(c.mediaKey)) continue;
-    if (usedSlides.has(c.slideIndex)) continue;
+    if (!all && usedSlides.has(c.slideIndex)) continue;
     usedSlides.add(c.slideIndex);
     picked.push(c.mediaKey);
   }
@@ -91,11 +95,12 @@ export function selectPhotoReplacements(
 /** One Haiku vision call: a tag + a short description per picture. Failure = no tags (nothing replaced). */
 export async function tagPhotos(
   pictures: readonly { mediaKey: string; bytes: Buffer }[],
+  all = false,
 ): Promise<Map<string, { tag: PhotoTag; desc: string }>> {
   const out = new Map<string, { tag: PhotoTag; desc: string }>();
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey || pictures.length === 0) return out;
-  const list = pictures.slice(0, MAX_TAGGED);
+  const list = pictures.slice(0, all ? MAX_TAGGED_ALL : MAX_TAGGED);
   try {
     const content: Anthropic.Messages.ContentBlockParam[] = [];
     for (let i = 0; i < list.length; i++) {

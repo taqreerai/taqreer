@@ -58,7 +58,7 @@ export function EnhanceQuestionsDialog({
   }, [onClose]);
 
   const label = (k: EnhanceOptionKey) => questions.labels[k] ?? copy.options[k];
-  const pictureOptions: PicturesChoice[] = imagesOn ? ["keep", "refresh", "redraw"] : ["keep", "refresh"];
+  const pictureOptions: PicturesChoice[] = imagesOn ? ["keep", "refresh", "replace", "redraw"] : ["keep", "refresh", "replace"];
   const groups: { key: QuestionKey; title: string; options: EnhanceOptionKey[] }[] = [
     { key: "wording", title: copy.wording, options: ["exact", "tidy"] satisfies WordingChoice[] },
     ...(questions.pictures ? [{ key: "pictures" as const, title: copy.pictures, options: pictureOptions }] : []),

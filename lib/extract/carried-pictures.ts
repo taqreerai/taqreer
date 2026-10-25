@@ -92,7 +92,7 @@ export async function prepareCarriedPictures(opts: {
   sourcePath: string;
   sourceMime: string;
   // "Refresh my photos" (opt-in): see lib/extract/photo-refresh.ts.
-  refresh?: { slideCount: number; paid: boolean; styleHint: string; palette: readonly string[] } | null;
+  refresh?: { slideCount: number; paid: boolean; styleHint: string; palette: readonly string[]; all?: boolean } | null;
   // Enhance's free layout (tidy wording or redrawn pictures): tag what each
   // picture shows and whether it may be swapped.
   rework?: boolean;
@@ -211,16 +211,18 @@ export async function prepareCarriedPictures(opts: {
     });
     // Tag the best candidates once each (by picture, not by slide).
     const byKey = new Map<string, PdfAsset>();
-    for (const c of refreshPool(cands)) {
+    for (const c of refreshPool(cands, opts.refresh.all === true && opts.refresh.paid)) {
       const a = storable.find((x) => x.assetId === c.assetId);
       if (a && !byKey.has(c.mediaKey)) byKey.set(c.mediaKey, a);
     }
+    const replaceAll = opts.refresh.all === true && opts.refresh.paid;
     const tagged = await tagPhotos(
       [...byKey].map(([mediaKey, a]) => ({ mediaKey, bytes: a.file.kind === "image" ? a.file.bytes : Buffer.alloc(0) })),
+      replaceAll,
     );
     refreshTagged = tagged.size;
     const tags = new Map([...tagged].map(([k, v]) => [k, v.tag] as const));
-    const picks = selectPhotoReplacements(cands, tags, { slideCount: opts.refresh.slideCount, paid: opts.refresh.paid });
+    const picks = selectPhotoReplacements(cands, tags, { slideCount: opts.refresh.slideCount, paid: opts.refresh.paid, all: opts.refresh.all });
     const made = await makeReplacements({
       projectId: opts.projectId,
       styleHint: opts.refresh.styleHint,

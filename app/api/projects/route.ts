@@ -1168,7 +1168,8 @@ export async function POST(request: Request) {
     ...(enhanceAnswers ? { enhanceAnswers } : {}),
     ...(enhanceAnswers?.wording === "tidy" ? { reworkDeck: true } : {}),
     ...(enhanceAnswers?.pictures === "redraw" ? { swapPictures: true } : {}),
-    ...(enhanceAnswers?.pictures === "refresh" ? { refreshPhotos: true } : {}),
+    ...(enhanceAnswers?.pictures === "refresh" || enhanceAnswers?.pictures === "replace" ? { refreshPhotos: true } : {}),
+    ...(enhanceAnswers?.pictures === "replace" ? { refreshAll: true } : {}),
     // Regional people descriptor for generated lifestyle images (only when
     // resolvable). buildUserMessage turns this into the cast directive.
     ...(imageRegion ? { imageRegion } : {}),

@@ -2330,6 +2330,7 @@ export const deckGenerate = inngest.createFunction(
           // the most important generic photos is re-made in the deck's style.
           const briefForRefresh = data.brief as {
             refreshPhotos?: boolean;
+            refreshAll?: boolean;
             rules?: { designStyle?: string | null } | null;
             brand?: { colors?: string[] } | null;
           } | null;
@@ -2338,6 +2339,7 @@ export const deckGenerate = inngest.createFunction(
               ? {
                   slideCount: Math.max(pageCount, textPerSlide.length),
                   paid: isPaidPlan(data.tier ?? null),
+                  all: briefForRefresh.refreshAll === true,
                   styleHint: imageStyleHint(briefForRefresh.rules?.designStyle ?? null),
                   palette: Array.isArray(briefForRefresh.brand?.colors) ? briefForRefresh.brand.colors : [],
                 }
