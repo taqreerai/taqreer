@@ -158,6 +158,13 @@ export async function prepareCarriedPictures(opts: {
       a.file = { kind: "image", bytes: r.bytes, contentType: r.contentType, width: r.width, height: r.height };
     }
   }
+  // "The file has pictures of its own" (which turns AI images off for the whole
+  // deck, deck-generate) means real PHOTOS, or a scanned page. A header banner,
+  // a diagram or a screenshot does not: one banner on the cover used to leave a
+  // text-only deck with no images at all (prod 2026-10-25, cmvo1woh10002n06ds86sboio).
+  hasContentImages =
+    assets.some((a) => a.cls === "page") ||
+    storable.some((a) => a.cls === "content" && kinds.get(a.assetId) === "photo");
   const backdropIds = fullSlidePhotos(storable, kinds);
   // Rework: once per distinct picture (same bytes on several slides = one),
   // small ones included (a labelled icon still needs its description).

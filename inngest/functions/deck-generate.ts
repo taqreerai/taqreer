@@ -2385,8 +2385,9 @@ export const deckGenerate = inngest.createFunction(
             ...(result.refresh ? { refreshTagged: result.refresh.tagged, refreshReplaced: result.refresh.replaced } : {}),
             hasContentImages: result.hasContentImages,
           });
-          if (result.hasContentImages && (data.brief as { imagesMode?: boolean } | null)?.imagesMode === true) {
-            logger.info("enhance_ai_images_off_source_has_pictures", { projectId });
+          const keepsImages = enhanceFlags(data.brief).swapPictures || (data.brief as { refreshAll?: boolean } | null)?.refreshAll === true;
+          if (result.hasContentImages && !keepsImages && (data.brief as { imagesMode?: boolean } | null)?.imagesMode === true) {
+            logger.info("enhance_ai_images_turned_off_source_has_photos", { projectId });
           }
           return result;
         } catch (err) {
@@ -2403,8 +2404,10 @@ export const deckGenerate = inngest.createFunction(
         // also charges nothing for images. Re-applied on every replay (the
         // function restarts with the original brief); the logs live in the step.
         const brief = data.brief as { imagesMode?: boolean } | null;
-        // Redraw keeps images mode: swapped clip-art becomes generated images.
-        if (carried.hasContentImages && brief?.imagesMode === true && !enhanceFlags(data.brief).swapPictures) {
+        // Redraw and Replace-all keep images mode: swapped clip-art / new photos
+        // are generated images, and slides without a photo may get one.
+        const keepsImages = enhanceFlags(data.brief).swapPictures || (data.brief as { refreshAll?: boolean } | null)?.refreshAll === true;
+        if (carried.hasContentImages && brief?.imagesMode === true && !keepsImages) {
           brief.imagesMode = false;
         }
       }
