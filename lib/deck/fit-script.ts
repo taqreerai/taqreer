@@ -64,12 +64,18 @@ export type FitCompressResult = {
 };
 
 export const FIT_SCRIPT = `
-function __tqCompressOverflow(well) {
+function __tqCompressOverflow(well, opts) {
+  // safeBottom (owner, 2026-10-26): content must END this many px above the
+  // well bottom, not merely inside it. The frame keeps only a 10px safety
+  // inset, so a slide whose last card touched the well read as content
+  // running off the screen.
+  var SAFE_BOTTOM = (opts && opts.safeBottom) || 0;
   var WS_FLOOR = 0.6;
   var FONT_FLOOR = 0.75;
   var IMG_FLOOR = 0.55;
   var view = well.ownerDocument.defaultView;
-  var wr = well.getBoundingClientRect();
+  var wr0 = well.getBoundingClientRect();
+  var wr = { top: wr0.top, left: wr0.left, right: wr0.right, width: wr0.width, height: wr0.height, bottom: wr0.bottom - SAFE_BOTTOM };
 
   // Same ink test as the audit: only content that would VISIBLY clip
   // counts (replaced elements + direct text); an invisible flex spacer
@@ -204,7 +210,10 @@ function __tqCompressOverflow(well) {
   // 684px infographic under a title pushed past the canvas and was cut).
   // Scaled together, width and height, so the aspect never changes.
   var pics = [];
-  var imgEls = well.querySelectorAll("img[data-asset]");
+  // Generated pictures too: a replace-all replacement is enlarged to 480px
+  // (lib/images/min-size.ts) and, left out here, pushed a slide past the
+  // canvas with nothing able to shrink it (prod 2026-10-26, slide 10).
+  var imgEls = well.querySelectorAll("img[data-asset], img[data-genimage]");
   for (var k = 0; k < imgEls.length; k++) {
     var ir = imgEls[k].getBoundingClientRect();
     if (ir.width >= 1 && ir.height >= 1) pics.push({ el: imgEls[k], w: ir.width, h: ir.height });

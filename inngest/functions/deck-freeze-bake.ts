@@ -948,8 +948,9 @@ export const deckFreezeBake = inngest.createFunction(
         await page.evaluate(
           `${FIT_SCRIPT}; window.__tqFit = __tqCompressOverflow;`,
         );
+        // Every slide, not only audited overflow: the safe bottom margin also
+        // pulls back content that merely touches the well's bottom edge.
         for (const sid of toFreeze) {
-          if (worstOverflowPx(finalAudit[sid]?.findings ?? []) === 0) continue;
           const res = (await page.evaluate((id) => {
             const escaped = id.replace(/[^a-zA-Z0-9_-]/g, "\\$&");
             const sec = document
@@ -959,9 +960,9 @@ export const deckFreezeBake = inngest.createFunction(
             if (!sec || !well) return null;
             const fit = (
               window as unknown as {
-                __tqFit: (w: Element) => FitCompressResult;
+                __tqFit: (w: Element, opts?: { safeBottom?: number }) => FitCompressResult;
               }
-            ).__tqFit(well);
+            ).__tqFit(well, { safeBottom: 30 });
             return { ...fit, html: fit.changed ? sec.outerHTML : "" };
           }, sid)) as (FitCompressResult & { html: string }) | null;
           if (!res || !res.changed) continue;
