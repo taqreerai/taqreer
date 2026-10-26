@@ -30,10 +30,10 @@ export async function POST(request: Request) {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized", code: "unauthorized" }, { status: 401 });
     }
     if (await isBannedSupabaseUser(user.id)) {
-      return NextResponse.json({ error: "Account suspended" }, { status: 403 });
+      return NextResponse.json({ error: "Account suspended", code: "suspended" }, { status: 403 });
     }
 
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -59,6 +59,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: `File exceeds the 100 MB limit (got ${(file.size / 1024 / 1024).toFixed(1)} MB).`,
+          code: "file_too_large",
         },
         { status: 400 },
       );
@@ -80,7 +81,7 @@ export async function POST(request: Request) {
       const isSvgExt = file.name.toLowerCase().endsWith(".svg");
       if (!isSvgMime && !isSvgExt) {
         return NextResponse.json(
-          { error: "Logo must be an SVG file (image/svg+xml)." },
+          { error: "Logo must be an SVG file (image/svg+xml).", code: "logo_type" },
           { status: 400 }
         );
       }
@@ -115,7 +116,7 @@ export async function POST(request: Request) {
       });
 
     if (uploadError) {
-      return NextResponse.json({ error: uploadError.message }, { status: 500 });
+      return NextResponse.json({ error: uploadError.message, code: "upload_failed" }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -126,6 +127,6 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Storage upload error:", error);
-    return NextResponse.json({ error: "Failed to upload file" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to upload file", code: "upload_failed" }, { status: 500 });
   }
 }

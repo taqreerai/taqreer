@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api/error-message";
 // Shared upload helper for brand assets (logo SVG/PNG, font files).
 //
 // Wraps POST /api/storage/upload — that route handles auth + the
@@ -34,10 +35,7 @@ export async function uploadAsset(
   });
 
   if (!response.ok) {
-    const data = (await response.json().catch(() => null)) as
-      | { error?: string }
-      | null;
-    throw new Error(data?.error ?? "Upload failed");
+    throw await apiError(response, "Upload failed");
   }
 
   return (await response.json()) as UploadedAsset;

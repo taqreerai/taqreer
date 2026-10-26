@@ -89,6 +89,7 @@ import {
 import { SocialFormatFields } from "@/components/social/SocialFormatFields";
 import { PremiumCrown } from "@/components/billing/PremiumCrown";
 import { LockedFlowBanner } from "@/components/billing/LockedFlowBanner";
+import { ApiError, useErrorText } from "@/lib/api/error-message";
 
 const MIN_PALETTE = 2;
 const MAX_PALETTE = 6;
@@ -126,6 +127,7 @@ const SOCIAL_LAST_STEP = 1;
 
 export default function SocialPage() {
   const dict = useDict();
+  const errorText = useErrorText();
   const { dir, locale } = useLocale();
   const router = useRouter();
 
@@ -480,14 +482,14 @@ export default function SocialPage() {
 
       if (!response.ok) {
         const data = (await response.json().catch(() => null)) as
-          | { error?: string }
+          | { error?: string; code?: string }
           | null;
         if (response.status === 402 && isCreditGatePayload(data)) {
           setCreditGate(data);
           setSubmitting(false);
           return;
         }
-        throw new Error(data?.error ?? dict.flows.createFailed);
+        throw new ApiError(data?.error ?? dict.flows.createFailed, data?.code, response.status);
       }
 
       const data = (await response.json()) as { projectId: string };
@@ -498,9 +500,7 @@ export default function SocialPage() {
     } catch (caughtError) {
       console.error("[social] generate failed:", caughtError);
       setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : dict.flows.startFailed,
+        errorText(caughtError),
       );
       setSubmitting(false);
     }

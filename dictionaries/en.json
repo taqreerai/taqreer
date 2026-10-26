@@ -51,7 +51,8 @@
     "admin": "Admin",
     "default": "Default",
     "share": "Share",
-    "export": "Export"
+    "export": "Export",
+    "errors": { "network": "Connection lost. Check your internet, then try again.", "generic": "Something went wrong. Try again.", "unauthorized": "Your session ended. Sign in again, then retry.", "suspended": "This account is suspended.", "rateLimited": "Too many tries. Wait a minute, then try again.", "fileTooLarge": "The file is too large. The limit is 100 MB.", "logoType": "The logo must be an SVG, PNG, JPG or WebP image.", "logoTooLarge": "The logo is too large. The limit is 5 MB.", "uploadFailed": "The upload failed. Try again." }
   },
   "notifications": { "account": { "emailChangedTitle": "Your email was updated", "emailChangedDesc": "Sign-in email is now {email}" }, "billing": { "planChangedTitle": "Your {plan} plan is active", "planChangedDesc": "{credits} monthly credits added to your account", "creditedTitle": "Your account was credited with {credits} credits", "creditedRenewal": "Plan renewal", "creditedTopup": "Top-up pack purchase", "creditedWelcome": "Welcome gift", "refundTitle": "{credits} credits refunded to your balance", "refundCancelled": "You stopped the generation, so we refunded the setup fee", "refundGoodwill": "A goodwill adjustment from the taqreer.ai team", "paymentFailedTitle": "Payment failed - update your payment method", "paymentFailedDesc": "We'll retry over the next few days", "endingTitle": "Your subscription ends on {date}", "endingDesc": "Credits remain usable until then" },
     "actorFallback": "a collaborator",

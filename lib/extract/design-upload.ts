@@ -1,3 +1,4 @@
+import { apiError } from "@/lib/api/error-message";
 // Client helper: upload a presentation the user likes the LOOK of and get back the
 // Anthropic file id the generator reads as the design reference. Same two calls
 // the old /mimic page made for its design file: POST /api/extract (kind "mimic",
@@ -23,7 +24,7 @@ type StatusBody =
 
 /**
  * Upload + analyse the reference deck. Rejects with an Error whose message is the
- * server's extract error code/text (callers map it with localizedExtractError), or
+ * server's extract error code/text (callers map it with useErrorText), or
  * a DOMException named "AbortError" when `signal` aborts.
  */
 export async function uploadDesignReference(
@@ -37,8 +38,7 @@ export async function uploadDesignReference(
   formData.append("format", "16:9");
   const start = await fetch("/api/extract", { method: "POST", body: formData, signal });
   if (!start.ok) {
-    const data = (await start.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(data?.error ?? `Upload failed (${start.status})`);
+    throw await apiError(start, `Upload failed (${start.status})`);
   }
   const { jobId } = (await start.json()) as { jobId?: string };
   if (!jobId) throw new Error("No jobId returned from /api/extract");
@@ -48,8 +48,7 @@ export async function uploadDesignReference(
     if (signal.aborted) throw new DOMException("Aborted", "AbortError");
     const res = await fetch(`/api/extract/${jobId}`, { signal });
     if (!res.ok) {
-      const data = (await res.json().catch(() => null)) as { error?: string } | null;
-      throw new Error(data?.error ?? `Status ${res.status}`);
+      throw await apiError(res, `Status ${res.status}`);
     }
     const body = (await res.json()) as StatusBody;
     if (body.status === "completed") {

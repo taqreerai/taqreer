@@ -51,34 +51,3 @@ export function classifyExtractError(
   if (/^Failed to start extraction/i.test(message)) return "start_failed";
   return null;
 }
-
-/**
- * Resolve the user-facing message for an extract failure: a localized
- * string when the error classifies to a known code, the raw message
- * otherwise. `errors` is `dict.flows.extractErrors`.
- */
-export function localizedExtractError(
-  errors: {
-    fileTooLarge: string;
-    pdfEncrypted: string;
-    conversionFailed: string;
-    uploadInterrupted: string;
-    startFailed: string;
-  },
-  message: string,
-): string {
-  switch (classifyExtractError(message)) {
-    case "file_too_large":
-      return errors.fileTooLarge;
-    case "pdf_encrypted":
-      return errors.pdfEncrypted;
-    case "conversion_failed":
-      return errors.conversionFailed;
-    case "upload_interrupted":
-      return errors.uploadInterrupted;
-    case "start_failed":
-      return errors.startFailed;
-    default:
-      return message;
-  }
-}

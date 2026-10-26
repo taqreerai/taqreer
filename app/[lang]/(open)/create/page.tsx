@@ -67,7 +67,7 @@ import { useSlideCap, useCreditBalance } from "@/lib/credits/store";
 import { isImagesLocked } from "@/lib/images/images-gating";
 import { displaySlideEstimate } from "@/lib/credits/cost";
 import { localizedHref } from "@/lib/i18n/navigation";
-import { localizedExtractError } from "@/lib/extract/error-codes";
+import { ApiError, apiError, useErrorText } from "@/lib/api/error-message";
 import { DECK_STYLES } from "@/lib/design-styles";
 import { AnimatePresence, motion } from "framer-motion";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
@@ -199,6 +199,7 @@ export default function CreatePage() {
   const router = useRouter();
   const contentInputRef = useRef<HTMLInputElement>(null);
   const dict = useDict();
+  const errorText = useErrorText();
   const { locale } = useLocale();
   const t = dict.flows;
   // Signed-out visitor (2026-10-06): everything that needs an account
@@ -536,9 +537,7 @@ export default function CreatePage() {
         setTemplate(null);
         setDesignUploadName(null);
         setError(
-          err instanceof Error
-            ? localizedExtractError(dict.flows.extractErrors, err.message)
-            : t.design.uploadFailed,
+          errorText(err, true),
         );
         return false;
       }
@@ -674,12 +673,7 @@ export default function CreatePage() {
           signal: controller.signal,
         });
         if (!startRes.ok) {
-          const data = (await startRes.json().catch(() => null)) as
-            | { error?: string }
-            | null;
-          throw new Error(
-            data?.error ?? `Upload failed (${startRes.status})`,
-          );
+          throw await apiError(startRes, `Upload failed (${startRes.status})`);
         }
         const { jobId } = (await startRes.json()) as { jobId: string };
         if (!jobId) throw new Error("No jobId returned from /api/extract");
@@ -694,10 +688,7 @@ export default function CreatePage() {
             signal: controller.signal,
           });
           if (!res.ok) {
-            const data = (await res.json().catch(() => null)) as
-              | { error?: string }
-              | null;
-            throw new Error(data?.error ?? `Status ${res.status}`);
+            throw await apiError(res, `Status ${res.status}`);
           }
           const body = (await res.json()) as
             | { status: "queued" | "processing" }
@@ -736,9 +727,7 @@ export default function CreatePage() {
         }
         console.error("[create] content extraction failed:", err);
         setError(
-          err instanceof Error
-            ? localizedExtractError(dict.flows.extractErrors, err.message)
-            : t.parseFailed,
+          errorText(err, true),
         );
         setContentFileStage("idle");
       }
@@ -1167,14 +1156,14 @@ export default function CreatePage() {
 
       if (!response.ok) {
         const data = (await response.json().catch(() => null)) as
-          | { error?: string }
+          | { error?: string; code?: string }
           | null;
         if (response.status === 402 && isCreditGatePayload(data)) {
           setCreditGate(data);
           setSubmitting(false);
           return;
         }
-        throw new Error(data?.error ?? t.createFailed);
+        throw new ApiError(data?.error ?? t.createFailed, data?.code, response.status);
       }
 
       const data = (await response.json()) as { projectId: string };
@@ -1189,9 +1178,7 @@ export default function CreatePage() {
     } catch (caughtError) {
       console.error("[create] generate failed:", caughtError);
       setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : t.startFailed,
+        errorText(caughtError),
       );
       setSubmitting(false);
     }

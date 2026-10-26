@@ -99,6 +99,7 @@ import {
   CREATE_BRAND_KEY,
   type HydratedBrand,
 } from "@/lib/create/hydrate-brand-from-session";
+import { ApiError, apiError, useErrorText } from "@/lib/api/error-message";
 
 // ─── Constants ────────────────────────────────────────────────────
 // 25 MB cap matches /api/datasheet/parse's server-side limit. Lower
@@ -158,6 +159,7 @@ type DatasheetParseResponse = {
 
 export default function DatasheetPage() {
   const dict = useDict();
+  const errorText = useErrorText();
   const { dir } = useLocale();
   const router = useRouter();
   const dataInputRef = useRef<HTMLInputElement>(null);
@@ -406,10 +408,7 @@ export default function DatasheetPage() {
           signal: controller.signal,
         });
         if (!res.ok) {
-          const body = (await res.json().catch(() => null)) as
-            | { error?: string }
-            | null;
-          throw new Error(body?.error ?? `Parse failed (${res.status})`);
+          throw await apiError(res, `Parse failed (${res.status})`);
         }
         const parsed = (await res.json()) as DatasheetParseResponse;
         if (!isCurrent) return;
@@ -425,9 +424,7 @@ export default function DatasheetPage() {
         }
         console.error("[datasheet] parse failed:", err);
         setError(
-          err instanceof Error
-            ? err.message
-            : dict.flows.datasheet.extractFailed,
+          errorText(err),
         );
         setDataFileStage("idle");
         // Also reset the hidden file input on parse-failure so the
@@ -441,7 +438,7 @@ export default function DatasheetPage() {
       isCurrent = false;
       controller.abort();
     };
-  }, [dataFile, dict]);
+  }, [dataFile, dict, errorText]);
 
   // ─── Palette handlers (identical to /create) ───────────────────
   const updateColor = (index: number, next: string) =>
@@ -590,14 +587,14 @@ export default function DatasheetPage() {
 
       if (!response.ok) {
         const data = (await response.json().catch(() => null)) as
-          | { error?: string }
+          | { error?: string; code?: string }
           | null;
         if (response.status === 402 && isCreditGatePayload(data)) {
           setCreditGate(data);
           setSubmitting(false);
           return;
         }
-        throw new Error(data?.error ?? dict.flows.createFailed);
+        throw new ApiError(data?.error ?? dict.flows.createFailed, data?.code, response.status);
       }
 
       const data = (await response.json()) as { projectId: string };
@@ -605,9 +602,7 @@ export default function DatasheetPage() {
     } catch (caughtError) {
       console.error("[datasheet] generate failed:", caughtError);
       setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : dict.flows.startFailed,
+        errorText(caughtError),
       );
       setSubmitting(false);
     }

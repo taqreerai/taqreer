@@ -95,7 +95,7 @@ import {
   type EnhanceGuestSettings,
   type GuestDraftFiles,
 } from "@/lib/create/guest-draft";
-import { localizedExtractError } from "@/lib/extract/error-codes";
+import { ApiError, apiError, useErrorText } from "@/lib/api/error-message";
 import { readSource, clearSource } from "@/lib/types/source";
 import { ContentLanguageDropdown } from "@/components/create/ContentLanguageDropdown";
 import { isRtlLanguage } from "@/lib/language/detect";
@@ -240,13 +240,13 @@ function uploadExtract(
         if (body?.jobId) resolve({ jobId: body.jobId });
         else reject(new Error("No jobId returned from /api/extract"));
       } else {
-        const body = xhr.response as { error?: string } | null;
-        reject(new Error(body?.error ?? `Upload failed (${xhr.status})`));
+        const body = xhr.response as { error?: string; code?: string } | null;
+        reject(new ApiError(body?.error ?? `Upload failed (${xhr.status})`, body?.code, xhr.status));
       }
     };
     xhr.onerror = () => {
       cleanup();
-      reject(new Error("Upload failed (network error)"));
+      reject(new TypeError("Failed to fetch"));
     };
     xhr.onabort = () => {
       cleanup();
@@ -289,6 +289,7 @@ const MAX_PALETTE = 6;
 
 export default function EnhanceContentPage() {
   const dict = useDict();
+  const errorText = useErrorText();
   // Signed-out visitor (2026-10-06, /enhance open before sign-up): the file
   // stays in the browser; upload + analysis, brand kits and generation wait
   // for sign-in (the draft carries the setup through it).
@@ -608,10 +609,7 @@ export default function EnhanceContentPage() {
       }
       const res = await fetch(`/api/extract/${jobId}`, { signal });
       if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        throw new Error(data?.error ?? `Status ${res.status}`);
+        throw await apiError(res, `Status ${res.status}`);
       }
       const body = (await res.json()) as ExtractStatusResponse;
       if (body.status === "completed") return body.result;
@@ -770,9 +768,7 @@ export default function EnhanceContentPage() {
         }
         console.error("[enhance] extraction failed:", err);
         setError(
-          err instanceof Error
-            ? localizedExtractError(dict.flows.extractErrors, err.message)
-            : dict.flows.enhance.extractFailed,
+          errorText(err, true),
         );
         setStage("idle");
       }
@@ -787,7 +783,7 @@ export default function EnhanceContentPage() {
       // shown, Next disabled). removeFile still sets the flag itself.
       controller.abort();
     };
-  }, [file, dict, guest, locale]);
+  }, [file, dict, guest, locale, errorText]);
 
   // ─── Guest draft (2026-10-06) ──────────────────────────────────
   // Same model as /create: a visitor's setup is saved as they go, and back
@@ -1082,14 +1078,14 @@ export default function EnhanceContentPage() {
 
       if (!response.ok) {
         const data = (await response.json().catch(() => null)) as
-          | { error?: string }
+          | { error?: string; code?: string }
           | null;
         if (response.status === 402 && isCreditGatePayload(data)) {
           setCreditGate(data);
           setStage("ready");
           return;
         }
-        throw new Error(data?.error ?? dict.flows.createFailed);
+        throw new ApiError(data?.error ?? dict.flows.createFailed, data?.code, response.status);
       }
 
       const data = (await response.json()) as { projectId: string };
@@ -1104,7 +1100,7 @@ export default function EnhanceContentPage() {
     } catch (err) {
       console.error("[enhance] generate failed:", err);
       setError(
-        err instanceof Error ? err.message : dict.flows.startFailed,
+        errorText(err),
       );
       setStage("ready");
     }

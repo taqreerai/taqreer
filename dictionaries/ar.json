@@ -51,7 +51,8 @@
     "admin": "Admin",
     "default": "افتراضية",
     "share": "مشاركة",
-    "export": "تصدير"
+    "export": "تصدير",
+    "errors": { "network": "تعذّر الاتصال. تحقق من الإنترنت ثم حاول مرة أخرى.", "generic": "حدث خطأ ما. حاول مرة أخرى.", "unauthorized": "انتهت جلستك. سجّل الدخول مرة أخرى ثم أعد المحاولة.", "suspended": "هذا الحساب موقوف.", "rateLimited": "محاولات كثيرة. انتظر دقيقة ثم حاول مرة أخرى.", "fileTooLarge": "الملف كبير جدًا. الحد الأقصى 100 م.ب.", "logoType": "يجب أن يكون الشعار صورة SVG أو PNG أو JPG أو WebP.", "logoTooLarge": "الشعار كبير جدًا. الحد الأقصى 5 م.ب.", "uploadFailed": "تعذّر رفع الملف. حاول مرة أخرى." }
   },
   "notifications": { "account": { "emailChangedTitle": "تم تحديث بريدك الإلكتروني", "emailChangedDesc": "بريد تسجيل الدخول الآن {email}" }, "billing": { "planChangedTitle": "تم تفعيل خطة {plan}", "planChangedDesc": "أضفنا {credits} نقطة شهرية إلى حسابك", "creditedTitle": "تمت إضافة {credits} نقطة إلى حسابك", "creditedRenewal": "تجديد الخطة", "creditedTopup": "شراء باقة شحن", "creditedWelcome": "هدية الترحيب", "refundTitle": "تمت إعادة {credits} نقطة إلى رصيدك", "refundCancelled": "أوقفت الإنشاء، فأعدنا رسوم الإعداد", "refundGoodwill": "تسوية من فريق taqreer.ai", "paymentFailedTitle": "فشل الدفع - حدث وسيلة الدفع", "paymentFailedDesc": "سنعيد المحاولة خلال الأيام القادمة", "endingTitle": "ينتهي اشتراكك في {date}", "endingDesc": "يبقى رصيدك قابلا للاستخدام حتى ذلك الحين" },
     "actorFallback": "أحد المتعاونين",

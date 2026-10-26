@@ -40,6 +40,7 @@ import {
   resolveUploadedFontFamilies,
   type UploadedFontFieldBrief,
 } from "@/lib/brand/upload";
+import { apiError, useErrorText } from "@/lib/api/error-message";
 
 // Same palette bounds /create uses — 2 to 6 swatches.
 const MIN_PALETTE = 2;
@@ -65,6 +66,7 @@ type ResolvedFontField = {
 export default function NewBrandKitPage() {
   const router = useRouter();
   const dict = useDict();
+  const errorText = useErrorText();
   const { dir, locale } = useLocale();
 
   // ─── Form state ────────────────────────────────────────────────
@@ -156,10 +158,7 @@ export default function NewBrandKitPage() {
       });
 
       if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        throw new Error(data?.error ?? dict.pages.brandKits.errSave);
+        throw await apiError(response, dict.pages.brandKits.errSave);
       }
 
       router.push(localizedHref("/brand-kits", locale));
@@ -167,9 +166,7 @@ export default function NewBrandKitPage() {
     } catch (caughtError) {
       console.error("[brand-kits/new] save failed:", caughtError);
       setError(
-        caughtError instanceof Error
-          ? caughtError.message
-          : dict.pages.brandKits.errSaveRetry,
+        errorText(caughtError),
       );
       setSubmitting(false);
     }

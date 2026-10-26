@@ -26,7 +26,7 @@ import {
 } from "@/components/credits/CreditGateDialog";
 import { useSlideCap } from "@/lib/credits/store";
 import { displaySlideEstimate } from "@/lib/credits/cost";
-import { localizedExtractError } from "@/lib/extract/error-codes";
+import { ApiError, apiError, useErrorText } from "@/lib/api/error-message";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
 import { Tooltip } from "@/components/common/Tooltip";
 import { AIImagesPanel } from "@/components/brand/AIImagesPanel";
@@ -188,6 +188,7 @@ export default function MimicFlow({
 } = {}) {
   const isTemplate = mode === "template" && !!templateSeed;
   const dict = useDict();
+  const errorText = useErrorText();
   // Signed-out visitor on /mimic (2026-10-06): both files stay in the
   // browser; analysis, brand kits and generation wait for sign-in (the
   // draft carries the setup through it). Template mode needs an account.
@@ -478,10 +479,7 @@ export default function MimicFlow({
       if (signal.aborted) throw new Error("Cancelled");
       const res = await fetch(`/api/extract/${jobId}`, { signal });
       if (!res.ok) {
-        const data = (await res.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        throw new Error(data?.error ?? `Status ${res.status}`);
+        throw await apiError(res, `Status ${res.status}`);
       }
       const body = (await res.json()) as ExtractStatusResponse;
       if (body.status === "completed") return body.result;
@@ -515,10 +513,7 @@ export default function MimicFlow({
           signal: controller.signal,
         });
         if (!startRes.ok) {
-          const data = (await startRes.json().catch(() => null)) as
-            | { error?: string }
-            | null;
-          throw new Error(data?.error ?? `Upload failed (${startRes.status})`);
+          throw await apiError(startRes, `Upload failed (${startRes.status})`);
         }
         const { jobId } = (await startRes.json()) as { jobId: string };
         if (!jobId) throw new Error("No jobId returned from /api/extract");
@@ -542,9 +537,7 @@ export default function MimicFlow({
         }
         console.error("[mimic] design extraction failed:", err);
         setError(
-          err instanceof Error
-            ? localizedExtractError(dict.flows.extractErrors, err.message)
-            : dict.flows.mimic.extractRefFailed,
+          errorText(err, true),
         );
         setDesignStage("idle");
       }
@@ -553,7 +546,7 @@ export default function MimicFlow({
       isCurrent = false;
       controller.abort();
     };
-  }, [designFile, dict, guest]);
+  }, [designFile, dict, guest, errorText]);
 
   // ─── Auto-extract: content file (only when a file is picked) ───
   // Stage("extracting") + error reset moved to setContentFromInput
@@ -575,10 +568,7 @@ export default function MimicFlow({
           signal: controller.signal,
         });
         if (!startRes.ok) {
-          const data = (await startRes.json().catch(() => null)) as
-            | { error?: string }
-            | null;
-          throw new Error(data?.error ?? `Upload failed (${startRes.status})`);
+          throw await apiError(startRes, `Upload failed (${startRes.status})`);
         }
         const { jobId } = (await startRes.json()) as { jobId: string };
         if (!jobId) throw new Error("No jobId returned from /api/extract");
@@ -599,9 +589,7 @@ export default function MimicFlow({
         }
         console.error("[mimic] content extraction failed:", err);
         setError(
-          err instanceof Error
-            ? localizedExtractError(dict.flows.extractErrors, err.message)
-            : dict.flows.mimic.extractContentFailed,
+          errorText(err, true),
         );
         setContentStage("idle");
       }
@@ -610,7 +598,7 @@ export default function MimicFlow({
       isCurrent = false;
       controller.abort();
     };
-  }, [contentFile, dict, guest]);
+  }, [contentFile, dict, guest, errorText]);
 
   // ─── Derived page-level stage ──────────────────────────────────
   // A visitor's files are only kept in the browser (analysed after sign-in).
@@ -978,14 +966,14 @@ export default function MimicFlow({
 
       if (!response.ok) {
         const data = (await response.json().catch(() => null)) as
-          | { error?: string }
+          | { error?: string; code?: string }
           | null;
         if (response.status === 402 && isCreditGatePayload(data)) {
           setCreditGate(data);
           setSubmitting(false);
           return;
         }
-        throw new Error(data?.error ?? dict.flows.createFailed);
+        throw new ApiError(data?.error ?? dict.flows.createFailed, data?.code, response.status);
       }
 
       const data = (await response.json()) as { projectId: string };
@@ -993,7 +981,7 @@ export default function MimicFlow({
     } catch (err) {
       console.error("[mimic] generate failed:", err);
       setError(
-        err instanceof Error ? err.message : dict.flows.startFailed,
+        errorText(err),
       );
       setSubmitting(false);
     }
