@@ -261,9 +261,35 @@ function __tqFreezeWell(well) {
         (ta === "end" && !rtl);
       slackShift = alignRight ? 2 : ta === "center" ? 1 : 0;
     }
+    // A SHORT text on ONE line (page number, corner tag, kicker, chip) is
+    // pinned no-wrap: the 2px slack still let one wrap in the viewer when its
+    // font rendered a little wider, dropping the words out of their pill
+    // (owner report 2026-10-26). No-wrap renders identically at bake time.
+    // Only labels drawn ON a shape of their own (a pill, a ringed page number):
+    // a plain short heading stays wrappable for editor text edits.
+    var parentEl = el.parentElement;
+    var onShape =
+      hasPaint(cs) ||
+      (parentEl && parentEl.textContent.trim() === el.textContent.trim() && hasPaint(getComputedStyle(parentEl)));
+    var oneLine = false;
+    if (growsWithText && onShape && el.textContent.trim().length <= 40) {
+      var range = el.ownerDocument.createRange();
+      range.selectNodeContents(el);
+      var rects = range.getClientRects();
+      var tops = [];
+      for (var q = 0; q < rects.length; q++) {
+        if (rects[q].width < 1) continue;
+        var tp = Math.round(rects[q].top);
+        if (tops.indexOf(tp) === -1) tops.push(tp);
+      }
+      var spread = 0;
+      for (var q2 = 0; q2 < tops.length; q2++) spread = Math.max(spread, Math.abs(tops[q2] - tops[0]));
+      oneLine = tops.length > 0 && spread < parseFloat(cs.fontSize || "16") * 0.6;
+    }
     jobs.push({
       el: el,
       text: growsWithText,
+      oneLine: oneLine,
       left: r.left - parentRect.left - (parseFloat(parentCs.borderLeftWidth) || 0) - slackShift,
       top: r.top - parentRect.top - (parseFloat(parentCs.borderTopWidth) || 0),
       w: r.width + (growsWithText ? 2 : 0),
@@ -380,6 +406,7 @@ function __tqFreezeWell(well) {
     // editor's resize semantics); the measured height equals auto height at
     // bake time, so the render is identical. Non-text boxes pin exactly.
     if (job.text) s.setProperty("height", "auto");
+    if (job.oneLine) s.setProperty("white-space", "nowrap");
     else s.setProperty("height", job.h.toFixed(2) + "px");
     s.setProperty("margin", "0");
     if (job.clearTf) s.setProperty("transform", "none");
