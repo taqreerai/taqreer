@@ -17,7 +17,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { useState } from "react";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
-import { DECK_STYLES, STYLE_SECTORS, type DeckStyleKey, type StyleSector } from "@/lib/design-styles";
+import { DECK_STYLES, EDU_LEVELS, STYLE_SECTORS, type DeckStyleKey, type EduLevel, type StyleSector } from "@/lib/design-styles";
 import { SocialStyleThumb, StyleThumb, type SocialThumbKey } from "@/components/create/StyleThumb";
 import { StyleInfoButton } from "@/components/create/StyleInfoButton";
 import { LookThumb, hasLookThumb } from "@/components/create/LookThumb";
@@ -28,7 +28,8 @@ import { FIT_MAX_ROWS, useFitCount } from "@/components/create/useFitCount";
 // anchor stored on the brief; the visible name comes from the dictionary.
 const STYLES = DECK_STYLES;
 
-type SectorFilter = "all" | StyleSector;
+// "edu:<level>" = the Education chip narrowed to one level (second chip row).
+type SectorFilter = "all" | StyleSector | `edu:${EduLevel}`;
 
 // Sector filter chips above the deck-style tiles (2026-10-05). Same pill
 // treatment as the colours "Auto" pill; scrolls sideways on narrow cards.
@@ -41,26 +42,45 @@ function SectorChips({
 }) {
   const t = useDict().flows.stylePicker;
   const labels: Record<string, string> = t.sectors;
+  const levelLabels: Record<string, string> = t.levels;
+  const inEducation = value === "education" || value.startsWith("edu:");
+  const chip = (active: boolean) =>
+    `h-7 shrink-0 whitespace-nowrap rounded-full border px-2.5 text-[11px] font-medium transition-colors ${
+      active
+        ? "border-foreground/40 bg-[var(--tq-overlay-soft)] text-foreground"
+        : "border-[var(--tq-border-hairline)] text-foreground/60 hover:border-foreground/30 hover:text-foreground"
+    }`;
   return (
-    <div role="group" aria-label={t.filterAria} className="hide-scrollbar -mx-0.5 flex gap-1.5 overflow-x-auto px-0.5 pb-0.5">
-      {(["all", ...STYLE_SECTORS] as const).map((sec) => {
-        const active = value === sec;
-        return (
-          <button
-            key={sec}
-            type="button"
-            onClick={() => onChange(sec)}
-            aria-pressed={active}
-            className={`h-7 shrink-0 whitespace-nowrap rounded-full border px-2.5 text-[11px] font-medium transition-colors ${
-              active
-                ? "border-foreground/40 bg-[var(--tq-overlay-soft)] text-foreground"
-                : "border-[var(--tq-border-hairline)] text-foreground/60 hover:border-foreground/30 hover:text-foreground"
-            }`}
-          >
-            {labels[sec]}
-          </button>
-        );
-      })}
+    <div className="flex flex-col gap-1.5">
+      <div role="group" aria-label={t.filterAria} className="hide-scrollbar -mx-0.5 flex gap-1.5 overflow-x-auto px-0.5 pb-0.5">
+        {(["all", ...STYLE_SECTORS] as const).map((sec) => {
+          const active = sec === "education" ? inEducation : value === sec;
+          return (
+            <button
+              key={sec}
+              type="button"
+              onClick={() => onChange(sec)}
+              aria-pressed={active}
+              className={chip(active)}
+            >
+              {labels[sec]}
+            </button>
+          );
+        })}
+      </div>
+      {inEducation ? (
+        <div role="group" aria-label={t.levelsAria} className="hide-scrollbar -mx-0.5 flex gap-1.5 overflow-x-auto px-0.5 pb-0.5">
+          {(["all", ...EDU_LEVELS] as const).map((lv) => {
+            const next: SectorFilter = lv === "all" ? "education" : `edu:${lv}`;
+            const active = value === next;
+            return (
+              <button key={lv} type="button" onClick={() => onChange(next)} aria-pressed={active} className={chip(active)}>
+                {levelLabels[lv]}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -68,7 +88,12 @@ function SectorChips({
 function inSector(key: string, sector: SectorFilter): boolean {
   if (sector === "all" || key === "auto") return true;
   const st = DECK_STYLES.find((d) => d.key === key);
-  return !!st && (st.sectors as readonly string[]).includes(sector);
+  if (!st) return false;
+  if (sector.startsWith("edu:")) {
+    const levels: readonly string[] = "levels" in st ? st.levels : [];
+    return levels.includes(sector.slice(4));
+  }
+  return (st.sectors as readonly string[]).includes(sector);
 }
 
 // ── Social-media style set (2026 trends) ────────────────────────

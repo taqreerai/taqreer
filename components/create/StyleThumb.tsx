@@ -525,6 +525,509 @@ function render(k: DeckStyleKey | "auto", title: string, dir: "rtl" | "ltr"): Re
           </svg>
         </>
       );
+    case "fintech":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FFFFFF" />
+          <T top="9%" s="7%" c="#0F172A" size={6.5}>{title}</T>
+          {[0, 1, 2].map((i) => (
+            <B key={i} top="34%" s={`${7 + i * 30}%`} w="26%" h="44%" c="#F8FAFC" r="3cqw" style={{ border: "1px solid #E2E8F0" }} />
+          ))}
+          {[0, 1, 2].map((i) => (
+            <T key={`n${i}`} top="44%" s={`${10 + i * 30}%`} c="#0F172A" size={7}>{["24", "8.5", "92"][i]}</T>
+          ))}
+          {[0, 1, 2].map((i) => (
+            <B key={`d${i}`} top="64%" s={`${10 + i * 30}%`} w="9%" h="6%" c={i === 1 ? "#FEE2E2" : "#DCFCE7"} r={999} />
+          ))}
+        </>
+      );
+    case "clinical":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#F0FAF8" />
+          <svg viewBox="0 0 100 10" preserveAspectRatio="none" style={{ position: "absolute", top: "6%", insetInlineStart: "7%", width: "86%", height: "8%" }}>
+            <polyline points="0,5 35,5 40,1 45,9 50,5 100,5" fill="none" stroke="#14B8A6" strokeWidth="0.8" />
+          </svg>
+          <T top="20%" s="7%" c="#0F3D3A" size={6.5} weight={700}>{title}</T>
+          {[0, 1].map((i) => (
+            <B key={i} top="44%" s={`${7 + i * 45}%`} w="41%" h="40%" c="#FFFFFF" r="3cqw" style={{ border: "1px solid #D5EEEA" }} />
+          ))}
+          {[0, 1].map((i) => (
+            <B key={`c${i}`} top="52%" s={`${11 + i * 45}%`} w="9%" h="16%" c="#CCF2EC" r={999} />
+          ))}
+          {[0, 1].map((i) => (
+            <L key={`l${i}`} top="74%" s={`${11 + i * 45}%`} w="26%" c="#0F3D3A44" />
+          ))}
+        </>
+      );
+    case "architectural":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#EEEBE5" />
+          <B top="10%" e="6%" w="52%" h="80%" c="linear-gradient(160deg,#9CA3AF,#4B5563)" />
+          <B top="10%" s="6%" w="34%" h="1px" c="#111" />
+          <B top="8%" s="6%" w="1px" h="5%" c="#111" />
+          <B top="8%" s="40%" w="1px" h="5%" c="#111" />
+          <T top="22%" s="6%" c="#111" size={6} weight={500}>{title}</T>
+          <L top="44%" s="6%" w="28%" c="#11111155" />
+          <L top="52%" s="6%" w="22%" c="#11111144" />
+          <T bottom="10%" s="6%" c="#111" size={3.2} weight={600}>A-02 · 1,200 m2</T>
+        </>
+      );
+    case "annualreport":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FFFFFF" />
+          <T top="8%" s="6%" c="#1D4ED8" size={18} weight={800}>01</T>
+          <T top="40%" s="6%" c="#111" size={6}>{title}</T>
+          <L top="56%" s="6%" w="30%" c="#11111144" />
+          <L top="63%" s="6%" w="24%" c="#11111133" />
+          <B top="8%" e="6%" w="44%" h="70%" c="linear-gradient(150deg,#CBD5E1,#64748B)" />
+          <B bottom="10%" s="6%" e="6%" h="1px" c="#11111133" />
+          <T bottom="4%" e="6%" c="#111" size={3} weight={600}>2026</T>
+        </>
+      );
+    case "mihrab":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#123B36" />
+          <B top="6%" s="3%" e="3%" bottom="6%" c="transparent" style={{ border: "1px solid #D9B86A66" }} />
+          <B top="16%" s="34%" w="32%" h="72%" c="#1B4D46" r="50% 50% 0 0 / 30% 30% 0 0" style={{ border: "1px solid #D9B86A" }} />
+          <Star size="7%" color="#D9B86A" style={{ top: "8%", insetInlineStart: "46.5%" }} />
+          <T top="48%" s="34%" w="32%" c="#F5E9C8" size={5} style={{ textAlign: "center" }}>{title}</T>
+          <L top="62%" s="40%" w="20%" c="#F5E9C866" />
+        </>
+      );
+    case "festive":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#1E1B4B" />
+          <B top="0" s="0" w="100%" h="12%" c="#312E81" />
+          {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+            <Star key={i} size="8%" color="#FBBF24" style={{ top: "2%", insetInlineStart: `${4 + i * 14}%` }} />
+          ))}
+          <B top="12%" e="14%" w="1px" h="14%" c="#FBBF24" />
+          <B top="26%" e="11.5%" w="6%" h="14%" c="#FBBF24" r="1cqw" />
+          <T top="44%" s="8%" c="#FDE68A" size={8}>{title}</T>
+          <L top="64%" s="8%" w="34%" c="#FDE68A66" />
+        </>
+      );
+    case "impact":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FFF7ED" />
+          <B top="0" e="0" w="46%" h="100%" c="linear-gradient(160deg,#FDBA74,#9A3412)" />
+          <T top="12%" s="6%" c="#9A3412" size={16} weight={800}>12K</T>
+          <T top="50%" s="6%" c="#431407" size={5.5}>{title}</T>
+          <B top="68%" s="6%" w="1.2%" h="16%" c="#EA580C" />
+          <L top="70%" s="10%" w="30%" c="#43140755" />
+          <L top="78%" s="10%" w="22%" c="#43140744" />
+        </>
+      );
+    case "legal":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FFFFFF" />
+          <T top="8%" s="7%" c="#111827" size={6}>{title}</T>
+          {[0, 1, 2, 3].map((i) => (
+            <B key={i} top={`${34 + i * 14}%`} s="7%" e="7%" h="1px" c="#11182733" />
+          ))}
+          {[0, 1, 2].map((i) => (
+            <T key={`n${i}`} top={`${38 + i * 14}%`} s="7%" c="#1D4ED8" size={3.6} weight={700}>{`1.${i + 1}`}</T>
+          ))}
+          {[0, 1, 2].map((i) => (
+            <L key={`l${i}`} top={`${39.5 + i * 14}%`} s="18%" w={`${50 - i * 8}%`} c="#11182744" />
+          ))}
+        </>
+      );
+    case "magazine":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="linear-gradient(170deg,#F9A8D4,#831843)" />
+          <T top="4%" s="6%" c="#FFFFFF" size={13} weight={900}>{title}</T>
+          <T top="27%" s="6%" c="#FFFFFF" size={2.8} weight={600}>ISSUE 01 / 2026</T>
+          <L top="62%" s="6%" w="34%" c="#FFFFFFcc" />
+          <L top="70%" s="6%" w="26%" c="#FFFFFF99" />
+          {[0, 1, 2, 3, 4, 5, 6].map((i) => (
+            <B key={i} bottom="8%" e={`${6 + i * 1.6}%`} w={i % 2 ? "0.5%" : "0.9%"} h="9%" c="#FFFFFF" />
+          ))}
+        </>
+      );
+    case "lookbook":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FAF7F2" />
+          <B top="8%" s="8%" w="30%" h="84%" c="linear-gradient(170deg,#D6C7B4,#7C6A55)" />
+          <B top="40%" s="42%" w="16%" h="30%" c="linear-gradient(170deg,#E7DCCD,#A8957C)" />
+          <T top="12%" e="8%" c="#2B2620" size={4.5} weight={500}>{title}</T>
+          <L top="24%" e="8%" w="18%" c="#2B262044" />
+          <T bottom="8%" e="8%" c="#2B2620" size={2.6} weight={600} style={{ letterSpacing: "0.3em" }}>LOOK 03</T>
+        </>
+      );
+    case "risograph":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#F6F1E7" />
+          <T top="14%" s="7.8%" c="#FF5A79" size={11} weight={900}>{title}</T>
+          <T top="12.5%" s="7%" c="#2563EB" size={11} weight={900}>{title}</T>
+          <svg style={{ position: "absolute", bottom: "8%", insetInlineEnd: "6%", width: "34%", height: "44%" }}>
+            <defs>
+              <pattern id="riso-dots" width="6" height="6" patternUnits="userSpaceOnUse">
+                <circle cx="3" cy="3" r="1.6" fill="#FF5A79" />
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#riso-dots)" />
+          </svg>
+          <L top="60%" s="7%" w="30%" c="#2563EB99" />
+        </>
+      );
+    case "menu":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FBF3E4" />
+          <B top="6%" s="4%" e="4%" bottom="6%" c="transparent" style={{ border: "3px double #7C2D12" }} />
+          <T top="14%" s="10%" c="#7C2D12" size={6.5}>{title}</T>
+          {[0, 1, 2].map((i) => (
+            <B key={i} top={`${40 + i * 14}%`} s="10%" w="44%" h="0" c="transparent" style={{ borderBottom: "2px dotted #7C2D1288" }} />
+          ))}
+          {[0, 1, 2].map((i) => (
+            <T key={`p${i}`} top={`${36 + i * 14}%`} s="56%" c="#B45309" size={3.4} weight={700}>{`${18 + i * 6}`}</T>
+          ))}
+          <B top="30%" e="10%" w="20%" h="36%" c="radial-gradient(circle,#FDBA74,#9A3412)" r={999} />
+        </>
+      );
+    case "blueprint":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#123A6B" style={{ backgroundImage: "linear-gradient(#ffffff14 1px,transparent 1px),linear-gradient(90deg,#ffffff14 1px,transparent 1px)", backgroundSize: "8% 14%" }} />
+          <T top="10%" s="6%" c="#E0F2FE" size={6} weight={600}>{title}</T>
+          <B top="40%" s="10%" w="40%" h="34%" c="transparent" style={{ border: "1px solid #E0F2FE" }} />
+          <B top="80%" s="10%" w="40%" h="1px" c="#E0F2FEaa" />
+          <B bottom="8%" e="6%" w="26%" h="18%" c="transparent" style={{ border: "1px solid #E0F2FE" }} />
+          <B bottom="17%" e="6%" w="26%" h="1px" c="#E0F2FE" />
+        </>
+      );
+    case "techreport":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FFFFFF" />
+          <T top="7%" s="6%" c="#1E3A8A" size={4} weight={700}>2.1</T>
+          <T top="16%" s="6%" c="#111" size={5.5}>{title}</T>
+          <B top="36%" s="6%" w="56%" h="40%" c="#F1F5F9" style={{ border: "1px solid #CBD5E1" }} />
+          {[30, 50, 40, 64].map((h, i) => (
+            <B key={i} bottom="26%" s={`${12 + i * 11}%`} w="6%" h={`${h * 0.5}%`} c={i === 3 ? "#1E3A8A" : "#94A3B8"} />
+          ))}
+          <L top="80%" s="6%" w="30%" c="#11111155" />
+          <B top="36%" e="6%" w="24%" h="40%" c="transparent" style={{ borderInlineStart: "1px solid #CBD5E1" }} />
+          <L top="42%" e="8%" w="18%" c="#11111133" />
+          <L top="50%" e="8%" w="14%" c="#11111133" />
+        </>
+      );
+    case "command":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#05080F" />
+          <B top="0" s="0" w="100%" h="9%" c="#0B1220" style={{ borderBottom: "1px solid #1E293B" }} />
+          <B top="3.5%" s="4%" w="1.6%" h="2.8%" c="#22C55E" r={999} />
+          <T top="2.6%" s="7%" c="#94A3B8" size={2.8} weight={700}>{title}</T>
+          {[0, 1, 2, 3].map((i) => (
+            <B key={i} top={i < 2 ? "16%" : "56%"} s={i % 2 ? "51%" : "4%"} w="45%" h="36%" c="#0B1220" r="1cqw" style={{ border: "1px solid #1E293B" }} />
+          ))}
+          <svg viewBox="0 0 100 30" preserveAspectRatio="none" style={{ position: "absolute", top: "30%", insetInlineStart: "8%", width: "37%", height: "16%" }}>
+            <polyline points="0,25 20,18 40,22 60,8 80,12 100,4" fill="none" stroke="#38BDF8" strokeWidth="1.5" />
+          </svg>
+          <T top="62%" s="8%" c="#E2E8F0" size={7}>98%</T>
+        </>
+      );
+    case "journey":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#F8FAFC" />
+          <T top="10%" s="6%" c="#0F172A" size={6.5}>{title}</T>
+          <B top="46%" s="6%" e="6%" h="1.4%" c="#2563EB" r={999} />
+          {[0, 1, 2, 3, 4].map((i) => (
+            <B key={i} top={i === 2 ? "40%" : "43.5%"} s={`${8 + i * 20}%`} w={i === 2 ? "6%" : "3%"} h={i === 2 ? "13%" : "6%"} c={i <= 2 ? "#2563EB" : "#FFFFFF"} r={999} style={{ border: "2px solid #2563EB" }} />
+          ))}
+          <B top="60%" s="40%" w="30%" h="26%" c="#FFFFFF" r="2cqw" style={{ border: "1px solid #CBD5E1" }} />
+          <L top="68%" s="43%" w="20%" c="#0F172A55" />
+        </>
+      );
+    case "pastel":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FDF2F8" />
+          <T top="12%" s="7%" c="#831843" size={7}>{title}</T>
+          <B top="34%" s="7%" w="22%" h="9%" c="#FBCFE8" r={999} />
+          <B top="34%" s="31%" w="16%" h="9%" c="#DDD6FE" r={999} />
+          <B top="52%" s="7%" w="40%" h="36%" c="#FFFFFF" r="4cqw" style={{ boxShadow: "0 4px 10px #83184322" }} />
+          <B top="40%" e="7%" w="38%" h="48%" c="#EDE9FE" r="4cqw" />
+          <L top="62%" s="11%" w="24%" c="#83184355" />
+        </>
+      );
+    case "papercut":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#ECFDF5" />
+          <T top="14%" s="7%" c="#064E3B" size={7}>{title}</T>
+          <B bottom="-20%" s="-10%" w="80%" h="55%" c="#A7F3D0" r={999} style={{ boxShadow: "0 -3px 8px #064E3B22" }} />
+          <B bottom="-28%" e="-12%" w="80%" h="55%" c="#6EE7B7" r={999} style={{ boxShadow: "0 -3px 8px #064E3B22" }} />
+          <B bottom="-34%" s="10%" w="90%" h="50%" c="#10B981" r={999} style={{ boxShadow: "0 -3px 8px #064E3B33" }} />
+          <L top="34%" s="7%" w="30%" c="#064E3B55" />
+        </>
+      );
+    case "aurora":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#F5F3FF" />
+          <B top="-30%" e="-14%" w="60%" h="110%" c="#DDD6FE" r={999} />
+          <B bottom="-40%" e="10%" w="50%" h="90%" c="#FBCFE8" r={999} />
+          <B top="-20%" s="-14%" w="44%" h="80%" c="#BAE6FD" r={999} />
+          <B top="18%" s="12%" w="56%" h="64%" c="#FFFFFF" r="3cqw" style={{ border: "1px solid #E9D5FF" }} />
+          <T top="32%" s="17%" c="#3B0764" size={6.5}>{title}</T>
+          <L top="54%" s="17%" w="30%" c="#3B076455" />
+        </>
+      );
+    case "sports":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#0B0B0F" />
+          <B top="0" e="0" w="55%" h="100%" c="#E11D48" style={{ clipPath: "polygon(30% 0,100% 0,100% 100%,0 100%)" }} />
+          {[0, 1, 2].map((i) => (
+            <B key={i} top={`${20 + i * 6}%`} s="6%" w="22%" h="2%" c="#FFFFFF" style={{ transform: "skewX(-20deg)" }} />
+          ))}
+          <T top="40%" s="6%" c="#FFFFFF" size={20} weight={900} style={{ transform: "skewX(-8deg)" }}>3:1</T>
+          <T bottom="10%" s="6%" c="#FFFFFF" size={4.5}>{title}</T>
+        </>
+      );
+    case "storybook":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FFF8E7" />
+          <B top="6%" s="5%" e="5%" bottom="6%" c="transparent" r="4cqw" style={{ border: "3px solid #FDBA74" }} />
+          <B top="12%" s="10%" e="10%" h="50%" c="#BAE6FD" r="3cqw" />
+          <B top="40%" s="10%" e="10%" h="22%" c="#86EFAC" r="50% 50% 3cqw 3cqw / 60% 60% 3cqw 3cqw" />
+          <B top="18%" e="18%" w="10%" h="17%" c="#FDE047" r={999} />
+          <T top="68%" s="10%" e="10%" c="#7C2D12" size={6} style={{ textAlign: "center" }}>{title}</T>
+          <B bottom="3%" s="46%" w="8%" h="9%" c="#FDBA74" r={999} />
+        </>
+      );
+    case "felt":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FEF3C7" />
+          <B top="12%" s="8%" w="50%" h="40%" c="#FCA5A5" r="3cqw" />
+          <B top="15%" s="10%" w="46%" h="34%" c="transparent" r="2cqw" style={{ border: "2px dashed #7F1D1D88" }} />
+          <T top="26%" s="13%" c="#7F1D1D" size={6}>{title}</T>
+          <B top="58%" s="8%" w="24%" h="30%" c="#93C5FD" r="3cqw" />
+          <B top="60.5%" s="9.5%" w="21%" h="25%" c="transparent" r="2cqw" style={{ border: "2px dashed #1E3A8A88" }} />
+          <B top="20%" e="10%" w="18%" h="32%" c="#86EFAC" r={999} />
+          <B top="32%" e="16%" w="2%" h="4%" c="#14532D" r={999} />
+          <B top="32%" e="20%" w="2%" h="4%" c="#14532D" r={999} />
+        </>
+      );
+    case "chalkboard":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#1F3B2D" />
+          <T top="14%" s="8%" c="#F8FAF5" size={7}>{title}</T>
+          <svg viewBox="0 0 100 10" preserveAspectRatio="none" style={{ position: "absolute", top: "30%", insetInlineStart: "8%", width: "40%", height: "5%" }}>
+            <path d="M0 6 Q25 2 50 6 T100 5" fill="none" stroke="#FDE68A" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+          <L top="44%" s="8%" w="40%" c="#F8FAF5aa" />
+          <L top="54%" s="8%" w="30%" c="#F8FAF588" />
+          <B top="38%" e="10%" w="26%" h="30%" c="transparent" r={999} style={{ border: "2px solid #F8FAF5aa" }} />
+          <B bottom="0" s="0" w="100%" h="9%" c="#8B5E34" style={{ borderTop: "2px solid #5C3A1E" }} />
+          <B bottom="6%" s="20%" w="7%" h="3%" c="#F8FAF5" r={999} />
+        </>
+      );
+    case "gamequest":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#1E1B4B" />
+          <B top="8%" s="6%" w="16%" h="9%" c="#FACC15" r={999} />
+          <T top="9.5%" s="8.5%" c="#1E1B4B" size={3.2} weight={900}>LEVEL 2</T>
+          <B top="10%" e="6%" w="40%" h="5%" c="#312E81" r={999} />
+          <B top="10%" e="26%" w="20%" h="5%" c="#22D3EE" r={999} />
+          <T top="30%" s="6%" c="#FFFFFF" size={7}>{title}</T>
+          <B top="54%" s="6%" w="54%" h="30%" c="#4338CA" r="3cqw" />
+          <B top="62%" s="10%" w="6%" h="11%" c="#FFFFFF" r="1cqw" />
+          <Star size="18%" color="#FACC15" style={{ top: "54%", insetInlineEnd: "10%" }} />
+        </>
+      );
+    case "mathgrid":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FFFFFF" style={{ backgroundImage: "linear-gradient(#BFDBFE 1px,transparent 1px),linear-gradient(90deg,#BFDBFE 1px,transparent 1px)", backgroundSize: "5% 8.9%" }} />
+          <B top="0" s="12%" w="0.5%" h="100%" c="#F87171" />
+          <T top="10%" s="16%" c="#1E3A8A" size={6}>{title}</T>
+          <B top="34%" s="16%" w="40%" h="14%" c="#EFF6FF" style={{ border: "1px solid #93C5FD" }} />
+          <B top="52%" s="16%" w="40%" h="14%" c="#EFF6FF" style={{ border: "1px solid #93C5FD" }} />
+          <B top="40%" e="8%" w="26%" h="22%" c="#FEF9C3" style={{ border: "3px double #1E3A8A" }} />
+          <T top="45%" e="16%" c="#1E3A8A" size={6} weight={900}>= 12</T>
+        </>
+      );
+    case "sciencelab":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#F0FDFA" />
+          <T top="8%" s="6%" c="#134E4A" size={6}>{title}</T>
+          {[0, 1, 2].map((i) => (
+            <B key={i} top="32%" s={`${6 + i * 30}%`} w="27%" h="54%" c="#FFFFFF" r="2cqw" style={{ border: "1px solid #CCFBF1" }} />
+          ))}
+          {["#F59E0B", "#3B82F6", "#10B981"].map((c, i) => (
+            <B key={`t${i}`} top="36%" s={`${9 + i * 30}%`} w="12%" h="7%" c={c} r={999} />
+          ))}
+          <svg viewBox="0 0 20 24" style={{ position: "absolute", top: "50%", insetInlineStart: "13%", width: "10%", height: "26%" }}>
+            <path d="M7 2 H13 M8 2 V9 L3 21 H17 L12 9 V2" fill="#99F6E4" stroke="#134E4A" strokeWidth="1" />
+          </svg>
+        </>
+      );
+    case "comic":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FFFFFF" />
+          <B top="5%" s="4%" w="56%" h="52%" c="#FDE68A" style={{ border: "3px solid #111" }} />
+          <B top="5%" s="62%" w="34%" h="52%" c="#BFDBFE" style={{ border: "3px solid #111" }} />
+          <B top="60%" s="4%" w="92%" h="35%" c="#FECACA" style={{ border: "3px solid #111" }} />
+          <B top="9%" s="7%" w="30%" h="10%" c="#FFFFFF" style={{ border: "2px solid #111" }} />
+          <T top="68%" s="8%" c="#111" size={7} weight={900}>{title}</T>
+          <B top="14%" s="68%" w="22%" h="20%" c="#FFFFFF" r={999} style={{ border: "2px solid #111" }} />
+        </>
+      );
+    case "cornell":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FFFFFF" />
+          <B top="0" s="0" w="100%" h="15%" c="#F8FAFC" style={{ borderBottom: "1px solid #CBD5E1" }} />
+          <T top="4%" s="5%" c="#0F172A" size={4.5}>{title}</T>
+          <B top="15%" s="0" w="28%" h="63%" c="#EEF2FF" style={{ borderInlineEnd: "1px solid #CBD5E1" }} />
+          {[0, 1, 2].map((i) => (
+            <L key={i} top={`${24 + i * 16}%`} s="5%" w="16%" c="#4338CA88" />
+          ))}
+          {[0, 1, 2, 3].map((i) => (
+            <B key={`r${i}`} top={`${28 + i * 12}%`} s="32%" e="5%" h="1px" c="#CBD5E1" />
+          ))}
+          <B bottom="0" s="0" w="100%" h="22%" c="#FEF3C7" style={{ borderTop: "2px solid #0F172A" }} />
+          <L bottom="9%" s="5%" w="50%" c="#0F172A66" />
+        </>
+      );
+    case "flashcard":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#EEF2FF" />
+          <B top="14%" s="16%" w="68%" h="72%" c="#FFFFFF" r="3cqw" style={{ border: "1px solid #C7D2FE", boxShadow: "0 4px 10px #4338CA22" }} />
+          <B top="20%" s="21%" w="8%" h="13%" c="#4338CA" r={999} />
+          <T top="22%" s="23.3%" c="#FFFFFF" size={4.5} weight={900}>Q</T>
+          <B top="46%" s="26%" w="34%" h="13%" c="#FDE68A" />
+          <T top="45%" s="27%" c="#1E1B4B" size={6.5}>{title}</T>
+          <T top="6%" e="6%" c="#4338CA" size={3} weight={700}>3 / 20</T>
+        </>
+      );
+    case "posterfair":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#1E40AF" />
+          <T top="5%" s="6%" c="#FFFFFF" size={5.5}>{title}</T>
+          {[[6, 26], [35, 30], [68, 26]].map(([s, w], i) => (
+            <B key={i} top="24%" s={`${s}%`} w={`${w}%`} h="68%" c="#FFFFFF" r="1cqw" />
+          ))}
+          {[[6, 26, "#F59E0B"], [35, 30, "#10B981"], [68, 26, "#EC4899"]].map(([s, w, c], i) => (
+            <B key={`h${i}`} top="24%" s={`${s}%`} w={`${w}%`} h="9%" c={c as string} r="1cqw 1cqw 0 0" />
+          ))}
+          <B top="40%" s="38%" w="24%" h="28%" c="linear-gradient(150deg,#A7F3D0,#047857)" />
+          <B top="38.5%" s="49%" w="2%" h="3.5%" c="#DC2626" r={999} />
+        </>
+      );
+    case "thesis":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FAFAF9" />
+          {[0, 1, 2, 3, 4].map((i) => (
+            <B key={i} top="6%" s={`${6 + i * 17.8}%`} w="16%" h="3%" c={i <= 1 ? "#7C2D12" : "#E7E5E4"} r={999} />
+          ))}
+          <T top="18%" s="6%" c="#1C1917" size={6}>{title}</T>
+          {[0, 1].map((i) => (
+            <B key={`q${i}`} top={`${38 + i * 20}%`} s="6%" w="11%" h="12%" c="#7C2D12" r="1cqw" />
+          ))}
+          {[0, 1].map((i) => (
+            <T key={`t${i}`} top={`${40.5 + i * 20}%`} s="7.5%" c="#FFFFFF" size={3.6} weight={800}>{`RQ${i + 1}`}</T>
+          ))}
+          {[0, 1].map((i) => (
+            <L key={`l${i}`} top={`${43 + i * 20}%`} s="20%" w="40%" c="#1C191755" />
+          ))}
+          <B bottom="10%" s="6%" e="6%" h="1px" c="#1C191733" />
+        </>
+      );
+    case "casestudy":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#F8FAFC" />
+          <T top="7%" e="6%" c="#475569" size={3} weight={700}>DILEMMA</T>
+          <T top="14%" s="6%" c="#0F172A" size={6}>{title}</T>
+          <B top="34%" s="6%" e="6%" h="18%" c="#DBEAFE" r="2cqw" />
+          <L top="41%" s="10%" w="50%" c="#1E3A8A88" />
+          {[0, 1, 2].map((i) => (
+            <B key={i} top="58%" s={`${6 + i * 30}%`} w="27%" h="30%" c="#FFFFFF" r="2cqw" style={{ border: "1px solid #CBD5E1" }} />
+          ))}
+          {[0, 1, 2].map((i) => (
+            <B key={`d${i}`} top="62%" s={`${9 + i * 30}%`} w="5%" h="8%" c={["#22C55E", "#F59E0B", "#EF4444"][i]} r={999} />
+          ))}
+        </>
+      );
+    case "workshop":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FFFBEB" />
+          <T top="9%" s="6%" c="#78350F" size={6}>{title}</T>
+          {[0, 1, 2].map((i) => (
+            <B key={i} top={`${32 + i * 19}%`} s="6%" w="58%" h="15%" c="#FFFFFF" r="2cqw" style={{ border: "1px solid #FDE68A" }} />
+          ))}
+          {[0, 1, 2].map((i) => (
+            <B key={`c${i}`} top={`${35.5 + i * 19}%`} s="9%" w="12%" h="8%" c={i === 1 ? "#0EA5E9" : "#F59E0B"} r={999} />
+          ))}
+          {[0, 1, 2].map((i) => (
+            <L key={`l${i}`} top={`${38.5 + i * 19}%`} s="24%" w="30%" c="#78350F55" />
+          ))}
+          <B top="32%" e="6%" w="26%" h="53%" c="#E0F2FE" r="2cqw" />
+        </>
+      );
+    case "languagelab":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#F0F9FF" />
+          <T top="8%" s="6%" c="#0C4A6E" size={6}>{title}</T>
+          {[0, 1].map((i) => (
+            <B key={i} top={`${30 + i * 32}%`} s="6%" e="6%" h="26%" c="#FFFFFF" r="2cqw" style={{ border: "1px solid #BAE6FD" }} />
+          ))}
+          {[0, 1].map((i) => (
+            <B key={`d${i}`} top={`${33 + i * 32}%`} s="50%" w="1px" h="20%" c="#BAE6FD" />
+          ))}
+          {[0, 1].map((i) => (
+            <T key={`a${i}`} top={`${36 + i * 32}%`} s="10%" c="#0369A1" size={4.5}>{["كتاب", "قلم"][i]}</T>
+          ))}
+          {[0, 1].map((i) => (
+            <T key={`e${i}`} top={`${36 + i * 32}%`} s="56%" c="#BE185D" size={4.5} style={{ direction: "ltr" }}>{["book", "pen"][i]}</T>
+          ))}
+        </>
+      );
+    case "schoolreport":
+      return (
+        <>
+          <B top="0" s="0" w="100%" h="100%" c="#FFFFFF" />
+          <B top="0" s="0" w="100%" h="20%" c="#14532D" />
+          <B top="4%" s="5%" w="7%" h="12.5%" c="#FDE68A" r={999} />
+          <T top="6%" s="15%" c="#FFFFFF" size={4.5}>{title}</T>
+          {[0, 1, 2].map((i) => (
+            <B key={i} top="28%" s={`${5 + i * 31}%`} w="28%" h="34%" c="#F0FDF4" r="2cqw" style={{ border: "1px solid #BBF7D0" }} />
+          ))}
+          {[0, 1, 2].map((i) => (
+            <T key={`n${i}`} top="36%" s={`${8 + i * 31}%`} c="#14532D" size={7}>{["96%", "88", "12"][i]}</T>
+          ))}
+          {[0, 1, 2, 3, 4].map((i) => (
+            <B key={`e${i}`} top="72%" s={`${5 + i * 18.4}%`} w="16%" h="16%" c={i === 0 ? "#14532D" : "#ECFDF5"} r="1.5cqw" />
+          ))}
+        </>
+      );
   }
 }
 
