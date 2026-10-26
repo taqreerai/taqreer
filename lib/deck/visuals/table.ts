@@ -54,6 +54,26 @@ function numericColumns(t: TableSpec, header: boolean): boolean[] {
   return cols.map((c) => c.all > 0 && c.num / c.all >= 0.6);
 }
 
+// Zebra stripes follow row GROUPS: rows tied together by a merged (rowspan)
+// cell share one stripe, so the merged value sits in one clean band with the
+// rows it covers. Striping single rows cut a merge into a staircase that read
+// as values on the wrong row (prod 2026-10-26, a grammar table).
+function rowGroups(t: TableSpec, header: boolean): number[] {
+  const out: number[] = [];
+  let group = -1;
+  let openUntil = -1;
+  t.rows.forEach((row, r) => {
+    if (header && r === 0) {
+      out.push(-1);
+      return;
+    }
+    if (r > openUntil) group++;
+    for (const c of row) openUntil = Math.max(openUntil, r + c.rowSpan - 1);
+    out.push(group);
+  });
+  return out;
+}
+
 export function renderTableHtml(t: TableSpec, opts: { boxHeight: number | null }): string {
   const header = hasHeader(t);
   t = { ...t, headerRow: header };
@@ -61,11 +81,12 @@ export function renderTableHtml(t: TableSpec, opts: { boxHeight: number | null }
   const fs = fontSizeFor(t, opts.boxHeight);
   const line = "color-mix(in srgb, currentColor 18%, transparent)";
   const zebra = "color-mix(in srgb, currentColor 5%, transparent)";
+  const groups = rowGroups(t, header);
   const body = t.rows
     .map((row, r) => {
       const isHead = t.headerRow && r === 0;
       const tag = isHead ? "th" : "td";
-      const bg = !isHead && (t.headerRow ? r - 1 : r) % 2 === 1 ? `background:${zebra};` : "";
+      const bg = !isHead && groups[r] % 2 === 1 ? `background:${zebra};` : "";
       let col = 0;
       const cells = row
         .map((c, ci) => {
