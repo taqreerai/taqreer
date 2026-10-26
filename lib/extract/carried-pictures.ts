@@ -25,6 +25,7 @@ import {
   tagPhotos,
   type RefreshCandidate,
 } from "@/lib/extract/photo-refresh";
+import { tagReplacePictures, type ReplaceRole } from "@/lib/extract/rework-pictures";
 import { createHash } from "crypto";
 import type { TableSpec } from "@/lib/deck/visuals/table";
 import type { ChartSpec } from "@/lib/deck/visuals/chart";
@@ -55,6 +56,8 @@ export type CarriedPicture = {
   // matched to the right picture). lib/extract/rework-pictures.ts.
   swap?: boolean;
   shows?: string;
+  // Replace-all decks: an organisation's logo, kept and restyled to fit.
+  logo?: boolean;
   // An animated GIF, stored as the original file so it plays.
   animated?: boolean;
   aspect: number; // width / height on the original slide
@@ -92,13 +95,17 @@ export async function prepareCarriedPictures(opts: {
   sourcePath: string;
   sourceMime: string;
   // "Refresh my photos" (opt-in): see lib/extract/photo-refresh.ts.
-  refresh?: { slideCount: number; paid: boolean; styleHint: string; palette: readonly string[]; all?: boolean } | null;
+  refresh?: { slideCount: number; paid: boolean; styleHint: string; palette: readonly string[] } | null;
   // Enhance's free layout (tidy wording or redrawn pictures): tag what each
   // picture shows and whether it may be swapped.
   rework?: boolean;
   // Tidy wording: a header table repeated on most slides is template chrome,
   // not a carried table (its information is shown once).
   dropChrome?: boolean;
+  // "Replace all my photos": each picture is a logo (kept), data (kept), a
+  // supporting picture (swap: rebuilt as a generated image) or dropped
+  // (lib/extract/rework-pictures.ts tagReplacePictures).
+  replace?: boolean;
 }): Promise<CarriedPictures> {
   if (opts.sourceMime !== PPTX_MIME && opts.sourceMime !== PDF_MIME) {
     return { hasContentImages: false, pictures: [], skipped: 0, tables: [] };
@@ -169,7 +176,8 @@ export async function prepareCarriedPictures(opts: {
   // Rework: once per distinct picture (same bytes on several slides = one),
   // small ones included (a labelled icon still needs its description).
   let tags = new Map<string, PictureTag>();
-  if (opts.rework) {
+  const roles = new Map<string, ReplaceRole>(); // by mediaKey, replace-all only
+  if (opts.rework || opts.replace) {
     const slideText = opts.sourceMime === PPTX_MIME ? await extractTextPerSlide(buffer).catch(() => [] as string[]) : [];
     const byKey = new Map<string, { bytes: Buffer; context?: string }>();
     for (const a of storable) {
@@ -178,7 +186,15 @@ export async function prepareCarriedPictures(opts: {
       mediaKeys.set(a.assetId, key);
       if (!byKey.has(key)) byKey.set(key, { bytes: a.file.bytes, context: slideText[a.slideIndex] });
     }
-    tags = await tagReworkPictures([...byKey].map(([mediaKey, v]) => ({ mediaKey, ...v })));
+    const list = [...byKey].map(([mediaKey, v]) => ({ mediaKey, ...v }));
+    if (opts.replace) {
+      for (const [key, tag] of await tagReplacePictures(list)) {
+        roles.set(key, tag.role);
+        tags.set(key, { swap: tag.role === "support", shows: tag.shows });
+      }
+    } else {
+      tags = await tagReworkPictures(list);
+    }
   }
   for (let i = 0; i < storable.length; i += UPLOAD_PARALLEL) {
     await Promise.all(
@@ -218,18 +234,16 @@ export async function prepareCarriedPictures(opts: {
     });
     // Tag the best candidates once each (by picture, not by slide).
     const byKey = new Map<string, PdfAsset>();
-    for (const c of refreshPool(cands, opts.refresh.all === true && opts.refresh.paid)) {
+    for (const c of refreshPool(cands)) {
       const a = storable.find((x) => x.assetId === c.assetId);
       if (a && !byKey.has(c.mediaKey)) byKey.set(c.mediaKey, a);
     }
-    const replaceAll = opts.refresh.all === true && opts.refresh.paid;
     const tagged = await tagPhotos(
       [...byKey].map(([mediaKey, a]) => ({ mediaKey, bytes: a.file.kind === "image" ? a.file.bytes : Buffer.alloc(0) })),
-      replaceAll,
     );
     refreshTagged = tagged.size;
     const tags = new Map([...tagged].map(([k, v]) => [k, v.tag] as const));
-    const picks = selectPhotoReplacements(cands, tags, { slideCount: opts.refresh.slideCount, paid: opts.refresh.paid, all: opts.refresh.all });
+    const picks = selectPhotoReplacements(cands, tags, { slideCount: opts.refresh.slideCount, paid: opts.refresh.paid });
     const made = await makeReplacements({
       projectId: opts.projectId,
       styleHint: opts.refresh.styleHint,
@@ -248,7 +262,15 @@ export async function prepareCarriedPictures(opts: {
     }
   }
 
-  const pictures: CarriedPicture[] = storable.map((a) => ({
+  // Replace-all: a dropped picture (and a supporting full-slide photo, which
+  // the redesign rebuilds as its own photo background) is not carried at all.
+  // Page artworks stay: they are the slide.
+  const dropped = (a: PdfAsset) => {
+    if (!opts.replace || a.cls === "page") return false;
+    const role = roles.get(mediaKeys.get(a.assetId) ?? "");
+    return role === "drop" || (role === "support" && backdropIds.has(a.assetId));
+  };
+  const pictures: CarriedPicture[] = storable.filter((a) => !dropped(a)).map((a) => ({
       assetId: replaced.get(a.assetId) ?? a.assetId,
       ...(replaced.has(a.assetId) ? { originalAssetId: a.assetId } : {}),
       slideIndex: a.slideIndex,
@@ -257,6 +279,7 @@ export async function prepareCarriedPictures(opts: {
       // An animated picture is never swapped: a generated image cannot move.
       ...(tags.get(mediaKeys.get(a.assetId) ?? "")?.swap && !(a.file.kind === "image" && a.file.animated) ? { swap: true } : {}),
       ...(a.file.kind === "image" && a.file.animated ? { animated: true } : {}),
+      ...(roles.get(mediaKeys.get(a.assetId) ?? "") === "logo" ? { logo: true } : {}),
       ...(tags.get(mediaKeys.get(a.assetId) ?? "")?.shows ? { shows: tags.get(mediaKeys.get(a.assetId) ?? "")!.shows! } : {}),
       box: { x: round3(a.box.x), y: round3(a.box.y), w: round3(a.box.w), h: round3(a.box.h) },
       // The PICTURE's own proportions (after the slide's crop), not the shape's:
@@ -271,7 +294,7 @@ export async function prepareCarriedPictures(opts: {
   // candidates are confirmed by the Haiku tagger; drawings never qualify.
   let coverPhotoId: string | undefined;
   const coverCands = coverPhotoCandidates(pictures)
-    .filter((p) => !p.originalAssetId)
+    .filter((p) => !p.originalAssetId && !p.swap)
     .slice(0, COVER_CANDIDATES);
   if (coverCands.length > 0) {
     const coverTags = await tagPhotos(

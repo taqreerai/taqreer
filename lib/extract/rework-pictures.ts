@@ -78,3 +78,67 @@ export async function tagReworkPictures(
   }
   return out;
 }
+
+// "Replace all my photos" (owner, 2026-10-26): the redesign keeps logos and
+// pictures that carry data, rebuilds every supporting picture as a new
+// generated image, and drops the rest so the enhanced deck stays clean.
+//   logo     kept, restyled to fit the deck (CARRIED_LOGO note)
+//   support  generic photo, clip-art, cartoon, emoji, mascot: a generated image
+//   data     chart, map, screenshot, scan, a picture the slide's task is about
+//   drop     words in a picture, arrows / shapes / frames, specific people or places
+export type ReplaceRole = "logo" | "support" | "data" | "drop";
+export type ReplaceTag = { role: ReplaceRole; shows: string | null };
+
+/** mediaKey -> its role in a replace-all redesign. Failure = no tags (every picture kept, as before). */
+export async function tagReplacePictures(
+  pictures: readonly { mediaKey: string; bytes: Buffer; context?: string }[],
+): Promise<Map<string, ReplaceTag>> {
+  const out = new Map<string, ReplaceTag>();
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey || pictures.length === 0) return out;
+  const list = pictures.slice(0, MAX_TAGGED);
+  try {
+    const content: Anthropic.Messages.ContentBlockParam[] = [];
+    for (let i = 0; i < list.length; i++) {
+      const jpg = await sharp(list[i].bytes, { failOn: "none" })
+        .resize(448, 448, { fit: "inside" })
+        .flatten({ background: "#ffffff" })
+        .jpeg({ quality: 70 })
+        .toBuffer();
+      const said = list[i].context?.replace(/\s+/g, " ").trim().slice(0, 160);
+      content.push({ type: "text", text: said ? `Image ${i + 1} (its slide says: "${said}"):` : `Image ${i + 1}:` });
+      content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: jpg.toString("base64") } });
+    }
+    content.push({
+      type: "text",
+      text:
+        `These pictures come from a slide deck that is being rebuilt with all-new pictures. Give each image one role:\n` +
+        `- logo: the logo, emblem, seal or crest of an organisation, school, ministry or brand\n` +
+        `- data: a chart, graph, table, map, screenshot, scanned document, or a technical diagram whose details carry information; also any picture the slide's activity or question is about (objects students must name, match, count or describe)\n` +
+        `- support: a generic picture that only illustrates or decorates the point: a stock or mood photo, clip-art, a cartoon, a mascot, an emoji, a sticker or a generic scene, with no written words on it\n` +
+        `- drop: anything else: a picture with written words on it in any language (a word in a shape, a title, a saying), an arrow, shape, frame, border or ornament, word art, or a photo of a specific real person or a named real place\n` +
+        `When unsure between data and another role, answer data.\n` +
+        `Also say what it shows in at most 6 plain English words.\n` +
+        `Reply with one line per image, exactly: <number>|<logo, data, support or drop>|<what it shows>`,
+    });
+    const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
+    const msg = await client.messages.create({
+      model: MODEL,
+      max_tokens: 600 + 40 * list.length,
+      thinking: { type: "disabled" },
+      messages: [{ role: "user", content }],
+    });
+    const reply = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+    for (const line of reply.split("\n")) {
+      const m = line.trim().match(/^(\d+)\s*\|\s*(logo|data|support|drop)\s*\|\s*(.*)$/i);
+      if (!m) continue;
+      const item = list[Number(m[1]) - 1];
+      if (!item) continue;
+      const shows = m[3].replace(/[|"<>]/g, "").trim().slice(0, MAX_SHOWS_CHARS) || null;
+      out.set(item.mediaKey, { role: m[2].toLowerCase() as ReplaceRole, shows });
+    }
+  } catch (err) {
+    console.error("[carry] replace picture tagging failed:", err);
+  }
+  return out;
+}

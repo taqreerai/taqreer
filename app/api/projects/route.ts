@@ -1062,8 +1062,8 @@ export async function POST(request: Request) {
     if (!sent && payload.refreshPhotos === true && answers.pictures === "keep") {
       answers.pictures = "refresh";
     }
-    // Redrawing pictures needs AI images; with them off it is a plain keep.
-    if (answers.pictures === "redraw" && !imagesOn) answers.pictures = "keep";
+    // Redrawing or replacing pictures needs AI images; with them off it is a plain keep.
+    if ((answers.pictures === "redraw" || answers.pictures === "replace") && !imagesOn) answers.pictures = "keep";
     return enhanceAnalysis?.audience ? { ...answers, audience: enhanceAnalysis.audience } : answers;
   })();
 

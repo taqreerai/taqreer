@@ -88,6 +88,7 @@ import { frameKindFor } from "@/lib/deck/frame-kind";
 import {
   CARRIED_PICTURES_RULE,
   reworkPicturesRule,
+  CARRIED_LOGO_RULE,
   CARRIED_TABLES_RULE,
   CARRIED_CHARTS_RULE,
   carriedSlideBlock,
@@ -241,10 +242,16 @@ function dropNeverGeneratedBg(decl: FrameSlideDecl): FrameSlideDecl {
 // textRework = "tidy" wording (the essence rules, brief.reworkDeck),
 // swapPictures = "redraw" (decorative clip-art becomes generated images). A
 // deck queued before the questions carries reworkDeck alone, which meant both.
-function enhanceFlags(brief: unknown): { textRework: boolean; swapPictures: boolean } {
-  const b = brief as { reworkDeck?: boolean; swapPictures?: boolean; enhanceAnswers?: unknown } | null;
+// replaceAll = "replace all my photos" (brief.refreshAll): supporting pictures
+// become generated images, logos and data pictures stay, the rest is dropped.
+function enhanceFlags(brief: unknown): { textRework: boolean; swapPictures: boolean; replaceAll: boolean } {
+  const b = brief as { reworkDeck?: boolean; swapPictures?: boolean; refreshAll?: boolean; enhanceAnswers?: unknown } | null;
   const textRework = b?.reworkDeck === true;
-  return { textRework, swapPictures: b?.swapPictures === true || (textRework && !b?.enhanceAnswers) };
+  return {
+    textRework,
+    swapPictures: b?.swapPictures === true || (textRework && !b?.enhanceAnswers),
+    replaceAll: b?.refreshAll === true,
+  };
 }
 
 // "Redesign freely" / tidy wording (owner, 2026-10-22): replaces the
@@ -1675,7 +1682,7 @@ function buildSourceTextDirective(
     const { colors } = readBriefBrandColors(event.brief);
     // Tidy wording (lib/enhance/answers.ts): the essence, not the exact words,
     // one slide per source slide. Redraw: decorative clip-art may be swapped.
-    const { textRework: rework, swapPictures } = enhanceFlags(event.brief);
+    const { textRework: rework, swapPictures, replaceAll } = enhanceFlags(event.brief);
     const answers = readBriefAnswers(event.brief);
     // The source text's real language (lib/language/detect.ts), so a French or
     // Turkish deck stays that language and is not read as "not Arabic = English".
@@ -1745,9 +1752,10 @@ function buildSourceTextDirective(
       ...((enhanceImages?.pictures?.length ?? 0) > 0
         ? [
             CARRIED_PICTURES_RULE,
-            ...((rework || swapPictures) && enhanceImages?.pictures?.some((p) => p.swap || p.shows)
-              ? [reworkPicturesRule(swapPictures && isImagesMode(event))]
+            ...((rework || swapPictures || replaceAll) && enhanceImages?.pictures?.some((p) => p.swap || p.shows)
+              ? [reworkPicturesRule((swapPictures || replaceAll) && isImagesMode(event), replaceAll)]
               : []),
+            ...(enhanceImages?.pictures?.some((p) => p.logo) ? [CARRIED_LOGO_RULE] : []),
           ]
         : []),
       `  • LOGOS / BRAND MARKS — never recreate. If anything in a slide image looks like a logo, brand mark, monogram, or stylized identifier, do NOT draw it in SVG (approximations look off and bloat the output). Two options: (a) brand name is readable as text → styled text matching the weight/colour you can read; (b) otherwise → a styled placeholder <div> with a short label (the brand name if readable, else "Logo"). The user swaps it post-generation.`,
@@ -2410,21 +2418,20 @@ export const deckGenerate = inngest.createFunction(
           // the most important generic photos is re-made in the deck's style.
           const briefForRefresh = data.brief as {
             refreshPhotos?: boolean;
-            refreshAll?: boolean;
             rules?: { designStyle?: string | null } | null;
             brand?: { colors?: string[] } | null;
           } | null;
+          const flags = enhanceFlags(data.brief);
+          // Replace-all has its own path (prepareCarriedPictures `replace`).
           const refresh =
-            briefForRefresh?.refreshPhotos === true
+            briefForRefresh?.refreshPhotos === true && !flags.replaceAll
               ? {
                   slideCount: Math.max(pageCount, textPerSlide.length),
                   paid: isPaidPlan(data.tier ?? null),
-                  all: briefForRefresh.refreshAll === true,
                   styleHint: imageStyleHint(briefForRefresh.rules?.designStyle ?? null),
                   palette: Array.isArray(briefForRefresh.brand?.colors) ? briefForRefresh.brand.colors : [],
                 }
               : null;
-          const flags = enhanceFlags(data.brief);
           const result = await prepareCarriedPictures({
             projectId,
             sourcePath,
@@ -2432,10 +2439,11 @@ export const deckGenerate = inngest.createFunction(
             refresh,
             rework: flags.textRework || flags.swapPictures,
             dropChrome: flags.textRework,
+            replace: flags.replaceAll,
           });
-          // Only "redraw" lets a picture be swapped: otherwise every picture
-          // is the user's and stays (the tags still pair labels by "shows").
-          if (!flags.swapPictures) for (const p of result.pictures) delete p.swap;
+          // Only "redraw" and "replace all" let a picture be swapped: otherwise
+          // every picture is the user's and stays (the tags still pair labels by "shows").
+          if (!flags.swapPictures && !flags.replaceAll) for (const p of result.pictures) delete p.swap;
           // Durable copy for the free-plan UNLOCK, which runs later (often after
           // the 24h source purge) and authors the locked tail: it reads which
           // picture / table belongs to which slide from here. Job.inputJson is
@@ -2515,7 +2523,7 @@ export const deckGenerate = inngest.createFunction(
           tables: prepared.tables ?? [],
           answers: readBriefAnswers(data.brief),
           textRework: flags.textRework,
-          swapPictures: flags.swapPictures,
+          swapPictures: flags.swapPictures || flags.replaceAll,
           imagesOn: isImagesMode(data),
           instructions: (data.enhance as { instructions?: unknown } | null | undefined)?.instructions as string | undefined,
         });
@@ -2839,7 +2847,8 @@ export const deckGenerate = inngest.createFunction(
         // Free redesign with AI images on: a SWAPPABLE picture (generic clip-art)
         // is never shown as it is; the prompt says so and the model still kept
         // one (local test 2026-10-22), so it is removed here like an unknown asset.
-        const dropSwappable = enhanceFlags(data.brief).swapPictures && isImagesMode(data);
+        const pictureFlags = enhanceFlags(data.brief);
+        const dropSwappable = (pictureFlags.swapPictures || pictureFlags.replaceAll) && isImagesMode(data);
         const carriedAssetIds = new Map(
           (enhanceImages?.pictures ?? [])
             .filter((p) => p.cls !== "page" && p.cls !== "backdrop" && !(dropSwappable && p.swap))

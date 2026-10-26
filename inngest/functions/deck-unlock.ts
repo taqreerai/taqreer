@@ -55,6 +55,7 @@ import { frameKindFor } from "@/lib/deck/frame-kind";
 import {
   CARRIED_PICTURES_RULE,
   reworkPicturesRule,
+  CARRIED_LOGO_RULE,
   CARRIED_TABLES_RULE,
   CARRIED_CHARTS_RULE,
   carriedSlideBlock,
@@ -238,14 +239,16 @@ export const deckUnlock = inngest.createFunction(
       // generation job's brief (the durable home; the raw upload is purged).
       let redesignSources: { position: number; text: string }[] = [];
       let rework = false;
+      let replaceAll = false;
       let answerLines: string[] = [];
       for (const j of jobs) {
         const src = (j.inputJson as { brief?: { source?: { kind?: string; textPerSlide?: unknown } } } | null)?.brief?.source;
         if (src?.kind !== "enhance" || !Array.isArray(src.textPerSlide)) continue;
-        const brief = (j.inputJson as { brief?: { reworkDeck?: boolean } } | null)?.brief;
+        const brief = (j.inputJson as { brief?: { reworkDeck?: boolean; refreshAll?: boolean } } | null)?.brief;
         // Tidy wording (lib/enhance/answers.ts); the tail follows the same
         // start answers as the visible slides.
         rework = brief?.reworkDeck === true;
+        replaceAll = brief?.refreshAll === true;
         const answers = readBriefAnswers(brief);
         answerLines = answers ? enhanceAnswerLines(answers) : [];
         // The redesign plan the visible slides followed (lib/enhance/plan.ts).
@@ -268,10 +271,11 @@ export const deckUnlock = inngest.createFunction(
           tables: (c.tables ?? []).filter((x) => inTail(x.slideIndex)),
           redesignSources,
           rework,
+          replaceAll,
           answerLines,
         };
       }
-      return { pictures: [] as CarriedPictureRef[], tables: [] as CarriedTableRef[], redesignSources, rework, answerLines };
+      return { pictures: [] as CarriedPictureRef[], tables: [] as CarriedTableRef[], redesignSources, rework, replaceAll, answerLines };
     });
     // Enhance teaser: the locked source pages kept at generation (PDF uploads
     // have no per-slide text, so these pages ARE the content).
@@ -308,7 +312,10 @@ export const deckUnlock = inngest.createFunction(
         ...(carried.tables.length > 0 ? [CARRIED_TABLES_RULE] : []),
         ...(carried.tables.some((x) => "kind" in x.spec) ? [CARRIED_CHARTS_RULE] : []),
         ...(carried.pictures.length > 0 ? [CARRIED_PICTURES_RULE] : []),
-        ...(carried.pictures.some((x) => x.swap || x.shows) ? [reworkPicturesRule(false)] : []),
+        ...(carried.pictures.some((x) => x.swap || x.shows)
+          ? [reworkPicturesRule(carried.replaceAll && isImagesDeck, carried.replaceAll)]
+          : []),
+        ...(carried.pictures.some((x) => x.logo) ? [CARRIED_LOGO_RULE] : []),
         "",
         ...blocks,
       ].join("\n");
@@ -316,7 +323,10 @@ export const deckUnlock = inngest.createFunction(
     // Page-sized artworks are shown only as a slide's backdrop (data-bg-asset),
     // never as a well picture: kept out of the well map (an <img> of one is removed).
     const carriedAssets = new Map(
-      carried.pictures.filter((x) => x.cls !== "page" && x.cls !== "backdrop").map((x) => [x.assetId, x.aspect] as const),
+      carried.pictures
+        // Replace-all with images: a supporting picture is never shown as it is.
+        .filter((x) => x.cls !== "page" && x.cls !== "backdrop" && !(carried.replaceAll && isImagesDeck && x.swap))
+        .map((x) => [x.assetId, x.aspect] as const),
     );
     const carriedTextIds = textPictureIds(carried.pictures);
     const carriedPageIds = new Set(carried.pictures.filter((x) => x.cls === "page").map((x) => x.assetId));

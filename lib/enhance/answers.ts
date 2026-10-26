@@ -14,8 +14,10 @@
 //            tidy    -> "Redesign freely" essence rules (brief.reworkDeck)
 //   pictures keep    -> every content picture kept, template decoration dropped
 //            refresh -> keep, and replace the main generic photos (brief.refreshPhotos)
-//            replace -> replace EVERY generic photo with a new one (brief.refreshPhotos + refreshAll;
-//                       people, products and drawn diagrams are still kept; paid plans only)
+//            replace -> all-new pictures (brief.refreshAll, 2026-10-26): supporting pictures become
+//                       generated images, logos and data pictures stay, the rest is dropped
+//                       (lib/extract/rework-pictures.ts tagReplacePictures); every plan,
+//                       offered only with AI images on
 //            redraw  -> decorative clip-art becomes generated images (brief.swapPictures;
 //                       offered only with AI images on)
 //   display  projected / screen -> type size and density lines in the prompt

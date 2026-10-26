@@ -58,7 +58,8 @@ export function EnhanceQuestionsDialog({
   }, [onClose]);
 
   const label = (k: EnhanceOptionKey) => questions.labels[k] ?? copy.options[k];
-  const pictureOptions: PicturesChoice[] = imagesOn ? ["keep", "refresh", "replace", "redraw"] : ["keep", "refresh", "replace"];
+  // Replace and redraw make new pictures, so they need AI images on.
+  const pictureOptions: PicturesChoice[] = imagesOn ? ["keep", "refresh", "replace", "redraw"] : ["keep", "refresh"];
   const groups: { key: QuestionKey; title: string; options: EnhanceOptionKey[] }[] = [
     { key: "wording", title: copy.wording, options: ["exact", "tidy"] satisfies WordingChoice[] },
     ...(questions.pictures ? [{ key: "pictures" as const, title: copy.pictures, options: pictureOptions }] : []),

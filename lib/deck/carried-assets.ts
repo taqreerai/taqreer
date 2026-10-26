@@ -207,6 +207,8 @@ export type CarriedPictureRef = {
   // the picture shows (labels are matched to pictures by it).
   swap?: boolean;
   shows?: string;
+  // Replace-all decks: an organisation's logo, kept and restyled (CARRIED_LOGO_RULE).
+  logo?: boolean;
   // An animated GIF: shown whole as a picture, never a background or replaced.
   animated?: boolean;
   aspect: number;
@@ -230,13 +232,19 @@ export const CARRIED_PICTURES_RULE = `  • ORIGINAL PICTURES: FIRST RULE, overr
  */
 // "Redesign freely" decks (lib/extract/rework-pictures.ts): pictures marked
 // SWAPPABLE are generic clip-art the redesign may leave out or replace.
-export function reworkPicturesRule(imagesOn: boolean): string {
+// Replace-all (`replace`): every SWAPPABLE picture is rebuilt, not optional.
+export function reworkPicturesRule(imagesOn: boolean, replace = false): string {
   return `  • FREE REDESIGN PICTURES: overrides "put EVERY listed picture" for entries marked SWAPPABLE only (generic clip-art and decoration). ${
-    imagesOn
-      ? "Never show a SWAPPABLE picture as it is: replace it with a generated-image box of the same idea in the deck's single image style when the slide needs a visual, otherwise leave it out."
-      : "Leave a SWAPPABLE picture out when it does not fit the new design; keep it when it still helps."
+    imagesOn && replace
+      ? "The user asked for all-new pictures: never show a SWAPPABLE picture as it is. Replace EACH one with one generated-image box of the same idea, in the deck's single image style, with about the same visual weight on its slide."
+      : imagesOn
+        ? "Never show a SWAPPABLE picture as it is: replace it with a generated-image box of the same idea in the deck's single image style when the slide needs a visual, otherwise leave it out."
+        : "Leave a SWAPPABLE picture out when it does not fit the new design; keep it when it still helps."
   } Every picture NOT marked SWAPPABLE is content and appears exactly once, as the ORIGINAL PICTURES rule says; a photo of a person (a leader, a teacher, a student) is never left out. LABELS AND PICTURES: when a slide pairs words with pictures (a name under each object), pair them by each entry's "shows": a label goes only with the picture that shows that thing. A "group" picture shows several objects: keep it as one picture with its labels around or beside it, never under a single label. A label with no matching picture stays as text, never on a wrong picture. A "blank" picture is decoration: leave it out.`;
 }
+
+// Replace-all decks: logos are kept but made to fit the new design.
+export const CARRIED_LOGO_RULE = `  • LOGOS (entries marked LOGO): the organisation's own logo, never redrawn, recoloured, cropped, stretched or filtered. Make it look designed in: put it in ONE fixed chrome position you choose (the same corner on every slide that shows it), at one consistent height (about 56 to 72px on content slides, up to about 120px on the cover), with clear space around it. On a dark or busy ground set it on a clean white or very light rounded badge with even padding so its own colours read; on a light ground show it as is. Several logos on one slide sit together in one tidy row with equal heights and gaps. A logo repeated on many source slides appears on the cover and in the chrome position only, never as a big picture in the content.`;
 
 export function coverPhotoCandidates<T extends CarriedPictureRef>(pictures: readonly T[]): T[] {
   const onCover = pictures.filter((p) => p.slideIndex === 0);
@@ -318,7 +326,7 @@ export function carriedSlideBlock(
           const where = p.box
             ? `${kind}; filled ${Math.round(Math.min(1, p.box.w) * 100)}% x ${Math.round(Math.min(1, p.box.h) * 100)}% of the source slide (importance hint, place it freely)`
             : kind;
-          return `<img data-asset="${p.assetId}" src="/api/assets/${projectId}/${p.assetId}" alt="${(p.altText ?? "").replace(/["<>&]/g, "")}">  aspect ${p.aspect} (e.g. ${w}x${Math.round(w / p.aspect)}px)${p.cls === "small" ? "  small: icon / logo / badge" : where}${words}${p.shows ? `  shows: "${p.shows.replace(/["<>&]/g, "")}"` : ""}${p.animated ? "  ANIMATED: a moving picture; show it whole as a picture (never a background, never cropped, never replaced by a generated image)" : ""}${p.swap ? "  SWAPPABLE: generic clip-art (free redesign: may be left out or replaced, see FREE REDESIGN)" : ""}`;
+          return `<img data-asset="${p.assetId}" src="/api/assets/${projectId}/${p.assetId}" alt="${(p.altText ?? "").replace(/["<>&]/g, "")}">  aspect ${p.aspect} (e.g. ${w}x${Math.round(w / p.aspect)}px)${p.logo ? "  LOGO: the organisation's logo (see LOGOS)" : ""}${p.cls === "small" ? "  small: icon / logo / badge" : where}${words}${p.shows ? `  shows: "${p.shows.replace(/["<>&]/g, "")}"` : ""}${p.animated ? "  ANIMATED: a moving picture; show it whole as a picture (never a background, never cropped, never replaced by a generated image)" : ""}${p.swap ? "  SWAPPABLE: generic clip-art (free redesign: may be left out or replaced, see FREE REDESIGN)" : ""}`;
         })
         .join("\n") +
       "\n\n";
