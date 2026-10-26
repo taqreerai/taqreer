@@ -29,7 +29,7 @@ import {
   MAX_EVENT_DATA_BYTES,
   clampChars,
 } from "@/lib/types/brief-limits";
-import { detectImageRegion } from "@/lib/geo/image-region";
+import { detectImageRegion, GULF_KHALEEJI_DESCRIPTOR } from "@/lib/geo/image-region";
 import { preflightGenerate } from "@/lib/credits/preflight";
 import type { Flow as CreditFlow, SlideEstimateInput } from "@/lib/credits/cost";
 import { pickAutoFont } from "@/lib/brand/auto-font";
@@ -1075,8 +1075,14 @@ export async function POST(request: Request) {
   // Saudi Arabia depicts local people, not a generic cast. Only resolved for
   // images decks (the only place generated photos exist); null when the geo
   // can't be determined, which keeps the brief — and the prompt — unchanged.
+  // Admin accounts (owner, 2026-10-26) always generate as if in KSA / UAE: the
+  // owner builds Gulf demo decks from abroad.
   const imageRegion =
-    payload.imagesMode === true ? detectImageRegion(request.headers) : null;
+    payload.imagesMode !== true
+      ? null
+      : dbUser.role === "admin"
+        ? GULF_KHALEEJI_DESCRIPTOR
+        : detectImageRegion(request.headers);
 
   // Auto design style (2026-10-15): a CREATE deck with the style left on Auto gets
   // one picked from the style list to fit its content (lib/create/auto-style.ts).
