@@ -236,7 +236,7 @@ export const CARRIED_PICTURES_RULE = `  • ORIGINAL PICTURES: FIRST RULE, overr
 export function reworkPicturesRule(imagesOn: boolean, replace = false): string {
   return `  • FREE REDESIGN PICTURES: overrides "put EVERY listed picture" for entries marked SWAPPABLE only (generic clip-art and decoration). ${
     imagesOn && replace
-      ? "The user asked for all-new pictures: never show a SWAPPABLE picture as it is. Replace EACH one with one generated-image box of the same idea, in the deck's single image style, with about the same visual weight on its slide."
+      ? "The user asked for all-new pictures: never show a SWAPPABLE picture as it is. Replace EACH one with one generated-image box of the same idea, in the deck's single image style, large enough to read as the slide's illustration: at least about 480px on its longer side, larger when the slide has room, never a small icon or thumbnail even when the original clip-art was small."
       : imagesOn
         ? "Never show a SWAPPABLE picture as it is: replace it with a generated-image box of the same idea in the deck's single image style when the slide needs a visual, otherwise leave it out."
         : "Leave a SWAPPABLE picture out when it does not fit the new design; keep it when it still helps."
@@ -244,6 +244,9 @@ export function reworkPicturesRule(imagesOn: boolean, replace = false): string {
 }
 
 // Replace-all decks: logos are kept but made to fit the new design.
+// Smallest suggested width for a SWAPPABLE picture's replacement (1920px canvas).
+const SWAP_MIN_WIDTH = 520;
+
 export const CARRIED_LOGO_RULE = `  • LOGOS (entries marked LOGO): the organisation's own logo, never redrawn, recoloured, cropped, stretched or filtered. Make it look designed in: put it in ONE fixed chrome position you choose (the same corner on every slide that shows it), at one consistent height (about 56 to 72px on content slides, up to about 120px on the cover), with clear space around it. On a dark or busy ground set it on a clean white or very light rounded badge with even padding so its own colours read; on a light ground show it as is. Several logos on one slide sit together in one tidy row with equal heights and gaps. A logo repeated on many source slides appears on the cover and in the chrome position only, never as a big picture in the content.`;
 
 export function coverPhotoCandidates<T extends CarriedPictureRef>(pictures: readonly T[]): T[] {
@@ -314,7 +317,11 @@ export function carriedSlideBlock(
         .map((p) => {
           // Start from the picture's ORIGINAL size on the slide (1920 px canvas),
           // so a hero photo stays a hero photo; fixed examples shrank them all.
-          const w0 = p.cls === "small" ? 120 : p.box ? Math.max(200, Math.min(1800, Math.round(p.box.w * 1920))) : 720;
+          // A SWAPPABLE picture is rebuilt as a generated image: suggest an
+          // illustration size, never the clip-art's icon size (prod 2026-10-26).
+          const w0 = p.swap
+            ? Math.max(SWAP_MIN_WIDTH, p.box ? Math.min(1100, Math.round(p.box.w * 1920)) : 0)
+            : p.cls === "small" ? 120 : p.box ? Math.max(200, Math.min(1800, Math.round(p.box.w * 1920))) : 720;
           // A slide's well is ~1060px tall and holds a title too: a tall example
           // size was copied as-is and ran past the canvas (prod 2026-10-22).
           const floor = readable.get(p.assetId);
@@ -326,7 +333,7 @@ export function carriedSlideBlock(
           const where = p.box
             ? `${kind}; filled ${Math.round(Math.min(1, p.box.w) * 100)}% x ${Math.round(Math.min(1, p.box.h) * 100)}% of the source slide (importance hint, place it freely)`
             : kind;
-          return `<img data-asset="${p.assetId}" src="/api/assets/${projectId}/${p.assetId}" alt="${(p.altText ?? "").replace(/["<>&]/g, "")}">  aspect ${p.aspect} (e.g. ${w}x${Math.round(w / p.aspect)}px)${p.logo ? "  LOGO: the organisation's logo (see LOGOS)" : ""}${p.cls === "small" ? "  small: icon / logo / badge" : where}${words}${p.shows ? `  shows: "${p.shows.replace(/["<>&]/g, "")}"` : ""}${p.animated ? "  ANIMATED: a moving picture; show it whole as a picture (never a background, never cropped, never replaced by a generated image)" : ""}${p.swap ? "  SWAPPABLE: generic clip-art (free redesign: may be left out or replaced, see FREE REDESIGN)" : ""}`;
+          return `<img data-asset="${p.assetId}" src="/api/assets/${projectId}/${p.assetId}" alt="${(p.altText ?? "").replace(/["<>&]/g, "")}">  aspect ${p.aspect} (e.g. ${w}x${Math.round(w / p.aspect)}px)${p.logo ? "  LOGO: the organisation's logo (see LOGOS)" : ""}${p.cls === "small" && !p.swap ? "  small: icon / logo / badge" : where}${words}${p.shows ? `  shows: "${p.shows.replace(/["<>&]/g, "")}"` : ""}${p.animated ? "  ANIMATED: a moving picture; show it whole as a picture (never a background, never cropped, never replaced by a generated image)" : ""}${p.swap ? "  SWAPPABLE: generic clip-art (free redesign: may be left out or replaced, see FREE REDESIGN); a replacement is a real illustration, never icon-sized" : ""}`;
         })
         .join("\n") +
       "\n\n";
