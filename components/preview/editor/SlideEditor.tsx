@@ -98,6 +98,11 @@ function applyTR(el: HTMLElement, tx: number, ty: number, rot: number) {
 // Untouched boxes (e.g. the page number) keep their own nowrap, so resizing one
 // box never reflows another. Non-text boxes (image / shape) take the explicit
 // width + height as drawn.
+// 2026-10-26 (owner report: a card would not resize from its sides): on a slide
+// still in flow layout a resized box leaves flex sizing (flex: 0 0 auto), since
+// a `flex:1` row item ignores an explicit width; and a box holding text keeps
+// the dragged height as a MIN-height, so it can be made taller but never
+// shorter than its text, and still grows while typing.
 // Shift while rotating snaps to 15deg increments (Figma/Canva). Rewrites the
 // rotate(...) inside Moveable's transform string with the snapped angle, leaving the
 // translate untouched.
@@ -110,10 +115,13 @@ function snapRotate(transform: string, rotation: number, inputEvent: unknown): s
 
 function applyResize(el: HTMLElement, width: number, height: number, transform: string) {
   const isText = (el.textContent ?? "").trim().length > 0;
+  el.style.flex = "0 0 auto";
+  el.style.maxWidth = "none";
   el.style.width = `${Math.round(width)}px`;
   if (isText) {
     el.style.removeProperty("white-space");
     el.style.height = "auto";
+    el.style.minHeight = `${Math.round(height)}px`;
   } else {
     el.style.height = `${Math.round(height)}px`;
   }
