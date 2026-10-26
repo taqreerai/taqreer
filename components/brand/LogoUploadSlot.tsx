@@ -39,6 +39,7 @@ import { CompactUploadZone } from "@/components/brand/CompactUploadZone";
 import { useDict } from "@/components/i18n/LocaleProvider";
 import { isPolychromeSvg } from "@/lib/brand/svg-polychrome";
 import { decodeSvgBytes } from "@/lib/brand/svg-decode";
+import { LOGO_ACCEPT, isRasterLogo } from "@/lib/brand/logo-format";
 import { useCreditBalance } from "@/lib/credits/store";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import { PremiumCrown } from "@/components/billing/PremiumCrown";
@@ -121,8 +122,11 @@ function LogoUploadSlotInner({
   // preview; monochrome wordmarks/icons still flatten to a white/black
   // silhouette so they read on the glass. Default mono; flip when detected.
   const [polychrome, setPolychrome] = useState(false);
+  // A PNG / JPG / WebP logo always keeps its colours (never recoloured).
+  const raster = file ? isRasterLogo(file) : isRasterLogo(previewUrl);
 
   useEffect(() => {
+    if (raster) return;
     // Read the SVG bytes (from the picked File, or the saved-kit previewUrl —
     // both EXTERNAL resources) to decide polychrome. setState lands only in the
     // async resolution, the sanctioned "subscribe to external state" shape.
@@ -147,7 +151,7 @@ function LogoUploadSlotInner({
     return () => {
       cancelled = true;
     };
-  }, [file, previewUrl]);
+  }, [file, previewUrl, raster]);
 
   useEffect(() => {
     // Skip the setState dance when the file ref is unchanged — React
@@ -209,7 +213,7 @@ function LogoUploadSlotInner({
     return (
       <CompactUploadZone
         label={resolvedEmptyLabel}
-        accept=".svg,image/svg+xml"
+        accept={LOGO_ACCEPT}
         file={null}
         onSelect={onSelect}
         compact={compact}
@@ -246,7 +250,7 @@ function LogoUploadSlotInner({
         // keep their real colours instead of collapsing to a solid-white blob.
         // Preview only — the saved SVG bytes are untouched either way.
         className={`max-w-[140px] object-contain${
-          polychrome ? "" : " logo-monochrome"
+          polychrome || raster ? "" : " logo-monochrome"
         }`}
         style={{ maxHeight: logoMaxHeightPx }}
       />

@@ -1647,9 +1647,9 @@
       "referenceDrop": "ارفع العرض المرجعي"
     },
     "brand": { "fontAuto": "قياسي", "fontAutoHint": "Cairo للعربية وInter للإنجليزية (تختار منشورات السوشيال الخط المناسب لنمطها)",
-      "svgLogo": "شعار SVG",
-      "svgOnly": "SVG فقط",
-      "svgLogoOnly": "شعار SVG فقط",
+      "svgLogo": "الشعار",
+      "svgOnly": "SVG أو PNG أو JPG",
+      "svgLogoOnly": "الشعار: SVG أو PNG أو JPG",
       "logoPreview": "معاينة الشعار",
       "removeLogo": "إزالة الشعار",
       "removeFont": "إزالة {label}",

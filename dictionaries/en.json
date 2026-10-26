@@ -1647,9 +1647,9 @@
       "referenceDrop": "Upload the reference deck"
     },
     "brand": { "fontAuto": "Standard", "fontAutoHint": "Cairo for Arabic, Inter for English (social posts match the font to their style)",
-      "svgLogo": "SVG logo",
-      "svgOnly": "SVG only",
-      "svgLogoOnly": "SVG logo only",
+      "svgLogo": "Logo",
+      "svgOnly": "SVG, PNG or JPG",
+      "svgLogoOnly": "Logo: SVG, PNG or JPG",
       "logoPreview": "Logo preview",
       "removeLogo": "Remove logo",
       "removeFont": "Remove {label}",

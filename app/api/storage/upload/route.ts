@@ -13,6 +13,19 @@ const allowedBuckets = new Set(["source-files", "brand-assets"]);
 // here too so an oversized upload gets a clean 400 instead of a raw
 // storage error or an nginx 413.
 const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB
+const MAX_RASTER_LOGO_BYTES = 5 * 1024 * 1024; // 5 MB
+
+// Raster logos (2026-10-26): accepted next to SVG, identified by their
+// leading bytes rather than the client-supplied type or name. They skip the
+// per-slide recolour and are placed as a true-colour <img> (the same marker
+// path a multicolour SVG takes in deck-generate).
+function rasterLogoType(bytes: Uint8Array): "image/png" | "image/jpeg" | "image/webp" | null {
+  const at = (i: number, ...v: number[]) => v.every((b, k) => bytes[i + k] === b);
+  if (at(0, 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return "image/png";
+  if (at(0, 0xff, 0xd8, 0xff)) return "image/jpeg";
+  if (at(0, 0x52, 0x49, 0x46, 0x46) && at(8, 0x57, 0x45, 0x42, 0x50)) return "image/webp";
+  return null;
+}
 
 function safeFileName(name: string) {
   // Same sanitizer as /api/extract: no ".." runs in a storage key.
@@ -70,34 +83,44 @@ export async function POST(request: Request) {
     let uploadBody: File | Buffer = file;
     let uploadContentType = file.type || "application/octet-stream";
 
-    // Folder-level format gating. The brand-assets/logos path is the logo
-    // upload pipeline; per the 2026-05-15 product call we only accept SVG
-    // logos so we can recolor per slide for contrast (raster logos can't
-    // be recolored without lossy operations). The client-side picker
-    // already restricts the file dialog, but a determined caller can
-    // bypass the picker — re-enforce here.
+    // Folder-level format gating for the brand-assets/logos path. SVG stays
+    // the preferred format (a mono SVG is recoloured per slide for contrast);
+    // PNG / JPG / WebP are accepted too since 2026-10-26 and placed as-is.
+    // The client picker restricts the dialog, but a caller can bypass it, so
+    // the type is re-checked here from the file's own bytes.
     if (bucket === "brand-assets" && folder === "logos") {
       const isSvgMime = file.type === "image/svg+xml";
       const isSvgExt = file.name.toLowerCase().endsWith(".svg");
       if (!isSvgMime && !isSvgExt) {
-        return NextResponse.json(
-          { error: "Logo must be an SVG file (image/svg+xml).", code: "logo_type" },
-          { status: 400 }
-        );
-      }
-      // Trim any dead margin baked into the logo's viewBox so it fills its
-      // reserved box on every slide instead of rendering tiny (see
-      // normalizeLogoViewBox). Best-effort: on ANY failure we fall through and
-      // store the file verbatim — normalization must never fail an upload.
-      try {
-        const svgText = decodeSvgBytes(await file.arrayBuffer());
-        const normalized = await normalizeLogoViewBox(svgText);
-        if (normalized !== svgText) {
-          uploadBody = Buffer.from(normalized, "utf-8");
-          uploadContentType = "image/svg+xml";
+        const raster = rasterLogoType(new Uint8Array(await file.slice(0, 16).arrayBuffer()));
+        if (!raster) {
+          return NextResponse.json(
+            { error: "Logo must be an SVG, PNG, JPG or WebP image.", code: "logo_type" },
+            { status: 400 },
+          );
         }
-      } catch {
-        // keep uploadBody = file
+        if (file.size > MAX_RASTER_LOGO_BYTES) {
+          return NextResponse.json(
+            { error: "Logo exceeds the 5 MB limit.", code: "logo_too_large" },
+            { status: 400 },
+          );
+        }
+        uploadContentType = raster;
+      } else {
+        // Trim any dead margin baked into the logo's viewBox so it fills its
+        // reserved box on every slide instead of rendering tiny (see
+        // normalizeLogoViewBox). Best-effort: on ANY failure we fall through and
+        // store the file verbatim — normalization must never fail an upload.
+        try {
+          const svgText = decodeSvgBytes(await file.arrayBuffer());
+          const normalized = await normalizeLogoViewBox(svgText);
+          if (normalized !== svgText) {
+            uploadBody = Buffer.from(normalized, "utf-8");
+            uploadContentType = "image/svg+xml";
+          }
+        } catch {
+          // keep uploadBody = file
+        }
       }
     }
 

@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from "react";
 import { useDict } from "@/components/i18n/LocaleProvider";
 import { useCreditBalance } from "@/lib/credits/store";
 import { LockedLogoSlot } from "@/components/brand/LogoUploadSlot";
+import { LOGO_ACCEPT, isAcceptedLogoFile, isRasterLogo } from "@/lib/brand/logo-format";
 
 // Logo dropzone / preview sizing. flex-1 + min-h lets the zone GROW to
 // absorb any extra height the parent card hands down (e.g. /create's brand
@@ -70,9 +71,10 @@ export function LogoRow({
 
   const activeUrl = objectUrl ?? previewUrl ?? null;
 
-  const acceptSvg = (dropped: File | undefined) => {
-    if (!dropped) return;
-    if (!/\.svg$/i.test(dropped.name) && dropped.type !== "image/svg+xml") return;
+  const raster = file ? isRasterLogo(file) : isRasterLogo(previewUrl);
+
+  const acceptLogo = (dropped: File | undefined) => {
+    if (!dropped || !isAcceptedLogoFile(dropped)) return;
     onSelect(dropped);
   };
 
@@ -89,7 +91,7 @@ export function LogoRow({
       <input
         ref={inputRef}
         type="file"
-        accept=".svg,image/svg+xml"
+        accept={LOGO_ACCEPT}
         className="hidden"
         onChange={(event) => {
           const f = event.target.files?.[0];
@@ -108,7 +110,7 @@ export function LogoRow({
           <img
             src={activeUrl}
             alt={dict.flows.brand.logoPreview}
-            className="max-h-[80%] max-w-[80%] object-contain logo-monochrome"
+            className={`max-h-[80%] max-w-[80%] object-contain${raster ? "" : " logo-monochrome"}`}
           />
           <button
             type="button"
@@ -133,7 +135,7 @@ export function LogoRow({
           onDrop={(event) => {
             event.preventDefault();
             setDragging(false);
-            acceptSvg(event.dataTransfer.files?.[0]);
+            acceptLogo(event.dataTransfer.files?.[0]);
           }}
           className={`flex w-full items-center rounded-xl border border-dashed bg-overlay-soft transition-colors ${
             compact ? "justify-start gap-3 px-2.5" : "flex-col justify-center gap-1"

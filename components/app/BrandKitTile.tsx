@@ -19,6 +19,7 @@
 //   • Date — subhead under the name.
 
 import { useRef } from "react";
+import { isRasterLogo } from "@/lib/brand/logo-format";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 
 // Inputs from the SSR page. Optional fields tolerate legacy rows /
@@ -157,7 +158,7 @@ export function BrandKitTile({
           <img
             src={kit.logoDisplayUrl}
             alt=""
-            className="h-16 w-auto max-w-[70%] object-contain logo-monochrome"
+            className={`h-16 w-auto max-w-[70%] object-contain${isRasterLogo(kit.logoDisplayUrl) ? "" : " logo-monochrome"}`}
             loading="lazy"
             decoding="async"
           />
