@@ -146,7 +146,7 @@ export function enforceCarriedTables(
     if (isChartSpec(spec) !== wantsChart) return null;
     return isChartSpec(spec)
       ? renderChartHtml(spec, { boxWidth: px(style, "width"), boxHeight: px(style, "height") })
-      : renderTableHtml(spec, { boxHeight: px(style, "height") });
+      : renderTableHtml(spec, { boxHeight: px(style, "height"), boxWidth: px(style, "width") });
   });
 }
 

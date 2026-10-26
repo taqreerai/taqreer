@@ -15,8 +15,36 @@ export type TableSpec = { rows: TableCell[][]; headerRow: boolean; columns: numb
 const NUMERIC_RE = /^[\s\d.,%+\-~≈×x^()/:$€£¥]+$/i;
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+// With the box's width known: the LARGEST size (16 to 34px) whose wrapped
+// text still fits the box height. The density caps below kept a 6-row table
+// of long sentences at 21px in a 1600x720 box, a third of it filled and
+// unreadable on a projector (prod 2026-10-26, slide 8). Estimate: an average
+// glyph ~0.6em (wide Arabic brand fonts), each cell padded 0.45em / 0.8em as rendered below.
+function fittedFontSize(t: TableSpec, boxWidth: number, boxHeight: number): number {
+  const cols = Math.max(1, t.columns);
+  for (let fs = 34; fs > 16; fs -= 1) {
+    let total = 0;
+    for (const row of t.rows) {
+      let rowLines = 1;
+      for (const c of row) {
+        const cellWidth = (boxWidth * c.colSpan) / cols - 1.6 * fs;
+        const perLine = Math.max(1, Math.floor(cellWidth / (0.6 * fs)));
+        const lines = c.text
+          .split("\n")
+          .reduce((n, part) => n + Math.max(1, Math.ceil(part.trim().length / perLine)), 0);
+        // A rowspan cell's lines are shared by the rows it covers.
+        rowLines = Math.max(rowLines, Math.ceil(lines / Math.max(1, c.rowSpan)));
+      }
+      total += rowLines * fs * 1.3 + 0.9 * fs;
+    }
+    if (total <= boxHeight * 0.92) return fs;
+  }
+  return 16;
+}
+
 // Font size from the box height and the amount of text (1920-wide canvas px).
-function fontSizeFor(t: TableSpec, boxHeight: number | null): number {
+function fontSizeFor(t: TableSpec, boxHeight: number | null, boxWidth: number | null = null): number {
+  if (boxWidth && boxHeight) return fittedFontSize(t, boxWidth, boxHeight);
   const rows = Math.max(1, t.rows.length);
   const cells = t.rows.flat();
   const avgChars = cells.reduce((n, c) => n + c.text.length, 0) / Math.max(1, cells.length);
@@ -74,11 +102,11 @@ function rowGroups(t: TableSpec, header: boolean): number[] {
   return out;
 }
 
-export function renderTableHtml(t: TableSpec, opts: { boxHeight: number | null }): string {
+export function renderTableHtml(t: TableSpec, opts: { boxHeight: number | null; boxWidth?: number | null }): string {
   const header = hasHeader(t);
   t = { ...t, headerRow: header };
   const numericCol = numericColumns(t, header);
-  const fs = fontSizeFor(t, opts.boxHeight);
+  const fs = fontSizeFor(t, opts.boxHeight, opts.boxWidth ?? null);
   const line = "color-mix(in srgb, currentColor 18%, transparent)";
   const zebra = "color-mix(in srgb, currentColor 5%, transparent)";
   const groups = rowGroups(t, header);
