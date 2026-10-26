@@ -2,6 +2,8 @@ import { enhanceAnswerLines, readBriefAnswers } from "@/lib/enhance/answers";
 import { checkRedesign, slideCheckMessage, type MeasuredFinding } from "@/lib/enhance/check";
 import { readRedesignPlan, redesignPlanLines, writeRedesignPlan, type RedesignPlan } from "@/lib/enhance/plan";
 import { mustNotGenerate, stripNeverGenerated } from "@/lib/images/never-generate";
+import { applyImageMedium, deckMedium } from "@/lib/images/image-medium";
+import { enlargeSmallGenImages } from "@/lib/images/min-size";
 import {
   brokenReworkSlides,
   missingCarriedPictures,
@@ -3713,6 +3715,24 @@ export const deckGenerate = inngest.createFunction(
     // sees the signed URL); fill each with the real logo <img> here so the
     // long token is never hand-copied per slide.
     injectDeckLogo(manifest, data.brief);
+
+    // One picture medium per deck (lib/images/image-medium.ts): every image box
+    // follows the majority (illustration or photo) before any is generated.
+    // Pure, in the body like the guard below, so every replay agrees.
+    // Replace-all / redraw: replacement pictures are never icon-sized
+    // (lib/images/min-size.ts).
+    if (isImagesMode(data)) {
+      const medium = deckMedium(manifest.slides.map((s) => s.html ?? ""));
+      const flags = enhanceFlags(data.brief);
+      const enlarge = flags.replaceAll || flags.swapPictures;
+      if (medium || enlarge) {
+        manifest.slides = manifest.slides.map((s) => {
+          let html = medium ? applyImageMedium(s.html, medium) : s.html;
+          if (enlarge) html = enlargeSmallGenImages(html);
+          return html === s.html ? s : { ...s, html };
+        });
+      }
+    }
 
     // Orphan-box guard (incident 2026-08-05): strip the gen attributes
     // off any srcless data-genimage box the fill pipeline will never

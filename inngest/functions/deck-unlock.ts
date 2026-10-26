@@ -18,6 +18,8 @@
 import { enhanceAnswerLines, readBriefAnswers } from "@/lib/enhance/answers";
 import { readRedesignPlan, redesignPlanLines } from "@/lib/enhance/plan";
 import { toSdkThinking } from "@/lib/anthropic/model-thinking";
+import { applyImageMedium, deckMedium } from "@/lib/images/image-medium";
+import { enlargeSmallGenImages } from "@/lib/images/min-size";
 import Anthropic from "@anthropic-ai/sdk";
 import { isEmptySlideHtml, readLockedPages, type LockedPage } from "@/lib/deck/locked-pages";
 import { NonRetriableError } from "inngest";
@@ -470,6 +472,21 @@ export const deckUnlock = inngest.createFunction(
         html,
       };
     });
+
+    // The tail's pictures follow the medium of the slides already shown
+    // (lib/images/image-medium.ts); with no clear medium there, the whole deck's.
+    if (isImagesDeck) {
+      const medium =
+        deckMedium(manifest.slides.map((s) => s.html)) ??
+        deckMedium([...manifest.slides, ...newSlides].map((s) => s.html));
+      if (medium || carried.replaceAll) {
+        for (let i = 0; i < newSlides.length; i += 1) {
+          let html = medium ? applyImageMedium(newSlides[i].html, medium) : newSlides[i].html;
+          if (carried.replaceAll) html = enlargeSmallGenImages(html);
+          if (html !== newSlides[i].html) newSlides[i] = { ...newSlides[i], html };
+        }
+      }
+    }
 
     // Orphan-box guard (incident 2026-08-05): the tail may only carry
     // srcless data-genimage boxes the deck.images.requested dispatch below
