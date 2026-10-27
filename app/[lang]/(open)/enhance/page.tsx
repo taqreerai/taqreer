@@ -385,6 +385,21 @@ export default function EnhanceContentPage() {
     setColors((c) =>
       c.length <= MIN_PALETTE ? c : c.filter((_, i) => i !== index),
     );
+  // A picked template brings its own colours (like /create): the palette was
+  // seeded from the ORIGINAL deck, and a non-empty palette outranks the
+  // template's colours at generation, so the redesign kept the old colours.
+  // Clearing the template puts back the palette it replaced.
+  const preTemplateColors = useRef<string[] | null>(null);
+  const applyTemplateColors = (palette: readonly string[]) => {
+    if (palette.length === 0) return;
+    if (preTemplateColors.current === null) preTemplateColors.current = colors;
+    setColorsAuto(false);
+    setColors(palette.slice(0, MAX_PALETTE));
+  };
+  const restorePreTemplateColors = () => {
+    if (preTemplateColors.current !== null) setColors(preTemplateColors.current);
+    preTemplateColors.current = null;
+  };
   // Single brand font — one Google family (Claude varies weights) OR up
   // to 5 uploaded families (Claude pairs). Replaces the old heading +
   // body two-slot UI; mirrors /create's BrandFontPicker model.
@@ -417,6 +432,7 @@ export default function EnhanceContentPage() {
   const onDesignStyle = (style: string | null) => {
     setDesignStyle(style);
     setTemplateId(null);
+    restorePreTemplateColors();
     if (style && STYLE_REQUIRES_IMAGES.has(style)) setImagesMode(true);
   };
 
@@ -1487,16 +1503,21 @@ export default function EnhanceContentPage() {
           onPickTemplate={(picked) => {
             setTemplateId(picked.template.id);
             setDesignStyle(null);
+            applyTemplateColors(picked.use.brand.palette);
           }}
           onGuestPickTemplate={
             guest
               ? (tpl) => {
                   setTemplateId(tpl.id);
                   setDesignStyle(null);
+                  applyTemplateColors(tpl.palette);
                 }
               : undefined
           }
-          onClearTemplate={() => setTemplateId(null)}
+          onClearTemplate={() => {
+            setTemplateId(null);
+            restorePreTemplateColors();
+          }}
           designStyle={designStyle}
           onDesignStyle={onDesignStyle}
           templateNote={dict.flows.design.templateNoteEnhance}
