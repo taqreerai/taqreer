@@ -13,6 +13,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import sharp from "sharp";
+import { thinkingOffFor, toSdkThinking } from "@/lib/anthropic/model-thinking";
 
 const MODEL = "claude-haiku-5-5";
 const MAX_TAGGED = 80;
@@ -84,9 +85,10 @@ export async function tagReworkPictures(
 // generated image, and drops the rest so the enhanced deck stays clean.
 //   logo     kept, restyled to fit the deck (CARRIED_LOGO note)
 //   support  generic photo, clip-art, cartoon, emoji, mascot: a generated image
-//   data     chart, map, screenshot, scan, a picture the slide's task is about
+//   screen   a screenshot of software: rebuilt as a clean mock-up (describeScreens)
+//   data     chart, map, scan, a picture the slide's task is about
 //   drop     words in a picture, arrows / shapes / frames, specific people or places
-export type ReplaceRole = "logo" | "support" | "data" | "drop";
+export type ReplaceRole = "logo" | "screen" | "support" | "data" | "drop";
 export type ReplaceTag = { role: ReplaceRole; shows: string | null };
 
 /** mediaKey -> its role in a replace-all redesign. Failure = no tags (every picture kept, as before). */
@@ -114,12 +116,13 @@ export async function tagReplacePictures(
       text:
         `These pictures come from a slide deck that is being rebuilt with all-new pictures. Give each image one role:\n` +
         `- logo: the logo, emblem, seal or crest of an organisation, school, ministry or brand\n` +
-        `- data: a chart, graph, table, map, screenshot, scanned document, or a technical diagram whose details carry information; also any picture the slide's activity or question is about (objects students must name, match, count or describe)\n` +
+        `- screen: a screenshot of software, a website or an app (a window, menu, ribbon, toolbar or dialog), with or without labels or callouts pointing at it\n` +
+        `- data: a chart, graph, table, map, scanned document, infographic, poster, or a technical diagram whose details carry information; an example the slide talks about (a sample design, a sample page); also any picture the slide's activity or question is about (objects students must name, match, count or describe)\n` +
         `- support: a generic picture that only illustrates or decorates the point: a stock or mood photo, clip-art, a cartoon, a mascot, an emoji, a sticker or a generic scene, with no written words on it\n` +
-        `- drop: anything else: a picture with written words on it in any language (a word in a shape, a title, a saying), an arrow, shape, frame, border or ornament, word art, or a photo of a specific real person or a named real place\n` +
+        `- drop: anything else: a picture whose only content is a few written words in any language (a word in a shape, a title, a saying), an arrow, shape, frame, border or ornament, word art, or a photo of a specific real person or a named real place\n` +
         `When unsure between data and another role, answer data.\n` +
         `Also say what it shows in at most 6 plain English words.\n` +
-        `Reply with one line per image, exactly: <number>|<logo, data, support or drop>|<what it shows>`,
+        `Reply with one line per image, exactly: <number>|<logo, screen, data, support or drop>|<what it shows>`,
     });
     const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
     const msg = await client.messages.create({
@@ -130,7 +133,7 @@ export async function tagReplacePictures(
     });
     const reply = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
     for (const line of reply.split("\n")) {
-      const m = line.trim().match(/^(\d+)\s*\|\s*(logo|data|support|drop)\s*\|\s*(.*)$/i);
+      const m = line.trim().match(/^(\d+)\s*\|\s*(logo|screen|data|support|drop)\s*\|\s*(.*)$/i);
       if (!m) continue;
       const item = list[Number(m[1]) - 1];
       if (!item) continue;
@@ -139,6 +142,73 @@ export async function tagReplacePictures(
     }
   } catch (err) {
     console.error("[carry] replace picture tagging failed:", err);
+  }
+  return out;
+}
+
+// Replace-all screenshots (owner, 2026-10-27): an old, soft interface
+// screenshot is rebuilt as a clean mock-up in the deck's style. One vision call
+// for the deck's screenshots: what to redraw, and every callout's words EXACTLY
+// as written (Sonnet: Arabic interface text in small, soft screenshots is past
+// Haiku). Failure = no descriptions: those screenshots stay as pictures.
+const SCREEN_MODEL = "claude-sonnet-5-5";
+const MAX_SCREENS = 12;
+const MAX_SCREEN_CHARS = 900;
+
+export async function describeScreens(
+  pictures: readonly { mediaKey: string; bytes: Buffer }[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey || pictures.length === 0) return out;
+  const list = pictures.slice(0, MAX_SCREENS);
+  try {
+    const content: Anthropic.Messages.ContentBlockParam[] = [];
+    for (let i = 0; i < list.length; i++) {
+      const png = await sharp(list[i].bytes, { failOn: "none" })
+        .resize(1400, 1400, { fit: "inside", withoutEnlargement: true })
+        .flatten({ background: "#ffffff" })
+        .png()
+        .toBuffer();
+      content.push({ type: "text", text: `Screenshot ${i + 1}:` });
+      content.push({ type: "image", source: { type: "base64", media_type: "image/png", data: png.toString("base64") } });
+    }
+    content.push({
+      type: "text",
+      text:
+        `Each screenshot will be redrawn as a simple, clean mock-up of the same interface. For each one write a short brief (at most 90 words) a designer can redraw from: ` +
+        `the app or page, its main regions in order (top to bottom, start to end), the controls in each region by name, ` +
+        `and EVERY callout, label or note drawn on the screenshot with its words copied exactly as written, in their own language, and which control it points to. ` +
+        `Leave out anything not readable rather than guess. ` +
+        `Reply with one block per screenshot, each starting with a line "### <number>".`,
+    });
+    const client = new Anthropic({ apiKey, timeout: 90_000, maxRetries: 1 });
+    const msg = await client.messages.create({
+      model: SCREEN_MODEL,
+      max_tokens: 600 + 320 * list.length,
+      // A plain transcription job: thinking ate the budget and cut the
+      // briefs mid-way (local test 2026-10-27, stop_reason max_tokens).
+      thinking: toSdkThinking(thinkingOffFor(SCREEN_MODEL)),
+      messages: [{ role: "user", content }],
+    });
+    const reply = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
+    for (const block of reply.split(/^###\s*/m)) {
+      const m = block.match(/^(\d+)\s*\n([\s\S]+)$/);
+      if (!m) continue;
+      const item = list[Number(m[1]) - 1];
+      // Latin digits only in what the user reads (house rule); no markdown.
+      const brief = m[2]
+        .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+        .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+        .replace(/\*\*/g, "")
+        .replace(/[<>"]/g, "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, MAX_SCREEN_CHARS);
+      if (item && brief) out.set(item.mediaKey, brief);
+    }
+  } catch (err) {
+    console.error("[carry] screenshot description failed:", err);
   }
   return out;
 }

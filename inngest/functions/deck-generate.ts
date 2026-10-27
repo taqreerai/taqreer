@@ -92,6 +92,7 @@ import {
   reworkPicturesRule,
   CARRIED_LOGO_RULE,
   CARRIED_SCREENS_RULE,
+  CARRIED_REBUILD_RULE,
   nativeSizeCaps,
   CARRIED_TABLES_RULE,
   CARRIED_CHARTS_RULE,
@@ -1760,7 +1761,8 @@ function buildSourceTextDirective(
               ? [reworkPicturesRule((swapPictures || replaceAll) && isImagesMode(event), replaceAll)]
               : []),
             ...(enhanceImages?.pictures?.some((p) => p.logo) ? [CARRIED_LOGO_RULE] : []),
-            ...(enhanceImages?.pictures?.some((p) => p.kind === "document") ? [CARRIED_SCREENS_RULE] : []),
+            ...(enhanceImages?.pictures?.some((p) => p.kind === "document" && !p.rebuild) ? [CARRIED_SCREENS_RULE] : []),
+            ...(enhanceImages?.pictures?.some((p) => p.rebuild) ? [CARRIED_REBUILD_RULE] : []),
           ]
         : []),
       `  • LOGOS / BRAND MARKS — never recreate. If anything in a slide image looks like a logo, brand mark, monogram, or stylized identifier, do NOT draw it in SVG (approximations look off and bloat the output). Two options: (a) brand name is readable as text → styled text matching the weight/colour you can read; (b) otherwise → a styled placeholder <div> with a short label (the brand name if readable, else "Logo"). The user swaps it post-generation.`,
@@ -2856,7 +2858,7 @@ export const deckGenerate = inngest.createFunction(
         const dropSwappable = (pictureFlags.swapPictures || pictureFlags.replaceAll) && isImagesMode(data);
         const carriedAssetIds = new Map(
           (enhanceImages?.pictures ?? [])
-            .filter((p) => p.cls !== "page" && p.cls !== "backdrop" && !(dropSwappable && p.swap))
+            .filter((p) => p.cls !== "page" && p.cls !== "backdrop" && !(dropSwappable && p.swap) && !p.rebuild)
             .map((p) => [p.assetId, p.aspect] as const),
         );
         // Photo refresh: new asset -> the original it replaced ("Restore original").
@@ -3430,7 +3432,7 @@ export const deckGenerate = inngest.createFunction(
           const checkCount = enhanceImages.fileIds.length || slides.length;
           const picturesBySlide = new Map<number, string[]>();
           for (const p of enhanceImages.pictures ?? []) {
-            if (p.cls === "page" || p.cls === "backdrop" || p.swap) continue;
+            if (p.cls === "page" || p.cls === "backdrop" || p.swap || p.rebuild) continue;
             if (exactRepair && p.cls !== "content") continue;
             (picturesBySlide.get(p.slideIndex) ?? picturesBySlide.set(p.slideIndex, []).get(p.slideIndex)!).push(p.assetId);
           }
@@ -3537,7 +3539,7 @@ export const deckGenerate = inngest.createFunction(
           const html = slides.map((sl) => sl.html ?? "");
           const missing = missingSourceNumbers(enhanceImages.textPerSlide, html);
           const missingPictures = missingCarriedPictures(
-            (enhanceImages.pictures ?? []).filter((p) => p.cls !== "page" && p.cls !== "backdrop" && !p.swap).map((p) => p.assetId),
+            (enhanceImages.pictures ?? []).filter((p) => p.cls !== "page" && p.cls !== "backdrop" && !p.swap && !p.rebuild).map((p) => p.assetId),
             html,
           );
           logger.info("enhance_rework_essence", {
@@ -3783,7 +3785,7 @@ export const deckGenerate = inngest.createFunction(
               (n) => !/0{5,}/.test(n) && !/^0\d/.test(n),
             );
             const lostPictures = pictures.filter(
-              (p) => p.slideIndex === i && p.cls === "content" && !p.swap && !htmls[i].includes(p.assetId),
+              (p) => p.slideIndex === i && p.cls === "content" && !p.swap && !p.rebuild && !htmls[i].includes(p.assetId),
             ).length;
             if (numbers.length > 0 || lostPictures > 0) findings.push({ slide: i + 1, numbers, pictures: lostPictures });
           }

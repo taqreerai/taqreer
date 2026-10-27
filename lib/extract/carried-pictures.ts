@@ -25,7 +25,7 @@ import {
   tagPhotos,
   type RefreshCandidate,
 } from "@/lib/extract/photo-refresh";
-import { tagReplacePictures, type ReplaceRole } from "@/lib/extract/rework-pictures";
+import { describeScreens, tagReplacePictures, type ReplaceRole } from "@/lib/extract/rework-pictures";
 import { createHash } from "crypto";
 import type { TableSpec } from "@/lib/deck/visuals/table";
 import type { ChartSpec } from "@/lib/deck/visuals/chart";
@@ -65,6 +65,10 @@ export type CarriedPicture = {
   shows?: string;
   // Replace-all decks: an organisation's logo, kept and restyled to fit.
   logo?: boolean;
+  // Replace-all decks: a software screenshot redrawn as a clean mock-up from
+  // this brief (lib/extract/rework-pictures.ts describeScreens); the picture
+  // itself is not shown.
+  rebuild?: string;
   // An animated GIF, stored as the original file so it plays.
   animated?: boolean;
   aspect: number; // width / height on the original slide
@@ -206,6 +210,7 @@ export async function prepareCarriedPictures(opts: {
   // small ones included (a labelled icon still needs its description).
   let tags = new Map<string, PictureTag>();
   const roles = new Map<string, ReplaceRole>(); // by mediaKey, replace-all only
+  const screenBriefs = new Map<string, string>(); // by mediaKey: screenshot -> mock-up brief
   if (opts.rework || opts.replace) {
     const slideText = opts.sourceMime === PPTX_MIME ? await extractTextPerSlide(buffer).catch(() => [] as string[]) : [];
     const byKey = new Map<string, { bytes: Buffer; context?: string }>();
@@ -221,6 +226,10 @@ export async function prepareCarriedPictures(opts: {
         roles.set(key, tag.role);
         tags.set(key, { swap: tag.role === "support", shows: tag.shows });
       }
+      // Screenshots are redrawn as clean mock-ups from a brief; one without a
+      // brief (the call failed) stays a picture, shown crisp and framed.
+      const screens = list.filter((x) => roles.get(x.mediaKey) === "screen");
+      for (const [key, brief] of await describeScreens(screens)) screenBriefs.set(key, brief);
     } else {
       tags = await tagReworkPictures(list);
     }
@@ -309,6 +318,7 @@ export async function prepareCarriedPictures(opts: {
       ...(tags.get(mediaKeys.get(a.assetId) ?? "")?.swap && !(a.file.kind === "image" && a.file.animated) ? { swap: true } : {}),
       ...(a.file.kind === "image" && a.file.animated ? { animated: true } : {}),
       ...(roles.get(mediaKeys.get(a.assetId) ?? "") === "logo" ? { logo: true } : {}),
+      ...(screenBriefs.has(mediaKeys.get(a.assetId) ?? "") ? { rebuild: screenBriefs.get(mediaKeys.get(a.assetId) ?? "")! } : {}),
       ...(tags.get(mediaKeys.get(a.assetId) ?? "")?.shows ? { shows: tags.get(mediaKeys.get(a.assetId) ?? "")!.shows! } : {}),
       box: { x: round3(a.box.x), y: round3(a.box.y), w: round3(a.box.w), h: round3(a.box.h) },
       // The PICTURE's own proportions (after the slide's crop), not the shape's:

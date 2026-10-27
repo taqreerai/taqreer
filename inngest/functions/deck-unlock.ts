@@ -59,6 +59,7 @@ import {
   reworkPicturesRule,
   CARRIED_LOGO_RULE,
   CARRIED_SCREENS_RULE,
+  CARRIED_REBUILD_RULE,
   nativeSizeCaps,
   CARRIED_TABLES_RULE,
   CARRIED_CHARTS_RULE,
@@ -320,7 +321,8 @@ export const deckUnlock = inngest.createFunction(
           ? [reworkPicturesRule(carried.replaceAll && isImagesDeck, carried.replaceAll)]
           : []),
         ...(carried.pictures.some((x) => x.logo) ? [CARRIED_LOGO_RULE] : []),
-        ...(carried.pictures.some((x) => x.kind === "document") ? [CARRIED_SCREENS_RULE] : []),
+        ...(carried.pictures.some((x) => x.kind === "document" && !x.rebuild) ? [CARRIED_SCREENS_RULE] : []),
+        ...(carried.pictures.some((x) => x.rebuild) ? [CARRIED_REBUILD_RULE] : []),
         "",
         ...blocks,
       ].join("\n");
@@ -330,7 +332,7 @@ export const deckUnlock = inngest.createFunction(
     const carriedAssets = new Map(
       carried.pictures
         // Replace-all with images: a supporting picture is never shown as it is.
-        .filter((x) => x.cls !== "page" && x.cls !== "backdrop" && !(carried.replaceAll && isImagesDeck && x.swap))
+        .filter((x) => x.cls !== "page" && x.cls !== "backdrop" && !(carried.replaceAll && isImagesDeck && x.swap) && !x.rebuild)
         .map((x) => [x.assetId, x.aspect] as const),
     );
     const carriedTextIds = textPictureIds(carried.pictures);

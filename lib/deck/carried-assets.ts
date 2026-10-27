@@ -61,6 +61,9 @@ export function nativeSizeCaps(pictures: readonly CarriedPictureRef[]): Map<stri
 // soft screenshot looks deliberate when it is shown crisp and framed.
 export const CARRIED_SCREENS_RULE = `  • SCREENSHOTS (entries marked SCREENSHOT OR DOCUMENT): never wider than the size given (larger only blurs it); smaller is fine. A screenshot of software, a website or a phone is shown inside a clean app-window frame: a rounded card (about 16px radius) with a slim title bar (about 36px, a light tint of the deck's colours, three small dots at one end), the screenshot below it filling the frame's width, and one soft shadow, the same frame for every screenshot in the deck. A scanned page or document sits on a clean white card with a thin border instead. Never crop, tint or filter it, and never set it as a background.`;
 
+// Replace-all decks (owner, 2026-10-27): an old, soft screenshot does not fit
+// the new look; it is redrawn from a brief as a clean mock-up instead.
+export const CARRIED_REBUILD_RULE = `  • SCREENSHOT REBUILD (entries marked MOCK-UP TO DRAW): overrides "put EVERY listed picture" for them. Draw the described interface as a clean, simplified mock-up in HTML/CSS with inline SVG icons (Lucide-style strokes), in the deck's own colours and type: an app-window card (rounded corners, a slim title bar with three small dots), its regions as soft panels in the order given, the named controls as small labelled buttons or icons. Every callout or label in the brief becomes REAL text, copied exactly as given, in a brand-colour tag with a thin leader line or a numbered marker pointing at its control. Simplify freely (leave out what the brief does not name) but keep every callout. Give it real size: the mock-up is the slide's main visual and must be readable from the back of a room. Never place an <img> for it.`;
 
 /** Ids of the pictures with words in them (graphics and documents). */
 export function textPictureIds(pictures: readonly CarriedPictureRef[]): Set<string> {
@@ -225,6 +228,9 @@ export type CarriedPictureRef = {
   shows?: string;
   // Replace-all decks: an organisation's logo, kept and restyled (CARRIED_LOGO_RULE).
   logo?: boolean;
+  // Replace-all decks: a screenshot redrawn as a mock-up from this brief
+  // (CARRIED_REBUILD_RULE); its <img> is never shown.
+  rebuild?: string;
   // An animated GIF: shown whole as a picture, never a background or replaced.
   animated?: boolean;
   aspect: number;
@@ -331,6 +337,9 @@ export function carriedSlideBlock(
       `── SLIDE ${slideNumber}: ORIGINAL PICTURES (place each one, tag unchanged) ──\n` +
       pictures
         .map((p) => {
+          if (p.rebuild) {
+            return `MOCK-UP TO DRAW (replaces the user's screenshot; place NO picture for it, see SCREENSHOT REBUILD): ${p.rebuild.replace(/[<>]/g, "")}`;
+          }
           // Start from the picture's ORIGINAL size on the slide (1920 px canvas),
           // so a hero photo stays a hero photo; fixed examples shrank them all.
           // A SWAPPABLE picture is rebuilt as a generated image: suggest an
