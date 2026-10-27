@@ -146,7 +146,9 @@ function textFromSlideXml(xml: string): string {
   const lines = paragraphs.map((p) => {
     let buf = "";
     for (const m of p.matchAll(
-      /<a:t[^>]*>([\s\S]*?)<\/a:t>|<a:br\b[^>]*\/?>/g,
+      // `<a:t\b` would also take <a:tab/> and <a:tabLst> (tab stops,
+      // which LibreOffice writes on every paragraph) and leak their XML.
+      /<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>|<a:br\b[^>]*\/?>/g,
     )) {
       buf += m[1] !== undefined ? m[1] : "\n";
     }

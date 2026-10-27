@@ -59,7 +59,7 @@ export async function detectPptxLanguage(
       // Pull every `<a:t ...>text</a:t>` text-run body. PPTX text
       // can include attributes on <a:t> (e.g. `lang`, `xml:space`)
       // so the open tag matcher is permissive.
-      const matches = xml.matchAll(/<a:t[^>]*>([^<]*)<\/a:t>/g);
+      const matches = xml.matchAll(/<a:t(?:\s[^>]*)?>([^<]*)<\/a:t>/g);
       for (const m of matches) {
         sampled += m[1] + " ";
       }
