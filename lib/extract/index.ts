@@ -55,6 +55,11 @@ export type ExtractionInput = {
   // /enhance: write the start questions' labels in this language
   // (lib/extract/enhance-questions.ts). Absent for the other flows.
   enhanceLocale?: "ar" | "en";
+  // A .pptx LibreOffice made from a legacy .ppt: its theme is LibreOffice's
+  // default (green / blue / orange accents, DejaVu fonts), not the deck's,
+  // so theme colours and fonts are not read; the redesign takes the colours
+  // off the slide images instead.
+  convertedFromPpt?: boolean;
 };
 
 export type ExtractionResult = {
@@ -188,8 +193,8 @@ export async function extract(
         detectPptxLanguage(buffer),
         extractTextPerSlide(buffer),
       ]);
-    if (fontsResult.status === "fulfilled") fonts = fontsResult.value;
-    if (colorsResult.status === "fulfilled") themeColors = colorsResult.value;
+    if (fontsResult.status === "fulfilled" && !input.convertedFromPpt) fonts = fontsResult.value;
+    if (colorsResult.status === "fulfilled" && !input.convertedFromPpt) themeColors = colorsResult.value;
     if (langResult.status === "fulfilled") language = langResult.value;
     if (textResult.status === "fulfilled") textPerSlide = textResult.value;
     // A repeated ribbon / badge picture is dropped from the carried pictures;

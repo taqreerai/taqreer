@@ -46,11 +46,14 @@ import { NonRetriableError } from "inngest";
 import { MissingToolError } from "@/lib/extract/missing-tool";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { extract } from "@/lib/extract";
+import { pptToPptx } from "@/lib/extract/pptx-to-pdf";
 import { uploadFileToAnthropic } from "@/lib/anthropic/files";
 
 // Source files are staged in this bucket by POST /api/extract before
 // the event fires. Path shape: `${supabaseUserId}/extract/${jobId}/${fileName}`.
 const SOURCE_FILES_BUCKET = "source-files";
+const PPT_MIME = "application/vnd.ms-powerpoint";
+const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
 
 // Payload the route emits. Keep in sync with POST /api/extract.
 type ExtractRequestedEvent = {
@@ -232,8 +235,25 @@ async function runExtractionPipeline(args: {
       `Source file not found at ${fileBucketPath}: ${dlError?.message ?? "no data"}`,
     );
   }
-  const sourceBuffer = Buffer.from(await download.arrayBuffer());
+  let sourceBuffer: Buffer = Buffer.from(await download.arrayBuffer());
   await writeExtractProgress(jobId, 20, "converting");
+
+  // Legacy .ppt (owner, 2026-10-27): converted to .pptx once, here, and the
+  // .pptx becomes the deck's source (stored beside the upload, same user /
+  // job folder). Every later reader (exact text, colours, fonts, carried
+  // pictures, tables, the pictures question) walks the OOXML zip; on a .ppt
+  // they all came back empty.
+  let sourcePath = fileBucketPath;
+  let sourceMime = mime;
+  if (mime === PPT_MIME) {
+    sourceBuffer = await pptToPptx(sourceBuffer);
+    sourcePath = fileBucketPath.replace(/\.ppt$/i, "") + ".pptx";
+    const { error: upError } = await admin.storage
+      .from(SOURCE_FILES_BUCKET)
+      .upload(sourcePath, sourceBuffer, { contentType: PPTX_MIME, upsert: true });
+    if (upError) throw new Error(`Converted .pptx upload failed: ${upError.message}`);
+    sourceMime = PPTX_MIME;
+  }
 
   // Run the extraction pipeline. Returns:
   //   • pdfBytes  — PDF the user uploaded OR LibreOffice-converted
@@ -246,7 +266,8 @@ async function runExtractionPipeline(args: {
   // reads visuals from the PDF document block directly.
   const ext = await extract({
     buffer: sourceBuffer,
-    mime,
+    mime: sourceMime,
+    ...(mime === PPT_MIME ? { convertedFromPpt: true } : {}),
     ...(flowKind === "enhance" ? { enhanceLocale: locale ?? "ar" } : {}),
   });
   await writeExtractProgress(jobId, 80, "analyzing");
@@ -287,8 +308,8 @@ async function runExtractionPipeline(args: {
     rework: ext.rework,
     ...(ext.questions !== undefined ? { questions: ext.questions } : {}),
     // Re-fetch keys for generation-time rasterization (transient).
-    sourcePath: fileBucketPath,
-    sourceMime: mime,
+    sourcePath,
+    sourceMime,
   };
 }
 

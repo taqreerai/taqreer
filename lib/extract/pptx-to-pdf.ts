@@ -72,7 +72,7 @@ const CANDIDATE_BINS = [
  * safe — see file header), read the resulting PDF, clean up.
  */
 export async function pptxToPdf(pptxBuffer: Buffer): Promise<Buffer> {
-  return officeToPdf(pptxBuffer, "pptx");
+  return officeConvert(pptxBuffer, "pptx");
 }
 
 /**
@@ -83,18 +83,31 @@ export async function pptxToPdf(pptxBuffer: Buffer): Promise<Buffer> {
  * font/colour/text extraction.
  */
 export async function docxToPdf(docxBuffer: Buffer): Promise<Buffer> {
-  return officeToPdf(docxBuffer, "docx");
+  return officeConvert(docxBuffer, "docx");
 }
 
 /**
- * Shared headless-LibreOffice convert-to-PDF. `inputExt` sets the temp
- * input filename's extension so LibreOffice selects the right import
- * filter (.pptx → Impress, .docx → Writer); the output is always
- * `out/input.pdf` (LibreOffice names the output by input basename).
+ * Convert a legacy binary PowerPoint (.ppt) to .pptx via the same headless
+ * LibreOffice path (owner, 2026-10-27). Every PPTX reader in the pipeline
+ * (text, theme colours, fonts, pictures, tables) walks the OOXML zip, so a
+ * .ppt read as one came back empty: no exact text, no carried pictures and
+ * no pictures question in Enhance.
  */
-async function officeToPdf(
+export async function pptToPptx(pptBuffer: Buffer): Promise<Buffer> {
+  return officeConvert(pptBuffer, "ppt", "pptx");
+}
+
+/**
+ * Shared headless-LibreOffice conversion (PDF by default, or .pptx for a
+ * legacy .ppt). `inputExt` sets the temp input filename's extension so
+ * LibreOffice selects the right import filter (.pptx / .ppt → Impress,
+ * .docx → Writer); the output is `out/input.<outExt>` (LibreOffice names
+ * the output by input basename).
+ */
+async function officeConvert(
   buffer: Buffer,
-  inputExt: "pptx" | "docx",
+  inputExt: "pptx" | "docx" | "ppt",
+  outExt: "pdf" | "pptx" = "pdf",
 ): Promise<Buffer> {
   // Isolated tmp namespace for this conversion: input, output, AND
   // the LibreOffice profile. Deleted in the finally block.
@@ -109,7 +122,7 @@ async function officeToPdf(
     // LibreOffice writes `out/<basename>.pdf` — basename matches
     // the input file's basename without extension, so we control it
     // by naming the input `input.pptx` → output is `input.pdf`.
-    const expectedOutPath = path.join(outDir, "input.pdf");
+    const expectedOutPath = path.join(outDir, `input.${outExt}`);
 
     const args = [
       // pathToFileURL, not "file://" + path (2026-10-07): on Windows the
@@ -123,7 +136,7 @@ async function officeToPdf(
       "--nodefault",
       "--nofirststartwizard",
       "--convert-to",
-      "pdf",
+      outExt,
       "--outdir",
       outDir,
       inputPath,
@@ -163,7 +176,7 @@ async function officeToPdf(
           .filter(Boolean)
           .join(" | ");
         throw new Error(
-          `LibreOffice ran but produced no PDF for the ${inputExt} input` +
+          `LibreOffice ran but produced no ${outExt.toUpperCase()} for the ${inputExt} input` +
             (detail ? `: ${detail}` : ""),
         );
       }
