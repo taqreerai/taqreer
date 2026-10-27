@@ -185,6 +185,7 @@ export async function analyzeAndEnhance(input: {
     return keep;
   }
   const kind = kindFromStats(stats);
+  if (kind === "document") return cleanDocument(input, keep);
   if (kind !== "photo") return { ...keep, kind };
   const badness = badnessOf(stats, input.width, input.height);
 
@@ -219,5 +220,25 @@ export async function analyzeAndEnhance(input: {
     };
   } catch {
     return { ...keep, kind, badness };
+  }
+}
+
+// Screenshots and documents (owner, 2026-10-27): a gentle sharpen so an old,
+// soft screenshot reads crisp at its own size. No upscale (the deck never shows
+// it past its native width, carried-assets maxSize) and no AI: an image model
+// garbles interface text.
+async function cleanDocument(
+  input: { bytes: Buffer; contentType: "image/jpeg" | "image/png"; width: number; height: number },
+  keep: EnhancedPicture,
+): Promise<EnhancedPicture> {
+  try {
+    const img = sharp(input.bytes).sharpen({ sigma: 0.5 });
+    const out =
+      input.contentType === "image/png"
+        ? await img.png({ compressionLevel: 9 }).toBuffer({ resolveWithObject: true })
+        : await img.jpeg({ quality: 92, mozjpeg: true }).toBuffer({ resolveWithObject: true });
+    return { ...keep, bytes: out.data, contentType: input.contentType, width: out.info.width, height: out.info.height, kind: "document", enhanced: true };
+  } catch {
+    return { ...keep, kind: "document" };
   }
 }

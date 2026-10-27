@@ -91,6 +91,8 @@ import {
   CARRIED_PICTURES_RULE,
   reworkPicturesRule,
   CARRIED_LOGO_RULE,
+  CARRIED_SCREENS_RULE,
+  nativeSizeCaps,
   CARRIED_TABLES_RULE,
   CARRIED_CHARTS_RULE,
   carriedSlideBlock,
@@ -1758,6 +1760,7 @@ function buildSourceTextDirective(
               ? [reworkPicturesRule((swapPictures || replaceAll) && isImagesMode(event), replaceAll)]
               : []),
             ...(enhanceImages?.pictures?.some((p) => p.logo) ? [CARRIED_LOGO_RULE] : []),
+            ...(enhanceImages?.pictures?.some((p) => p.kind === "document") ? [CARRIED_SCREENS_RULE] : []),
           ]
         : []),
       `  • LOGOS / BRAND MARKS — never recreate. If anything in a slide image looks like a logo, brand mark, monogram, or stylized identifier, do NOT draw it in SVG (approximations look off and bloat the output). Two options: (a) brand name is readable as text → styled text matching the weight/colour you can read; (b) otherwise → a styled placeholder <div> with a short label (the brand name if readable, else "Logo"). The user swaps it post-generation.`,
@@ -2862,6 +2865,8 @@ export const deckGenerate = inngest.createFunction(
         );
         // Pictures with words: never cropped, stamped data-asset-text.
         const carriedTextIds = textPictureIds(enhanceImages?.pictures ?? []);
+        // Screenshots / documents: never stretched past their own size.
+        const carriedCaps = nativeSizeCaps(enhanceImages?.pictures ?? []);
         // Single full-slide photos: the slide's photo background (data-bg-asset).
         const carriedBackdropIds = new Set(
           (enhanceImages?.pictures ?? []).filter((p) => p.cls === "backdrop").map((p) => p.assetId),
@@ -2897,6 +2902,7 @@ export const deckGenerate = inngest.createFunction(
                 carriedAssetIds,
                 carriedOriginals,
                 carriedTextIds,
+                carriedCaps,
               ),
               carriedTables,
             ),

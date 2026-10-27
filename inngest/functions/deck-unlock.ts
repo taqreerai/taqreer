@@ -58,6 +58,8 @@ import {
   CARRIED_PICTURES_RULE,
   reworkPicturesRule,
   CARRIED_LOGO_RULE,
+  CARRIED_SCREENS_RULE,
+  nativeSizeCaps,
   CARRIED_TABLES_RULE,
   CARRIED_CHARTS_RULE,
   carriedSlideBlock,
@@ -318,6 +320,7 @@ export const deckUnlock = inngest.createFunction(
           ? [reworkPicturesRule(carried.replaceAll && isImagesDeck, carried.replaceAll)]
           : []),
         ...(carried.pictures.some((x) => x.logo) ? [CARRIED_LOGO_RULE] : []),
+        ...(carried.pictures.some((x) => x.kind === "document") ? [CARRIED_SCREENS_RULE] : []),
         "",
         ...blocks,
       ].join("\n");
@@ -331,6 +334,7 @@ export const deckUnlock = inngest.createFunction(
         .map((x) => [x.assetId, x.aspect] as const),
     );
     const carriedTextIds = textPictureIds(carried.pictures);
+    const carriedCaps = nativeSizeCaps(carried.pictures);
     const carriedPageIds = new Set(carried.pictures.filter((x) => x.cls === "page").map((x) => x.assetId));
     const carriedOriginals = new Map(
       carried.pictures.flatMap((x) => (x.originalAssetId ? [[x.assetId, x.originalAssetId] as const] : [])),
@@ -450,7 +454,7 @@ export const deckUnlock = inngest.createFunction(
       // foreign (lib/deck/carried-assets.ts), same as generation's ingest.
       const decl = parseFrameSlide(
         enforceCarriedTables(
-          enforceCarriedAssetImgs(stripTextDashes(noStyles), projectId, carriedAssets, carriedOriginals, carriedTextIds),
+          enforceCarriedAssetImgs(stripTextDashes(noStyles), projectId, carriedAssets, carriedOriginals, carriedTextIds, carriedCaps),
           carriedTables,
         ),
       );

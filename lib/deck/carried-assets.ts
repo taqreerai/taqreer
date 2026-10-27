@@ -52,6 +52,16 @@ export function isTextPicture(p: Pick<CarriedPictureRef, "cls" | "kind" | "swap"
   return p.cls === "content" && (p.kind === "graphic" || p.kind === "document") && !p.swap;
 }
 
+/** Screenshots / documents -> their own pixel size (enforceCarriedAssetImgs maxSizes). */
+export function nativeSizeCaps(pictures: readonly CarriedPictureRef[]): Map<string, { w: number; h: number }> {
+  return new Map(pictures.flatMap((p) => (p.kind === "document" && p.native ? [[p.assetId, p.native] as const] : [])));
+}
+
+// Screenshots / documents in every Enhance deck (owner, 2026-10-27): an old,
+// soft screenshot looks deliberate when it is shown crisp and framed.
+export const CARRIED_SCREENS_RULE = `  • SCREENSHOTS (entries marked SCREENSHOT OR DOCUMENT): never wider than the size given (larger only blurs it); smaller is fine. A screenshot of software, a website or a phone is shown inside a clean app-window frame: a rounded card (about 16px radius) with a slim title bar (about 36px, a light tint of the deck's colours, three small dots at one end), the screenshot below it filling the frame's width, and one soft shadow, the same frame for every screenshot in the deck. A scanned page or document sits on a clean white card with a thin border instead. Never crop, tint or filter it, and never set it as a background.`;
+
+
 /** Ids of the pictures with words in them (graphics and documents). */
 export function textPictureIds(pictures: readonly CarriedPictureRef[]): Set<string> {
   return new Set(pictures.filter(isTextPicture).map((p) => p.assetId));
@@ -161,6 +171,9 @@ export function enforceCarriedAssetImgs(
   // Pictures with words in them (graphics, documents): always shown whole,
   // stamped data-asset-text so later rewrites keep knowing it.
   textAssets?: ReadonlySet<string>,
+  // Screenshots / documents: their own pixel size, stamped as max-width /
+  // max-height so the layout can never stretch (and blur) them.
+  maxSizes?: ReadonlyMap<string, { w: number; h: number }>,
 ): string {
   if (!/<img\b/i.test(html)) return html;
   return html.replace(IMG_RE, (tag) => {
@@ -174,7 +187,9 @@ export function enforceCarriedAssetImgs(
       // safe for photos.
       const textual = textAssets?.has(id) === true || attr(tag, "data-asset-text") !== null;
       const fit = textual ? "contain" : fitFor(style, assets.get(id));
-      const nextStyle = `${style}${style && !style.endsWith(";") ? ";" : ""}object-fit:${fit}`;
+      const cap = maxSizes?.get(id);
+      const capStyle = cap ? `;max-width:${cap.w}px;max-height:${cap.h}px` : "";
+      const nextStyle = `${style}${style && !style.endsWith(";") ? ";" : ""}object-fit:${fit}${capStyle}`;
       const aspect = assets.get(id);
       let stamped = aspect && Number.isFinite(aspect) ? setAttr(tag, "data-asset-aspect", String(aspect)) : tag;
       if (textual) stamped = setAttr(stamped, "data-asset-text", "1");
@@ -202,6 +217,7 @@ export type CarriedPictureRef = {
   // Content pictures: a real photo, or a graphic (diagram, scanned page,
   // screenshot). Absent on decks generated before 2026-10-20.
   kind?: "photo" | "graphic" | "document";
+  native?: { w: number; h: number };
   originalAssetId?: string;
   // Rework decks: generic clip-art the redesign may drop or replace, and what
   // the picture shows (labels are matched to pictures by it).
@@ -324,8 +340,16 @@ export function carriedSlideBlock(
             : p.cls === "small" ? 120 : p.box ? Math.max(200, Math.min(1800, Math.round(p.box.w * 1920))) : 720;
           // A slide's well is ~1060px tall and holds a title too: a tall example
           // size was copied as-is and ran past the canvas (prod 2026-10-22).
-          const floor = readable.get(p.assetId);
-          const w = floor ?? Math.min(w0, Math.round(EXAMPLE_MAX_HEIGHT * p.aspect));
+          // A screenshot / document never goes past its own pixel width: the
+          // native size wins over the readable floor (stretching adds blur,
+          // not detail).
+          const cap = p.kind === "document" && p.native ? p.native.w : Infinity;
+          const floorRaw = readable.get(p.assetId);
+          const floor = floorRaw !== undefined ? Math.min(floorRaw, cap) : undefined;
+          const w = Math.min(cap, floor ?? Math.min(w0, Math.round(EXAMPLE_MAX_HEIGHT * p.aspect)));
+          const screen = Number.isFinite(cap)
+            ? `  SCREENSHOT OR DOCUMENT: at most ${cap}px wide (its own size; larger only blurs it), framed per SCREENSHOTS`
+            : "";
           const words = floor
             ? `  HAS WORDS: keep it readable from the back of a room, at least ${floor}px wide (never a thumbnail, never cropped); shorten or move the slide's other elements to make room`
             : "";
@@ -333,7 +357,7 @@ export function carriedSlideBlock(
           const where = p.box
             ? `${kind}; filled ${Math.round(Math.min(1, p.box.w) * 100)}% x ${Math.round(Math.min(1, p.box.h) * 100)}% of the source slide (importance hint, place it freely)`
             : kind;
-          return `<img data-asset="${p.assetId}" src="/api/assets/${projectId}/${p.assetId}" alt="${(p.altText ?? "").replace(/["<>&]/g, "")}">  aspect ${p.aspect} (e.g. ${w}x${Math.round(w / p.aspect)}px)${p.logo ? "  LOGO: the organisation's logo (see LOGOS)" : ""}${p.cls === "small" && !p.swap ? "  small: icon / logo / badge" : where}${words}${p.shows ? `  shows: "${p.shows.replace(/["<>&]/g, "")}"` : ""}${p.animated ? "  ANIMATED: a moving picture; show it whole as a picture (never a background, never cropped, never replaced by a generated image)" : ""}${p.swap ? "  SWAPPABLE: generic clip-art (free redesign: may be left out or replaced, see FREE REDESIGN); a replacement is a real illustration, never icon-sized" : ""}`;
+          return `<img data-asset="${p.assetId}" src="/api/assets/${projectId}/${p.assetId}" alt="${(p.altText ?? "").replace(/["<>&]/g, "")}">  aspect ${p.aspect} (e.g. ${w}x${Math.round(w / p.aspect)}px)${screen}${p.logo ? "  LOGO: the organisation's logo (see LOGOS)" : ""}${p.cls === "small" && !p.swap ? "  small: icon / logo / badge" : where}${words}${p.shows ? `  shows: "${p.shows.replace(/["<>&]/g, "")}"` : ""}${p.animated ? "  ANIMATED: a moving picture; show it whole as a picture (never a background, never cropped, never replaced by a generated image)" : ""}${p.swap ? "  SWAPPABLE: generic clip-art (free redesign: may be left out or replaced, see FREE REDESIGN); a replacement is a real illustration, never icon-sized" : ""}`;
         })
         .join("\n") +
       "\n\n";

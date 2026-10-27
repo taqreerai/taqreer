@@ -52,6 +52,9 @@ export type CarriedPicture = {
   // Content pictures only: a real photo, or a graphic (diagram, scanned page,
   // screenshot) whose pixels must stay exact.
   kind?: PictureKind;
+  // The stored bitmap's own pixel size: a screenshot / document is never shown
+  // larger than this (it only blurs), carried-assets maxSize.
+  native?: { w: number; h: number };
   // Photo refresh: this picture is a NEW photo replacing that original asset
   // (kept stored; the studio's "Restore original" puts it back).
   originalAssetId?: string;
@@ -311,6 +314,7 @@ export async function prepareCarriedPictures(opts: {
       // The PICTURE's own proportions (after the slide's crop), not the shape's:
       // a stretched source shape would otherwise make object-fit: cover cut it.
       aspect: Math.round((a.file.kind === "image" ? a.file.width / a.file.height : a.aspect) * 100) / 100,
+      ...(a.file.kind === "image" ? { native: { w: a.file.width, h: a.file.height } } : {}),
       altText: a.altText ? a.altText.slice(0, 200) : null,
   }));
 
