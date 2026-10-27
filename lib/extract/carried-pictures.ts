@@ -35,6 +35,10 @@ const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.
 const PDF_MIME = "application/pdf";
 // Upload concurrency: small files, a few at a time.
 const UPLOAD_PARALLEL = 4;
+// A PDF picture this much of the page, not a photo, under this many words of
+// real text is the page's baked template background (see the filter below).
+const TEMPLATE_BG_AREA = 0.9;
+const TEMPLATE_BG_MIN_WORDS = 5;
 
 export type CarriedPicture = {
   assetId: string;
@@ -116,10 +120,12 @@ export async function prepareCarriedPictures(opts: {
   const buffer = Buffer.from(await data.arrayBuffer());
 
   let assets: PdfAsset[];
+  let wordsByPage: number[] | null = null; // PDF only: text-layer words per page
   let hasContentImages: boolean;
   let tables: CarriedTable[] = [];
   if (opts.sourceMime === PDF_MIME) {
     const visuals = await extractPdfPictures(buffer);
+    wordsByPage = visuals.wordsByPage;
     const classes = classifyPdfPictures(visuals);
     assets = await buildPdfAssets(visuals, classes);
     // After the flat-image filter: a file whose only "pictures" were shadows
@@ -134,7 +140,7 @@ export async function prepareCarriedPictures(opts: {
     tables = tablesOf(visuals, opts.dropChrome ? chromeTables(visuals) : undefined);
   }
 
-  const storable = assets.filter((a) => a.file.kind === "image");
+  let storable = assets.filter((a) => a.file.kind === "image");
   // Photo vs graphic, and the free clean-up of washed-out / small photos
   // (lib/extract/photo-enhance.ts). Graphics and icons are stored untouched.
   const kinds = new Map<string, PictureKind>();
@@ -169,6 +175,26 @@ export async function prepareCarriedPictures(opts: {
   // deck, deck-generate) means real PHOTOS, or a scanned page. A header banner,
   // a diagram or a screenshot does not: one banner on the cover used to leave a
   // text-only deck with no images at all (prod 2026-10-25, cmvo1woh10002n06ds86sboio).
+  // PDF template backgrounds (owner, 2026-10-27): a PDF can bake a slide's
+  // whole template (corner shapes, dots, a faded watermark) into ONE full-page
+  // image under the real text. Repeated on many pages it is caught as
+  // "background" (pdf-visuals); on only two or three it came through as a
+  // "document" and would be shown as a framed picture of an empty template.
+  // A full-page picture that is not a photo, on a page with real text drawn
+  // over it, is that template: not carried. A full-page PHOTO still becomes
+  // the slide's photo background; scanned pages are cls "page", untouched.
+  if (wordsByPage) {
+    const words = wordsByPage;
+    storable = storable.filter(
+      (a) =>
+        !(
+          a.cls === "content" &&
+          a.box.w * a.box.h >= TEMPLATE_BG_AREA &&
+          kinds.get(a.assetId) !== "photo" &&
+          (words[a.slideIndex] ?? 0) >= TEMPLATE_BG_MIN_WORDS
+        ),
+    );
+  }
   hasContentImages =
     assets.some((a) => a.cls === "page") ||
     storable.some((a) => a.cls === "content" && kinds.get(a.assetId) === "photo");
