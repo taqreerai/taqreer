@@ -83,6 +83,10 @@ export type PptxTable = {
   rows: PptxTableCell[][];
   headerRow: boolean; // a:tblPr firstRow="1"
   columns: number;
+  // a:tblPr rtl="1": cells are stored right to left. Without it they are
+  // stored left to right, even in an Arabic deck (renderTableHtml keeps
+  // that column order).
+  rtl: boolean;
 };
 
 export type PptxFrame = {
@@ -139,7 +143,8 @@ function readTable(graphicData: XmlElement): PptxTable | undefined {
     rows.push(row);
   }
   if (rows.length === 0) return undefined;
-  return { rows, headerRow: child(tbl, NS_A, "tblPr")?.getAttribute("firstRow") === "1", columns: columns || Math.max(...rows.map((r) => r.reduce((n, c) => n + c.colSpan, 0))) };
+  const tblPr = child(tbl, NS_A, "tblPr");
+  return { rows, headerRow: tblPr?.getAttribute("firstRow") === "1", rtl: tblPr?.getAttribute("rtl") === "1", columns: columns || Math.max(...rows.map((r) => r.reduce((n, c) => n + c.colSpan, 0))) };
 }
 
 export type PptxVisuals = {

@@ -10,7 +10,9 @@
 // <table> as a native, editable PowerPoint table). Digits stay as written.
 
 export type TableCell = { text: string; colSpan: number; rowSpan: number };
-export type TableSpec = { rows: TableCell[][]; headerRow: boolean; columns: number };
+// rtl: the source table's own direction (PowerPoint a:tblPr rtl). false =
+// its cells run left to right; absent (PDF tables) = follow the slide.
+export type TableSpec = { rows: TableCell[][]; headerRow: boolean; columns: number; rtl?: boolean };
 
 const NUMERIC_RE = /^[\s\d.,%+\-~≈×x^()/:$€£¥]+$/i;
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -110,6 +112,13 @@ export function renderTableHtml(t: TableSpec, opts: { boxHeight: number | null; 
   const line = "color-mix(in srgb, currentColor 18%, transparent)";
   const zebra = "color-mix(in srgb, currentColor 5%, transparent)";
   const groups = rowGroups(t, header);
+  // A PowerPoint table not flagged rtl stores its cells left to right, even
+  // in an Arabic deck: on an RTL slide its columns came out mirrored (labels
+  // on the left, prod 2026-10-28 cmvrptccn006zak6dflqd03ui). dir="ltr" keeps
+  // the source's column order; each cell's own text still reads in its own
+  // direction (dir="auto"). The PPTX export writes cells in DOM order, left
+  // to right, so the exported table matches too.
+  const ltrTable = t.rtl === false;
   const body = t.rows
     .map((row, r) => {
       const isHead = t.headerRow && r === 0;
@@ -136,11 +145,11 @@ export function renderTableHtml(t: TableSpec, opts: { boxHeight: number | null; 
             .filter(Boolean)
             .join(";");
           const span = `${c.colSpan > 1 ? ` colspan="${c.colSpan}"` : ""}${c.rowSpan > 1 ? ` rowspan="${c.rowSpan}"` : ""}`;
-          return `<${tag}${span} style="${style}">${esc(c.text).replace(/\n/g, "<br>")}</${tag}>`;
+          return `<${tag}${span}${ltrTable ? ' dir="auto"' : ""} style="${style}">${esc(c.text).replace(/\n/g, "<br>")}</${tag}>`;
         })
         .join("");
       return `<tr style="${bg}">${cells}</tr>`;
     })
     .join("");
-  return `<table data-tq-source-table="1" style="width:100%;height:100%;border-collapse:collapse;font-size:${fs}px;line-height:1.3;color:inherit;font-family:inherit">${body}</table>`;
+  return `<table data-tq-source-table="1"${ltrTable ? ' dir="ltr"' : ""} style="width:100%;height:100%;border-collapse:collapse;font-size:${fs}px;line-height:1.3;color:inherit;font-family:inherit">${body}</table>`;
 }
