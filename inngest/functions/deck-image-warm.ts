@@ -25,7 +25,7 @@
 //      re-broadcasts its URL instead of re-billing.
 
 import { inngest } from "@/inngest/client";
-import { generateImageWithRetry } from "@/lib/images/gpt-image";
+import { fillImage } from "@/lib/images/image-source";
 import {
   storeGeneratedImage,
   generatedImageExists,
@@ -48,6 +48,9 @@ type WarmBox = {
   // key so a drift's changed prompt (or a ref'd vs no-ref box) is a distinct
   // image, never a collision with the discarded draft.
   hash: string;
+  // The box's place in the deck (0-based): free decks may use AI only for
+  // the first few (lib/images/image-source.ts). Absent on a user's regenerate.
+  rank?: number;
 };
 
 export const deckImageWarm = inngest.createFunction(
@@ -99,11 +102,13 @@ export const deckImageWarm = inngest.createFunction(
           });
           return { filled: 0, skipped: 1, failed: 0 };
         }
-        const { b64 } = await generateImageWithRetry({
+        const { b64 } = await fillImage({
+          projectId,
           prompt: box.prompt,
           aspect: box.aspect,
           referenceUrl: box.ref ?? null,
           stock: box.stock === true,
+          rank: box.rank,
         });
         const url = await storeGeneratedImage({
           projectId,

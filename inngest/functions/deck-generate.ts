@@ -3,6 +3,7 @@ import { checkRedesign, slideCheckMessage, type MeasuredFinding } from "@/lib/en
 import { readRedesignPlan, redesignPlanLines, writeRedesignPlan, type RedesignPlan } from "@/lib/enhance/plan";
 import { mustNotGenerate, stripNeverGenerated } from "@/lib/images/never-generate";
 import { applyImageMedium, firstMedium, type ImageMedium } from "@/lib/images/image-medium";
+import { projectImageTier } from "@/lib/images/image-source";
 import { enlargeSmallGenImages } from "@/lib/images/min-size";
 import {
   brokenReworkSlides,
@@ -850,7 +851,7 @@ function dispatchImageWarm(
     data: {
       projectId: string;
       slideKey: string;
-      box: GenImageMarker & { hash: string };
+      box: GenImageMarker & { hash: string; rank: number };
       idemKey: string;
     };
   }[] = [];
@@ -880,7 +881,8 @@ function dispatchImageWarm(
       data: {
         projectId,
         slideKey: slideId,
-        box: { ...m, hash },
+        // Deck order of the box (lib/images/image-source.ts rank).
+        box: { ...m, hash, rank: [...warmedGenidsForCap].indexOf(m.genid) },
         idemKey: `${projectId}:${m.genid}:${hash}`,
       },
     });
@@ -2431,8 +2433,10 @@ export const deckGenerate = inngest.createFunction(
           } | null;
           const flags = enhanceFlags(data.brief);
           // Replace-all has its own path (prepareCarriedPictures `replace`).
+          // Free decks never re-make photos with the image model (owner,
+          // 2026-10-28: OpenAI cost); their photos are kept as they are.
           const refresh =
-            briefForRefresh?.refreshPhotos === true && !flags.replaceAll
+            briefForRefresh?.refreshPhotos === true && !flags.replaceAll && (await projectImageTier(projectId)) === "paid"
               ? {
                   slideCount: Math.max(pageCount, textPerSlide.length),
                   paid: isPaidPlan(data.tier ?? null),

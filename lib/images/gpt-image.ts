@@ -51,6 +51,7 @@ const REF_MAX_BYTES = 10 * 1024 * 1024;
 
 const MODEL = "gpt-image-2";
 const QUALITY = "medium";
+export type ImageQuality = "low" | "medium";
 // Images can take up to ~2 min on complex prompts; give the SDK headroom.
 const TIMEOUT_MS = 120_000;
 
@@ -105,6 +106,8 @@ export async function generateImage(opts: {
   prompt: string;
   aspect: ImageAspect;
   referenceUrl?: string | null;
+  // "low" for free accounts' few AI images (lib/images/image-source.ts).
+  quality?: ImageQuality;
 }): Promise<GeneratedImageResult> {
   const size = SIZE_FOR_ASPECT[opts.aspect];
 
@@ -120,7 +123,7 @@ export async function generateImage(opts: {
       image,
       prompt: `${opts.prompt.trim()} ${PRODUCT_GUARD}`,
       size,
-      quality: QUALITY,
+      quality: opts.quality ?? QUALITY,
       n: 1,
     });
     const b64 = res.data?.[0]?.b64_json;
@@ -132,7 +135,7 @@ export async function generateImage(opts: {
     model: MODEL,
     prompt: `${opts.prompt.trim()} ${TEXTLESS_GUARD}`,
     size,
-    quality: QUALITY,
+    quality: opts.quality ?? QUALITY,
     n: 1,
   });
 
@@ -229,7 +232,7 @@ function isTransientImageError(err: unknown): boolean {
  * three identical-theme prompts succeeded — a one-off 429).
  */
 export async function generateImageWithRetry(
-  opts: { prompt: string; aspect: ImageAspect; referenceUrl?: string | null; stock?: boolean },
+  opts: { prompt: string; aspect: ImageAspect; referenceUrl?: string | null; stock?: boolean; quality?: ImageQuality },
   attempts = 3,
 ): Promise<GeneratedImageResult> {
   // A stock box: a real photo from Pexels (size "pexels:<id>"). With no key or

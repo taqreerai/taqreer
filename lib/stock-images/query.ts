@@ -11,6 +11,8 @@
 // superseded / regenerated near-duplicate image sets. It also excludes
 // deleted projects for free (their Presentation row is gone).
 //
+// Library reuses (size "lib:<id>", lib/images/image-source.ts) are copies of
+// an image already listed, so they are left out too.
 // LICENCE: Pexels stock photos (GeneratedImage.size "pexels:<id>", lib/images/
 // pexels.ts) are never listed: their licence forbids redistributing them as a
 // stock library.
@@ -142,6 +144,7 @@ export async function getStockImagesPage(opts: {
         ON pr."savedVersionId" = gi."presentationVersionId"
       WHERE gi.status = 'ready'
         AND gi.size NOT LIKE 'pexels:%'
+        AND gi.size NOT LIKE 'lib:%'
         AND gi."storageUrl" IS NOT NULL
         AND (${ratio}::text IS NULL OR gi.aspect = ${ratio})
         AND (${like}::text IS NULL OR gi.prompt ILIKE ${like})
@@ -172,6 +175,7 @@ export async function getStockImagesPage(opts: {
           ON pr."savedVersionId" = gi."presentationVersionId"
         WHERE gi.status = 'ready'
         AND gi.size NOT LIKE 'pexels:%'
+        AND gi.size NOT LIKE 'lib:%'
           AND gi."storageUrl" IS NOT NULL
           AND (${ratio}::text IS NULL OR gi.aspect = ${ratio})
           AND (${like}::text IS NULL OR gi.prompt ILIKE ${like})
@@ -210,6 +214,7 @@ export async function getRelatedStockImages(id: string): Promise<StockImage[]> {
         ON pr."savedVersionId" = gi."presentationVersionId"
       WHERE gi.status = 'ready'
         AND gi.size NOT LIKE 'pexels:%'
+        AND gi.size NOT LIKE 'lib:%'
         AND gi."storageUrl" IS NOT NULL
         -- Same saved-version deck as the requested image (subquery is itself
         -- saved-version scoped, so a random/superseded id resolves to nothing).
@@ -221,6 +226,7 @@ export async function getRelatedStockImages(id: string): Promise<StockImage[]> {
           WHERE gi2.id = ${id}
             AND gi2.status = 'ready'
             AND gi2.size NOT LIKE 'pexels:%'
+            AND gi2.size NOT LIKE 'lib:%'
             AND gi2."storageUrl" IS NOT NULL
           LIMIT 1
         )

@@ -32,7 +32,7 @@ import {
   MAX_GENERATED_IMAGES,
   type GenImageAspect,
 } from "@/lib/images/slide-images";
-import { generateImageWithRetry } from "@/lib/images/gpt-image";
+import { fillImage } from "@/lib/images/image-source";
 import {
   storeGeneratedImage,
   generatedImageExists,
@@ -292,11 +292,14 @@ export const deckImagesGenerate = inngest.createFunction(
               adopted += 1;
               continue;
             }
-            const { b64, size } = await generateImageWithRetry({
+            const { b64, size } = await fillImage({
+              projectId,
               prompt: b.prompt,
               aspect: b.aspect,
               referenceUrl: b.ref,
               stock: b.stock,
+              // Deck order (free decks: AI only for the first few boxes).
+              rank: boxes.findIndex((x) => x.genid === b.genid),
             });
             const url = await storeGeneratedImage({
               projectId,
