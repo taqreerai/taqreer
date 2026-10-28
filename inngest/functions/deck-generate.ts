@@ -2,7 +2,7 @@ import { enhanceAnswerLines, readBriefAnswers } from "@/lib/enhance/answers";
 import { checkRedesign, slideCheckMessage, type MeasuredFinding } from "@/lib/enhance/check";
 import { readRedesignPlan, redesignPlanLines, writeRedesignPlan, type RedesignPlan } from "@/lib/enhance/plan";
 import { mustNotGenerate, stripNeverGenerated } from "@/lib/images/never-generate";
-import { applyImageMedium, deckMedium } from "@/lib/images/image-medium";
+import { applyImageMedium, firstMedium, type ImageMedium } from "@/lib/images/image-medium";
 import { enlargeSmallGenImages } from "@/lib/images/min-size";
 import {
   brokenReworkSlides,
@@ -2783,6 +2783,15 @@ export const deckGenerate = inngest.createFunction(
         const slides: SlideType[] = [];
         const warmedKeys = new Set<string>();
         const warmedGenidsForCap = new Set<string>();
+        // The deck's picture medium, fixed by the first box that names one
+        // (lib/images/image-medium.ts firstMedium) and applied to each slide
+        // BEFORE its images warm, so no prompt changes after it is paid for.
+        let streamMedium: ImageMedium | null = null;
+        const withMedium = (html: string): string => {
+          if (!isImagesMode(data)) return html;
+          streamMedium ??= firstMedium([html])?.medium ?? null;
+          return streamMedium ? applyImageMedium(html, streamMedium) : html;
+        };
         // FRAME decks: deck-level context accumulated as slides stream (the
         // cover declares data-deck-title, re-stamped on the stored cover for
         // the manifest-title extraction; nothing renders from it). The frame
@@ -2900,7 +2909,7 @@ export const deckGenerate = inngest.createFunction(
               enforceCarriedAssetImgs(
                 // A flag / emblem / sacred-text image box is never generated
                 // (lib/images/never-generate.ts).
-                stripNeverGenerated(stripTextDashes(rawParsed.html)),
+                withMedium(stripNeverGenerated(stripTextDashes(rawParsed.html))),
                 projectId,
                 carriedAssetIds,
                 carriedOriginals,
@@ -3726,18 +3735,20 @@ export const deckGenerate = inngest.createFunction(
     // long token is never hand-copied per slide.
     injectDeckLogo(manifest, data.brief);
 
-    // One picture medium per deck (lib/images/image-medium.ts): every image box
-    // follows the majority (illustration or photo) before any is generated.
+    // One picture medium per deck (lib/images/image-medium.ts): every box from
+    // the first one naming a medium on follows it. The stream already applied
+    // it slide by slide before the images warmed; this repeats the same rule
+    // (a no-op there) for any path that did not stream.
     // Pure, in the body like the guard below, so every replay agrees.
     // Replace-all / redraw: replacement pictures are never icon-sized
     // (lib/images/min-size.ts).
     if (isImagesMode(data)) {
-      const medium = deckMedium(manifest.slides.map((s) => s.html ?? ""));
+      const first = firstMedium(manifest.slides.map((s) => s.html ?? ""));
       const flags = enhanceFlags(data.brief);
       const enlarge = flags.replaceAll || flags.swapPictures;
-      if (medium || enlarge) {
-        manifest.slides = manifest.slides.map((s) => {
-          let html = medium ? applyImageMedium(s.html, medium) : s.html;
+      if (first || enlarge) {
+        manifest.slides = manifest.slides.map((s, i) => {
+          let html = first && i >= first.index ? applyImageMedium(s.html, first.medium) : s.html;
           if (enlarge) html = enlargeSmallGenImages(html);
           return html === s.html ? s : { ...s, html };
         });

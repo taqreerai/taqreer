@@ -61,6 +61,25 @@ export function deckMedium(htmls: readonly string[]): ImageMedium | null {
   return illus > photo ? "illustration" : "photo";
 }
 
+/**
+ * The deck's medium as decided WHILE it streams (owner, 2026-10-28): the
+ * medium of the first box, in slide order, that names one, and that slide's
+ * index. Images are generated as each slide closes; a majority known only at
+ * the end rewrote prompts after their images were paid for, and the changed
+ * prompt was generated again (1 to 3 wasted images per deck). Slides from
+ * that index on follow the medium as they stream; the end-of-deck pass
+ * repeats the same rule, so it changes nothing that was already generated.
+ */
+export function firstMedium(htmls: readonly string[]): { medium: ImageMedium; index: number } | null {
+  for (let i = 0; i < htmls.length; i++) {
+    for (const b of boxes(htmls[i])) {
+      const m = promptMedium(b.prompt, b.stock);
+      if (m) return { medium: m, index: i };
+    }
+  }
+  return null;
+}
+
 /** Rewrite every box that is not already in `medium` so it is. Pure. */
 export function applyImageMedium(html: string, medium: ImageMedium): string {
   return html.replace(BOX_TAG, (tag) => {
