@@ -104,11 +104,46 @@ function rowGroups(t: TableSpec, header: boolean): number[] {
   return out;
 }
 
+// A long two- or three-column list (a fact sheet: label | value, 21 rows)
+// fitted into one box lands on the 16px floor, unreadable on a projector
+// (prod 2026-10-28 cmvrptccn006zak6dflqd03ui). Split into two side-by-side
+// halves (the header repeated on both) when that is clearly larger. Only
+// simple tables: a merged cell cannot be cut in two.
+const SPLIT_MIN_BODY_ROWS = 10;
+const SPLIT_GAP = 48;
+
+function splitHalves(t: TableSpec, header: boolean, boxWidth: number | null, boxHeight: number | null): [TableSpec, TableSpec] | null {
+  if (!boxWidth || !boxHeight || t.columns > 3) return null;
+  if (t.rows.some((r) => r.some((c) => c.colSpan > 1 || c.rowSpan > 1))) return null;
+  const head = header ? t.rows.slice(0, 1) : [];
+  const body = header ? t.rows.slice(1) : t.rows;
+  if (body.length < SPLIT_MIN_BODY_ROWS) return null;
+  const mid = Math.ceil(body.length / 2);
+  const a = { ...t, rows: [...head, ...body.slice(0, mid)] };
+  const b = { ...t, rows: [...head, ...body.slice(mid)] };
+  const whole = fittedFontSize(t, boxWidth, boxHeight);
+  const half = fittedFontSize(a, (boxWidth - SPLIT_GAP) / 2, boxHeight);
+  return half >= whole + 4 ? [a, b] : null;
+}
+
 export function renderTableHtml(t: TableSpec, opts: { boxHeight: number | null; boxWidth?: number | null }): string {
   const header = hasHeader(t);
   t = { ...t, headerRow: header };
+  const boxWidth = opts.boxWidth ?? null;
+  const halves = splitHalves(t, header, boxWidth, opts.boxHeight);
+  if (halves && boxWidth && opts.boxHeight) {
+    // Both halves share the first half's size so their rows line up; the
+    // wrapper follows the slide's direction, so the first half sits at the
+    // reading start.
+    const fs = fittedFontSize(halves[0], (boxWidth - SPLIT_GAP) / 2, opts.boxHeight);
+    const parts = halves.map((h) => `<div style="flex:1 1 0;min-width:0">${tableMarkup(h, header, fs, "auto")}</div>`).join("");
+    return `<div data-tq-split-table="1" style="display:flex;gap:${SPLIT_GAP}px;align-items:flex-start;width:100%;height:100%">${parts}</div>`;
+  }
+  return tableMarkup(t, header, fontSizeFor(t, opts.boxHeight, boxWidth), "100%");
+}
+
+function tableMarkup(t: TableSpec, header: boolean, fs: number, height: string): string {
   const numericCol = numericColumns(t, header);
-  const fs = fontSizeFor(t, opts.boxHeight, opts.boxWidth ?? null);
   const line = "color-mix(in srgb, currentColor 18%, transparent)";
   const zebra = "color-mix(in srgb, currentColor 5%, transparent)";
   const groups = rowGroups(t, header);
@@ -151,5 +186,5 @@ export function renderTableHtml(t: TableSpec, opts: { boxHeight: number | null; 
       return `<tr style="${bg}">${cells}</tr>`;
     })
     .join("");
-  return `<table data-tq-source-table="1"${ltrTable ? ' dir="ltr"' : ""} style="width:100%;height:100%;border-collapse:collapse;font-size:${fs}px;line-height:1.3;color:inherit;font-family:inherit">${body}</table>`;
+  return `<table data-tq-source-table="1"${ltrTable ? ' dir="ltr"' : ""} style="width:100%;height:${height};border-collapse:collapse;font-size:${fs}px;line-height:1.3;color:inherit;font-family:inherit">${body}</table>`;
 }
