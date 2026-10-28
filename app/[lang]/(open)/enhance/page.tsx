@@ -34,6 +34,7 @@
 // per "reuse > extend > fork > build new".
 
 import { STYLE_REQUIRES_IMAGES } from "@/components/create/OutputCards";
+import { DECK_STYLES } from "@/lib/design-styles";
 import { AIImagesPanel } from "@/components/brand/AIImagesPanel";
 import { EnhanceQuestionsDialog } from "@/components/create/EnhanceQuestionsDialog";
 import { recommendedAnswers, type EnhanceAnswers, type EnhanceQuestions } from "@/lib/enhance/answers";
@@ -427,14 +428,64 @@ export default function EnhanceContentPage() {
     isAdmin: enhanceCredits?.isAdmin ?? false,
   });
   const imagesOn = imagesMode && !imagesLocked;
+  // A style or template the user picked: a suggestion never overrides it.
+  const lookTouchedRef = useRef(false);
   // Picking a style clears the template; photo-led styles switch AI photos
   // on (never off), like /create.
   const onDesignStyle = (style: string | null) => {
+    lookTouchedRef.current = true;
     setDesignStyle(style);
     setTemplateId(null);
     restorePreTemplateColors();
     if (style && STYLE_REQUIRES_IMAGES.has(style)) setImagesMode(true);
   };
+
+  // Suggested styles for a picture-led deck (owner, 2026-10-28): when the
+  // analysis found many pictures (questions.pictureSuggest: weak ones to
+  // replace, or sharp ones to show off), the Design step asks once which
+  // styles fit and preselects the first, like /create. Never over a style
+  // or template the user picked (lookTouchedRef). Other decks keep the
+  // classic enhance look.
+  const [suggestedStyles, setSuggestedStyles] = useState<string[]>([]);
+  const suggestKeyRef = useRef("");
+  const pictureSuggest = extracted?.questions?.pictureSuggest ?? null;
+  const styleSample = (extracted?.textPerSlide ?? []).join("\n").trim().slice(0, 1200);
+  useEffect(() => {
+    if (step !== 1 || !pictureSuggest || !styleSample) return;
+    const key = `${imagesOn ? 1 : 0}:${pictureSuggest}:${styleSample}`;
+    if (key === suggestKeyRef.current) return;
+    suggestKeyRef.current = key;
+    let alive = true;
+    let done = false;
+    fetch("/api/style-suggestions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: styleSample, imagesMode: imagesOn, pictureHint: pictureSuggest }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: { styles?: unknown } | null) => {
+        done = true;
+        if (!alive) return;
+        const styles = (Array.isArray(data?.styles) ? data.styles : []).filter(
+          (s): s is string => typeof s === "string" && DECK_STYLES.some((d) => d.label === s),
+        );
+        setSuggestedStyles(styles);
+        const apply = !!styles[0] && !lookTouchedRef.current;
+        if (apply) {
+          setDesignStyle(styles[0]);
+          setTemplateId(null);
+          setLookTab("styles");
+        }
+        posthog.capture("design_styles_suggested", { flow: "enhance", styles, applied: apply, pictureSuggest });
+      })
+      .catch(() => {
+        done = true;
+      });
+    return () => {
+      alive = false;
+      if (!done) suggestKeyRef.current = "";
+    };
+  }, [step, pictureSuggest, styleSample, imagesOn]);
 
   // Apply a resolved brand (sessionStorage, default kit, or a picked
   // saved kit) to the card state. Maps the heading font slot → the
@@ -881,6 +932,7 @@ export default function EnhanceContentPage() {
       setInstructions(d.instructions ?? "");
       setTemplateId(d.templateId ?? null);
       setDesignStyle(d.designStyle ?? null);
+      if (d.designStyle || d.templateId) lookTouchedRef.current = true;
       setLookTab(d.lookTab === "styles" ? "styles" : "templates");
       setColorsAuto(!!d.colorsAuto);
       setColors(Array.isArray(d.colors) ? d.colors.slice(0, MAX_PALETTE) : []);
@@ -1501,6 +1553,7 @@ export default function EnhanceContentPage() {
           onTab={setLookTab}
           templateId={templateId}
           onPickTemplate={(picked) => {
+            lookTouchedRef.current = true;
             setTemplateId(picked.template.id);
             setDesignStyle(null);
             applyTemplateColors(picked.use.brand.palette);
@@ -1508,6 +1561,7 @@ export default function EnhanceContentPage() {
           onGuestPickTemplate={
             guest
               ? (tpl) => {
+                  lookTouchedRef.current = true;
                   setTemplateId(tpl.id);
                   setDesignStyle(null);
                   applyTemplateColors(tpl.palette);
@@ -1521,6 +1575,7 @@ export default function EnhanceContentPage() {
           designStyle={designStyle}
           onDesignStyle={onDesignStyle}
           templateNote={dict.flows.design.templateNoteEnhance}
+          suggestedStyles={suggestedStyles}
           disabled={stage === "submitting"}
         />
         <BrandCard

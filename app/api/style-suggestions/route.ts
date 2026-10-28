@@ -30,6 +30,7 @@ export async function POST(request: Request) {
     title?: unknown;
     text?: unknown;
     imagesMode?: unknown;
+    pictureHint?: unknown;
   } | null;
   const title = typeof body?.title === "string" ? body.title.slice(0, 200) : "";
   const text = typeof body?.text === "string" ? body.text.slice(0, MAX_CHARS) : "";
@@ -41,6 +42,7 @@ export async function POST(request: Request) {
     title,
     text,
     imagesMode: body?.imagesMode === true,
+    ...(body?.pictureHint === "photoRich" || body?.pictureHint === "replace" ? { pictureHint: body.pictureHint } : {}),
     count: 3,
     timeoutMs: 6000,
   });
