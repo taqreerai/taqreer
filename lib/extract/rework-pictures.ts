@@ -86,8 +86,10 @@ export async function tagReworkPictures(
 //   logo     kept, restyled to fit the deck (CARRIED_LOGO note)
 //   support  generic photo, clip-art, cartoon, emoji, mascot: a generated image
 //   screen   a screenshot of software: rebuilt as a clean mock-up (describeScreens)
-//   data     chart, map, scan, a picture the slide's task is about
-//   drop     words in a picture, arrows / shapes / frames, specific people or places
+//   data     chart, map, scan, a picture the slide's task is about, a photo of
+//            a specific real person, place or event (owner, 2026-10-28: a
+//            generated image must never stand in for a real person)
+//   drop     words in a picture, arrows / shapes / frames
 export type ReplaceRole = "logo" | "screen" | "support" | "data" | "drop";
 export type ReplaceTag = { role: ReplaceRole; shows: string | null };
 
@@ -117,9 +119,9 @@ export async function tagReplacePictures(
         `These pictures come from a slide deck that is being rebuilt with all-new pictures. Give each image one role:\n` +
         `- logo: the logo, emblem, seal or crest of an organisation, school, ministry or brand\n` +
         `- screen: a screenshot of software, a website or an app (a window, menu, ribbon, toolbar or dialog), with or without labels or callouts pointing at it\n` +
-        `- data: a chart, graph, table, map, scanned document, infographic, poster, or a technical diagram whose details carry information; an example the slide talks about (a sample design, a sample page); also any picture the slide's activity or question is about (objects students must name, match, count or describe)\n` +
+        `- data: a chart, graph, table, map, scanned document, infographic, poster, or a technical diagram whose details carry information; an example the slide talks about (a sample design, a sample page); also any picture the slide's activity or question is about (objects students must name, match, count or describe); also a photo of a specific real person (a leader, a scholar, a public figure), a named real place or landmark, or a real historical event: a generated image must never stand in for them\n` +
         `- support: a generic picture that only illustrates or decorates the point: a stock or mood photo, clip-art, a cartoon, a mascot, an emoji, a sticker or a generic scene, with no written words on it\n` +
-        `- drop: anything else: a picture whose only content is a few written words in any language (a word in a shape, a title, a saying), an arrow, shape, frame, border or ornament, word art, or a photo of a specific real person or a named real place\n` +
+        `- drop: anything else: a picture whose only content is a few written words in any language (a word in a shape, a title, a saying), an arrow, shape, frame, border or ornament, or word art\n` +
         `When unsure between data and another role, answer data.\n` +
         `Also say what it shows in at most 6 plain English words.\n` +
         `Reply with one line per image, exactly: <number>|<logo, screen, data, support or drop>|<what it shows>`,

@@ -54,6 +54,10 @@ export type EnhanceQuestions = {
   pictures: boolean;
   // Option labels fitted to the deck; a missing key falls back to the dictionary.
   labels: Partial<Record<EnhanceOptionKey, string>>;
+  // How the deck's own pictures will hold up (lib/extract/picture-signal.ts):
+  // "replace" = many weak or crowded pictures, "Replace all" is preselected;
+  // "photoRich" = many sharp photos, a photo-led style is suggested.
+  pictureSuggest?: "replace" | "photoRich";
 };
 
 /**
@@ -68,7 +72,14 @@ export function recommendedAnswers(
   const rework = decision?.mode === "rework";
   return {
     wording: rework ? "tidy" : "exact",
-    pictures: rework && imagesOn && questions?.pictures !== false ? "redraw" : "keep",
+    pictures:
+      !imagesOn || questions?.pictures === false
+        ? "keep"
+        : questions?.pictureSuggest === "replace"
+          ? "replace"
+          : rework
+            ? "redraw"
+            : "keep",
     display: questions?.display ?? "projected",
   };
 }

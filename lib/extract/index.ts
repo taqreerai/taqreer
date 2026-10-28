@@ -43,6 +43,8 @@ import { readOrnamentLabels } from "./ornament-labels";
 import { chromeTables, classifyPptxPictures, extractPptxVisuals, type PptxVisuals } from "./pptx-visuals";
 import { decideRework, type ReworkDecision } from "./rework-score";
 import { writeEnhanceQuestions } from "./enhance-questions";
+import { pdfPictureSignal, pptxPictureSignal, type PictureSignal } from "./picture-signal";
+import { extractPdfPictures } from "./pdf-visuals";
 import type { EnhanceQuestions } from "@/lib/enhance/answers";
 import { extractTextPerSlide } from "./text-pptx";
 import { pdfToText } from "./pdf-to-text";
@@ -297,7 +299,22 @@ export async function extract(
     allPictures: pictureClasses.filter((c) => c !== "capture").length,
   });
   const sourceKind = isPptx ? "pptx" : isDocx ? "docx" : "pdf";
-  const questions = input.enhanceLocale
+  // Enhance only: how the deck's own pictures will hold up (picture-signal.ts).
+  let pictureSignal: PictureSignal | null = null;
+  if (input.enhanceLocale) {
+    try {
+      pictureSignal = isPptx
+        ? visuals
+          ? await pptxPictureSignal(buffer, visuals)
+          : null
+        : isPdf
+          ? await pdfPictureSignal(await extractPdfPictures(pdfBytes))
+          : null;
+    } catch (err) {
+      console.error("[extract] picture signal failed:", err);
+    }
+  }
+  const questionsRaw = input.enhanceLocale
     ? await writeEnhanceQuestions({
         textPerSlide: isPptx ? textPerSlide : [fullText],
         contentPictures: pictureClasses.filter((c) => c === "content").length,
@@ -306,6 +323,8 @@ export async function extract(
         locale: input.enhanceLocale,
       })
     : undefined;
+  const questions =
+    questionsRaw && pictureSignal?.suggest ? { ...questionsRaw, pictureSuggest: pictureSignal.suggest } : questionsRaw;
 
   return {
     pdfBytes,

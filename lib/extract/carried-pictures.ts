@@ -307,13 +307,28 @@ export async function prepareCarriedPictures(opts: {
     }
   }
 
+  // At most one generated replacement per slide (owner, 2026-10-28): a collage
+  // slide of 4 web pictures becomes one strong new picture, not 4 generations.
+  // The largest supporting picture on each slide is the one replaced.
+  const extraSupports = new Set<string>();
+  if (opts.replace) {
+    const bySlide = new Map<number, PdfAsset[]>();
+    for (const a of storable) {
+      if (roles.get(mediaKeys.get(a.assetId) ?? "") !== "support" || backdropIds.has(a.assetId)) continue;
+      (bySlide.get(a.slideIndex) ?? bySlide.set(a.slideIndex, []).get(a.slideIndex)!).push(a);
+    }
+    for (const list of bySlide.values()) {
+      list.sort((x, y) => y.box.w * y.box.h - x.box.w * x.box.h);
+      for (const a of list.slice(1)) extraSupports.add(a.assetId);
+    }
+  }
   // Replace-all: a dropped picture (and a supporting full-slide photo, which
   // the redesign rebuilds as its own photo background) is not carried at all.
   // Page artworks stay: they are the slide.
   const dropped = (a: PdfAsset) => {
     if (!opts.replace || a.cls === "page") return false;
     const role = roles.get(mediaKeys.get(a.assetId) ?? "");
-    return role === "drop" || (role === "support" && backdropIds.has(a.assetId));
+    return role === "drop" || (role === "support" && backdropIds.has(a.assetId)) || extraSupports.has(a.assetId);
   };
   const pictures: CarriedPicture[] = storable.filter((a) => !dropped(a)).map((a) => ({
       assetId: replaced.get(a.assetId) ?? a.assetId,
