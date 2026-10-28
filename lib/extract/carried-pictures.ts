@@ -12,7 +12,7 @@
 import { tagReworkPictures, type PictureTag } from "@/lib/extract/rework-pictures";
 import { extractTextPerSlide } from "@/lib/extract/text-pptx";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { chromeTables, extractPptxVisuals, classifyPptxPictures, type PptxFrame } from "@/lib/extract/pptx-visuals";
+import { chromeTables, extractPptxVisuals, classifyPptxPictures, extractTemplatePictures, type PptxFrame } from "@/lib/extract/pptx-visuals";
 import { buildPptxAssets } from "@/lib/extract/pptx-asset-crops";
 import { buildPdfAssets, classifyPdfPictures, extractPdfPictures, type PdfAsset } from "@/lib/extract/pdf-visuals";
 import { uploadSourceAsset } from "@/lib/storage/source-assets";
@@ -26,6 +26,7 @@ import {
   type RefreshCandidate,
 } from "@/lib/extract/photo-refresh";
 import { describeScreens, tagReplacePictures, type ReplaceRole } from "@/lib/extract/rework-pictures";
+import { brandLogoCandidates, findBrandLogos, type BrandLogo } from "@/lib/extract/brand-logos";
 import { createHash } from "crypto";
 import type { TableSpec } from "@/lib/deck/visuals/table";
 import type { ChartSpec } from "@/lib/deck/visuals/chart";
@@ -65,6 +66,9 @@ export type CarriedPicture = {
   shows?: string;
   // Replace-all decks: an organisation's logo, kept and restyled to fit.
   logo?: boolean;
+  // A brand logo from the deck's template (lib/extract/brand-logos.ts): the
+  // slides it showed on (it is listed on each); slideIndex is the first.
+  slides?: number[];
   // Replace-all decks: a software screenshot redrawn as a clean mock-up from
   // this brief (lib/extract/rework-pictures.ts describeScreens); the picture
   // itself is not shown.
@@ -130,6 +134,7 @@ export async function prepareCarriedPictures(opts: {
   let wordsByPage: number[] | null = null; // PDF only: text-layer words per page
   let hasContentImages: boolean;
   let tables: CarriedTable[] = [];
+  let brandLogos: BrandLogo[] = [];
   if (opts.sourceMime === PDF_MIME) {
     const visuals = await extractPdfPictures(buffer);
     wordsByPage = visuals.wordsByPage;
@@ -143,6 +148,8 @@ export async function prepareCarriedPictures(opts: {
     const classes = classifyPptxPictures(visuals);
     hasContentImages = [...classes.values()].includes("content");
     assets = await buildPptxAssets(buffer, visuals, classes);
+    const template = await extractTemplatePictures(buffer).catch(() => ({ pictures: [] }));
+    brandLogos = await findBrandLogos(buffer, brandLogoCandidates(visuals, classes, template));
     // Rework: lesson-info strips are template chrome; the redesign shows them once.
     tables = tablesOf(visuals, opts.dropChrome ? chromeTables(visuals) : undefined);
   }
@@ -327,6 +334,30 @@ export async function prepareCarriedPictures(opts: {
       ...(a.file.kind === "image" ? { native: { w: a.file.width, h: a.file.height } } : {}),
       altText: a.altText ? a.altText.slice(0, 200) : null,
   }));
+
+  // ─── Template brand logos (lib/extract/brand-logos.ts) ───
+  // Stored once, listed on every slide that showed them, always as a LOGO.
+  for (let k = 0; k < brandLogos.length; k++) {
+    const logo = brandLogos[k];
+    const assetId = `brand-${k + 1}`;
+    try {
+      await uploadSourceAsset({ projectId: opts.projectId, assetId, bytes: logo.bytes, contentType: logo.contentType });
+    } catch (err) {
+      console.error("[carry] brand logo upload failed:", err);
+      continue;
+    }
+    pictures.push({
+      assetId,
+      slideIndex: logo.slides[0],
+      slides: logo.slides,
+      cls: "small",
+      logo: true,
+      box: { x: round3(logo.box.x), y: round3(logo.box.y), w: round3(logo.box.w), h: round3(logo.box.h) },
+      aspect: Math.round((logo.width / logo.height) * 100) / 100,
+      native: { w: logo.width, h: logo.height },
+      altText: null,
+    });
+  }
 
   // ─── Cover photo (lib/deck/carried-assets pickCoverPhoto) ───
   // A cover with no photo opens on the deck's strongest photo. The pixel

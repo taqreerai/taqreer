@@ -228,6 +228,9 @@ export type CarriedPictureRef = {
   shows?: string;
   // Replace-all decks: an organisation's logo, kept and restyled (CARRIED_LOGO_RULE).
   logo?: boolean;
+  // A brand logo from the template (lib/extract/brand-logos.ts): one stored
+  // picture listed on every slide it showed on; slideIndex is the first.
+  slides?: number[];
   // Replace-all decks: a screenshot redrawn as a mock-up from this brief
   // (CARRIED_REBUILD_RULE); its <img> is never shown.
   rebuild?: string;
@@ -236,6 +239,11 @@ export type CarriedPictureRef = {
   aspect: number;
   altText: string | null;
 };
+/** Whether a carried picture belongs on slide i (a template logo shows on many). */
+export function pictureOnSlide(p: Pick<CarriedPictureRef, "slideIndex" | "slides">, i: number): boolean {
+  return p.slideIndex === i || (p.slides?.includes(i) ?? false);
+}
+
 export type CarriedTableRef = { tableId: string; slideIndex: number; spec: TableSpec | ChartSpec };
 
 export const CARRIED_TABLES_RULE = `  • ORIGINAL TABLES: FIRST RULE for tables. A slide may come with an "ORIGINAL TABLES" block. For each listed table put ONE EMPTY <div data-table="ID" style="width:...px;height:...px"></div> where the table belongs, sized to fit its rows (start from the suggested size). Never write that table's cells, rows or a <table> yourself, and never repeat its cells as text, cards or bullets elsewhere on the slide (they also appear in the exact-text block; that is the table): the system fills the box with the EXACT table, styled from the slide's text colour and --primary. A title or a short caption above it is fine.`;
@@ -346,7 +354,7 @@ export function carriedSlideBlock(
           // illustration size, never the clip-art's icon size (prod 2026-10-26).
           const w0 = p.swap
             ? Math.max(SWAP_MIN_WIDTH, p.box ? Math.min(1100, Math.round(p.box.w * 1920)) : 0)
-            : p.cls === "small" ? 120 : p.box ? Math.max(200, Math.min(1800, Math.round(p.box.w * 1920))) : 720;
+            : p.cls === "small" ? (p.logo ? Math.round(64 * p.aspect) : 120) : p.box ? Math.max(200, Math.min(1800, Math.round(p.box.w * 1920))) : 720;
           // A slide's well is ~1060px tall and holds a title too: a tall example
           // size was copied as-is and ran past the canvas (prod 2026-10-22).
           // A screenshot / document never goes past its own pixel width: the

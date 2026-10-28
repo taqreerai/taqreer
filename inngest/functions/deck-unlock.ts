@@ -64,6 +64,7 @@ import {
   CARRIED_TABLES_RULE,
   CARRIED_CHARTS_RULE,
   carriedSlideBlock,
+  pictureOnSlide,
   textPictureIds,
   enforceCarriedAssetImgs,
   enforceCarriedTables,
@@ -272,7 +273,7 @@ export const deckUnlock = inngest.createFunction(
         if (!c) continue;
         const inTail = (slideIndex: number) => slideIndex >= visibleCount && slideIndex < total;
         return {
-          pictures: (c.pictures ?? []).filter((x) => inTail(x.slideIndex)),
+          pictures: (c.pictures ?? []).filter((x) => inTail(x.slideIndex) || (x.slides ?? []).some(inTail)),
           tables: (c.tables ?? []).filter((x) => inTail(x.slideIndex)),
           redesignSources,
           rework,
@@ -306,7 +307,7 @@ export const deckUnlock = inngest.createFunction(
         const b = carriedSlideBlock(
           idx + 1,
           projectId,
-          carried.pictures.filter((x) => x.slideIndex === idx),
+          carried.pictures.filter((x) => pictureOnSlide(x, idx)),
           carried.tables.filter((x) => x.slideIndex === idx),
         );
         if (b) blocks.push(b);

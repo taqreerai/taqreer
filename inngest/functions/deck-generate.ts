@@ -97,6 +97,7 @@ import {
   CARRIED_TABLES_RULE,
   CARRIED_CHARTS_RULE,
   carriedSlideBlock,
+  pictureOnSlide,
   readableWidths,
   textPictureIds,
   enforceCarriedAssetImgs,
@@ -1584,7 +1585,7 @@ function buildSourceContentBlocks(
       // Carried original pictures of this slide (images are only attached
       // for the slides authored in this run, so only those list theirs).
       const slidePictures = fileId
-        ? (enhanceImages.pictures ?? []).filter((p) => p.slideIndex === i)
+        ? (enhanceImages.pictures ?? []).filter((p) => pictureOnSlide(p, i))
         : [];
       const slideTables = fileId
         ? (enhanceImages.tables ?? []).filter((t) => t.slideIndex === i)
@@ -1765,7 +1766,7 @@ function buildSourceTextDirective(
             ...(enhanceImages?.pictures?.some((p) => p.rebuild) ? [CARRIED_REBUILD_RULE] : []),
           ]
         : []),
-      `  • LOGOS / BRAND MARKS — never recreate. If anything in a slide image looks like a logo, brand mark, monogram, or stylized identifier, do NOT draw it in SVG (approximations look off and bloat the output). Two options: (a) brand name is readable as text → styled text matching the weight/colour you can read; (b) otherwise → a styled placeholder <div> with a short label (the brand name if readable, else "Logo"). The user swaps it post-generation.`,
+      `  • LOGOS / BRAND MARKS — never recreate. If anything in a slide image looks like a logo, brand mark, monogram, or stylized identifier, do NOT draw it in SVG (approximations look off and bloat the output). Two options: (a) brand name is readable as text → styled text matching the weight/colour you can read; (b) otherwise → a styled placeholder <div> with a short label (the brand name if readable, else "Logo"). The user swaps it post-generation. In both, copy the name's words exactly and in their own order (never reorder an English name around an "&"), never invent an acronym or initials badge, and never draw an emblem. A LOGO entry in ORIGINAL PICTURES is the real file: use it and skip this stand-in.`,
       // 2026-10-06: the user's own pictures never reach the redesign (source
       // asset extraction was removed 2026-05-25), so a photo placeholder is
       // marked data-photoslot and the studio offers "Upload yours" on it.
@@ -3432,7 +3433,8 @@ export const deckGenerate = inngest.createFunction(
           const checkCount = enhanceImages.fileIds.length || slides.length;
           const picturesBySlide = new Map<number, string[]>();
           for (const p of enhanceImages.pictures ?? []) {
-            if (p.cls === "page" || p.cls === "backdrop" || p.swap || p.rebuild) continue;
+            // A template logo is chrome: never a reason to repair a slide.
+            if (p.cls === "page" || p.cls === "backdrop" || p.swap || p.rebuild || p.slides) continue;
             if (exactRepair && p.cls !== "content") continue;
             (picturesBySlide.get(p.slideIndex) ?? picturesBySlide.set(p.slideIndex, []).get(p.slideIndex)!).push(p.assetId);
           }
@@ -3455,7 +3457,7 @@ export const deckGenerate = inngest.createFunction(
                 carriedSlideBlock(
                   b.slide,
                   projectId,
-                  (enhanceImages.pictures ?? []).filter((p) => p.slideIndex === i),
+                  (enhanceImages.pictures ?? []).filter((p) => pictureOnSlide(p, i)),
                   (enhanceImages.tables ?? []).filter((t) => t.slideIndex === i),
                 ),
               );
@@ -3539,7 +3541,7 @@ export const deckGenerate = inngest.createFunction(
           const html = slides.map((sl) => sl.html ?? "");
           const missing = missingSourceNumbers(enhanceImages.textPerSlide, html);
           const missingPictures = missingCarriedPictures(
-            (enhanceImages.pictures ?? []).filter((p) => p.cls !== "page" && p.cls !== "backdrop" && !p.swap && !p.rebuild).map((p) => p.assetId),
+            (enhanceImages.pictures ?? []).filter((p) => p.cls !== "page" && p.cls !== "backdrop" && !p.swap && !p.rebuild && !p.slides).map((p) => p.assetId),
             html,
           );
           logger.info("enhance_rework_essence", {

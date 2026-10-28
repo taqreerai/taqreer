@@ -652,3 +652,98 @@ export function fileHasContentImages(v: PptxVisuals): boolean {
   for (const c of classifyPptxPictures(v).values()) if (c === "content") return true;
   return false;
 }
+
+// ─── Brand marks on the template (owner, 2026-10-28) ───
+// A logo placed on a slide LAYOUT or the MASTER shows on every slide that uses
+// it, yet sits in no slide's own shape tree, so the slide walk above never saw
+// it and the redesign drew a stand-in (a "MEWA" text badge for a ministry's
+// emblem, prod cmvrptccn006zak6dflqd03ui). This lists the template's own
+// pictures with the slides they show on; lib/extract/brand-logos.ts picks the
+// logos among them.
+export type TemplatePicture = {
+  mediaPath: string;
+  box: Box; // on the first slide that shows it
+  format: PptxPicture["format"];
+  slides: number[]; // presentation order, 0-based
+};
+
+export async function extractTemplatePictures(buffer: Buffer): Promise<{ slideCount: number; slideSize: { cx: number; cy: number }; pictures: TemplatePicture[] }> {
+  const zip = await JSZip.loadAsync(buffer);
+  const presXml = await zip.files["ppt/presentation.xml"]?.async("string");
+  const sz = presXml?.match(/<p:sldSz\b[^>]*>/)?.[0] ?? "";
+  const slideSize = { cx: num(sz.match(/\bcx="(\d+)"/)?.[1], 12192000), cy: num(sz.match(/\bcy="(\d+)"/)?.[1], 6858000) };
+  const order = await resolveSlideOrder(zip);
+  // template part -> slides showing it
+  const uses = new Map<string, Set<number>>();
+  const addUse = (part: string | null, i: number) => {
+    if (part) (uses.get(part) ?? uses.set(part, new Set()).get(part)!).add(i);
+  };
+  for (let i = 0; i < order.length; i++) {
+    const slidePath = order[i];
+    const slideXml = (await zip.files[slidePath]?.async("string")) ?? "";
+    const slideRels = (await zip.files[relsPathOf(slidePath)]?.async("string")) ?? "";
+    const layoutPath = targetOfType(slideRels, slidePath.slice(0, slidePath.lastIndexOf("/")), "slideLayout");
+    if (!layoutPath) continue;
+    // showMasterSp="0" hides the layout's / master's shapes on that slide.
+    if (/<p:sld\b[^>]*\bshowMasterSp="0"/.test(slideXml)) continue;
+    addUse(layoutPath, i);
+    const layoutXml = (await zip.files[layoutPath]?.async("string")) ?? "";
+    if (/<p:sldLayout\b[^>]*\bshowMasterSp="0"/.test(layoutXml)) continue;
+    const layoutRels = (await zip.files[relsPathOf(layoutPath)]?.async("string")) ?? "";
+    addUse(targetOfType(layoutRels, layoutPath.slice(0, layoutPath.lastIndexOf("/")), "slideMaster"), i);
+  }
+
+  const byMedia = new Map<string, TemplatePicture>();
+  for (const [part, slides] of uses) {
+    const xml = await zip.files[part]?.async("string");
+    if (!xml) continue;
+    const rels = parseRels((await zip.files[relsPathOf(part)]?.async("string")) ?? "");
+    const dir = part.slice(0, part.lastIndexOf("/"));
+    const doc = new DOMParser().parseFromString(xml, "text/xml");
+    const spTree = deep(doc.documentElement as unknown as XmlElement, NS_P, "spTree");
+    if (!spTree) continue;
+    const visit = (el: XmlElement, map: Mapper) => {
+      for (const c of children(el)) {
+        if (c.namespaceURI !== NS_P) continue;
+        if (c.localName === "grpSp") {
+          const gxEl = child(child(c, NS_P, "grpSpPr"), NS_A, "xfrm");
+          const gx = readXfrm(gxEl);
+          const chOff = child(gxEl, NS_A, "chOff");
+          const chExt = child(gxEl, NS_A, "chExt");
+          let inner = map;
+          if (gx && chOff && chExt) {
+            const cox = num(chOff.getAttribute("x")), coy = num(chOff.getAttribute("y"));
+            const sx = num(chExt.getAttribute("cx")) ? gx.cx / num(chExt.getAttribute("cx")) : 1;
+            const sy = num(chExt.getAttribute("cy")) ? gx.cy / num(chExt.getAttribute("cy")) : 1;
+            inner = (x, y, cx, cy) => map(gx.x + (x - cox) * sx, gx.y + (y - coy) * sy, cx * sx, cy * sy);
+          }
+          visit(c, inner);
+          continue;
+        }
+        if (c.localName !== "pic") continue;
+        const nv = child(c, NS_P, "nvPicPr");
+        if (child(nv, NS_P, "cNvPr")?.getAttribute("hidden") === "1") continue;
+        const rid = child(child(c, NS_P, "blipFill"), NS_A, "blip")?.getAttributeNS(NS_R, "embed");
+        const x = readXfrm(child(child(c, NS_P, "spPr"), NS_A, "xfrm"));
+        const rel = rid ? rels.get(rid) : undefined;
+        if (!x || !rel || rel.external) continue;
+        const mediaPath = resolvePart(dir, rel.target);
+        if (!zip.files[mediaPath]) continue;
+        const m = map(x.x, x.y, x.cx, x.cy);
+        const box = { x: m.x / slideSize.cx, y: m.y / slideSize.cy, w: m.cx / slideSize.cx, h: m.cy / slideSize.cy };
+        const prev = byMedia.get(mediaPath);
+        if (prev) {
+          prev.slides = [...new Set([...prev.slides, ...slides])].sort((a, b) => a - b);
+          continue;
+        }
+        byMedia.set(mediaPath, { mediaPath, box, format: "unknown", slides: [...slides].sort((a, b) => a - b) });
+      }
+    };
+    visit(spTree, IDENTITY);
+  }
+  for (const p of byMedia.values()) {
+    const head = await zip.files[p.mediaPath].async("uint8array");
+    p.format = formatOf(p.mediaPath, head.subarray(0, 16));
+  }
+  return { slideCount: order.length, slideSize, pictures: [...byMedia.values()] };
+}
