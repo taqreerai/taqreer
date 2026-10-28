@@ -27,6 +27,7 @@ import {
 } from "@/lib/extract/photo-refresh";
 import { describeScreens, tagReplacePictures, type ReplaceRole } from "@/lib/extract/rework-pictures";
 import { brandLogoCandidates, findBrandLogos, type BrandLogo } from "@/lib/extract/brand-logos";
+import { findHdPictures, type HdCandidate } from "@/lib/extract/hd-pictures";
 import { createHash } from "crypto";
 import type { TableSpec } from "@/lib/deck/visuals/table";
 import type { ChartSpec } from "@/lib/deck/visuals/chart";
@@ -307,6 +308,36 @@ export async function prepareCarriedPictures(opts: {
     }
   }
 
+  // ─── Sharper copies of flags and famous places (lib/extract/hd-pictures.ts) ───
+  // Only carried, unswapped pictures shown wider than their own pixels.
+  const hd = new Map<string, { assetId: string; width: number; height: number }>(); // mediaKey ->
+  {
+    const seen = new Set<string>();
+    const cands: HdCandidate[] = [];
+    for (const a of storable) {
+      const key = mediaKeys.get(a.assetId);
+      if (!key || seen.has(key) || a.file.kind !== "image" || a.file.animated || replaced.has(a.assetId)) continue;
+      const role = roles.get(key);
+      if (role === "drop" || role === "support" || role === "logo" || role === "screen" || tags.get(key)?.swap) continue;
+      if (a.file.width >= Math.min(1, a.box.w) * 1920) continue;
+      seen.add(key);
+      cands.push({ mediaKey: key, bytes: a.file.bytes, aspect: a.file.width / a.file.height });
+    }
+    for (const [key, pic] of await findHdPictures(cands)) {
+      const assetId = `hd-${key.slice(0, 12)}`;
+      try {
+        await uploadSourceAsset({ projectId: opts.projectId, assetId, bytes: pic.bytes, contentType: pic.contentType });
+        hd.set(key, { assetId, width: pic.width, height: pic.height });
+      } catch (err) {
+        console.error("[carry] hd picture upload failed:", err);
+      }
+    }
+    for (const a of storable) {
+      const up = hd.get(mediaKeys.get(a.assetId) ?? "");
+      if (up && !replaced.has(a.assetId)) replaced.set(a.assetId, up.assetId);
+    }
+  }
+
   // At most one generated replacement per slide (owner, 2026-10-28): a collage
   // slide of 4 web pictures becomes one strong new picture, not 4 generations.
   // The largest supporting picture on each slide is the one replaced.
@@ -345,8 +376,15 @@ export async function prepareCarriedPictures(opts: {
       box: { x: round3(a.box.x), y: round3(a.box.y), w: round3(a.box.w), h: round3(a.box.h) },
       // The PICTURE's own proportions (after the slide's crop), not the shape's:
       // a stretched source shape would otherwise make object-fit: cover cut it.
-      aspect: Math.round((a.file.kind === "image" ? a.file.width / a.file.height : a.aspect) * 100) / 100,
-      ...(a.file.kind === "image" ? { native: { w: a.file.width, h: a.file.height } } : {}),
+      ...(() => {
+        // A sharper copy brings its own proportions and size.
+        const up = hd.get(mediaKeys.get(a.assetId) ?? "");
+        if (up) return { aspect: Math.round((up.width / up.height) * 100) / 100, native: { w: up.width, h: up.height } };
+        return {
+          aspect: Math.round((a.file.kind === "image" ? a.file.width / a.file.height : a.aspect) * 100) / 100,
+          ...(a.file.kind === "image" ? { native: { w: a.file.width, h: a.file.height } } : {}),
+        };
+      })(),
       altText: a.altText ? a.altText.slice(0, 200) : null,
   }));
 
