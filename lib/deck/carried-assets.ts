@@ -355,7 +355,22 @@ export function carriedSlideBlock(
           const cap = p.kind === "document" && p.native ? p.native.w : Infinity;
           const floorRaw = readable.get(p.assetId);
           const floor = floorRaw !== undefined ? Math.min(floorRaw, cap) : undefined;
-          const w = Math.min(cap, floor ?? Math.min(w0, Math.round(EXAMPLE_MAX_HEIGHT * p.aspect)));
+          // A photo that was the source slide's main visual (a section divider's
+          // full-height photo): the 560px example height made a tall one a
+          // 350px strip (prod 2026-10-28 cmvrptccn006zak6dflqd03ui). It keeps
+          // a main-visual size: a full-height side panel when tall.
+          const mainPhoto =
+            p.kind === "photo" && !p.swap && p.cls !== "small" && !!p.box &&
+            (p.box.w * p.box.h >= 0.25 || (p.box.h >= 0.8 && p.box.w >= 0.3));
+          const tallMain = mainPhoto && p.aspect < 1.2;
+          const w = tallMain
+            ? Math.max(Math.round(1920 * 0.36), Math.round(1080 * p.aspect))
+            : Math.min(cap, floor ?? Math.min(w0, Math.round(EXAMPLE_MAX_HEIGHT * p.aspect)));
+          const main = mainPhoto
+            ? tallMain
+              ? `  MAIN PHOTO: the slide's main visual; show it as a full-height side panel (top to bottom of the slide, at least ${w}px wide, object-fit:cover is fine), never a small strip or thumbnail`
+              : `  MAIN PHOTO: the slide's main visual; keep it large (at least 45% of the slide's width), never a thumbnail`
+            : "";
           const screen = Number.isFinite(cap)
             ? `  SCREENSHOT OR DOCUMENT: at most ${cap}px wide (its own size; larger only blurs it), framed per SCREENSHOTS`
             : "";
@@ -366,7 +381,7 @@ export function carriedSlideBlock(
           const where = p.box
             ? `${kind}; filled ${Math.round(Math.min(1, p.box.w) * 100)}% x ${Math.round(Math.min(1, p.box.h) * 100)}% of the source slide (importance hint, place it freely)`
             : kind;
-          return `<img data-asset="${p.assetId}" src="/api/assets/${projectId}/${p.assetId}" alt="${(p.altText ?? "").replace(/["<>&]/g, "")}">  aspect ${p.aspect} (e.g. ${w}x${Math.round(w / p.aspect)}px)${screen}${p.logo ? "  LOGO: the organisation's logo (see LOGOS)" : ""}${p.cls === "small" && !p.swap ? "  small: icon / logo / badge" : where}${words}${p.shows ? `  shows: "${p.shows.replace(/["<>&]/g, "")}"` : ""}${p.animated ? "  ANIMATED: a moving picture; show it whole as a picture (never a background, never cropped, never replaced by a generated image)" : ""}${p.swap ? "  SWAPPABLE: generic clip-art (free redesign: may be left out or replaced, see FREE REDESIGN); a replacement is a real illustration, never icon-sized" : ""}`;
+          return `<img data-asset="${p.assetId}" src="/api/assets/${projectId}/${p.assetId}" alt="${(p.altText ?? "").replace(/["<>&]/g, "")}">  aspect ${p.aspect} (e.g. ${tallMain ? `${w}x1080` : `${w}x${Math.round(w / p.aspect)}`}px)${screen}${main}${p.logo ? "  LOGO: the organisation's logo (see LOGOS)" : ""}${p.cls === "small" && !p.swap ? "  small: icon / logo / badge" : where}${words}${p.shows ? `  shows: "${p.shows.replace(/["<>&]/g, "")}"` : ""}${p.animated ? "  ANIMATED: a moving picture; show it whole as a picture (never a background, never cropped, never replaced by a generated image)" : ""}${p.swap ? "  SWAPPABLE: generic clip-art (free redesign: may be left out or replaced, see FREE REDESIGN); a replacement is a real illustration, never icon-sized" : ""}`;
         })
         .join("\n") +
       "\n\n";
