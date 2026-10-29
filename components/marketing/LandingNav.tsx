@@ -13,6 +13,7 @@ import { useLocale, useDict } from "@/components/i18n/LocaleProvider";
 import { useIsAuthed } from "@/hooks/useIsAuthed";
 import { localizedHref, stripLocale } from "@/lib/i18n/navigation";
 import { LanguageMenu } from "@/components/i18n/LanguageMenu";
+import { ThemeToggle } from "@/components/app/ThemeToggle";
 import { ThemeLogo } from "@/components/brand/ThemeLogo";
 import { FeaturesMenu, MobileFeaturesList } from "@/components/marketing/FeaturesMenu";
 
@@ -97,10 +98,11 @@ export function LandingNav() {
           </div>
 
           <div className="hidden items-center gap-2 md:flex">
-            {/* Language only - the theme toggle lives in the dashboard
-                chrome. Marketing follows the same theme: light by default,
-                dark when the visitor chose it in the app (2026-10-29). */}
+            {/* Theme + language. The theme is one choice for the whole site
+                (light by default, owner 2026-10-29), so the same toggle as
+                the dashboard chrome. */}
             <div className="flex items-center gap-1">
+              <ThemeToggle />
               <LanguageMenu />
             </div>
             {isAuthed ? (
@@ -165,6 +167,7 @@ export function LandingNav() {
             ))}
             {/* Centered controls + content-width (not full-width) CTAs. */}
             <div className="mt-2 mb-2 flex items-center justify-center gap-2">
+              <ThemeToggle />
               <LanguageMenu />
             </div>
             {isAuthed ? (
