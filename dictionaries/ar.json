@@ -1403,7 +1403,7 @@
         "brandKit": { "title": "الهوية البصرية", "desc": "ألوانك وخطوطك وشعارك في كل عرض" },
         "powerpointOnline": { "title": "بوربوينت اون لاين", "desc": "محرر كامل في المتصفح" },
         "collaboration": { "title": "التعاون", "desc": "شارك وعلق وعدل مع فريقك" },
-        "exportFormats": { "title": "التصدير", "desc": "PowerPoint وPDF وGoogle Slides" }
+        "exportFormats": { "title": "التصدير", "desc": "PowerPoint و PDF و Google Slides" }
       }
     }
   },
