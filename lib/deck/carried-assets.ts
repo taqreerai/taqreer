@@ -286,7 +286,14 @@ export function coverPhotoCandidates<T extends CarriedPictureRef>(pictures: read
   }
   const area = (p: T) => (p.box ? Math.min(1, p.box.w) * Math.min(1, p.box.h) : 0);
   return pictures
-    .filter((p) => p.slideIndex !== 0 && p.cls === "content" && p.kind === "photo" && p.aspect >= 1 && p.aspect <= 2.4)
+    .filter(
+      (p) =>
+        p.slideIndex !== 0 &&
+        (p.cls === "content" || p.cls === "backdrop") &&
+        p.kind === "photo" &&
+        p.aspect >= 1 &&
+        p.aspect <= 2.4,
+    )
     .sort((a, b) => area(b) - area(a));
 }
 

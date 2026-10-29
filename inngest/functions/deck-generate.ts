@@ -2519,7 +2519,15 @@ export const deckGenerate = inngest.createFunction(
         tables: carried?.tables ?? [],
         // A free redesign keeps the source order, so its cover is source
         // slide 1: never borrow a later slide's photo for it.
-        coverPhotoId: enhanceFlags(data.brief).textRework ? undefined : carried?.coverPhotoId,
+        // A free preview only borrows from the pages it builds (prod
+        // 2026-10-28 cmvspt4r200nkak6dw8rfbwmy: a portfolio cover opened on a
+        // lamp from locked page 38).
+        coverPhotoId: enhanceFlags(data.brief).textRework
+          ? undefined
+          : (carried?.coverPhotoIds ?? (carried?.coverPhotoId ? [carried.coverPhotoId] : [])).find((id) => {
+              const p = carried?.pictures.find((x) => x.assetId === id);
+              return !!p && (teaserVisible == null || p.slideIndex < teaserVisible);
+            }),
       };
       // The redesign plan (lib/enhance/plan.ts): written once from the
       // rendered slides, the text, the picture tags and the start answers,

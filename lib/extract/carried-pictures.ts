@@ -103,6 +103,9 @@ export type CarriedPictures = {
   refresh?: { tagged: number; replaced: number };
   // A photo from another slide for a cover that has none (Haiku-confirmed).
   coverPhotoId?: string;
+  // Every confirmed cover photo, best first: a free preview builds only the
+  // first pages and must not borrow a photo from a page it does not show.
+  coverPhotoIds?: string[];
   tables: CarriedTable[];
 };
 
@@ -417,6 +420,7 @@ export async function prepareCarriedPictures(opts: {
   // classifier calls a colourful floor plan a photo, so the largest few
   // candidates are confirmed by the Haiku tagger; drawings never qualify.
   let coverPhotoId: string | undefined;
+  let coverPhotoIds: string[] = [];
   const coverCands = coverPhotoCandidates(pictures)
     .filter((p) => !p.originalAssetId && !p.swap)
     .slice(0, COVER_CANDIDATES);
@@ -433,14 +437,15 @@ export async function prepareCarriedPictures(opts: {
       return t !== undefined && t !== "diagram";
     });
     usable.sort((x, y) => rank(coverTags.get(x.assetId)?.tag) - rank(coverTags.get(y.assetId)?.tag));
-    coverPhotoId = usable[0]?.assetId;
+    coverPhotoIds = usable.map((p) => p.assetId);
+    coverPhotoId = coverPhotoIds[0];
   }
 
   return {
     hasContentImages,
     ...(opts.refresh ? { refresh: { tagged: refreshTagged, replaced: replaced.size } } : {}),
     pictures,
-    ...(coverPhotoId ? { coverPhotoId } : {}),
+    ...(coverPhotoId ? { coverPhotoId, coverPhotoIds } : {}),
     skipped: assets.length - storable.length,
     enhancedPhotos: enhancedCount,
     tables,
