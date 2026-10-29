@@ -1092,7 +1092,7 @@
         {
           "heading": "عملك محفوظ دائما",
           "blocks": [
-            "يحفظ المحرر كل تعديل تلقائيا، ويمكنك حفظ نسخ من الشرائح والرجوع إلى أي نسخة سابقة من سجل النسخ. وعندما تنتهي، صدّر العرض إلى [PowerPoint وPDF وGoogle Slides](/export).",
+            "يحفظ المحرر كل تعديل تلقائيا، ويمكنك حفظ نسخ من الشرائح والرجوع إلى أي نسخة سابقة من سجل النسخ. وعندما تنتهي، صدّر العرض إلى [PowerPoint و PDF و Google Slides](/export).",
             "ملاحظة: التعديل الكامل متاح على الكمبيوتر، أما على الجوال فيمكنك معاينة العرض وطلب التعديلات من الذكاء الاصطناعي."
           ]
         }
@@ -1318,13 +1318,13 @@
   },
   "exportFormats": {
     "meta": {
-      "title": "صدّر عرضك إلى PowerPoint وPDF وGoogle Slides | taqreer.ai",
+      "title": "صدّر عرضك إلى PowerPoint و PDF و Google Slides | taqreer.ai",
       "description": "صدّر عرضك التقديمي إلى PowerPoint قابل للتعديل، أو PDF، أو صور PNG، أو HTML، أو Google Slides، مع عربية سليمة في كل صيغة."
     },
     "breadcrumb": "التصدير",
     "hero": {
       "eyebrow": "التصدير",
-      "title": "صدّر عرضك إلى PowerPoint وPDF وGoogle Slides",
+      "title": "صدّر عرضك إلى PowerPoint و PDF و Google Slides",
       "subtitle": "عرض واحد وخمس صيغ: ملف PowerPoint قابل للتعديل، وPDF للمشاركة، وصور PNG، وصفحة HTML، وGoogle Slides.",
       "cta": "جرّب مجانا"
     },
