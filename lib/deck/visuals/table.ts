@@ -22,26 +22,67 @@ const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
 // of long sentences at 21px in a 1600x720 box, a third of it filled and
 // unreadable on a projector (prod 2026-10-26, slide 8). Estimate: an average
 // glyph ~0.6em (wide Arabic brand fonts), each cell padded 0.45em / 0.8em as rendered below.
-function fittedFontSize(t: TableSpec, boxWidth: number, boxHeight: number): number {
-  const cols = Math.max(1, t.columns);
-  for (let fs = 34; fs > 16; fs -= 1) {
-    let total = 0;
-    for (const row of t.rows) {
-      let rowLines = 1;
-      for (const c of row) {
-        const cellWidth = (boxWidth * c.colSpan) / cols - 1.6 * fs;
-        const perLine = Math.max(1, Math.floor(cellWidth / (0.6 * fs)));
-        const lines = c.text
-          .split("\n")
-          .reduce((n, part) => n + Math.max(1, Math.ceil(part.trim().length / perLine)), 0);
-        // A rowspan cell's lines are shared by the rows it covers.
-        rowLines = Math.max(rowLines, Math.ceil(lines / Math.max(1, c.rowSpan)));
+// Each column's share of the width, as an auto-layout table gives it: by its
+// longest single-column cell (equal shares wrapped a long name column that
+// the browser actually widens, and the text came out far smaller than needed).
+function columnShares(t: TableSpec): number[] {
+  const longest = Array.from({ length: Math.max(1, t.columns) }, () => 4);
+  for (const row of t.rows) {
+    let col = 0;
+    for (const c of row) {
+      if (c.colSpan === 1 && longest[col] !== undefined) {
+        const len = Math.max(...c.text.split("\n").map((p) => p.trim().length));
+        longest[col] = Math.max(longest[col], Math.min(len, 60));
       }
-      total += rowLines * fs * 1.3 + 0.9 * fs;
+      col += c.colSpan;
     }
-    if (total <= boxHeight * 0.92) return fs;
   }
-  return 16;
+  const sum = longest.reduce((a, b) => a + b, 0);
+  return longest.map((n) => n / sum);
+}
+
+function tableHeight(t: TableSpec, boxWidth: number, fs: number, compact: boolean): number {
+  const shares = columnShares(t);
+  const padX = compact ? 1.0 : 1.6; // both sides, in em
+  const padY = compact ? 0.3 : 0.9;
+  let total = 0;
+  for (const row of t.rows) {
+    let rowLines = 1;
+    let col = 0;
+    for (const c of row) {
+      const share = shares.slice(col, col + c.colSpan).reduce((a, b) => a + b, 0);
+      col += c.colSpan;
+      const cellWidth = boxWidth * share - padX * fs;
+      const perLine = Math.max(1, Math.floor(cellWidth / (0.6 * fs)));
+      const lines = c.text
+        .split("\n")
+        .reduce((n, part) => n + Math.max(1, Math.ceil(part.trim().length / perLine)), 0);
+      // A rowspan cell's lines are shared by the rows it covers.
+      rowLines = Math.max(rowLines, Math.ceil(lines / Math.max(1, c.rowSpan)));
+    }
+    total += rowLines * fs * 1.3 + padY * fs;
+  }
+  return total;
+}
+
+// A table that does not fit at 16px with the usual padding fell off the
+// bottom of the slide: prod 2026-10-29 cmvt7fp5q00269o6dx95rjfhj lost permits
+// 31 and 32 of a 32-row list. Then the cells tighten and the text goes down
+// to MIN_FS (the source slide itself was set near 9px), so every row shows.
+const MIN_FS = 10;
+function fitTable(t: TableSpec, boxWidth: number, boxHeight: number): { fs: number; compact: boolean } {
+  const room = boxHeight * 0.92;
+  for (let fs = 34; fs >= 16; fs -= 1) {
+    if (tableHeight(t, boxWidth, fs, false) <= room) return { fs, compact: false };
+  }
+  for (let fs = 16; fs > MIN_FS; fs -= 1) {
+    if (tableHeight(t, boxWidth, fs, true) <= room) return { fs, compact: true };
+  }
+  return { fs: MIN_FS, compact: true };
+}
+
+function fittedFontSize(t: TableSpec, boxWidth: number, boxHeight: number): number {
+  return fitTable(t, boxWidth, boxHeight).fs;
 }
 
 // Font size from the box height and the amount of text (1920-wide canvas px).
@@ -139,10 +180,11 @@ export function renderTableHtml(t: TableSpec, opts: { boxHeight: number | null; 
     const parts = halves.map((h) => `<div style="flex:1 1 0;min-width:0">${tableMarkup(h, header, fs, "auto")}</div>`).join("");
     return `<div data-tq-split-table="1" style="display:flex;gap:${SPLIT_GAP}px;align-items:flex-start;width:100%;height:100%">${parts}</div>`;
   }
-  return tableMarkup(t, header, fontSizeFor(t, opts.boxHeight, boxWidth), "100%");
+  const fit = boxWidth && opts.boxHeight ? fitTable(t, boxWidth, opts.boxHeight) : null;
+  return tableMarkup(t, header, fit?.fs ?? fontSizeFor(t, opts.boxHeight, boxWidth), "100%", fit?.compact === true);
 }
 
-function tableMarkup(t: TableSpec, header: boolean, fs: number, height: string): string {
+function tableMarkup(t: TableSpec, header: boolean, fs: number, height: string, compact = false): string {
   const numericCol = numericColumns(t, header);
   const line = "color-mix(in srgb, currentColor 18%, transparent)";
   const zebra = "color-mix(in srgb, currentColor 5%, transparent)";
@@ -168,7 +210,7 @@ function tableMarkup(t: TableSpec, header: boolean, fs: number, height: string):
           // Header labels follow their column; body cells follow their own text.
           const alignEnd = isHead ? c.colSpan === 1 && numericCol[at] === true : numeric;
           const style = [
-            "padding:0.45em 0.8em",
+            compact ? "padding:0.15em 0.5em" : "padding:0.45em 0.8em",
             "vertical-align:middle",
             `text-align:${alignEnd ? "end" : "start"}`,
             numeric ? "font-variant-numeric:tabular-nums;white-space:nowrap" : "",
