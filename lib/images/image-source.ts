@@ -84,6 +84,7 @@ async function libraryCandidates(projectId: string, prompt: string, aspect: GenI
       AND gi."storageUrl" IS NOT NULL
       AND gi.size NOT LIKE 'pexels:%'
       AND gi.size NOT LIKE 'lib:%'
+      AND gi.size NOT LIKE 'flagcdn:%'
       AND gi.aspect = ${aspect}
       AND pr."projectId" <> ${projectId}
       AND NOT (gi.id = ANY(${skip}::text[]))
@@ -221,7 +222,8 @@ export async function fillImage(opts: {
       const q = query || fallbackQuery(opts.prompt);
       for (const attempt of [q, q.split(" ").slice(0, 2).join(" ")]) {
         if (!attempt) continue;
-        const photo = await findStockPhoto(attempt, opts.aspect);
+        // Checked against the box's own description (lib/images/pexels.ts).
+        const photo = await findStockPhoto(attempt, opts.aspect, opts.prompt);
         if (photo) return { b64: photo.b64, size: photo.size };
       }
     }

@@ -145,6 +145,7 @@ export async function getStockImagesPage(opts: {
       WHERE gi.status = 'ready'
         AND gi.size NOT LIKE 'pexels:%'
         AND gi.size NOT LIKE 'lib:%'
+        AND gi.size NOT LIKE 'flagcdn:%'
         AND gi."storageUrl" IS NOT NULL
         AND (${ratio}::text IS NULL OR gi.aspect = ${ratio})
         AND (${like}::text IS NULL OR gi.prompt ILIKE ${like})
@@ -176,6 +177,7 @@ export async function getStockImagesPage(opts: {
         WHERE gi.status = 'ready'
         AND gi.size NOT LIKE 'pexels:%'
         AND gi.size NOT LIKE 'lib:%'
+        AND gi.size NOT LIKE 'flagcdn:%'
           AND gi."storageUrl" IS NOT NULL
           AND (${ratio}::text IS NULL OR gi.aspect = ${ratio})
           AND (${like}::text IS NULL OR gi.prompt ILIKE ${like})
@@ -215,6 +217,7 @@ export async function getRelatedStockImages(id: string): Promise<StockImage[]> {
       WHERE gi.status = 'ready'
         AND gi.size NOT LIKE 'pexels:%'
         AND gi.size NOT LIKE 'lib:%'
+        AND gi.size NOT LIKE 'flagcdn:%'
         AND gi."storageUrl" IS NOT NULL
         -- Same saved-version deck as the requested image (subquery is itself
         -- saved-version scoped, so a random/superseded id resolves to nothing).
@@ -227,6 +230,7 @@ export async function getRelatedStockImages(id: string): Promise<StockImage[]> {
             AND gi2.status = 'ready'
             AND gi2.size NOT LIKE 'pexels:%'
             AND gi2.size NOT LIKE 'lib:%'
+            AND gi2.size NOT LIKE 'flagcdn:%'
             AND gi2."storageUrl" IS NOT NULL
           LIMIT 1
         )

@@ -239,7 +239,7 @@ export async function generateImageWithRetry(
   // no result it falls back to the image model, except for subjects the model
   // must never draw (a flag): those fail and the box keeps its placeholder.
   if (opts.stock) {
-    const photo = await findStockPhoto(opts.prompt, opts.aspect);
+    const photo = await findStockPhoto(opts.prompt, opts.aspect, opts.prompt);
     if (photo) {
       console.info("[images] stock photo", { query: opts.prompt.slice(0, 80), id: photo.size, photographer: photo.photographer });
       return { b64: photo.b64, size: photo.size };
