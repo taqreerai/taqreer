@@ -3144,6 +3144,11 @@ body:has(.tq-support-toolbar) .support-fab-anchor {
   background: var(--tq-surface);
   border: 1px solid var(--tq-border-hairline);
 }
+/* Light theme: dropdowns take the page's own paper colour (owner, 2026-10-29:
+   the lighter surface still read as a white card); the hairline separates. */
+:root.light .surface-menu {
+  background: var(--tq-bg);
+}
 
 .surface-modal {
   /* Floating modals/dialogs share the popover's dark fill (2026-06-08) so they

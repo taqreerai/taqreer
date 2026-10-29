@@ -121,7 +121,7 @@ function FeatureMenuItem({
       onMouseLeave={() => iconRef.current?.stopAnimation()}
       className="group flex items-start gap-3 rounded-lg px-3 py-2 text-start transition-colors hover:bg-overlay-soft"
     >
-      <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center text-muted transition-colors group-hover:text-[var(--tq-violet)]">
+      <span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center text-[var(--tq-purple)] transition-colors group-hover:text-[var(--tq-purple-hover)]">
         <AnimatedIcon ref={iconRef} name={feature.icon} size={22} strokeWidth={1.75} />
       </span>
       <span className="flex min-w-0 flex-col">
@@ -169,7 +169,9 @@ export function MobileFeaturesList({ onNavigate }: { onNavigate: () => void }) {
                   onClick={onNavigate}
                   className="icon-hover flex items-center gap-3 rounded-lg px-2 py-2 text-start text-sm"
                 >
-                  <AnimatedIcon name={f.icon} size={20} strokeWidth={1.75} />
+                  <span className="flex flex-shrink-0 text-[var(--tq-purple)]">
+                    <AnimatedIcon name={f.icon} size={20} strokeWidth={1.75} />
+                  </span>
                   {m.items[f.key].title}
                 </Link>
               ))}
