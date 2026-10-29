@@ -107,6 +107,7 @@ import {
   applyPageBackdrop,
 } from "@/lib/deck/carried-assets";
 import { prepareCarriedPictures, type CarriedPicture, type CarriedTable } from "@/lib/extract/carried-pictures";
+import { carryUploadPictures, uploadPicturesBlock } from "@/lib/create/upload-pictures";
 
 function getClient() {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -2560,6 +2561,23 @@ export const deckGenerate = inngest.createFunction(
       });
     }
 
+    // /create upload: the pictures its content depends on, placed by the
+    // model where that content lands (lib/create/upload-pictures.ts).
+    let uploadPictures: CarriedPicture[] = [];
+    const uploadFileId = sourceKind === "scratch" ? (readSource(data) as { anthropicFileId?: string } | null)?.anthropicFileId : undefined;
+    if (uploadFileId) {
+      uploadPictures = await step.run("carry-upload-pictures", async () => {
+        try {
+          const pictures = await carryUploadPictures(projectId, uploadFileId);
+          logger.info("create_upload_pictures", { projectId, pictures: pictures.length, logos: pictures.filter((p) => p.logo).length });
+          return pictures;
+        } catch (err) {
+          logger.warn("create_upload_pictures_failed", { projectId, error: err instanceof Error ? err.message : String(err) });
+          return [];
+        }
+      });
+    }
+
     const validated = await step.run("call-claude-and-validate", async () => {
       const client = getClient();
       // Build the user-text portion. When the brief carries a
@@ -2567,9 +2585,8 @@ export const deckGenerate = inngest.createFunction(
       // data), the directive describing what the prepended document
       // means lives at the TOP of the user text.
       const sourceDirective = buildSourceTextDirective(data, enhanceImages);
-      const baseUserMessage = sourceDirective
-        ? `${sourceDirective}\n${buildUserMessage(data)}`
-        : buildUserMessage(data);
+      const uploadPicturesText = uploadPicturesBlock(projectId, uploadPictures);
+      const baseUserMessage = [sourceDirective, uploadPicturesText, buildUserMessage(data)].filter(Boolean).join("\n");
       // Prepended document blocks (Enhance + Mimic + /create-upload). Empty for
       // plain scratch-text / data — content stays a plain string.
       const sourceDocumentBlocks = buildSourceContentBlocks(data, enhanceImages);
@@ -2878,8 +2895,10 @@ export const deckGenerate = inngest.createFunction(
         // one (local test 2026-10-22), so it is removed here like an unknown asset.
         const pictureFlags = enhanceFlags(data.brief);
         const dropSwappable = (pictureFlags.swapPictures || pictureFlags.replaceAll) && isImagesMode(data);
+        // An Enhance deck's pictures, or a /create upload's (uploadPictures).
+        const carriedPictures = enhanceImages?.pictures ?? uploadPictures;
         const carriedAssetIds = new Map(
-          (enhanceImages?.pictures ?? [])
+          carriedPictures
             .filter((p) => p.cls !== "page" && p.cls !== "backdrop" && !(dropSwappable && p.swap) && !p.rebuild)
             .map((p) => [p.assetId, p.aspect] as const),
         );
@@ -2888,9 +2907,9 @@ export const deckGenerate = inngest.createFunction(
           (enhanceImages?.pictures ?? []).flatMap((p) => (p.originalAssetId ? [[p.assetId, p.originalAssetId] as const] : [])),
         );
         // Pictures with words: never cropped, stamped data-asset-text.
-        const carriedTextIds = textPictureIds(enhanceImages?.pictures ?? []);
+        const carriedTextIds = textPictureIds(carriedPictures);
         // Screenshots / documents: never stretched past their own size.
-        const carriedCaps = nativeSizeCaps(enhanceImages?.pictures ?? []);
+        const carriedCaps = nativeSizeCaps(carriedPictures);
         // Single full-slide photos: the slide's photo background (data-bg-asset).
         const carriedBackdropIds = new Set(
           (enhanceImages?.pictures ?? []).filter((p) => p.cls === "backdrop").map((p) => p.assetId),

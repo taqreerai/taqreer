@@ -123,6 +123,10 @@ export async function tagReplacePictures(
         `- support: a generic picture that only illustrates or decorates the point: a stock or mood photo, clip-art, a cartoon, a mascot, an emoji, a sticker or a generic scene, with no written words on it\n` +
         `- drop: anything else: a picture whose only content is a few written words in any language (a word in a shape, a title, a saying), an arrow, shape, frame, border or ornament, or word art\n` +
         `When unsure between data and another role, answer data.\n` +
+        // Prod 2026-10-29 cmvsvkk6i0008fw6d3zumkgla: a "name the tools" game's
+        // cartoon car and calculator were called support (and dropped) while
+        // the slide listed both by name.
+        `A picture of something the slide's own words name or list (one item of an exercise, a game or a vocabulary list: a car, a calculator, a key) is data, even when it is clip-art or a cartoon.\n` +
         `Also say what it shows in at most 6 plain English words.\n` +
         `Reply with one line per image, exactly: <number>|<logo, screen, data, support or drop>|<what it shows>`,
     });
