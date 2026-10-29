@@ -528,8 +528,23 @@ export function applyPageBackdrop(
   // Full-slide PHOTO backdrops (cls "backdrop"): same marker, but the slide
   // keeps its own text and the model's scrim choice.
   photoIds?: ReadonlySet<string>,
+  // Safety net when the model left a full-slide PHOTO off (prod 2026-10-28
+  // cmvspt4r200nkak6dw8rfbwmy wrote a colour ground and the photo vanished):
+  // the backdrop photo of THIS slide position, used only when the slide shows
+  // no picture of its own.
+  fallbackPhotoId?: string | null,
 ): void {
-  const photo = decl.bgAsset;
+  let photo = decl.bgAsset;
+  if (
+    !(photo && (photoIds?.has(photo) || pageIds.has(photo))) &&
+    fallbackPhotoId &&
+    photoIds?.has(fallbackPhotoId) &&
+    !/<img\b/i.test(decl.wellHtml) &&
+    !decl.wellHtml.includes(fallbackPhotoId)
+  ) {
+    photo = fallbackPhotoId;
+    decl.bgAsset = photo;
+  }
   if (photo && photoIds?.has(photo)) {
     decl.bgAssetSrc = `/api/assets/${projectId}/${photo}`;
     decl.bg = "image";

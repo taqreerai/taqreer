@@ -2898,6 +2898,13 @@ export const deckGenerate = inngest.createFunction(
         const pageAssetAt = new Map(
           (enhanceImages?.pictures ?? []).filter((p) => p.cls === "page").map((p) => [p.slideIndex, p.assetId] as const),
         );
+        // Source position -> its full-slide photo (fallback when the model
+        // drops it). A tidy-wording redesign may reorder slides: no fallback.
+        const backdropAt = new Map(
+          enhanceFlags(data.brief).textRework
+            ? []
+            : (enhanceImages?.pictures ?? []).filter((p) => p.cls === "backdrop").map((p) => [p.slideIndex, p.assetId] as const),
+        );
         const carriedTables = new Map(
           (enhanceImages?.tables ?? []).map((t) => [t.tableId, t.spec] as const),
         );
@@ -2937,7 +2944,7 @@ export const deckGenerate = inngest.createFunction(
             if (revises !== null && revises < slides.length) {
               const target = slides[revises];
               const decl = dropNeverGeneratedBg(parseFrameSlide(parsed.html));
-              applyPageBackdrop(decl, projectId, carriedPageIds, pageAssetAt.get(revises), carriedBackdropIds);
+              applyPageBackdrop(decl, projectId, carriedPageIds, pageAssetAt.get(revises), carriedBackdropIds, backdropAt.get(revises));
               if (decl.deckTitle) frameCtx.deckTitle = decl.deckTitle;
               if (productImageUrl && decl.bgSource === "product") {
                 decl.bgRef = productImageUrl;
@@ -3063,7 +3070,7 @@ export const deckGenerate = inngest.createFunction(
           // slides.length is the 0-based index of THIS slide (pre-push);
           // the restart guard resets it.
           const decl = dropNeverGeneratedBg(parseFrameSlide(parsed.html));
-          applyPageBackdrop(decl, projectId, carriedPageIds, pageAssetAt.get(slides.length), carriedBackdropIds);
+          applyPageBackdrop(decl, projectId, carriedPageIds, pageAssetAt.get(slides.length), carriedBackdropIds, backdropAt.get(slides.length));
           if (decl.deckTitle) frameCtx.deckTitle = decl.deckTitle;
           // AUTO nav total: the cover declares the model's intended count
           // (data-deck-slides, read off the opening tag by parseFrameSlide).

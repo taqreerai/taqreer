@@ -346,6 +346,10 @@ export const deckUnlock = inngest.createFunction(
     const pageAssetAt = new Map(
       carried.pictures.filter((x) => x.cls === "page").map((x) => [x.slideIndex, x.assetId] as const),
     );
+    // Source position -> its full-slide photo (fallback when the model drops it).
+    const backdropAt = new Map(
+      carried.pictures.filter((x) => x.cls === "backdrop").map((x) => [x.slideIndex, x.assetId] as const),
+    );
     const carriedTables = new Map(carried.tables.map((x) => [x.tableId, x.spec] as const));
     if (carriedBlock) {
       logger.info("deck_unlock_carried", {
@@ -461,7 +465,7 @@ export const deckUnlock = inngest.createFunction(
           carriedTables,
         ),
       );
-      applyPageBackdrop(decl, projectId, carriedPageIds, pageAssetAt.get(slideIndex), carriedBackdropIds);
+      applyPageBackdrop(decl, projectId, carriedPageIds, pageAssetAt.get(slideIndex), carriedBackdropIds, backdropAt.get(slideIndex));
       const assembled = assembleFramedSlide(decl, frameCtx, slideIndex, dims);
       const html = buildSlideHtml(
         assembled,
