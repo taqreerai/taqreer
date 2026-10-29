@@ -52,6 +52,9 @@ export type RedesignPlanInput = {
   textRework: boolean;
   swapPictures: boolean;
   imagesOn: boolean;
+  // Images on and the file has no photos of its own: the cover and section
+  // dividers get new photos (deck-generate ENHANCE_ADD_PHOTOS_ADDENDUM).
+  addPhotos?: boolean;
   // The user's own words from the Enhance page ("Something else..." lands here).
   instructions?: string | null;
 };
@@ -90,7 +93,9 @@ function answerNotes(input: RedesignPlanInput): string {
     : "Keep every word exactly as written. No wording fixes, no translation. A repeated lesson-info strip stays on each slide that has it, cleaned up.";
   const pictures = input.swapPictures && input.imagesOn
     ? "Keep the key pictures; decorative clip-art may be redrawn as generated images in one consistent style."
-    : "Keep the user's pictures; drop decorative template extras (frames, ribbons, repeated badges).";
+    : input.addPhotos
+      ? "Keep the user's pictures; drop decorative template extras (frames, ribbons, repeated badges). The file has no photos of its own and the user turned new images on: plan ONE new photo about the deck's subject on the cover and on each section divider slide (a photo panel beside the title, or a photo background with a scrim). Table, chart and data slides stay photo-free. Do not ask for the cover to look the same as the original."
+      : "Keep the user's pictures; drop decorative template extras (frames, ribbons, repeated badges).";
   const display = a?.display === "screen" ? "read on the reader's own screen" : "projected in a room";
   const who = a?.audience ? `${a.audience.replace(/["<>]/g, "")}, ${display}` : display;
   return [`Wording: ${wording}`, `Pictures: ${pictures}`, `Audience and display: ${who}.`].join("\n");

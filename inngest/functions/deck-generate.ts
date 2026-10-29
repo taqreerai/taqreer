@@ -231,6 +231,12 @@ const ENHANCE_IMG_ADDENDUM = `ENHANCE IMAGES: images mode is ON for this redesig
   • Photos never displace content: every fact from the slide's exact-text block still appears. Keep one consistent medium and mood across the deck.
   • SUBJECT / SCENE / MOOD only in every prompt: never request text, letters, numbers, logos, signage, charts, or UI inside the image (stripped server-side); keep it trademark-safe (no real brand / person / team / character names).`;
 
+// The source has no photos of its own and the user turned images on to get
+// some: a free government report came back with none, its cover and section
+// divider left as empty gradients (prod 2026-10-29 cmvt7fp5q00269o6dx95rjfhj,
+// the plan had asked for the cover to look "essentially the same").
+const ENHANCE_ADD_PHOTOS_ADDENDUM = `ENHANCE IMAGES, NO PHOTOS IN THE SOURCE: the uploaded deck has no photos of its own and the user turned images on to get some. This overrides "add one only when the slide's content clearly benefits" and any plan line asking for the cover to look the same: the cover and every section divider slide MUST each get ONE photo about the deck's subject (a photo panel beside the title, or a photo background with a scrim), in the deck's palette and mood. Table, chart, data, agenda and text-dense slides stay photo-free. Every word, table and picture the plan protects stays as planned.`;
+
 // Enhance flow's HTML system addendum. Enhance REDESIGNS an existing deck rather
 // than inventing one, so it must neutralise the create prompt's "ORIGINAL / fresh"
 // framing AND its "VARY the composition slide to slide" rule (enhance wants the
@@ -238,6 +244,13 @@ const ENHANCE_IMG_ADDENDUM = `ENHANCE IMAGES: images mode is ON for this redesig
 // brief lives in the user message (buildSourceTextDirective enhance branch); this
 // just redirects the base prompt toward it. Appended AFTER so it wins.
 const ENHANCE_TEMPLATE_ADDENDUM = `ENHANCE + TEMPLATE — the user picked a deck TEMPLATE for this redesign. Override "improve only layout, hierarchy, typography, spacing, and rhythm" and any instruction to invent your own visual system: REPRODUCE the attached DESIGN reference's visual language (layout system, type hierarchy, spacing, shapes, grids, decorative motifs) on every slide, recoloured to the injected brand variables. Everything else in ENHANCE MODE still holds: exactly one redesigned slide per source slide, same order, each slide's content from its own exact-text block, never the template's words.`;
+
+/** Images on, keep-pictures mode, and the source has no photo of its own (logos and icons aside). */
+function enhanceAddsPhotos(brief: unknown, enhanceImages: EnhanceImages | null): boolean {
+  const flags = enhanceFlags(brief);
+  if (flags.swapPictures || flags.replaceAll) return false;
+  return !(enhanceImages?.pictures ?? []).some((p) => p.kind === "photo" && p.cls !== "small");
+}
 
 // A background-image prompt the image model must not draw (a flag, an emblem):
 // the slide keeps its colour background instead (lib/images/never-generate.ts).
@@ -2546,6 +2559,7 @@ export const deckGenerate = inngest.createFunction(
           textRework: flags.textRework,
           swapPictures: flags.swapPictures || flags.replaceAll,
           imagesOn: isImagesMode(data),
+          addPhotos: isImagesMode(data) && enhanceAddsPhotos(data.brief, prepared),
           instructions: (data.enhance as { instructions?: unknown } | null | undefined)?.instructions as string | undefined,
         });
         if (plan && jobId) {
@@ -2747,6 +2761,9 @@ export const deckGenerate = inngest.createFunction(
           data.type === "enhance" ? ENHANCE_HTML_ADDENDUM : null,
           isImagesMode(data) && htmlSourceKind === "enhance"
             ? ENHANCE_IMG_ADDENDUM
+            : null,
+          isImagesMode(data) && htmlSourceKind === "enhance" && enhanceAddsPhotos(data.brief, enhanceImages)
+            ? ENHANCE_ADD_PHOTOS_ADDENDUM
             : null,
           enhanceTemplate ? ENHANCE_TEMPLATE_ADDENDUM : null,
         ]
