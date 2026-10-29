@@ -8,6 +8,7 @@
 // sync. Theme is a CHROME concern only; the slide canvas is manifest-driven.
 
 import { THEME_COOKIE, setUiCookie } from "@/lib/ui-cookies";
+import { stripLocale } from "@/lib/i18n/navigation";
 
 const listeners = new Set<() => void>();
 
@@ -32,5 +33,22 @@ export function getThemeIsLightServer() {
 export function setThemeLight(light: boolean) {
   document.documentElement.classList.toggle("light", light);
   setUiCookie(THEME_COOKIE, light ? "light" : "dark");
+  listeners.forEach((l) => l());
+}
+
+/**
+ * Re-apply the stored theme to <html>, by the same rule as the layout's
+ * pre-paint CHROME_INIT: light unless the cookie says "dark", and the admin
+ * panel stays dark. Needed after a LANGUAGE switch: the locale is part of the
+ * root layout, so React re-renders <html> with only its own className and the
+ * `light` class was dropped (prod 2026-10-29: the landing went dark on every
+ * switch). ThemeClassKeeper calls this after each navigation.
+ */
+export function applyStoredTheme(pathname: string) {
+  const segment = stripLocale(pathname).split("/").filter(Boolean)[0];
+  const dark = new RegExp(`(?:^|;\\s*)${THEME_COOKIE}=dark(?:;|$)`).test(document.cookie);
+  const light = segment !== "admin" && !dark;
+  if (document.documentElement.classList.contains("light") === light) return;
+  document.documentElement.classList.toggle("light", light);
   listeners.forEach((l) => l());
 }

@@ -3,6 +3,7 @@ import { Cairo, Poppins } from "next/font/google";
 import "../globals.css";
 import { notFound } from "next/navigation";
 import { ScrollReset } from "@/components/app/ScrollReset";
+import { ThemeClassKeeper } from "@/components/app/ThemeClassKeeper";
 import { isLocale, dirForLocale } from "@/lib/i18n/config";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { LocaleProvider } from "@/components/i18n/LocaleProvider";
@@ -192,6 +193,7 @@ export default async function RootLayout({
           ]}
         />
         <ScrollReset />
+        <ThemeClassKeeper />
         <LocaleProvider locale={lang} dict={dict}>
           {children}
           <PostHogProvider />
