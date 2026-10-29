@@ -464,9 +464,12 @@ export function fullSlidePhotos(assets: readonly PdfAsset[], kinds?: ReadonlyMap
     const vw = Math.max(0, Math.min(1, a.box.x + a.box.w) - Math.max(0, a.box.x));
     const vh = Math.max(0, Math.min(1, a.box.y + a.box.h) - Math.max(0, a.box.y));
     const area = vw * vh;
-    // Covers the slide, or spans its full height / width and most of the other
-    // side (a poster-style cover whose art bleeds off one edge).
-    const hero = area >= 0.85 || (area >= 0.6 && (vh >= 0.95 || vw >= 0.95));
+    // Covers (nearly) the whole slide. A photo that bleeds off one edge but
+    // leaves room for the text beside it is the slide's main picture, not its
+    // background (prod 2026-10-28 cmvspt4r200nkak6dw8rfbwmy: a full-height
+    // photo 70% wide became a backdrop, the model wrote a colour ground and
+    // the photo vanished).
+    const hero = vw >= 0.9 && vh >= 0.9;
     if (hero && area > (best.get(a.slideIndex)?.area ?? 0)) best.set(a.slideIndex, { id: a.assetId, area });
   }
   return new Set([...best.values()].map((b) => b.id));
