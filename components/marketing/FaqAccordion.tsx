@@ -25,8 +25,10 @@ export function FaqAccordion({
 
   return (
     // shadcn-style: no card pills — each row is just a question + a hairline
-    // divider under it, with the answer expanding below.
-    <div className="w-full" dir={dir}>
+    // divider under it, with the answer expanding below. tq-frost: a frosted
+    // paper panel in the light theme so the rows stay readable over the
+    // rising blue glow (globals.css).
+    <div className="tq-frost w-full" dir={dir}>
         {faq.map((item, i) => {
           const isOpen = open === i;
           return (

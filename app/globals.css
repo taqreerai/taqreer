@@ -1962,8 +1962,38 @@ html.app-shell-scroll body {
     transparent 80%
   );
 }
+/* Light theme: the glow is a mood at the bottom edge, not a backdrop for
+   text (owner, 2026-10-29: FAQ answers were hard to read on it). Softer, and
+   it fades out lower than in dark. */
 :root.light .tq-stitch-wave-canvas {
-  opacity: 0.45;
+  opacity: 0.36;
+  -webkit-mask-image: linear-gradient(
+    to top,
+    #000 0%,
+    #000 14%,
+    rgba(0, 0, 0, 0.4) 30%,
+    rgba(0, 0, 0, 0.12) 44%,
+    transparent 58%
+  );
+  mask-image: linear-gradient(
+    to top,
+    #000 0%,
+    #000 14%,
+    rgba(0, 0, 0, 0.4) 30%,
+    rgba(0, 0, 0, 0.12) 44%,
+    transparent 58%
+  );
+}
+
+/* Frosted paper panel for text that scrolls over the glow (FAQ lists).
+   Light theme only: white text on the dark theme's glow reads fine. */
+:root.light .tq-frost {
+  background: color-mix(in srgb, var(--tq-bg) 82%, transparent);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--tq-border-hairline);
+  border-radius: 20px;
+  padding: 4px 24px;
 }
 
 /* Dot-field texture — the tiled dot grid the dashboard panel / hero demo
