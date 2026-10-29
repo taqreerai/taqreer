@@ -10,6 +10,9 @@
 // region-limited free accounts (lib/credits/region-model, the Haiku-only
 // countries, to cap spend there); everyone else has them, free accounts included.
 // Admins are always exempt. Existing decks keep the images they already have.
+// 2026-10-29 (owner decision): unlocked for the region-limited free accounts
+// too. Their images come from Pexels only (no library, no AI), so they cost
+// nothing (lib/images/image-source.ts fillImage, tier "region").
 
 import { type KnownPlan, isPaidPlan } from "@/lib/plan";
 
@@ -17,16 +20,15 @@ import { type KnownPlan, isPaidPlan } from "@/lib/plan";
 export const IMAGES_GATE_TIER: KnownPlan = "plus";
 
 /**
- * Whether generated images are locked for this user: only a region-limited FREE
- * account (the server derives it from the stored signup country; the client reads
- * `regionPreset` from /api/credits). Unknown (credits not loaded yet) is not
- * locked: the server gate is authoritative and the toggle defaults off.
+ * Whether generated images are locked for this user. Nobody is locked since
+ * 2026-10-29; the gate stays wired (toggle, create back door, server
+ * preflight) so a future limit is a one-line change here.
  */
-export function isImagesLocked(user: {
+export function isImagesLocked(_user: {
   regionLimited: boolean;
   isAdmin: boolean;
 }): boolean {
-  return !user.isAdmin && user.regionLimited;
+  return false;
 }
 
 /**

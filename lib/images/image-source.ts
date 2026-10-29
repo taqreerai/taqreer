@@ -11,6 +11,9 @@
 //               4. nothing: the box fails and keeps its placeholder
 //   paid plan   a library image only on a near-exact match, else gpt-image at
 //               medium quality as before (stock boxes still try Pexels first)
+//   region      a free account from a region-limited country (lib/credits/
+//               region-model): Pexels ONLY, no library, no AI (owner,
+//               2026-10-29: images unlocked for them at no image cost)
 // A deck that was bought outright counts as paid. The library is the same
 // pool the public /free-stock-images gallery shows (saved deck versions),
 // never Pexels copies, never a deck made around a user's own product photo,
@@ -21,6 +24,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import sharp from "sharp";
 import { prisma } from "@/lib/prisma";
 import { isPaidPlan } from "@/lib/plan";
+import { isRegionLimitedFree } from "@/lib/credits/region-model";
 import { generateImageWithRetry, type GeneratedImageResult } from "@/lib/images/gpt-image";
 import { findStockPhoto, stockPhotosEnabled } from "@/lib/images/pexels";
 import { mustNotGenerate } from "@/lib/images/never-generate";
@@ -38,7 +42,7 @@ const STOP = new Set([
   "like", "same", "not", "the", "and", "for", "soft", "light", "lighting", "scene", "showing", "text", "words",
 ]);
 
-export type ImageTier = "free" | "paid";
+export type ImageTier = "free" | "paid" | "region";
 
 const tierCache = new Map<string, { tier: ImageTier; at: number }>();
 export async function projectImageTier(projectId: string): Promise<ImageTier> {
@@ -46,9 +50,14 @@ export async function projectImageTier(projectId: string): Promise<ImageTier> {
   if (hit && Date.now() - hit.at < 60_000) return hit.tier;
   const p = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { purchasedAt: true, user: { select: { plan: true, role: true } } },
+    select: { purchasedAt: true, user: { select: { plan: true, role: true, signupCountry: true } } },
   });
-  const tier: ImageTier = !p || isPaidPlan(p.user.plan) || p.user.role === "admin" || p.purchasedAt ? "paid" : "free";
+  const tier: ImageTier =
+    !p || isPaidPlan(p.user.plan) || p.user.role === "admin" || p.purchasedAt
+      ? "paid"
+      : isRegionLimitedFree(p.user)
+        ? "region"
+        : "free";
   tierCache.set(projectId, { tier, at: Date.now() });
   return tier;
 }
@@ -211,6 +220,18 @@ export async function fillImage(opts: {
       if (image) return image;
     }
     return generateImageWithRetry({ prompt: opts.prompt, aspect: opts.aspect, referenceUrl: ref, stock });
+  }
+
+  if (tier === "region") {
+    // Pexels only. A stock box carries its own query; any other box gets a
+    // short query from Haiku (choose with no library candidates).
+    const q = stock ? opts.prompt : (await choose(opts.prompt, [], false)).query || fallbackQuery(opts.prompt);
+    for (const attempt of [q, q.split(" ").slice(0, 2).join(" ")]) {
+      if (!attempt || !stockPhotosEnabled()) continue;
+      const photo = await findStockPhoto(attempt, opts.aspect, opts.prompt);
+      if (photo) return { b64: photo.b64, size: photo.size };
+    }
+    throw new Error("region free plan: no fitting stock photo for this box");
   }
 
   // Free plan.

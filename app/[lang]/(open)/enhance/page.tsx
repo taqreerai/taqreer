@@ -419,9 +419,9 @@ export default function EnhanceContentPage() {
   // opens them once the file is read; Start in the dialog runs the deck. They
   // replace the old "How much to change" and "Refresh my photos" controls.
   const [questionsOpen, setQuestionsOpen] = useState(false);
-  // Region-limited free accounts can't use generated images (lib/images/images-
-  // gating.ts): the default-ON state must not reach the server for them, or the
-  // run would be refused with images_locked. Everyone else keeps the toggle.
+  // The images gate (lib/images/images-gating.ts) locks nobody since
+  // 2026-10-29 (region-limited free accounts get Pexels-only images); kept
+  // wired so a future limit cannot send a default-ON state the server refuses.
   const enhanceCredits = useCreditBalance();
   const imagesLocked = isImagesLocked({
     regionLimited: !!enhanceCredits?.regionPreset,

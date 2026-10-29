@@ -38,7 +38,7 @@ export function AIImagesPanel({
 }) {
   const dict = useDict();
   const credits = useCreditBalance();
-  // Locked only for region-limited free accounts (lib/images/images-gating.ts).
+  // Nobody is locked since 2026-10-29 (lib/images/images-gating.ts).
   const locked = isImagesLocked({
     regionLimited: !!credits?.regionPreset,
     isAdmin: credits?.isAdmin ?? false,
