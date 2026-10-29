@@ -46,13 +46,19 @@ export function promptMedium(prompt: string, stock = false): ImageMedium | null 
   return illus > photo ? "illustration" : "photo";
 }
 
-/** The deck's medium: the majority of the boxes that name one; null on a tie or none. */
+// A stock box (a real photo of a flag or a landmark) never decides the deck's
+// medium: prod 2026-10-29 cmvsvkk6i0008fw6d3zumkgla opened on a flag, so a
+// chalkboard deck's "chalk-like" book was rewritten as a realistic photo.
+// Only the generated boxes vote; the stock ones follow the result.
+
+/** The deck's medium: the majority of the generated boxes that name one; null on a tie or none. */
 export function deckMedium(htmls: readonly string[]): ImageMedium | null {
   let illus = 0;
   let photo = 0;
   for (const html of htmls) {
     for (const b of boxes(html)) {
-      const m = promptMedium(b.prompt, b.stock);
+      if (b.stock) continue;
+      const m = promptMedium(b.prompt);
       if (m === "illustration") illus++;
       else if (m === "photo") photo++;
     }
@@ -63,7 +69,7 @@ export function deckMedium(htmls: readonly string[]): ImageMedium | null {
 
 /**
  * The deck's medium as decided WHILE it streams (owner, 2026-10-28): the
- * medium of the first box, in slide order, that names one, and that slide's
+ * medium of the first generated box, in slide order, that names one, and that slide's
  * index. Images are generated as each slide closes; a majority known only at
  * the end rewrote prompts after their images were paid for, and the changed
  * prompt was generated again (1 to 3 wasted images per deck). Slides from
@@ -73,7 +79,8 @@ export function deckMedium(htmls: readonly string[]): ImageMedium | null {
 export function firstMedium(htmls: readonly string[]): { medium: ImageMedium; index: number } | null {
   for (let i = 0; i < htmls.length; i++) {
     for (const b of boxes(htmls[i])) {
-      const m = promptMedium(b.prompt, b.stock);
+      if (b.stock) continue;
+      const m = promptMedium(b.prompt);
       if (m) return { medium: m, index: i };
     }
   }
