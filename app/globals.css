@@ -393,8 +393,11 @@
 }
 
 /* ─── Light theme ───────────────────────────────────────────────────────────
-   Toggled by `html.light` (set from the `tq_theme` cookie; SSR-applied so there
-   is no flash). Flips ONLY the neutral scale to shadcn/ui light defaults; the
+   The DEFAULT in the app shell (owner, 2026-10-29): `html.light` is set unless
+   the `tq_theme` cookie says "dark" (CHROME_INIT in app/[lang]/layout.tsx, no
+   flash). "Paper" palette: a warm off-white instead of pure white, which was
+   too harsh on the eyes; warm neutrals step down from page to panel, cards sit
+   a touch lighter, text is a soft near-black. Only the neutral scale flips; the
    brand accents (--tq-purple, the AI mesh, --tq-gradient-*) and the aurora glow
    colours are inherited from :root unchanged (user direction). */
 :root.light {
@@ -402,21 +405,22 @@
   /* Light mode flips the gutter/panel relationship (user direction): the main
      dashboard gutter is WHITE and the rounded content panel is the soft gray,
      so the two swap sides vs dark mode. */
-  --tq-bg:              oklch(1 0 0);
-  --tq-bg-rgb:          255, 255, 255;
-  --tq-panel:           oklch(0.95 0 0);
-  --tq-card:            oklch(0.97 0 0);
-  --tq-surface:         oklch(1 0 0);
-  --tq-text-primary:    oklch(0.145 0 0);
-  --tq-text-muted:      oklch(0.556 0 0);
-  --tq-border-hairline: oklch(0.922 0 0);
-  --tq-border-focus:    oklch(0.708 0 0);
-  --tq-overlay-soft:    rgba(0, 0, 0, 0.04);
-  --tq-overlay:         rgba(0, 0, 0, 0.06);
-  --tq-overlay-strong:  rgba(0, 0, 0, 0.10);
-  --tq-dot:             rgba(0, 0, 0, 0.14);
-  --tq-studio-dot:      rgba(0, 0, 0, 0.07);
-  --tq-bg-strong:       rgba(0, 0, 0, 0.04);
+  --tq-bg:              #F7F5F0;
+  --tq-bg-rgb:          247, 245, 240;
+  --tq-panel:           #EEEBE3;
+  --tq-card:            #FBFAF6;
+  --tq-surface:         #FDFCF9;
+  --tq-text-primary:    #1C1B18;
+  --tq-text-muted:      #6E6A60;
+  --tq-border-hairline: #E2DDD2;
+  --tq-border-focus:    #A8A294;
+  /* Overlays and dots: the text's warm near-black, not pure black. */
+  --tq-overlay-soft:    rgba(28, 27, 24, 0.04);
+  --tq-overlay:         rgba(28, 27, 24, 0.06);
+  --tq-overlay-strong:  rgba(28, 27, 24, 0.10);
+  --tq-dot:             rgba(28, 27, 24, 0.14);
+  --tq-studio-dot:      rgba(28, 27, 24, 0.07);
+  --tq-bg-strong:       rgba(28, 27, 24, 0.04);
   /* Light mode = the MAIN blue #0057FF at rest, a darker blue on hover. (Dark
      mode uses the brighter #3380FF — see :root.) Aliases --tq-violet/-blue/
      -lavender are `var(--tq-purple)`, so they follow; the *-rgb literals flip. */
@@ -1397,8 +1401,11 @@ html.app-shell-scroll body {
    deliberately NOT re-scoped - the CTA + Popular pill must be the SAME
    blue as every other blue button (user direction: blue-button
    consistency), so they resolve the light-theme #0057FF/#0046CC like the
-   Plus/Max cards rather than the brighter dark-mode blue. */
-:root.light .tq-aura {
+   Plus/Max cards rather than the brighter dark-mode blue.
+   Cards only (.surface-card): the landing hero scene also wears .tq-aura for
+   its glow and must follow the light theme (2026-10-29, light became the
+   marketing default, and its floating panels came out as dark cards). */
+:root.light .tq-aura.surface-card {
   --tq-surface: oklch(0.205 0 0);
   --tq-text-primary: #ffffff;
   --tq-text-muted: #b4b4b4;

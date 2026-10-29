@@ -6,13 +6,12 @@
 // chrome direction: in RTL the logo reads at the start (right); in LTR it leads
 // from the left. Strings come from the active-locale dictionary.
 
-import { useState, useRef, useEffect, useLayoutEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLocale, useDict } from "@/components/i18n/LocaleProvider";
 import { useIsAuthed } from "@/hooks/useIsAuthed";
 import { localizedHref, stripLocale } from "@/lib/i18n/navigation";
-import { isAppPath } from "@/lib/app-routes";
 import { LanguageMenu } from "@/components/i18n/LanguageMenu";
 import { ThemeLogo } from "@/components/brand/ThemeLogo";
 import { FeaturesMenu, MobileFeaturesList } from "@/components/marketing/FeaturesMenu";
@@ -29,26 +28,6 @@ export function LandingNav() {
   const isAuthed = useIsAuthed();
   const [menuOpen, setMenuOpen] = useState(false);
   const navRef = useRef<HTMLElement>(null);
-
-  // Marketing surfaces are DARK-ONLY (user direction 2026-08-30): the theme
-  // toggle lives exclusively in the dashboard chrome. The pre-paint script
-  // (layout CHROME_INIT) already skips `.light` on non-app loads; this guard
-  // covers CLIENT-side navigations (app -> landing would keep the class
-  // otherwise) and restores the visitor's cookie preference only when they
-  // navigate back INTO the app shell (auth/marketing destinations stay
-  // dark). Layout effect so the class flips BEFORE paint - a plain
-  // effect let one light-themed frame flash through on client
-  // navigation (CR PR #193). DOM side-effect only - no state, lint-safe.
-  useLayoutEffect(() => {
-    const root = document.documentElement;
-    root.classList.remove("light");
-    return () => {
-      const prefersLight = /(?:^|;\s*)tq_theme=light(?:;|$)/.test(document.cookie);
-      if (prefersLight && isAppPath(stripLocale(window.location.pathname))) {
-        root.classList.add("light");
-      }
-    };
-  }, []);
 
   // Close the mobile menu on an outside click or Escape, matching the app's
   // popup convention (the landing has no iframe, so a document listener is
@@ -118,9 +97,9 @@ export function LandingNav() {
           </div>
 
           <div className="hidden items-center gap-2 md:flex">
-            {/* Language only - the theme toggle left the marketing nav
-                2026-08-30 (marketing is dark-only; toggling lives in the
-                dashboard chrome). */}
+            {/* Language only - the theme toggle lives in the dashboard
+                chrome. Marketing follows the same theme: light by default,
+                dark when the visitor chose it in the app (2026-10-29). */}
             <div className="flex items-center gap-1">
               <LanguageMenu />
             </div>

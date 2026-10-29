@@ -33,17 +33,15 @@ const poppins = Poppins({
 });
 
 // Pre-paint chrome init injected into <head> (runs before the stylesheet, so no
-// theme flash + no app-route scrollbar jump). Sets `.light` from the tq_theme
-// cookie and `.app-shell-scroll` from the first path segment — CLIENT-side, so
-// the layout needs no server cookies()/headers() read, which is the prerequisite
-// for static rendering. Keep the app-route list in sync with lib/app-routes.ts
-// (APP_ROUTE_SEGMENTS).
-//
-// `.light` is gated to APP-SHELL routes only (user direction 2026-08-30):
-// the landing / marketing / auth surfaces are dark-only, the theme toggle
-// lives exclusively in the dashboard chrome. LandingNav carries the
-// matching runtime guard for client-side navigations.
-const CHROME_INIT = `(function(){try{var p=location.pathname.split("/").filter(Boolean);var s=(p[0]==="ar"||p[0]==="en")?p[1]:p[0];var A={dashboard:1,projects:1,favorites:1,library:1,templates:1,"brand-kits":1,settings:1,create:1,enhance:1,mimic:1,datasheet:1,social:1,project:1,preview:1,"use-template":1};var app=s&&A[s];if(app){document.documentElement.classList.add("app-shell-scroll");var m=document.cookie.match(/(?:^|;\\s*)tq_theme=(\\w+)/);if(m&&m[1]==="light")document.documentElement.classList.add("light");}}catch(e){}})();`;
+// theme flash + no app-route scrollbar jump). Sets `.light` on EVERY route
+// unless the tq_theme cookie says "dark" (owner 2026-10-29: light is the
+// default for the app, the landing, marketing and sign-in pages; this replaced
+// the 2026-08-30 dark-only marketing rule) and `.app-shell-scroll` from the
+// first path segment. CLIENT-side, so the layout needs no server
+// cookies()/headers() read, which is the prerequisite for static rendering.
+// Keep the app-route list in sync with lib/app-routes.ts (APP_ROUTE_SEGMENTS).
+// The admin panel stays dark (internal ops tool, built dark-only).
+const CHROME_INIT = `(function(){try{var p=location.pathname.split("/").filter(Boolean);var s=(p[0]==="ar"||p[0]==="en")?p[1]:p[0];var A={dashboard:1,projects:1,favorites:1,library:1,templates:1,"brand-kits":1,settings:1,create:1,enhance:1,mimic:1,datasheet:1,social:1,project:1,preview:1,"use-template":1};var app=s&&A[s];if(app)document.documentElement.classList.add("app-shell-scroll");var m=document.cookie.match(/(?:^|;\\s*)tq_theme=(\\w+)/);if(s!=="admin"&&!(m&&m[1]==="dark"))document.documentElement.classList.add("light");}catch(e){}})();`;
 
 // Prerender both locales so the static-eligible pages (landing, marketing
 // spokes, legal) build to static HTML. App routes (cookies/auth) opt out of

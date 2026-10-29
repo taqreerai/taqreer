@@ -22,10 +22,11 @@ export function getThemeIsLight() {
   return document.documentElement.classList.contains("light");
 }
 
-// SSR has no DOM; default to dark. useSyncExternalStore reconciles to the real
-// value on the client (the `.light` class is already applied from the cookie).
+// SSR has no DOM; assume the app default (light). useSyncExternalStore
+// reconciles to the real value on the client (the `.light` class is already
+// applied from the cookie).
 export function getThemeIsLightServer() {
-  return false;
+  return true;
 }
 
 export function setThemeLight(light: boolean) {

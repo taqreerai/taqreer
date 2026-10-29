@@ -155,7 +155,8 @@ export function CreateScene({ reduced = false }: { reduced?: boolean }) {
   return (
     // `.tq-aura` living-blue backdrop + the dashboard's dot field (both
     // restored 2026-08-30, user direction). The aura's light-theme
-    // dark-island re-scope is moot now: marketing is dark-only.
+    // dark-island re-scope applies to cards only (.tq-aura.surface-card), so
+    // this scene follows the light theme.
     <div aria-hidden className="tq-aura relative h-full w-full overflow-hidden" dir={dir} data-scene-root>
       {/* Dot field - the design system's tiled grid (.tq-dot-grid,
           token-driven), same texture as the dashboard panel. */}
