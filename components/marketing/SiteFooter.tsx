@@ -147,7 +147,10 @@ export async function SiteFooter({
             </div>
           ))}
         </div>
-        <div className="flex flex-col items-center justify-between gap-4 border-t border-[var(--tq-border-hairline)] pt-8 text-sm text-muted md:flex-row">
+        {/* md:pe-[88px]: the fixed WhatsApp button (.support-fab-anchor, 52px
+            at 20px from the inline end) sits in this row's end corner and
+            covered the contact button; the padding keeps the button clear. */}
+        <div className="flex flex-col items-center justify-between gap-4 border-t border-[var(--tq-border-hairline)] pt-8 text-sm text-muted md:flex-row md:pe-[88px]">
           <p>
             {footer.copyright.replace("{year}", String(new Date().getFullYear()))}
           </p>
