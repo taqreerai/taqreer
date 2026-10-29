@@ -35,7 +35,7 @@ import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { isPaidPlan } from "@/lib/plan";
 import { resolveProjectAccess } from "@/lib/api/project-access";
-import { generatedImageExists, genImageIdentityHash, publicGeneratedImageUrl } from "@/lib/images/store";
+import { generatedImageExists, generatedImageSource, genImageIdentityHash, publicGeneratedImageUrl } from "@/lib/images/store";
 import { scanGenImages, type GenImageAspect } from "@/lib/images/slide-images";
 import { chargeCredits, refundCredits } from "@/lib/credits/server";
 import type { CreditGate402 } from "@/lib/api/regen-helpers";
@@ -168,9 +168,11 @@ export async function POST(
       return NextResponse.json({ error: "Previous image not found" }, { status: 404 });
     }
     const url = publicGeneratedImageUrl(projectId, genid, hash);
+    // Its source (Pexels / library / AI) as stored beside it; "" if unknown.
+    const size = await generatedImageSource(projectId, genid, hash);
     await prisma.generatedImage.upsert({
       where: { presentationVersionId_genid: { presentationVersionId: latestVersionId, genid } },
-      update: { prompt: bodyPrompt, aspect, status: "ready", storageUrl: url },
+      update: { prompt: bodyPrompt, aspect, status: "ready", storageUrl: url, size },
       create: {
         presentationVersionId: latestVersionId,
         slideKey,
@@ -180,6 +182,7 @@ export async function POST(
         aspect,
         status: "ready",
         storageUrl: url,
+        size,
       },
     });
     return NextResponse.json({ ok: true, prompt: bodyPrompt, prevPrompt: storedPrompt, url, charged: 0 });

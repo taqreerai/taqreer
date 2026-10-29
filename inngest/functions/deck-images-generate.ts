@@ -36,6 +36,7 @@ import { fillImage } from "@/lib/images/image-source";
 import {
   storeGeneratedImage,
   generatedImageExists,
+  generatedImageSource,
   publicGeneratedImageUrl,
   genImageIdentityHash,
 } from "@/lib/images/store";
@@ -287,6 +288,8 @@ export const deckImagesGenerate = inngest.createFunction(
               await setStatus(b.genid, {
                 status: "ready",
                 storageUrl: adoptedUrl,
+                // Pexels / library / AI, as the warm stored it ("" if none).
+                size: await generatedImageSource(projectId, b.genid, b.hash),
               });
               await announce(b.slideKey, b.genid, adoptedUrl);
               adopted += 1;

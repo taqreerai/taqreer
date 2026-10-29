@@ -89,6 +89,17 @@ export function genThumbPath(
   return `${projectId}/gen/thumb/${genThumbFileName(genid, hash)}`;
 }
 
+// Where a stored image came from (GeneratedImage.size: "1536x1024" for
+// gpt-image, "pexels:<id>", "lib:<id>"), kept beside a WARMED image: the
+// mid-stream warm has no row to write it on, and the end reconcile that
+// adopts the file would otherwise mark the row with no source (prod
+// 2026-10-29: Pexels photos and library copies read as our own generations,
+// so they entered the reuse library and the public gallery). Same invisible
+// nested-folder rule as thumb/.
+function genSourcePath(projectId: string, genid: string, hash: string): string {
+  return `${projectId}/gen/src/${genid}-${hash}.txt`;
+}
+
 // Shared by the live write below and scripts/backfill-image-thumbs.ts so the
 // two can never drift. 700px bounding box: tiles render ≤ ~350px (x2 retina);
 // `fit: "inside"` preserves aspect (the gpt-image outputs are 3:2 / 2:3 / 1:1).
@@ -141,6 +152,8 @@ export async function storeGeneratedImage(opts: {
   genid: string;
   hash: string;
   b64: string;
+  // The image's source (see genSourcePath); stored only when given.
+  source?: string;
 }): Promise<string> {
   const admin = adminClient();
   const path = genImagePath(opts.projectId, opts.genid, opts.hash);
@@ -185,6 +198,16 @@ export async function storeGeneratedImage(opts: {
       `[gen-thumb] thumb store failed for ${opts.projectId}/${opts.genid}:`,
       err instanceof Error ? err.message : String(err),
     );
+  }
+
+  if (opts.source) {
+    const { error: srcError } = await admin.storage
+      .from(BUCKET)
+      .upload(genSourcePath(opts.projectId, opts.genid, opts.hash), Buffer.from(opts.source.slice(0, 100)), {
+        contentType: "text/plain",
+        upsert: true,
+      });
+    if (srcError) console.warn(`[gen-src] source store failed for ${opts.projectId}/${opts.genid}: ${srcError.message}`);
   }
 
   return admin.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
@@ -248,6 +271,16 @@ export function publicGeneratedImageUrl(
  * reconcile ADOPT warmed images — mark them ready with the deterministic URL
  * instead of re-generating — so a box is billed to gpt-image-2 at most once.
  */
+/** The source stored beside a warmed image, or "" when none was stored. */
+export async function generatedImageSource(projectId: string, genid: string, hash: string): Promise<string> {
+  try {
+    const { data } = await adminClient().storage.from(BUCKET).download(genSourcePath(projectId, genid, hash));
+    return data ? (await data.text()).trim().slice(0, 100) : "";
+  } catch {
+    return "";
+  }
+}
+
 export async function generatedImageExists(
   projectId: string,
   genid: string,

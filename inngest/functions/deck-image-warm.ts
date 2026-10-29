@@ -102,7 +102,7 @@ export const deckImageWarm = inngest.createFunction(
           });
           return { filled: 0, skipped: 1, failed: 0 };
         }
-        const { b64 } = await fillImage({
+        const { b64, size } = await fillImage({
           projectId,
           prompt: box.prompt,
           aspect: box.aspect,
@@ -115,6 +115,8 @@ export const deckImageWarm = inngest.createFunction(
           genid: box.genid,
           hash: box.hash,
           b64,
+          // The reconcile that adopts this file reads it back for the row.
+          source: size,
         });
         await broadcastToProject(projectId, "slide.image.ready", {
           slideKey,
