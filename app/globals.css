@@ -408,8 +408,11 @@
   --tq-bg:              #F7F5F0;
   --tq-bg-rgb:          247, 245, 240;
   --tq-panel:           #EEEBE3;
-  --tq-card:            #FBFAF6;
-  --tq-surface:         #FDFCF9;
+  /* Cards and floating surfaces (menus, popovers, modals, inputs) stay in the
+     paper family, just above the page; #FDFCF9 read as pure white next to it.
+     Their hairline border does the separating (2026-10-29). */
+  --tq-card:            #FAF8F3;
+  --tq-surface:         #FAF8F3;
   --tq-text-primary:    #1C1B18;
   --tq-text-muted:      #6E6A60;
   --tq-border-hairline: #E2DDD2;
