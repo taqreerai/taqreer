@@ -47,6 +47,8 @@ const MIN_REPEAT_SLIDES = 3;
 // bigger than this share of the slide (prod 2026-10-22: a "طبقي ما اكتشفت"
 // ribbon on 4 of 20 slides, once as large as a section header).
 const ORNAMENT_MAX_AREA = 0.2;
+// Below this opacity (a:alphaModFix) a picture is a watermark, not content.
+const FAINT_OPACITY = 0.4;
 
 // Shared with the PDF path (lib/extract/pdf-visuals.ts): same classes, same limits.
 export const PICTURE_THRESHOLDS = {
@@ -73,6 +75,8 @@ export type PptxPicture = {
   flipV: boolean;
   // Picture used as a shape's fill (p:sp with a:blipFill) rather than p:pic
   asShapeFill: boolean;
+  // a:alphaModFix on the blip: the picture's opacity (0..1); absent = opaque.
+  opacity?: number;
 };
 
 export type PptxTableCell = { text: string; colSpan: number; rowSpan: number };
@@ -295,6 +299,12 @@ async function placeholderChain(zip: JSZip, slideRelsXml: string, slideDir: stri
   return [layout, master].filter((d): d is XmlElement => d !== null);
 }
 
+function readOpacity(blip: XmlElement | null): number | undefined {
+  const amt = child(blip, NS_A, "alphaModFix")?.getAttribute("amt");
+  const n = amt != null ? Number(amt) : NaN;
+  return Number.isFinite(n) ? Math.max(0, Math.min(1, n / 100000)) : undefined;
+}
+
 function readSrcRect(blipFill: XmlElement | null): PptxPicture["srcRect"] {
   const r = child(blipFill, NS_A, "srcRect");
   if (!r) return null;
@@ -453,6 +463,7 @@ export async function extractPptxVisuals(buffer: Buffer): Promise<PptxVisuals> {
             flipH: x.flipH,
             flipV: x.flipV,
             asShapeFill: c.localName === "sp",
+            opacity: readOpacity(blip),
           });
           continue;
         }
@@ -590,6 +601,10 @@ export function classifyPptxPictures(v: PptxVisuals): Map<PptxPicture, PictureCl
     const area = vw * vh; // visible share of the slide
     const reused = many(slidesByMedia.get(p.mediaPath)!.size);
     if (area >= FULL_BLEED_AREA && reused) out.set(p, "background");
+    // A picture faded to a watermark is decoration: carried at full opacity
+    // a 5% grey map of Saudi Arabia came out as a black blob (prod
+    // 2026-10-29 cmvt7fp5q00269o6dx95rjfhj).
+    else if ((p.opacity ?? 1) < FAINT_OPACITY) out.set(p, "background");
     else if (many(slidesByMediaPlace.get(place(p))!.size)) out.set(p, "repeated");
     // The same picture on most of the deck is template art even when it moves
     // from slide to slide (prod 2026-10-22: a chalkboard frame on 18 of 27).
