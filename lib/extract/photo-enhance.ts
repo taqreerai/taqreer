@@ -155,6 +155,47 @@ async function transparentShare(bytes: Buffer): Promise<number> {
   return data.length ? clear / data.length : 0;
 }
 
+/**
+ * How much of a picture carries detail, plus a perceptual fingerprint. Used
+ * to tell an empty PDF template background (a few corner shapes or dots on
+ * paper) from a full-page artwork (a portfolio page of drawings and renders).
+ * busyShare: share of 16px tiles (on a 256px sample) whose luminance varies.
+ * fingerprint: 16x16 average hash, 256 bits as a 0/1 string.
+ */
+export async function detailProfile(bytes: Buffer): Promise<{ busyShare: number; fingerprint: string }> {
+  const { data, info } = await sharp(bytes)
+    .resize(SAMPLE, SAMPLE, { fit: "inside" })
+    .removeAlpha()
+    .greyscale()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const W = info.width;
+  const H = info.height;
+  const T = 16;
+  let busy = 0;
+  let tiles = 0;
+  for (let ty = 0; ty < H; ty += T) {
+    for (let tx = 0; tx < W; tx += T) {
+      let s = 0;
+      let s2 = 0;
+      let m = 0;
+      for (let y = ty; y < Math.min(H, ty + T); y++) {
+        for (let x = tx; x < Math.min(W, tx + T); x++) {
+          const v = data[y * W + x];
+          s += v;
+          s2 += v * v;
+          m++;
+        }
+      }
+      if (Math.sqrt(Math.max(0, s2 / m - (s / m) ** 2)) > 12) busy++;
+      tiles++;
+    }
+  }
+  const tiny = await sharp(bytes).resize(16, 16, { fit: "fill" }).greyscale().raw().toBuffer();
+  const avg = tiny.reduce((acc, v) => acc + v, 0) / tiny.length;
+  return { busyShare: tiles ? busy / tiles : 0, fingerprint: Array.from(tiny, (v) => (v > avg ? "1" : "0")).join("") };
+}
+
 /** Photo or graphic, from the bytes alone (the studio restore route refuses graphics). */
 export async function pictureKind(bytes: Buffer): Promise<PictureKind> {
   try {

@@ -17,7 +17,7 @@ import { buildPptxAssets } from "@/lib/extract/pptx-asset-crops";
 import { buildPdfAssets, classifyPdfPictures, extractPdfPictures, type PdfAsset } from "@/lib/extract/pdf-visuals";
 import { uploadSourceAsset } from "@/lib/storage/source-assets";
 import { coverPhotoCandidates } from "@/lib/deck/carried-assets";
-import { analyzeAndEnhance, type PictureKind } from "@/lib/extract/photo-enhance";
+import { analyzeAndEnhance, detailProfile, type PictureKind } from "@/lib/extract/photo-enhance";
 import {
   makeReplacements,
   refreshPool,
@@ -41,6 +41,14 @@ const UPLOAD_PARALLEL = 4;
 // real text is the page's baked template background (see the filter below).
 const TEMPLATE_BG_AREA = 0.9;
 const TEMPLATE_BG_MIN_WORDS = 5;
+// ...and only when it is mostly empty (under this share of detailed tiles) or
+// the same picture recurs on another page (fingerprints this many bits apart
+// or fewer, of 256). A full-page ARTWORK, a portfolio page of drawings and
+// renders with live text over it, is carried (prod 2026-10-30,
+// cmvu3aiip001q9m6d1zzvrnda: 24 of 27 artwork pages, 25% to 95% busy, unique,
+// were dropped and the redesign asked for AI images of them instead).
+const TEMPLATE_BG_MAX_BUSY = 0.2;
+const TEMPLATE_BG_REPEAT_BITS = 6;
 
 export type CarriedPicture = {
   assetId: string;
@@ -201,17 +209,42 @@ export async function prepareCarriedPictures(opts: {
   // A full-page picture that is not a photo, on a page with real text drawn
   // over it, is that template: not carried. A full-page PHOTO still becomes
   // the slide's photo background; scanned pages are cls "page", untouched.
+  // Only a mostly empty or repeated one is a template (TEMPLATE_BG_MAX_BUSY).
   if (wordsByPage) {
     const words = wordsByPage;
-    storable = storable.filter(
+    const fullPage = storable.filter(
       (a) =>
-        !(
-          a.cls === "content" &&
-          a.box.w * a.box.h >= TEMPLATE_BG_AREA &&
-          kinds.get(a.assetId) !== "photo" &&
-          (words[a.slideIndex] ?? 0) >= TEMPLATE_BG_MIN_WORDS
-        ),
+        a.cls === "content" &&
+        a.box.w * a.box.h >= TEMPLATE_BG_AREA &&
+        kinds.get(a.assetId) !== "photo" &&
+        (words[a.slideIndex] ?? 0) >= TEMPLATE_BG_MIN_WORDS,
     );
+    const profiles = new Map<string, { busyShare: number; fingerprint: string }>();
+    for (const a of fullPage) {
+      if (a.file.kind !== "image") continue;
+      // Unmeasurable: kept (the user's picture is never dropped on a guess).
+      const p = await detailProfile(a.file.bytes).catch(() => null);
+      if (p) profiles.set(a.assetId, p);
+    }
+    const bitsApart = (x: string, y: string) => {
+      let d = 0;
+      for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) d++;
+      return d;
+    };
+    const template = new Set(
+      fullPage
+        .filter((a) => {
+          const p = profiles.get(a.assetId);
+          if (!p) return false;
+          if (p.busyShare < TEMPLATE_BG_MAX_BUSY) return true;
+          return fullPage.some((b) => {
+            const q = profiles.get(b.assetId);
+            return b.slideIndex !== a.slideIndex && !!q && bitsApart(p.fingerprint, q.fingerprint) <= TEMPLATE_BG_REPEAT_BITS;
+          });
+        })
+        .map((a) => a.assetId),
+    );
+    storable = storable.filter((a) => !template.has(a.assetId));
   }
   hasContentImages =
     assets.some((a) => a.cls === "page") ||
