@@ -16,7 +16,7 @@ import { Hero } from "@/components/marketing/Hero";
 import { FeatureFlowCards } from "@/components/marketing/FeatureFlowCards";
 import { BidiSection } from "@/components/marketing/BidiSection";
 import { ScrollReveal } from "@/components/marketing/ScrollReveal";
-import { LandingTemplatesGrid } from "@/components/marketing/LandingTemplatesGrid";
+import { LandingStylesTemplates } from "@/components/marketing/LandingStylesTemplates";
 import { SiteFooter } from "@/components/marketing/SiteFooter";
 import { StitchBackdrop } from "@/components/marketing/StitchBackdrop";
 import { PricingTiers } from "@/components/marketing/PricingTiers";
@@ -190,7 +190,7 @@ export default async function LandingPage({
           <BidiSection />
         </section>
 
-        {/* Templates */}
+        {/* Styles & templates: two tabs, Styles first (LandingStylesTemplates). */}
         <section id="templates" className={`${SECTION} ${PX}`}>
           <ScrollReveal direction="up">
             <SectionHeader
@@ -200,15 +200,7 @@ export default async function LandingPage({
             />
           </ScrollReveal>
           <div className="mt-12">
-            <LandingTemplatesGrid templates={landingTemplates} />
-            <div className="mt-16 text-center">
-              <a
-                href={localizedHref("/presentation-templates", lang)}
-                className="btn-gradient inline-flex px-5 py-2 text-sm"
-              >
-                {dict.landing.sections.templates.viewAll}
-              </a>
-            </div>
+            <LandingStylesTemplates templates={landingTemplates} />
           </div>
         </section>
 

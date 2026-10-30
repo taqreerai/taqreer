@@ -1760,9 +1760,11 @@
         "subtitle": "Start from raw content, enhance an existing deck, use any deck as your template, or design a social media post. taqreer.ai designs your presentations and reports with AI."
       },
       "templates": {
-        "eyebrow": "Templates",
-        "title": "Start from a template, what you see is what you get",
-        "subtitle": "Explore our ready-made templates suited to your project, without relying on AI design direction.",
+        "eyebrow": "Styles & templates",
+        "title": "Presentation styles and templates for Arabic and English decks",
+        "subtitle": "Pick one of 60 design styles and the AI designs every slide in it, or start from a ready-made template you can edit.",
+        "tabs": { "styles": "Styles", "templates": "Templates" },
+        "stylesCta": "Start with a style",
         "viewAll": "Browse all templates"
       },
       "pricing": {
