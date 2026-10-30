@@ -5,7 +5,7 @@
 // separators were removed (2026-06-11) in favour of plain section spacing, so
 // the page reads like the app rather than a marketing grid. Single-column
 // section headers are centered; only the 2-column BiDi band is right-aligned.
-// The only page motion left is the hero's own 3D demo + the trusted-by marquee.
+// The only page motion left is the hero's own 3D demo + the template-cover rows.
 //
 // Lives at `app/page.tsx` (NOT inside a route group) because of a Next 16.2.6 +
 // Turbopack route-resolution bug with `(marketing)/page.tsx`.
@@ -24,7 +24,8 @@ import { FaqAccordion } from "@/components/marketing/FaqAccordion";
 import { LandingNav } from "@/components/marketing/LandingNav";
 import { SectionHeader } from "@/components/marketing/SectionHeader";
 import { localizedHref } from "@/lib/i18n/navigation";
-import { getLandingTemplates } from "@/lib/auth/marquee-projects";
+import { getLandingCoverRows, getLandingTemplates } from "@/lib/auth/marquee-projects";
+import { TemplateCoverRows } from "@/components/marketing/TemplateCoverRows";
 import { SmoothScrollProvider } from "@/components/providers";
 import { getDictionary } from "@/lib/i18n/dictionaries";
 import { JsonLd } from "@/components/seo/JsonLd";
@@ -63,23 +64,6 @@ const getProjectCount = unstable_cache(
   // /ar health-check re-warms it each release.
   { revalidate: 86400, tags: ["landing-project-count"] }
 );
-
-// "Trusted by" logos. Each renders as a `currentColor` SVG mask (see
-// `.trusted-logo` in globals.css) so they're monochrome + theme-adaptive on
-// both light and dark. `w`/`h` = the logo's CONTENT box (the public/logos SVG
-// viewBox is pre-cropped to it) and drive the per-logo aspect-ratio. `px` is the
-// per-logo display HEIGHT, hand-tuned for OPTICAL balance: a uniform pixel
-// height makes all-caps wordmarks (EMAAR) read heavier than lowercase ones
-// (mbc) or mark+wordmarks, so caps shrink and lowercase/marks grow.
-const TRUSTED_LOGOS: { file: string; w: number; h: number; px: number; label: string }[] = [
-  { file: "uber", w: 606, h: 210, px: 20, label: "Uber" },
-  { file: "shahid", w: 719, h: 204, px: 23, label: "Shahid" },
-  { file: "etisalat", w: 250, h: 57, px: 22, label: "Etisalat" },
-  { file: "mbc", w: 636, h: 270, px: 26, label: "MBC Group" },
-  { file: "emaar", w: 1617, h: 321, px: 18, label: "Emaar" },
-  { file: "claude", w: 512, h: 110, px: 20, label: "Claude" },
-  { file: "openai", w: 512, h: 126, px: 20, label: "OpenAI" },
-];
 
 // SectionHeader moved to components/marketing/SectionHeader.tsx (shared with the
 // marketing spoke pages, e.g. /templates).
@@ -126,10 +110,11 @@ export default async function LandingPage({
   // No auth read here: the nav/pricing/grid resolve auth client-side
   // (useIsAuthed, a cookie check — no Supabase client) and the data calls are
   // cached, so this page renders statically (ISR) and stays light.
-  const [projectCount, landingTemplates, dict, tierPrices] =
+  const [projectCount, landingTemplates, coverRows, dict, tierPrices] =
     await Promise.all([
       getProjectCount(),
       getLandingTemplates(),
+      getLandingCoverRows(),
       getDictionary(lang),
       getDisplayPrices(),
       ensureFresh(),
@@ -172,34 +157,15 @@ export default async function LandingPage({
           dotted + aurora backdrop, matching the dashboard). */}
       <div className="relative mx-auto max-w-7xl">
 
-        {/* Trusted-by — animated full-width marquee with edge-fade mask
-            (`.mask-edges`) so the logos dissolve at both ends. */}
+        {/* Template covers: Arabic row drifting right to left, the other
+            languages underneath drifting left to right (TemplateCoverRows). */}
         <section className="py-24">
-          <div className="mask-edges relative w-full overflow-hidden" dir="ltr">
-            <div className="animate-marquee-rtl pause-on-hover flex w-max items-center text-foreground opacity-50">
-              {/* gap = 2x the group padding so the loop seam keeps the same
-                  rhythm. Wide on desktop (~5 logos in view), tighter on a phone
-                  so it isn't too sparse. */}
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-24 px-12 lg:gap-44 lg:px-22">
-                  {TRUSTED_LOGOS.map((logo) => (
-                    <span
-                      key={logo.file}
-                      role="img"
-                      aria-label={logo.label}
-                      className="trusted-logo shrink-0"
-                      style={{
-                        height: logo.px,
-                        aspectRatio: `${logo.w} / ${logo.h}`,
-                        WebkitMaskImage: `url(/logos/${logo.file}.svg)`,
-                        maskImage: `url(/logos/${logo.file}.svg)`,
-                      }}
-                    />
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
+          <TemplateCoverRows
+            arabic={coverRows.arabic}
+            other={coverRows.other}
+            locale={lang}
+            fallbackAlt={dict.landing.templatesGrid.coverAlt}
+          />
         </section>
 
         {/* Flows — 4 gapped cards (dashboard-style), no backbone dividers. */}

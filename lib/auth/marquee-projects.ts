@@ -326,6 +326,65 @@ export const getLandingTemplates = unstable_cache(
   { revalidate: 86400, tags: ["landing-templates"] },
 );
 
+// ─── Landing cover rows ───────────────────────────────────────────────
+//
+// The two template-cover rows under the hero (they replaced the trusted-by
+// logos, owner 2026-10-30): Arabic covers in the first row, every other
+// language in the second. Every admin-featured 16:9 template, in featured
+// order, so featuring a template in the admin grows its row (curation busts
+// the "landing-templates" tag + purges the CDN).
+
+export type LandingCover = {
+  id: string;
+  cover: string;
+  slug: string | null;
+  nameAr: string | null;
+  nameEn: string | null;
+};
+
+export const getLandingCoverRows = unstable_cache(
+  async (): Promise<{ arabic: LandingCover[]; other: LandingCover[] }> => {
+    try {
+      const rows = await prisma.$queryRaw<(LandingCover & { language: string })[]>`
+        SELECT t.id,
+               t."thumbnailUrls"[1] AS cover,
+               t.slug,
+               t."nameAr" AS "nameAr",
+               t."nameEn" AS "nameEn",
+               t.language
+        FROM "Template" t
+        INNER JOIN "User" u ON t."ownerId" = u.id
+        LEFT JOIN "Project" p ON p.id = t."sourceProjectId"
+        WHERE u.email = ${MARQUEE_OWNER_EMAIL}
+          AND t."isPublic" = true
+          AND t."featuredOrder" IS NOT NULL
+          AND COALESCE(t.brand->>'format', '16:9') <> '9:16'
+          AND array_length(t."thumbnailUrls", 1) > 0
+          AND (t."sourceProjectId" IS NULL OR p.id IS NOT NULL)
+        ORDER BY t."featuredOrder" ASC
+      `;
+      const row = (arabic: boolean): LandingCover[] =>
+        rows
+          .filter((r) => r.cover && !r.cover.includes("/showcase-"))
+          .filter((r) => (r.language === "ar") === arabic)
+          .map((r) => ({
+            id: r.id,
+            cover: edgeCoverUrl(r.cover),
+            slug: r.slug,
+            nameAr: r.nameAr,
+            nameEn: r.nameEn,
+          }));
+      return { arabic: row(true), other: row(false) };
+    } catch (err) {
+      // DB hiccup → no rows (the section collapses).
+      console.error("[landing/cover-rows] query failed", err);
+      return { arabic: [], other: [] };
+    }
+  },
+  ["landing-cover-rows"],
+  { revalidate: 86400, tags: ["landing-templates"] },
+);
+
 // ─── Welcome-email template strip ─────────────────────────────────────
 //
 // The 3 most-recent public curator templates, each as a single cover

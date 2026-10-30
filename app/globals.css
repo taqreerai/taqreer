@@ -2034,21 +2034,6 @@ html.app-shell-scroll body {
 }
 
 /* ─── Marquee ─── */
-@keyframes marquee-rtl {
-  0% {
-    transform: translateX(0);
-  }
-
-  100% {
-    transform: translateX(-16.6666%);
-  }
-}
-
-.animate-marquee-rtl {
-  animation: marquee-rtl 30s linear infinite;
-  will-change: transform;
-}
-
 .mask-edges {
   mask-image: linear-gradient(to left, transparent 0%, black 15%, black 85%, transparent 100%);
   -webkit-mask-image: linear-gradient(to left, transparent 0%, black 15%, black 85%, transparent 100%);
@@ -2058,21 +2043,44 @@ html.app-shell-scroll body {
   animation-play-state: paused;
 }
 
-/* "Trusted by" marquee logos: each source SVG is used as an alpha MASK filled
-   with `currentColor`, so any logo (incl. all-black wordmarks) renders as one
-   muted theme-ink that flips with light/dark - no per-logo, per-theme assets.
-   Pair with a fixed height + per-logo `aspect-ratio` inline (the SVG viewBox is
-   pre-cropped to the logo's content, so it fills the box edge to edge). */
-.trusted-logo {
-  display: inline-block;
-  vertical-align: middle;
-  background-color: currentColor;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
-  -webkit-mask-size: contain;
-  mask-size: contain;
+/* Landing template-cover rows (TemplateCoverRows): each track holds two
+   identical halves and slides by one half, so the loop is seamless. The
+   first row drifts right to left, the second left to right. The duration is
+   set inline from the tile count (same slow speed for both rows); 80s is the
+   fallback. */
+@keyframes cover-row-rtl {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes cover-row-ltr {
+  from {
+    transform: translateX(-50%);
+  }
+
+  to {
+    transform: translateX(0);
+  }
+}
+
+.cover-row-rtl {
+  animation: cover-row-rtl 80s linear infinite;
+}
+
+.cover-row-ltr {
+  animation: cover-row-ltr 80s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cover-row-rtl,
+  .cover-row-ltr {
+    animation: none;
+  }
 }
 
 /* ─── Landing full-bleed section rules ───────────────────────────────────────
