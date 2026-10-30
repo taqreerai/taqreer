@@ -3,7 +3,8 @@
 // Landing "Styles & templates" section body (owner 2026-10-30): two tabs on
 // the shared `.design-tabs` control, Styles selected by default. Styles show a
 // curated set of the deck looks with real sample slides (LookThumb, hover
-// scrubs the slides); Templates is the featured template grid. Both panels
+// scrubs the slides), each opening Create with it preselected (?style=);
+// Templates is the featured template grid. Both panels
 // stay in the HTML (the inactive one `hidden`) so their content is crawlable.
 
 import { useId, useState } from "react";
@@ -73,9 +74,15 @@ export function LandingStylesTemplates({ templates }: { templates: LandingTempla
         <ul className="grid grid-cols-2 gap-x-4 gap-y-6 md:grid-cols-4">
           {LANDING_STYLES.map((key) => (
             <li key={key}>
-              <LookThumb k={key} locale={SAMPLE_LOCALE} />
-              <h3 className="mt-3 text-sm font-semibold">{picker.names[key]}</h3>
-              <p className="mt-1 text-sm text-muted">{picker.descs[key]}</p>
+              {/* Opens Create with this style preselected (open route, so
+                  visitors can start before signing up). */}
+              <a href={localizedHref(`/create?style=${key}`, locale)} className="group block">
+                <LookThumb k={key} locale={SAMPLE_LOCALE} />
+                <h3 className="mt-3 text-sm font-semibold transition-colors group-hover:text-[var(--tq-purple)]">
+                  {picker.names[key]}
+                </h3>
+                <p className="mt-1 text-sm text-muted">{picker.descs[key]}</p>
+              </a>
             </li>
           ))}
         </ul>

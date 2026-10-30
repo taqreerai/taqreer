@@ -494,6 +494,20 @@ export default function CreatePage() {
     };
   }, [applyTemplateUse, resolveTemplateUse, guest]);
 
+  // /create?style=<key> - the landing's style tiles land here with that style
+  // preselected (a manual pick, so content suggestions never replace it).
+  useEffect(() => {
+    const key = new URLSearchParams(window.location.search).get("style");
+    const style = DECK_STYLES.find((s) => s.key === key);
+    if (!style) return;
+    styleTouchedRef.current = true;
+    queueMicrotask(() => {
+      setLookTab("styles");
+      setDesignStyle(style.label);
+      setDesignStyleSource("manual");
+    });
+  }, []);
+
   // ─── Wizard step (2026-08-30, user direction) ─────────────────
   // The three cards present one at a time: 0 Content, 1 Brand,
   // 2 Output + Generate. Pure presentation - every card stays
@@ -850,10 +864,12 @@ export default function CreatePage() {
   // free-trial pop-up still shows first for a free account) once the file
   // is extracted and the template resolved. A visitor still signed out gets
   // a plain restore: same setup and step, the draft kept, nothing starts.
-  // A gallery pick (?template=) is a fresh start and skips it.
+  // A gallery pick (?template=) or a landing style pick (?style=) is a fresh
+  // start and skips it.
   const [autoStart, setAutoStart] = useState(false);
   useEffect(() => {
-    const freshPick = new URLSearchParams(window.location.search).has("template");
+    const search = new URLSearchParams(window.location.search);
+    const freshPick = search.has("template") || search.has("style");
     const mode = guest ? (freshPick ? null : "restore") : readResumeMode();
     if (!mode) {
       if (guest) queueMicrotask(() => setGuestDraftReady(true));
