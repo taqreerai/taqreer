@@ -20,6 +20,7 @@
 // never the same project. A reused image is stored as this deck's own copy
 // (size "lib:<source id>", left out of the gallery so it is not listed twice).
 
+import { NO_MATCH_SIZE } from "@/lib/images/slide-images";
 import Anthropic from "@anthropic-ai/sdk";
 import sharp from "sharp";
 import { prisma } from "@/lib/prisma";
@@ -199,6 +200,14 @@ function fallbackQuery(prompt: string): string {
   return (prompt.toLowerCase().match(/[a-z]{4,}/g) ?? []).filter((w) => !STOP.has(w)).slice(0, 4).join(" ");
 }
 
+/**
+ * A free or region box with no fitting library / stock picture and no AI
+ * allowance: not a refusal, nothing to retry. Failed rows carry
+ * NO_MATCH_SIZE in `size` so the editor says so and offers an upload only.
+ */
+export class NoImageMatchError extends Error {}
+export { NO_MATCH_SIZE };
+
 export async function fillImage(opts: {
   projectId: string;
   prompt: string;
@@ -231,7 +240,7 @@ export async function fillImage(opts: {
       const photo = await findStockPhoto(attempt, opts.aspect, opts.prompt);
       if (photo) return { b64: photo.b64, size: photo.size };
     }
-    throw new Error("region free plan: no fitting stock photo for this box");
+    throw new NoImageMatchError("region free plan: no fitting stock photo for this box");
   }
 
   // Free plan.
@@ -249,9 +258,9 @@ export async function fillImage(opts: {
       }
     }
   }
-  if (stock && mustNotGenerate(opts.prompt)) throw new Error("no stock photo for a subject that is never generated");
+  if (stock && mustNotGenerate(opts.prompt)) throw new NoImageMatchError("no stock photo for a subject that is never generated");
   if (opts.rank !== undefined && opts.rank < FREE_AI_PER_DECK) {
     return generateImageWithRetry({ prompt: opts.prompt, aspect: opts.aspect, referenceUrl: ref, quality: "low" });
   }
-  throw new Error("free plan: no library, stock or allowed AI image for this box");
+  throw new NoImageMatchError("free plan: no library, stock or allowed AI image for this box");
 }

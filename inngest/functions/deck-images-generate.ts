@@ -32,7 +32,7 @@ import {
   MAX_GENERATED_IMAGES,
   type GenImageAspect,
 } from "@/lib/images/slide-images";
-import { fillImage } from "@/lib/images/image-source";
+import { fillImage, NO_MATCH_SIZE, NoImageMatchError } from "@/lib/images/image-source";
 import {
   storeGeneratedImage,
   generatedImageExists,
@@ -324,13 +324,17 @@ export const deckImagesGenerate = inngest.createFunction(
               genid: b.genid,
               error: err instanceof Error ? err.message : String(err),
             });
-            await setStatus(b.genid, { status: "failed" }).catch(() => undefined);
-            // Tell open viewers the box failed permanently (usually a
-            // safety/copyright rejection of the prompt) so the client swaps
-            // the shimmer → a retry state instead of loading forever.
+            // A free / region box with no fitting picture is marked as such
+            // (NO_MATCH_SIZE) so the editor offers an upload, not a retry.
+            const noMatch = err instanceof NoImageMatchError;
+            await setStatus(b.genid, { status: "failed", size: noMatch ? NO_MATCH_SIZE : "" }).catch(() => undefined);
+            // Tell open viewers the box failed permanently (a safety/copyright
+            // rejection of the prompt, or no match) so the client swaps the
+            // shimmer → the failed card instead of loading forever.
             await broadcastToProject(projectId, "slide.image.failed", {
               slideKey: b.slideKey,
               genid: b.genid,
+              ...(noMatch ? { reason: "nomatch" as const } : {}),
             }).catch(() => undefined);
           }
         }

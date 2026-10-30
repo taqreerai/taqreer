@@ -25,7 +25,7 @@
 //      re-broadcasts its URL instead of re-billing.
 
 import { inngest } from "@/inngest/client";
-import { fillImage } from "@/lib/images/image-source";
+import { fillImage, NO_MATCH_SIZE, NoImageMatchError } from "@/lib/images/image-source";
 import {
   storeGeneratedImage,
   generatedImageExists,
@@ -142,6 +142,7 @@ export const deckImageWarm = inngest.createFunction(
         // warms carry no versionId and never mark — the end-of-deck reconcile
         // owns their retry + failure signal.
         if (versionId) {
+          const noMatch = err instanceof NoImageMatchError;
           try {
             const { prisma } = await import("@/lib/prisma");
             const marked = await prisma.generatedImage.updateMany({
@@ -155,12 +156,13 @@ export const deckImageWarm = inngest.createFunction(
                 aspect: box.aspect,
                 status: { notIn: ["ready"] },
               },
-              data: { status: "failed" },
+              data: { status: "failed", size: noMatch ? NO_MATCH_SIZE : "" },
             });
             if (marked.count > 0) {
               await broadcastToProject(projectId, "slide.image.failed", {
                 slideKey,
                 genid: box.genid,
+                ...(noMatch ? { reason: "nomatch" as const } : {}),
               });
             }
           } catch (markErr) {

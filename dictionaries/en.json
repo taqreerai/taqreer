@@ -2209,6 +2209,8 @@
     "imageFailed": {
       "title": "Image could not be generated",
       "hint": "The description may include sensitive or copyrighted content. Select the image to edit its description, or try again.",
+      "noMatchTitle": "No matching picture found",
+      "noMatchHint": "Free decks use our picture library and stock photos, and none fit this box. Upload your own picture.",
       "retry": "Try again",
       "upload": "Upload yours",
       "uploading": "Uploading…"

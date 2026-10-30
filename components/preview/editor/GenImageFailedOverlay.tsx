@@ -8,6 +8,8 @@
 // those genids (`failedImages`, fed by the `slide.image.failed` broadcast +
 // the status poll's `imageFailed`); this component floats a card over each
 // failed box: what happened, why it likely happened, and a one-click retry.
+// A free / region box that found no fitting picture (`noMatch`) says so and
+// offers the upload only: its retry would take the same no-AI path again.
 //
 // Positioning follows the StylePill recipe: the boxes live INSIDE the editor
 // iframe (a separate document), so a rAF loop reads each box's on-screen rect
@@ -36,6 +38,9 @@ type RetryInput = {
 type GenImageFailedOverlayProps = {
   editorDoc: Document;
   failed: ReadonlySet<string>;
+  // Failed boxes that found no fitting picture (free / region plan): a retry
+  // would fail again, so the card explains that and offers the upload only.
+  noMatch?: ReadonlySet<string>;
   slideId: string;
   onRetry: (input: RetryInput) => void;
   // The user's own photo for the box: DeckView swaps the src, drops the gen
@@ -53,6 +58,7 @@ function findBox(editorDoc: Document, genid: string): HTMLImageElement | null {
 export function GenImageFailedOverlay({
   editorDoc,
   failed,
+  noMatch,
   slideId,
   onRetry,
   onUpload,
@@ -84,9 +90,14 @@ export function GenImageFailedOverlay({
         el.style.display = "";
         el.style.left = `${fr.left + r.left + r.width / 2}px`;
         el.style.top = `${fr.top + r.top + r.height / 2}px`;
-        el.style.maxWidth = `${Math.max(120, Math.min(340, r.width - 16))}px`;
-        // Small on-screen box → icon + button only (the hint wouldn't fit).
-        el.dataset.compact = r.width < 240 || r.height < 150 ? "1" : "0";
+        el.style.maxWidth = `${Math.max(72, Math.min(340, r.width - 16))}px`;
+        // The card always fits inside its box (prod 2026-10-30: in short boxes
+        // the title + stacked buttons spilled over the neighbouring boxes):
+        // full = icon, title, hint, labelled buttons (about 190px tall);
+        // compact = no hint, buttons on one row (about 100px);
+        // tiny = icon-only buttons in one row (about 48px).
+        el.dataset.size =
+          r.width >= 300 && r.height >= 230 ? "full" : r.width >= 290 && r.height >= 120 ? "compact" : "tiny";
       }
       raf = requestAnimationFrame(tick);
     };
@@ -157,53 +168,59 @@ export function GenImageFailedOverlay({
             else cardRefs.current.delete(genid);
           }}
           dir={dir}
-          className="group surface-menu fixed z-10 -translate-x-1/2 -translate-y-1/2 rounded-xl px-4 py-3 text-center text-foreground shadow-lg"
+          className="group surface-menu fixed z-10 -translate-x-1/2 -translate-y-1/2 rounded-xl px-4 py-3 text-center text-foreground shadow-lg data-[size=tiny]:px-2 data-[size=tiny]:py-2"
           // Hidden until the first rAF places it (no top-left flash); hairline
           // border so the card reads over any slide colour.
           style={{ display: "none", border: "1px solid var(--tq-border-hairline)" }}
         >
           <span
-            className="material-symbols-outlined text-foreground/55"
+            className="material-symbols-outlined text-foreground/55 group-data-[size=tiny]:hidden"
             style={{ fontSize: 20 }}
             aria-hidden
           >
             broken_image
           </span>
-          <p className="mt-0.5 text-[12px] font-medium">{t.title}</p>
-          <p className="mt-1 text-[11px] leading-relaxed text-foreground/55 group-data-[compact=1]:hidden">
-            {t.hint}
+          <p className="mt-0.5 text-[12px] font-medium group-data-[size=tiny]:sr-only">
+            {noMatch?.has(genid) ? t.noMatchTitle : t.title}
           </p>
-          <button
-            type="button"
-            onClick={() => handleRetry(genid)}
-            className="btn-gradient-anim mt-2.5 inline-flex h-7 items-center gap-1.5 rounded-full px-3.5 text-[12px] font-medium text-foreground"
-          >
-            <span
-              className="material-symbols-outlined"
-              style={{ fontSize: 14 }}
-              aria-hidden
-            >
-              refresh
-            </span>
-            {t.retry}
-          </button>
-          {onUpload ? (
-            <button
-              type="button"
-              disabled={uploadFor !== null}
-              onClick={() => {
-                pendingGenid.current = genid;
-                fileRef.current?.click();
-              }}
-              className="mt-2.5 ms-1.5 inline-flex h-7 items-center gap-1.5 rounded-full px-3.5 text-[12px] font-medium text-foreground/85 transition-colors hover:text-foreground disabled:opacity-60"
-              style={{ background: "var(--tq-surface)", border: "1px solid var(--tq-border-hairline)" }}
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: 14 }} aria-hidden>
-                upload
-              </span>
-              {uploadFor === genid ? t.uploading : t.upload}
-            </button>
-          ) : null}
+          <p className="mt-1 text-[11px] leading-relaxed text-foreground/55 group-data-[size=compact]:hidden group-data-[size=tiny]:hidden">
+            {noMatch?.has(genid) ? t.noMatchHint : t.hint}
+          </p>
+          <div className="mt-2.5 flex flex-nowrap items-center justify-center gap-1.5 group-data-[size=tiny]:mt-0">
+            {noMatch?.has(genid) ? null : (
+              <button
+                type="button"
+                onClick={() => handleRetry(genid)}
+                aria-label={t.retry}
+                title={t.retry}
+                className="btn-gradient-anim inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[12px] font-medium text-foreground group-data-[size=tiny]:px-2"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 14 }} aria-hidden>
+                  refresh
+                </span>
+                <span className="group-data-[size=tiny]:hidden">{t.retry}</span>
+              </button>
+            )}
+            {onUpload ? (
+              <button
+                type="button"
+                disabled={uploadFor !== null}
+                onClick={() => {
+                  pendingGenid.current = genid;
+                  fileRef.current?.click();
+                }}
+                aria-label={t.upload}
+                title={t.upload}
+                className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[12px] font-medium text-foreground/85 transition-colors hover:text-foreground disabled:opacity-60 group-data-[size=tiny]:px-2"
+                style={{ background: "var(--tq-surface)", border: "1px solid var(--tq-border-hairline)" }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: 14 }} aria-hidden>
+                  upload
+                </span>
+                <span className="group-data-[size=tiny]:hidden">{uploadFor === genid ? t.uploading : t.upload}</span>
+              </button>
+            ) : null}
+          </div>
         </div>
       ))}
       <input

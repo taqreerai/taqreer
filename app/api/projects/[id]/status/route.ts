@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
 import { resolveGenImageFills } from "@/lib/images/resolve-fills";
-import { scanGenImages } from "@/lib/images/slide-images";
+import { NO_MATCH_SIZE, scanGenImages } from "@/lib/images/slide-images";
 
 type Progress = {
   stage: "thinking" | "designing" | "validating" | "saving";
@@ -306,6 +306,7 @@ export async function GET(
   // image the instant the warm fill lands.
   let imageFills: Record<string, string> | null = null;
   let imageFailed: string[] | null = null;
+  let imageNoMatch: string[] | null = null;
   let imagePending: string[] | null = null;
   if (includeImageFills) {
     // genid → prompt + ref for every reserved box the client is rendering.
@@ -335,7 +336,7 @@ export async function GET(
           presentationVersionId: latestVersion.id,
           status: { in: ["failed", "pending", "generating"] },
         },
-        select: { genid: true, prompt: true, status: true },
+        select: { genid: true, prompt: true, status: true, size: true },
       });
       const liveRows = stateRows.filter(
         (r) =>
@@ -343,6 +344,11 @@ export async function GET(
       );
       imageFailed = liveRows
         .filter((r) => r.status === "failed")
+        .map((r) => r.genid);
+      // The failed boxes that found no fitting picture (free / region plan):
+      // the editor offers an upload instead of a retry.
+      imageNoMatch = liveRows
+        .filter((r) => r.status === "failed" && r.size === NO_MATCH_SIZE)
         .map((r) => r.genid);
       // Boxes whose fill is still IN FLIGHT (seeded pending / claimed
       // generating). The client keeps their loading shimmer through the
@@ -366,6 +372,7 @@ export async function GET(
     genChat,
     imageFills,
     imageFailed,
+    imageNoMatch,
     imagePending,
     // Latest version id + its own status. DeckView's partial-regen polling
     // uses this to distinguish "applying is done" (versionId == the new

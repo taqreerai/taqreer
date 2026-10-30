@@ -175,6 +175,9 @@ export type ProjectBroadcastPayloadMap = {
     // data-genid of the failed box — the client finds the matching
     // <img data-genid> and shows the failed/retry state.
     genid: string;
+    // "nomatch": a free / region box with no fitting picture (upload only).
+    // Absent: the image model refused the prompt (retry / edit).
+    reason?: "nomatch";
   };
   "deck.baked": {
     // The PresentationVersion the bake wrote.

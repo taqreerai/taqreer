@@ -330,3 +330,7 @@ export function injectImgSrc(html: string, genid: string, url: string): string {
   }
   return html;
 }
+
+// GeneratedImage.size on a FAILED row whose box found no fitting picture
+// (free / region plan, lib/images/image-source NoImageMatchError).
+export const NO_MATCH_SIZE = "nomatch";

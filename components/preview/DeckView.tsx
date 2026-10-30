@@ -1784,6 +1784,11 @@ export function DeckView({
   const [failedImages, setFailedImages] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+  // The failed boxes that found no fitting picture (free / region plan): the
+  // overlay offers an upload instead of a retry. Only read for failed boxes.
+  const [noMatchImages, setNoMatchImages] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   // Genids with a single-image regen in flight (PR #185 follow-up). Drives
   // the editor boxes' `.tq-genimg-live` shimmer via the mirror effect below.
   // React state, NOT a direct classList write: the iframe rebuilds on
@@ -2369,6 +2374,7 @@ export function DeckView({
         const data = (await res.json()) as {
           imageFills?: Record<string, string> | null;
           imageFailed?: string[] | null;
+          imageNoMatch?: string[] | null;
           imagePending?: string[] | null;
         };
         if (cancelled) return;
@@ -2409,6 +2415,12 @@ export function DeckView({
             }
             return serverFailed;
           });
+          const noMatch = data.imageNoMatch ?? [];
+          setNoMatchImages((prev) =>
+            prev.size === noMatch.length && noMatch.every((g) => prev.has(g))
+              ? prev
+              : new Set(noMatch),
+          );
         }
         // In-flight boxes (rows pending/generating). RECONCILE like `failed`:
         // the server is authoritative, so a box it stops reporting (filled,
@@ -3085,6 +3097,14 @@ export function DeckView({
         setFailedImages((prev) =>
           prev.has(payload.genid) ? prev : new Set(prev).add(payload.genid),
         );
+        setNoMatchImages((prev) => {
+          const noMatch = payload.reason === "nomatch";
+          if (prev.has(payload.genid) === noMatch) return prev;
+          const next = new Set(prev);
+          if (noMatch) next.add(payload.genid);
+          else next.delete(payload.genid);
+          return next;
+        });
       });
       // Peer started a FULL deck regen. Mark every slide in the current
       // manifest as in-flight so the dim+spinner overlay covers the
@@ -5921,6 +5941,7 @@ export function DeckView({
               <GenImageFailedOverlay
                 editorDoc={editorDoc}
                 failed={failedImages}
+                noMatch={noMatchImages}
                 slideId={focusedSlide!.slideId}
                 // A failed box retries with its own prompt: free (regen route).
                 onRetry={(r) => void handleRegenImage({ ...r, mode: "prompt" })}
