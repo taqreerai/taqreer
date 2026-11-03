@@ -12,8 +12,9 @@
 //   paid plan   a library image only on a near-exact match, else gpt-image at
 //               medium quality as before (stock boxes still try Pexels first)
 //   region      a free account from a region-limited country (lib/credits/
-//               region-model): Pexels ONLY, no library, no AI (owner,
-//               2026-10-29: images unlocked for them at no image cost)
+//               region-model): our library, then Pexels, never AI (owner,
+//               2026-10-29: images unlocked for them at no image cost;
+//               library added 2026-11-03, it costs nothing per image)
 // A deck that was bought outright counts as paid. The library is the same
 // pool the public /free-stock-images gallery shows (saved deck versions),
 // never Pexels copies, never a deck made around a user's own product photo,
@@ -232,9 +233,16 @@ export async function fillImage(opts: {
   }
 
   if (tier === "region") {
-    // Pexels only. A stock box carries its own query; any other box gets a
-    // short query from Haiku (choose with no library candidates).
-    const q = stock ? opts.prompt : (await choose(opts.prompt, [], false)).query || fallbackQuery(opts.prompt);
+    let regionQuery: string | null = null;
+    // Library first (a stored image costs nothing), then Pexels. A stock box
+    // goes straight to Pexels with its own query; any other box takes the
+    // query Haiku wrote while checking the library. Never AI.
+    if (!ref && !stock) {
+      const { image, query } = await fromLibrary(opts.projectId, opts.prompt, opts.aspect, false);
+      if (image) return image;
+      regionQuery = query;
+    }
+    const q = stock ? opts.prompt : regionQuery || fallbackQuery(opts.prompt);
     for (const attempt of [q, q.split(" ").slice(0, 2).join(" ")]) {
       if (!attempt || !stockPhotosEnabled()) continue;
       const photo = await findStockPhoto(attempt, opts.aspect, opts.prompt);
