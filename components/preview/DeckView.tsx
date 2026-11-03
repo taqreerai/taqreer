@@ -4933,7 +4933,14 @@ export function DeckView({
   // the locked tail right after it (effectiveTeaserLocked below). The model
   // declares the planned TOTAL on the cover, so cap the writing slots at the
   // built part or the tail would show twice.
-  const teaserActive = role === "owner" && !teaserUnlockedState && teaserLockedCount > 0;
+  // A deck holding more real slides than the free part is already unlocked: a
+  // payment that lands outside this tab swaps the full manifest in (peer sync)
+  // without flipping teaserUnlockedState, which left 5 phantom locked tiles
+  // after 10 real slides (prod 2026-11-03, project cmw0f4feb01fk0x6d94w0074r).
+  const beyondTeaser =
+    (manifest?.slides.length ?? 0) > teaserVisibleForFlow(initialIsSocial ? "social" : "create");
+  const teaserActive =
+    role === "owner" && !teaserUnlockedState && teaserLockedCount > 0 && !beyondTeaser;
   const teaserBuiltSlots = teaserVisibleForFlow(initialIsSocial ? "social" : "create");
   const rawSlotCount = initialSlideCountAuto
     ? Math.max(streamingPreview.length + 1, autoTotalHint, 1)
