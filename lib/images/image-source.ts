@@ -54,12 +54,16 @@ export async function projectImageTier(projectId: string): Promise<ImageTier> {
     where: { id: projectId },
     select: { purchasedAt: true, user: { select: { plan: true, role: true, signupCountry: true } } },
   });
+  // A bought deck in a limited region stays on library and Pexels (owner,
+  // 2026-11-04): only a paid plan brings AI images there.
   const tier: ImageTier =
-    !p || isPaidPlan(p.user.plan) || p.user.role === "admin" || p.purchasedAt
+    !p || isPaidPlan(p.user.plan) || p.user.role === "admin"
       ? "paid"
       : isRegionLimitedFree(p.user)
         ? "region"
-        : "free";
+        : p.purchasedAt
+          ? "paid"
+          : "free";
   tierCache.set(projectId, { tier, at: Date.now() });
   return tier;
 }
