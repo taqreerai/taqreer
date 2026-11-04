@@ -144,18 +144,21 @@ export function DecksClient({ initialDecks }: { initialDecks: AdminDeck[] }) {
           </p>
         ) : (
           pageRows.map((d, i) => (
-            <Link
+            <div
               key={d.id}
-              href={localizedHref(`/project/${d.id}`, locale)}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-4 py-3"
+              className="flex items-center gap-3"
               style={{
                 borderBottom:
                   i === pageRows.length - 1
                     ? "none"
                     : "1px solid var(--tq-border-hairline)",
               }}
+            >
+            <Link
+              href={localizedHref(`/project/${d.id}`, locale)}
+              target="_blank"
+              rel="noreferrer"
+              className="flex min-w-0 flex-1 items-center gap-4 py-3"
             >
               {/* Cover thumb (per-slide thumbs only exist after Save) */}
               {d.thumbnail ? (
@@ -235,6 +238,17 @@ export function DecksClient({ initialDecks }: { initialDecks: AdminDeck[] }) {
                 open_in_new
               </span>
             </Link>
+            <Link
+              href={localizedHref(`/admin/compare/${d.id}`, locale)}
+              aria-label="Compare with the original"
+              title="Compare with the original"
+              className="flex-shrink-0"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 18, color: MUTED }}>
+                compare
+              </span>
+            </Link>
+            </div>
           ))
         )}
       </div>
