@@ -16,6 +16,8 @@ import {
   transcribePicture,
 } from "@/lib/assistant/picture-text";
 import { holdCredits, settleHold } from "@/lib/credits/server";
+import { applyImageMedium, deckMedium } from "@/lib/images/image-medium";
+import { collectSeedableGenImages } from "@/lib/images/slide-images";
 import { regenCost } from "@/lib/credits/cost";
 import { ownerGetsVisionReview } from "@/lib/deck/review-gate";
 import {
@@ -444,6 +446,11 @@ function extractSlideHtml(raw: string): string {
   return text;
 }
 
+// A paid unlock on a deck with images on (appended to the frame system prompt).
+const UNLOCK_IMAGES_RULE = `
+
+PAID DECK IMAGES: when this slide's design has room and a picture would genuinely help it, add one generated-image box under the image rules above. Leave it out when the slide is dense, built on data or a table, or already carries the user's own picture. Never push content out to make room.`;
+
 type RegenPartialEvent = {
   projectId: string;
   presentationId: string;
@@ -469,6 +476,11 @@ type RegenPartialEvent = {
   // the broadcast is the courtesy signal for OTHER collaborators).
   // Optional for backwards compat with in-flight pre-16.D events.
   actorPrismaUserId?: string | null;
+  // Set only by deck-unlock, never from a request (owner, 2026-11-04): once a
+  // free deck is paid for, its first slides are redone on the unlock's model.
+  // Comped (no hold, no charge). `images`: the slides may gain image boxes,
+  // and this run fills the whole deck's boxes before the bake.
+  unlockHead?: { images: boolean };
   // Billing tier captured at enqueue so the `priority.run` CEL can give Max-tier
   // regens queue priority. Read only by Inngest's scheduler; missing → no boost.
   tier?: string | null;
@@ -499,6 +511,25 @@ export const deckRegeneratePartial = inngest.createFunction(
     onFailure: async ({ event, error }) => {
       const original = readOriginalEvent(event.data);
       if (!original.versionId) return;
+      // A failed head regen after an unlock: the deck stays on the version the
+      // unlock saved, whose new slides still need their images and bake.
+      if (original.unlockHead && original.sourceVersionId && original.projectId) {
+        await inngest
+          .send(
+            original.unlockHead.images
+              ? {
+                  id: `images:${original.projectId}:${original.sourceVersionId}:unlock-head-failed`,
+                  name: "deck.images.requested",
+                  data: { projectId: original.projectId, versionId: original.sourceVersionId, freezeAfter: true, review: true },
+                }
+              : {
+                  id: `freeze:${original.projectId}:${original.sourceVersionId}:unlock-head-failed`,
+                  name: "deck.freeze.bake",
+                  data: { projectId: original.projectId, versionId: original.sourceVersionId, review: true },
+                },
+          )
+          .catch((e) => console.error("partial-regen onFailure: unlock finalize failed", e));
+      }
       const { prisma } = await import("@/lib/prisma");
       await prisma.presentationVersion
         .update({
@@ -650,7 +681,8 @@ export const deckRegeneratePartial = inngest.createFunction(
         jobKey: regenChargeKey,
         amount: regenAmount,
         // Admin/superuser owner: waive the charge (no hold, no debit).
-        waive: project.user.role === "admin",
+        // The first slides of a paid unlock are part of what was paid for.
+        waive: project.user.role === "admin" || !!data.unlockHead,
         metadata: {
           kind: "deck.regenerate.partial",
           preset: eventQuality,
@@ -799,15 +831,16 @@ export const deckRegeneratePartial = inngest.createFunction(
           return p?.type ?? null;
         })
       : null;
+    const unlockImages = data.unlockHead?.images === true;
     const frameRegenSystemPrompt = isFrameDeck
       ? frameSystemPrompt({
           canvas: SLIDE_DIMENSIONS[sourceFormat],
           language: source.language === "en" ? "en" : "ar",
-          imagesMode: source.slides.some((s) =>
-            s.html.includes("data-genimage"),
-          ),
+          imagesMode:
+            unlockImages ||
+            source.slides.some((s) => s.html.includes("data-genimage")),
           kind: frameKindFor(regenProjectType, sourceFormat),
-        })
+        }) + (unlockImages ? UNLOCK_IMAGES_RULE : "")
       : null;
     const frameCtx = isFrameDeck
       ? frameCtxFromStoredCover(
@@ -1132,14 +1165,22 @@ export const deckRegeneratePartial = inngest.createFunction(
         set.add(row.genid);
         keepGenidsBySlide.set(row.slideKey, set);
       }
+      // A paid unlock's image pass fills these boxes itself (dispatch below),
+      // so the boxes it will seed stay, by the same walk the seed scan uses.
+      const spliced = source.slides.map((s) => {
+        const update = regenResults.find((r) => r.slideId === s.slideId);
+        return update ? { ...s, html: update.html } : s;
+      });
+      const unlockBoxes = unlockImages ? collectSeedableGenImages(spliced) : null;
+      const unlockMedium = unlockImages ? deckMedium(spliced.map((s) => s.html)) : null;
       const slides = source.slides.map((s) => {
         const update = regenResults.find((r) => r.slideId === s.slideId);
         if (!update) return s;
         const html = neutralizeGenImages(
           logoInner ? injectLogoMarkers(update.html, logoInner) : update.html,
-          keepGenidsBySlide.get(s.slideId),
+          unlockBoxes ? unlockBoxes.get(s.slideId) : keepGenidsBySlide.get(s.slideId),
         );
-        return { ...s, html };
+        return { ...s, html: unlockMedium ? applyImageMedium(html, unlockMedium) : html };
       });
       // Carry the GenChat feed into the rebuilt manifest. The version row
       // holds source history + this run's appends (jsonb_set writes above);
@@ -1209,6 +1250,16 @@ export const deckRegeneratePartial = inngest.createFunction(
           where: { id: data.presentationId },
           data: { currentVersionId: versionId },
         }),
+        // Same as the unlock's own save: exports and thumbnails read the saved
+        // pin first, and this version is the deck that was paid for.
+        ...(data.unlockHead
+          ? [
+              prisma.presentation.updateMany({
+                where: { id: data.presentationId, savedVersionId: { not: null } },
+                data: { savedVersionId: versionId },
+              }),
+            ]
+          : []),
         prisma.project.update({
           where: { id: projectId },
           data: { status: "completed" },
@@ -1327,15 +1378,24 @@ export const deckRegeneratePartial = inngest.createFunction(
     await step.run("dispatch-bake-and-settle", async () => {
       let bakeDispatched = true;
       try {
-        await inngest.send({
-          id: `freeze:${projectId}:${versionId}:regen:${data.jobId ?? event.id ?? "0"}`,
-          name: "deck.freeze.bake",
-          // review ALWAYS on for regen bakes, enhance decks included: a
-          // regen is an explicit authoring request, the review is subset-
-          // sized (the regen'd slides only), and it is what catches regen
-          // defects - the 70cr regen base pays for exactly this.
-          data: { projectId, versionId, review: true },
-        });
+        await inngest.send(
+          data.unlockHead?.images
+            ? {
+                // Chains the freeze bake itself (freezeAfter).
+                id: `images:${projectId}:${versionId}:unlock-head`,
+                name: "deck.images.requested",
+                data: { projectId, versionId, freezeAfter: true, review: true },
+              }
+            : {
+                id: `freeze:${projectId}:${versionId}:regen:${data.jobId ?? event.id ?? "0"}`,
+                name: "deck.freeze.bake",
+                // review ALWAYS on for regen bakes, enhance decks included: a
+                // regen is an explicit authoring request, the review is subset-
+                // sized (the regen'd slides only), and it is what catches regen
+                // defects - the 70cr regen base pays for exactly this.
+                data: { projectId, versionId, review: true },
+              },
+        );
       } catch (err) {
         bakeDispatched = false;
         logger.warn("deck_freeze_dispatch_failed", {
