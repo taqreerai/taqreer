@@ -15,6 +15,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { chromeTables, extractPptxVisuals, classifyPptxPictures, extractTemplatePictures, type PptxFrame } from "@/lib/extract/pptx-visuals";
 import { buildPptxAssets } from "@/lib/extract/pptx-asset-crops";
 import { buildPdfAssets, classifyPdfPictures, extractPdfPictures, type PdfAsset } from "@/lib/extract/pdf-visuals";
+import { replaceCoveredPictures } from "@/lib/extract/pdf-overlays";
 import { uploadSourceAsset } from "@/lib/storage/source-assets";
 import { coverPhotoCandidates } from "@/lib/deck/carried-assets";
 import { analyzeAndEnhance, detailProfile, type PictureKind } from "@/lib/extract/photo-enhance";
@@ -157,6 +158,9 @@ export async function prepareCarriedPictures(opts: {
     wordsByPage = visuals.wordsByPage;
     const classes = classifyPdfPictures(visuals);
     assets = await buildPdfAssets(visuals, classes, { whiteScans: opts.cutPages });
+    // What the page really shows when something covers a picture. Never fails
+    // the deck: the bitmap stays.
+    await replaceCoveredPictures(assets, buffer).catch((err) => console.warn("[carry] visible pictures failed:", err));
     // After the flat-image filter: a file whose only "pictures" were shadows
     // and fills has no real pictures, so it keeps AI images.
     hasContentImages = assets.some((a) => a.cls === "content" || (a.cls === "page" && !a.scan));

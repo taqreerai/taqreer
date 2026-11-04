@@ -109,7 +109,7 @@ function bins(name: string, envVar: string): string[] {
   );
 }
 
-async function runTool(name: string, envVar: string, args: string[], timeout: number): Promise<string> {
+export async function runTool(name: string, envVar: string, args: string[], timeout: number): Promise<string> {
   let lastErr: unknown;
   for (const bin of bins(name, envVar)) {
     try {
