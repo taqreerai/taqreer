@@ -70,9 +70,11 @@ function pictureNotes(input: RedesignPlanInput): string {
   const bySlide = new Map<number, string[]>();
   for (const p of input.pictures) {
     const what =
-      p.cls === "page" || p.cls === "backdrop"
-        ? "full-slide background art"
-        : p.swap
+      p.cls === "page"
+        ? "finished page artwork, shown exactly as it is: nothing on this slide can change, so never plan a new layout, new text or a redesign for it"
+        : p.cls === "backdrop"
+          ? "full-slide background art"
+          : p.swap
           ? `decorative clip-art${p.shows ? ` (${p.shows})` : ""}`
           : `${p.kind === "graphic" ? "content graphic, pixels must stay exact" : "content picture"}${p.shows ? ` (${p.shows})` : ""}`;
     (bySlide.get(p.slideIndex) ?? bySlide.set(p.slideIndex, []).get(p.slideIndex)!).push(what);

@@ -15,6 +15,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { prepareCarriedPictures, type CarriedPicture } from "@/lib/extract/carried-pictures";
+import { cutPagePictures } from "@/lib/extract/page-regions";
 import { carriedSlideBlock, CARRIED_LOGO_RULE, CARRIED_SCREENS_RULE } from "@/lib/deck/carried-assets";
 
 const MAX_PICTURES = 40;
@@ -38,9 +39,22 @@ export async function carryUploadPictures(projectId: string, anthropicFileId: st
     sourcePath: out.sourcePath,
     sourceMime: out.sourceMime,
     replace: true,
+    cutPages: true,
   });
-  return carried.pictures
-    .filter((p) => p.cls !== "page" && !p.swap && !p.rebuild)
+  // A flat page is cut into its pictures (lib/extract/page-regions.ts); one that
+  // cannot be split is still the user's content and is shown whole. Dropping
+  // these left empty picture boxes (prod 2026-11-03 cmw1alaxj01r40x6d3xjmq1cp).
+  const { pictures, pagesCut, pagesRetyped, pagesKept, regions } = await cutPagePictures({
+    projectId,
+    pictures: carried.pictures,
+    shouldCut: () => true,
+  });
+  if (pagesCut + pagesRetyped + pagesKept > 0) {
+    console.info("[create] flat pages", { projectId, pagesCut, pagesRetyped, pagesKept, regions });
+  }
+  return pictures
+    .map((p) => (p.cls === "page" ? { ...p, cls: "content" as const, kind: p.kind ?? ("graphic" as const), swap: false } : p))
+    .filter((p) => !p.swap && !p.rebuild)
     // A full-slide photo is placed as a picture here: the new slide is not that page.
     .map((p) => (p.cls === "backdrop" ? { ...p, cls: "content" as const } : p))
     .slice(0, MAX_PICTURES);

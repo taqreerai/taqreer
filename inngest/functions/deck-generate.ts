@@ -107,6 +107,7 @@ import {
   applyPageBackdrop,
 } from "@/lib/deck/carried-assets";
 import { prepareCarriedPictures, type CarriedPicture, type CarriedTable } from "@/lib/extract/carried-pictures";
+import { cutPagePictures } from "@/lib/extract/page-regions";
 import { carryUploadPictures, uploadPicturesBlock } from "@/lib/create/upload-pictures";
 
 function getClient() {
@@ -2458,15 +2459,36 @@ export const deckGenerate = inngest.createFunction(
                   palette: Array.isArray(briefForRefresh.brand?.colors) ? briefForRefresh.brand.colors : [],
                 }
               : null;
+          // Flat PDF pages, when the user asked for anything past keeping the
+          // deck as it is: cut into their pictures so the slide can be redesigned
+          // (lib/extract/page-regions.ts). A free preview reads only the pages it
+          // builds; the unlock cuts the rest.
+          const cutPages = flags.textRework || flags.swapPictures || flags.replaceAll || briefForRefresh?.refreshPhotos === true;
           const result = await prepareCarriedPictures({
             projectId,
             sourcePath,
             sourceMime,
+            cutPages,
             refresh,
             rework: flags.textRework || flags.swapPictures,
             dropChrome: flags.textRework,
             replace: flags.replaceAll,
           });
+          if (cutPages) {
+            const cut = await cutPagePictures({
+              projectId,
+              pictures: result.pictures,
+              shouldCut: (p) => teaserVisible == null || p.slideIndex < teaserVisible,
+            });
+            result.pictures = cut.pictures;
+            logger.info("enhance_flat_pages", {
+              projectId,
+              pagesCut: cut.pagesCut,
+              pagesRetyped: cut.pagesRetyped,
+              pagesKept: cut.pagesKept,
+              regions: cut.regions,
+            });
+          }
           // Only "redraw" and "replace all" let a picture be swapped: otherwise
           // every picture is the user's and stays (the tags still pair labels by "shows").
           if (!flags.swapPictures && !flags.replaceAll) for (const p of result.pictures) delete p.swap;

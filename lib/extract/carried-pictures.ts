@@ -84,6 +84,8 @@ export type CarriedPicture = {
   rebuild?: string;
   // An animated GIF, stored as the original file so it plays.
   animated?: boolean;
+  // A mostly white flat page, kept only for lib/extract/page-regions.ts.
+  scan?: boolean;
   aspect: number; // width / height on the original slide
   altText: string | null;
 };
@@ -133,6 +135,9 @@ export async function prepareCarriedPictures(opts: {
   // supporting picture (swap: rebuilt as a generated image) or dropped
   // (lib/extract/rework-pictures.ts tagReplacePictures).
   replace?: boolean;
+  // The caller will cut flat pages (lib/extract/page-regions.ts): mostly white
+  // ones are kept for it too, since line drawings on white look like a scan.
+  cutPages?: boolean;
 }): Promise<CarriedPictures> {
   if (opts.sourceMime !== PPTX_MIME && opts.sourceMime !== PDF_MIME) {
     return { hasContentImages: false, pictures: [], skipped: 0, tables: [] };
@@ -151,10 +156,10 @@ export async function prepareCarriedPictures(opts: {
     const visuals = await extractPdfPictures(buffer);
     wordsByPage = visuals.wordsByPage;
     const classes = classifyPdfPictures(visuals);
-    assets = await buildPdfAssets(visuals, classes);
+    assets = await buildPdfAssets(visuals, classes, { whiteScans: opts.cutPages });
     // After the flat-image filter: a file whose only "pictures" were shadows
     // and fills has no real pictures, so it keeps AI images.
-    hasContentImages = assets.some((a) => a.cls === "content" || a.cls === "page");
+    hasContentImages = assets.some((a) => a.cls === "content" || (a.cls === "page" && !a.scan));
   } else {
     const visuals = await extractPptxVisuals(buffer);
     const classes = classifyPptxPictures(visuals);
@@ -247,7 +252,7 @@ export async function prepareCarriedPictures(opts: {
     storable = storable.filter((a) => !template.has(a.assetId));
   }
   hasContentImages =
-    assets.some((a) => a.cls === "page") ||
+    assets.some((a) => a.cls === "page" && !a.scan) ||
     storable.some((a) => a.cls === "content" && kinds.get(a.assetId) === "photo");
   const backdropIds = fullSlidePhotos(storable, kinds);
   // Rework: once per distinct picture (same bytes on several slides = one),
@@ -259,7 +264,7 @@ export async function prepareCarriedPictures(opts: {
     const slideText = opts.sourceMime === PPTX_MIME ? await extractTextPerSlide(buffer).catch(() => [] as string[]) : [];
     const byKey = new Map<string, { bytes: Buffer; context?: string }>();
     for (const a of storable) {
-      if (a.file.kind !== "image") continue;
+      if (a.file.kind !== "image" || a.scan) continue;
       const key = mediaKeys.get(a.assetId) ?? createHash("sha1").update(a.file.bytes).digest("hex");
       mediaKeys.set(a.assetId, key);
       if (!byKey.has(key)) byKey.set(key, { bytes: a.file.bytes, context: slideText[a.slideIndex] });
@@ -352,7 +357,7 @@ export async function prepareCarriedPictures(opts: {
     const cands: HdCandidate[] = [];
     for (const a of storable) {
       const key = mediaKeys.get(a.assetId);
-      if (!key || seen.has(key) || a.file.kind !== "image" || a.file.animated || replaced.has(a.assetId)) continue;
+      if (!key || seen.has(key) || a.file.kind !== "image" || a.file.animated || a.scan || replaced.has(a.assetId)) continue;
       const role = roles.get(key);
       if (role === "drop" || role === "support" || role === "logo" || role === "screen" || tags.get(key)?.swap) continue;
       if (a.file.width >= Math.min(1, a.box.w) * 1920) continue;
@@ -406,6 +411,7 @@ export async function prepareCarriedPictures(opts: {
       // An animated picture is never swapped: a generated image cannot move.
       ...(tags.get(mediaKeys.get(a.assetId) ?? "")?.swap && !(a.file.kind === "image" && a.file.animated) ? { swap: true } : {}),
       ...(a.file.kind === "image" && a.file.animated ? { animated: true } : {}),
+      ...(a.scan ? { scan: true } : {}),
       ...(roles.get(mediaKeys.get(a.assetId) ?? "") === "logo" ? { logo: true } : {}),
       ...(screenBriefs.has(mediaKeys.get(a.assetId) ?? "") ? { rebuild: screenBriefs.get(mediaKeys.get(a.assetId) ?? "")! } : {}),
       ...(tags.get(mediaKeys.get(a.assetId) ?? "")?.shows ? { shows: tags.get(mediaKeys.get(a.assetId) ?? "")!.shows! } : {}),

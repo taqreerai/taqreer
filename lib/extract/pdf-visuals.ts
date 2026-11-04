@@ -69,7 +69,12 @@ const DECOR_TILES = 3; // the same small picture this many times on one page is 
 export type PdfPictureClass = PictureClass | "pagescan" | "faded" | "decor";
 
 // An asset ready to store. cls "page" = a page-sized artwork (see header).
-export type PdfAsset = Omit<PptxAsset, "cls"> & { cls: PptxAsset["cls"] | "page" };
+export type PdfAsset = Omit<PptxAsset, "cls"> & {
+  cls: PptxAsset["cls"] | "page";
+  // A mostly white flat page (a scan, or line drawings on white), kept only so
+  // lib/extract/page-regions.ts can look for pictures on it. Never shown as it is.
+  scan?: boolean;
+};
 
 type Mat = [number, number, number, number, number, number];
 type Rect = [number, number, number, number];
@@ -519,7 +524,11 @@ async function pixelStats(bytes: Buffer): Promise<{ flat: boolean; whiteShare: n
  * Content + small pictures (and page-sized artwork) as ready-to-store asset
  * files (ids like "s07-a1"). Flat images and document scans are left out.
  */
-export async function buildPdfAssets(visuals: PdfVisuals, classes: Map<PdfPicture, PdfPictureClass>): Promise<PdfAsset[]> {
+export async function buildPdfAssets(
+  visuals: PdfVisuals,
+  classes: Map<PdfPicture, PdfPictureClass>,
+  opts?: { whiteScans?: boolean },
+): Promise<PdfAsset[]> {
   const perPage = new Map<number, number>();
   const keep = visuals.pictures.filter((p) => {
     const c = classes.get(p);
@@ -546,8 +555,9 @@ export async function buildPdfAssets(visuals: PdfVisuals, classes: Map<PdfPictur
       const cut = await cutPicture(p);
       const stats = await pixelStats(cut.bytes);
       if (stats.flat) return null;
-      if (c === "pagescan" && stats.whiteShare >= SCAN_WHITE_SHARE) return null; // a scan / screenshot, not artwork
-      return { ...base, file: { kind: "image", bytes: cut.bytes, contentType: cut.contentType, width: cut.width, height: cut.height } };
+      const white = c === "pagescan" && stats.whiteShare >= SCAN_WHITE_SHARE; // a scan / screenshot, not artwork
+      if (white && !opts?.whiteScans) return null;
+      return { ...base, ...(white ? { scan: true } : {}), file: { kind: "image", bytes: cut.bytes, contentType: cut.contentType, width: cut.width, height: cut.height } };
     } catch {
       return c === "pagescan" ? null : { ...base, file: { kind: "needsPageCrop" } };
     }

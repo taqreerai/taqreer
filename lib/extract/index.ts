@@ -323,8 +323,13 @@ export async function extract(
         locale: input.enhanceLocale,
       })
     : undefined;
-  const questions =
-    questionsRaw && pictureSignal?.suggest ? { ...questionsRaw, pictureSuggest: pictureSignal.suggest } : questionsRaw;
+  const questions = questionsRaw
+    ? {
+        ...questionsRaw,
+        ...(pictureSignal?.suggest ? { pictureSuggest: pictureSignal.suggest } : {}),
+        ...(pictureSignal?.flatPages ? { flatPages: true } : {}),
+      }
+    : questionsRaw;
 
   return {
     pdfBytes,

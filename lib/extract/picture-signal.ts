@@ -32,6 +32,8 @@ export type PictureSignal = {
   lowResShare: number;
   // The suggestion: replace the pictures, or keep them in a photo-led look.
   suggest: "replace" | "photoRich" | null;
+  // A PDF whose pages are flat images: a redesign reads the words from them.
+  flatPages?: boolean;
 };
 
 type Measured = { slideIndex: number; shownW: number; pixelW: number | null };
@@ -92,5 +94,5 @@ export async function pdfPictureSignal(visuals: PdfVisuals): Promise<PictureSign
     if (classes.get(p) !== "content") continue;
     items.push({ slideIndex: p.pageIndex, shownW: Math.min(1, p.box.w) * CANVAS_W, pixelW: await widthOf(p.bytes) });
   }
-  return decide(items, visuals.scannedPages);
+  return { ...decide(items, visuals.scannedPages), flatPages: [...classes.values()].includes("pagescan") };
 }

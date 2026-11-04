@@ -124,6 +124,9 @@ export function EnhanceQuestionsDialog({
           </header>
 
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-6 pb-2">
+            {questions.flatPages ? (
+              <p className="rounded-xl border border-[var(--tq-border-hairline)] p-3 text-sm text-muted">{copy.flatPages}</p>
+            ) : null}
             {groups.map((g) => (
               <fieldset key={g.key} className="rounded-xl border border-[var(--tq-border-hairline)] p-3">
                 <legend className="sr-only">{g.title}</legend>

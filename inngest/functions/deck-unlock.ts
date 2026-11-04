@@ -36,6 +36,7 @@ import {
 import { ensureFresh } from "@/lib/config/runtime-config";
 import { paramsForQuality, usesLayoutRules } from "@/lib/anthropic/quality-params";
 import { scopeDeckCss, unscopeDeckCss } from "@/lib/deck/scope-css";
+import { cutPagePictures } from "@/lib/extract/page-regions";
 import { buildSlideHtml, canvasFrameCss } from "@/lib/deck/scaffold";
 import {
   assembleFramedSlide,
@@ -246,11 +247,13 @@ export const deckUnlock = inngest.createFunction(
       let redesignSources: { position: number; text: string }[] = [];
       let rework = false;
       let replaceAll = false;
+      let cutPages = false;
       let answerLines: string[] = [];
       for (const j of jobs) {
         const src = (j.inputJson as { brief?: { source?: { kind?: string; textPerSlide?: unknown } } } | null)?.brief?.source;
         if (src?.kind !== "enhance" || !Array.isArray(src.textPerSlide)) continue;
-        const brief = (j.inputJson as { brief?: { reworkDeck?: boolean; refreshAll?: boolean } } | null)?.brief;
+        const brief = (j.inputJson as { brief?: { reworkDeck?: boolean; refreshAll?: boolean; swapPictures?: boolean; refreshPhotos?: boolean } } | null)?.brief;
+        cutPages = brief?.reworkDeck === true || brief?.refreshAll === true || brief?.swapPictures === true || brief?.refreshPhotos === true;
         // Tidy wording (lib/enhance/answers.ts); the tail follows the same
         // start answers as the visible slides.
         rework = brief?.reworkDeck === true;
@@ -272,8 +275,21 @@ export const deckUnlock = inngest.createFunction(
         const c = (j.inputJson as { carried?: { pictures?: CarriedPictureRef[]; tables?: CarriedTableRef[] } } | null)?.carried;
         if (!c) continue;
         const inTail = (slideIndex: number) => slideIndex >= visibleCount && slideIndex < total;
+        const tailPictures = (c.pictures ?? []).filter((x) => inTail(x.slideIndex) || (x.slides ?? []).some(inTail));
+        // A free preview cut only the pages it built: the locked pages are cut
+        // here, from their stored copies (lib/extract/page-regions.ts).
+        const cut = cutPages ? await cutPagePictures({ projectId, pictures: tailPictures, shouldCut: () => true }) : null;
+        if (cut) {
+          logger.info("deck_unlock_flat_pages", {
+            projectId,
+            pagesCut: cut.pagesCut,
+            pagesRetyped: cut.pagesRetyped,
+            pagesKept: cut.pagesKept,
+            regions: cut.regions,
+          });
+        }
         return {
-          pictures: (c.pictures ?? []).filter((x) => inTail(x.slideIndex) || (x.slides ?? []).some(inTail)),
+          pictures: cut?.pictures ?? tailPictures,
           tables: (c.tables ?? []).filter((x) => inTail(x.slideIndex)),
           redesignSources,
           rework,

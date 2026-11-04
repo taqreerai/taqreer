@@ -58,6 +58,8 @@ export type EnhanceQuestions = {
   // "replace" = many weak or crowded pictures, "Replace all" is preselected;
   // "photoRich" = many sharp photos, a photo-led style is suggested.
   pictureSuggest?: "replace" | "photoRich";
+  // The file's pages are flat images, so a redesign reads the words from them.
+  flatPages?: boolean;
 };
 
 /**
