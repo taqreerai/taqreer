@@ -52,9 +52,29 @@ export function isTextPicture(p: Pick<CarriedPictureRef, "cls" | "kind" | "swap"
   return p.cls === "content" && (p.kind === "graphic" || p.kind === "document") && !p.swap;
 }
 
-/** Screenshots / documents -> their own pixel size (enforceCarriedAssetImgs maxSizes). */
+// How far a graphic with words may be enlarged (owner, 2026-11-04): two 274px
+// text pictures were stretched to 606px and went blurry while the sharp 1455px
+// main picture shrank to 468px (prod cmw1q81a30083un6dgzozo9t1, slide 5).
+const GRAPHIC_UPSCALE_LIMIT = 1.5;
+
+/** The widest a picture may be shown (px), or null when it has no limit. */
+function widthLimit(p: Pick<CarriedPictureRef, "cls" | "kind" | "swap" | "native" | "box">): number | null {
+  if (!p.native) return null;
+  if (p.kind === "document") return p.native.w;
+  if (!isTextPicture(p)) return null;
+  // Never smaller than the source slide already showed it.
+  const source = p.box ? Math.round(Math.min(1, p.box.w) * 1920) : 0;
+  return Math.max(Math.round(p.native.w * GRAPHIC_UPSCALE_LIMIT), source);
+}
+
+/** Pictures with a width limit -> that size (enforceCarriedAssetImgs maxSizes). */
 export function nativeSizeCaps(pictures: readonly CarriedPictureRef[]): Map<string, { w: number; h: number }> {
-  return new Map(pictures.flatMap((p) => (p.kind === "document" && p.native ? [[p.assetId, p.native] as const] : [])));
+  return new Map(
+    pictures.flatMap((p) => {
+      const w = widthLimit(p);
+      return w !== null && p.native ? [[p.assetId, { w, h: Math.round((w * p.native.h) / p.native.w) }] as const] : [];
+    }),
+  );
 }
 
 // Screenshots / documents in every Enhance deck (owner, 2026-10-27): an old,
@@ -174,8 +194,8 @@ export function enforceCarriedAssetImgs(
   // Pictures with words in them (graphics, documents): always shown whole,
   // stamped data-asset-text so later rewrites keep knowing it.
   textAssets?: ReadonlySet<string>,
-  // Screenshots / documents: their own pixel size, stamped as max-width /
-  // max-height so the layout can never stretch (and blur) them.
+  // Screenshots, documents and graphics with words: their width limit, stamped
+  // as max-width / max-height so the layout can never stretch (and blur) them.
   maxSizes?: ReadonlyMap<string, { w: number; h: number }>,
 ): string {
   if (!/<img\b/i.test(html)) return html;
@@ -236,6 +256,8 @@ export type CarriedPictureRef = {
   rebuild?: string;
   // An animated GIF: shown whole as a picture, never a background or replaced.
   animated?: boolean;
+  // A mostly white flat page awaiting lib/extract/page-regions.ts; never shown.
+  scan?: boolean;
   aspect: number;
   altText: string | null;
 };
@@ -348,6 +370,13 @@ export function carriedSlideBlock(
   }
   if (pictures.length > 0) {
     const readable = readableWidths(pictures);
+    // The slide's main visual, whatever its tag. A picture that filled most of
+    // the source slide stays the largest thing on the new one; the others no
+    // longer compete with it for size (the same slide 5 as GRAPHIC_UPSCALE_LIMIT).
+    const areaOf = (p: CarriedPictureRef) => (p.box ? Math.min(1, p.box.w) * Math.min(1, p.box.h) : 0);
+    const dominant = (p: CarriedPictureRef) =>
+      !p.swap && !p.rebuild && p.cls !== "small" && !!p.box && (areaOf(p) >= 0.25 || (p.box.h >= 0.8 && p.box.w >= 0.3));
+    const mainArea = Math.max(0, ...pictures.filter(dominant).map(areaOf));
     out +=
       `── SLIDE ${slideNumber}: ORIGINAL PICTURES (place each one, tag unchanged) ──\n` +
       pictures
@@ -367,9 +396,10 @@ export function carriedSlideBlock(
           // A screenshot / document never goes past its own pixel width: the
           // native size wins over the readable floor (stretching adds blur,
           // not detail).
-          const cap = p.kind === "document" && p.native ? p.native.w : Infinity;
+          const cap = widthLimit(p) ?? Infinity;
+          const secondary = mainArea > 0 && !(dominant(p) && areaOf(p) === mainArea);
           const floorRaw = readable.get(p.assetId);
-          const floor = floorRaw !== undefined ? Math.min(floorRaw, cap) : undefined;
+          const floor = floorRaw !== undefined ? Math.min(floorRaw, cap, secondary ? w0 : Infinity) : undefined;
           // A photo that was the source slide's main visual (a section divider's
           // full-height photo): the 560px example height made a tall one a
           // 350px strip (prod 2026-10-28 cmvrptccn006zak6dflqd03ui). It keeps
@@ -378,6 +408,8 @@ export function carriedSlideBlock(
             p.kind === "photo" && !p.swap && p.cls !== "small" && !!p.box &&
             (p.box.w * p.box.h >= 0.25 || (p.box.h >= 0.8 && p.box.w >= 0.3));
           const tallMain = mainPhoto && p.aspect < 1.2;
+          // A graphic or document main visual is shown whole: never a cropped panel.
+          const mainOther = !mainPhoto && !secondary && p.kind !== "photo" && dominant(p);
           const w = tallMain
             ? Math.max(Math.round(1920 * 0.36), Math.round(1080 * p.aspect))
             : Math.min(cap, floor ?? Math.min(w0, Math.round(EXAMPLE_MAX_HEIGHT * p.aspect)));
@@ -385,10 +417,16 @@ export function carriedSlideBlock(
             ? tallMain
               ? `  MAIN PHOTO: the slide's main visual; show it as a full-height side panel (top to bottom of the slide, at least ${w}px wide, object-fit:cover is fine), never a small strip or thumbnail`
               : `  MAIN PHOTO: the slide's main visual; keep it large (at least 45% of the slide's width), never a thumbnail`
-            : "";
-          const screen = Number.isFinite(cap)
-            ? `  SCREENSHOT OR DOCUMENT: at most ${cap}px wide (its own size; larger only blurs it), framed per SCREENSHOTS`
-            : "";
+            : mainOther
+              ? `  MAIN VISUAL: the slide's main visual; keep it the largest thing on the slide, never a thumbnail`
+              : "";
+          const screen =
+            p.kind === "document" && Number.isFinite(cap)
+              ? `  SCREENSHOT OR DOCUMENT: at most ${cap}px wide (its own size; larger only blurs it), framed per SCREENSHOTS`
+              : Number.isFinite(cap) && cap < READABLE_WIDTH_ALONE
+                ? `  LOW RESOLUTION: at most ${cap}px wide (larger only blurs it)`
+                : "";
+          const beside = secondary && p.cls !== "small" ? "  SECONDARY: smaller than the slide's main visual" : "";
           const words = floor
             ? `  HAS WORDS: keep it readable from the back of a room, at least ${floor}px wide (never a thumbnail, never cropped); shorten or move the slide's other elements to make room`
             : "";
@@ -396,7 +434,7 @@ export function carriedSlideBlock(
           const where = p.box
             ? `${kind}; filled ${Math.round(Math.min(1, p.box.w) * 100)}% x ${Math.round(Math.min(1, p.box.h) * 100)}% of the source slide (importance hint, place it freely)`
             : kind;
-          return `<img data-asset="${p.assetId}" src="/api/assets/${projectId}/${p.assetId}" alt="${(p.altText ?? "").replace(/["<>&]/g, "")}">  aspect ${p.aspect} (e.g. ${tallMain ? `${w}x1080` : `${w}x${Math.round(w / p.aspect)}`}px)${screen}${main}${p.logo ? "  LOGO: the organisation's logo (see LOGOS)" : ""}${p.cls === "small" && !p.swap ? "  small: icon / logo / badge" : where}${words}${p.shows ? `  shows: "${p.shows.replace(/["<>&]/g, "")}"` : ""}${p.animated ? "  ANIMATED: a moving picture; show it whole as a picture (never a background, never cropped, never replaced by a generated image)" : ""}${p.swap ? "  SWAPPABLE: generic clip-art (free redesign: may be left out or replaced, see FREE REDESIGN); a replacement is a real illustration, never icon-sized" : ""}`;
+          return `<img data-asset="${p.assetId}" src="/api/assets/${projectId}/${p.assetId}" alt="${(p.altText ?? "").replace(/["<>&]/g, "")}">  aspect ${p.aspect} (e.g. ${tallMain ? `${w}x1080` : `${w}x${Math.round(w / p.aspect)}`}px)${screen}${main}${beside}${p.logo ? "  LOGO: the organisation's logo (see LOGOS)" : ""}${p.cls === "small" && !p.swap ? "  small: icon / logo / badge" : where}${words}${p.shows ? `  shows: "${p.shows.replace(/["<>&]/g, "")}"` : ""}${p.animated ? "  ANIMATED: a moving picture; show it whole as a picture (never a background, never cropped, never replaced by a generated image)" : ""}${p.swap ? "  SWAPPABLE: generic clip-art (free redesign: may be left out or replaced, see FREE REDESIGN); a replacement is a real illustration, never icon-sized" : ""}`;
         })
         .join("\n") +
       "\n\n";
