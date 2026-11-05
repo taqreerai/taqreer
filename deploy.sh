@@ -28,10 +28,24 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# A failed post-receive hook does not fail the push, so check what the box says
+# it finished deploying.
+verify_deployed() {
+  local deployed
+  deployed=$(ssh taqreer 'cat /root/taqreer/.deployed-commit 2>/dev/null' || true)
+  if [[ "$deployed" != "$1" ]]; then
+    echo "✗ Deploy did not finish: the box reports '${deployed:-nothing}', expected $1."
+    echo "  Read the hook output above before deploying again."
+    exit 1
+  fi
+  echo "✓ Live on $1"
+}
+
 # ── Env-only rebuild: trigger the hook on the current main, no new commit. ──
 if [[ "${1:-}" == "--rebuild" ]]; then
   echo "==> Forcing a rebuild of the current main on the box"
   ssh taqreer 'echo "0 0 refs/heads/main" | /root/taqreer-app.git/hooks/post-receive'
+  verify_deployed "$(git ls-remote prod refs/heads/main | cut -f1)"
   exit 0
 fi
 
@@ -50,3 +64,4 @@ git push -q origin dev dev:main || echo "(github push failed — deploying anywa
 
 echo "==> Deploying: git push -> box bare repo (post-receive builds, swaps, health-checks)"
 git push prod dev:main
+verify_deployed "$(git rev-parse dev)"

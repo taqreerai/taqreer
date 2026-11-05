@@ -38,7 +38,13 @@ npx prisma migrate deploy
 echo "==> build (.next-build) then atomic swap"
 rm -rf .next-build
 NEXT_DIST_DIR=.next-build npx next build
-rm -rf .next-deploy
+# Rename, never delete in place: the running app writes into .next-deploy, so a
+# delete can fail halfway and leave it serving from an emptied folder (prod
+# 2026-11-05). The old build goes once the old process is gone.
+rm -rf .next-old
+if [ -d .next-deploy ]; then
+  mv .next-deploy .next-old
+fi
 mv .next-build .next-deploy
 
 echo "==> pm2 restart"
@@ -57,9 +63,22 @@ pm2 start npm --name taqreer-prod -- start -- -p "$PORT" -H 127.0.0.1
 # adds or changes functions, re-sync the app from the Inngest Cloud dashboard.
 pm2 save
 
-echo "==> Deployed. Health check:"
-sleep 5
-curl -s -o /dev/null -w 'HTTP %{http_code}\n' "http://localhost:$PORT/ar"
+echo "==> Health check"
+CODE=000
+for _ in 1 2 3 4 5 6; do
+  sleep 5
+  CODE=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$PORT/ar" || true)
+  [ "$CODE" = "200" ] && break
+done
+echo "HTTP $CODE"
+if [ "$CODE" != "200" ]; then
+  echo "✗ Health check failed. The previous build is kept in .next-old for a rollback."
+  exit 1
+fi
+rm -rf .next-old
+# deploy.sh reads this back: it is written only once the new build is serving.
+git --git-dir="$GIT_DIR" rev-parse main > .deployed-commit
+echo "==> Deployed."
 
 # Purge the Cloudflare edge cache: this build changed every hashed JS/CSS chunk,
 # so any HTML still cached at the edge points at chunks that now 404 -> the page
