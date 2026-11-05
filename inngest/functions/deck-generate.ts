@@ -2489,20 +2489,15 @@ export const deckGenerate = inngest.createFunction(
               regions: cut.regions,
             });
           }
-          // Test switch, admin decks only: pictures of text become slide text
-          // (lib/extract/text-pictures.ts).
-          if ((data.brief as { pictureSort?: boolean } | null)?.pictureSort === true) {
-            const owner = await prisma.project.findUnique({
-              where: { id: projectId },
-              select: { user: { select: { role: true } } },
-            });
-            if (owner?.user.role === "admin") {
-              const sorted = await sortTextPictures({ projectId, pictures: result.pictures });
-              result.pictures = sorted.pictures;
-              result.transcribed = sorted.transcribed;
-              logger.info("enhance_text_pictures", { projectId, transcribed: sorted.transcribed.length });
-            }
-          }
+          // Pictures of text become slide text (lib/extract/text-pictures.ts).
+          const sorted = await sortTextPictures({
+            projectId,
+            pictures: result.pictures,
+            shouldRead: (p) => teaserVisible == null || p.slideIndex < teaserVisible,
+          });
+          result.pictures = sorted.pictures;
+          result.transcribed = sorted.transcribed;
+          logger.info("enhance_text_pictures", { projectId, transcribed: sorted.transcribed.length });
           // Only "redraw" and "replace all" let a picture be swapped: otherwise
           // every picture is the user's and stays (the tags still pair labels by "shows").
           if (!flags.swapPictures && !flags.replaceAll) for (const p of result.pictures) delete p.swap;

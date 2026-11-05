@@ -1,5 +1,6 @@
-// Pictures that are only words become slide text (owner, 2026-11-04). Test
-// switch for now: brief.pictureSort on an admin's deck.
+// Pictures that are only words become slide text in Enhance (owner, 2026-11-05,
+// after a test deck turned two blurry lists into sharp editable cards). This is
+// the one exception to "never swap the user's pictures".
 //
 // A small picture of a list stays soft however it is sized. Two models read it
 // and the picture leaves the deck only when both call it text only, neither is
@@ -10,6 +11,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import sharp from "sharp";
 import { thinkingOffFor, toSdkThinking } from "@/lib/anthropic/model-thinking";
+import { stripTextDashes } from "@/lib/deck/strip-dashes";
 import { readSourceAsset } from "@/lib/storage/source-assets";
 
 const MODELS = ["claude-haiku-5-5", "claude-sonnet-5-5"] as const;
@@ -80,19 +82,23 @@ export function agreedText(a: Reading | null, b: Reading | null): string | null 
   const x = wordsOf(a.lines);
   const y = wordsOf(b.lines);
   if (x.length < MIN_WORDS || x.length !== y.length || x.some((w, i) => w !== y[i])) return null;
-  return a.lines.join("\n").replace(/[–—]/g, ",").trim();
+  // House style: no dashes. Same cleanup as slide text, so a comma stays on its word.
+  return stripTextDashes(a.lines.join("\n").replace(/[<>]/g, "")).trim();
 }
 
 /** The pictures minus those turned into text, and that text by slide. */
 export async function sortTextPictures<T extends SortablePicture>(opts: {
   projectId: string;
   pictures: readonly T[];
+  // A free preview reads only the slides it builds; the unlock reads the rest.
+  shouldRead?: (p: T) => boolean;
 }): Promise<{ pictures: T[]; transcribed: { slideIndex: number; text: string }[] }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { pictures: [...opts.pictures], transcribed: [] };
   const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
   const candidates = opts.pictures
     .filter((p) => p.cls === "content" && (p.kind === "graphic" || p.kind === "document") && !p.swap && !p.logo && !!p.native && p.native.w <= MAX_WIDTH)
+    .filter((p) => opts.shouldRead?.(p) ?? true)
     .slice(0, MAX_PICTURES);
   const gone = new Set<string>();
   const transcribed: { slideIndex: number; text: string }[] = [];

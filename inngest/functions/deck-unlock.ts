@@ -38,6 +38,7 @@ import { ensureFresh } from "@/lib/config/runtime-config";
 import { paramsForQuality, usesLayoutRules } from "@/lib/anthropic/quality-params";
 import { scopeDeckCss, unscopeDeckCss } from "@/lib/deck/scope-css";
 import { cutPagePictures } from "@/lib/extract/page-regions";
+import { sortTextPictures } from "@/lib/extract/text-pictures";
 import { buildSlideHtml, canvasFrameCss } from "@/lib/deck/scaffold";
 import {
   assembleFramedSlide,
@@ -306,8 +307,14 @@ export const deckUnlock = inngest.createFunction(
             regions: cut.regions,
           });
         }
+        // Pictures of text on the locked slides become text, as on the visible ones.
+        const sorted = await sortTextPictures({ projectId, pictures: cut?.pictures ?? tailPictures });
+        for (const t of sorted.transcribed) {
+          const entry = redesignSources.find((r) => r.position === t.slideIndex + 1);
+          if (entry) entry.text = [entry.text, t.text].filter(Boolean).join("\n");
+        }
         return {
-          pictures: cut?.pictures ?? tailPictures,
+          pictures: sorted.pictures,
           tables: (c.tables ?? []).filter((x) => inTail(x.slideIndex)),
           redesignSources,
           rework,
