@@ -113,6 +113,60 @@ function snapRotate(transform: string, rotation: number, inputEvent: unknown): s
   return transform.replace(/rotate\([^)]*\)/, `rotate(${snapped}deg)`);
 }
 
+// The freeze pins a card's contents with absolute coordinates, so resizing the
+// card left them where they were (325 cards on 229 recent slides). The contents'
+// boxes are read once at the start of the gesture and scaled from those values,
+// so frames never compound. Font sizes stay.
+type PinnedBox = { el: HTMLElement; left: number; top: number; width: number; height: number; fixedHeight: boolean };
+type ResizeBase = { width: number; height: number; pinned: PinnedBox[] };
+const resizeBases = new WeakMap<HTMLElement, ResizeBase>();
+
+function captureResizeBase(el: HTMLElement) {
+  const pinned: PinnedBox[] = [];
+  if (el.tagName !== "IMG" && el.tagName.toLowerCase() !== "svg") {
+    for (const kid of el.querySelectorAll<HTMLElement>("*")) {
+      if (kid.style.position !== "absolute" || kid.closest("svg")) continue;
+      pinned.push({
+        el: kid,
+        left: kid.offsetLeft,
+        top: kid.offsetTop,
+        width: kid.offsetWidth,
+        height: kid.offsetHeight,
+        fixedHeight: kid.style.height !== "" && kid.style.height !== "auto",
+      });
+    }
+  }
+  resizeBases.set(el, { width: el.offsetWidth, height: el.offsetHeight, pinned });
+}
+
+function scalePinnedContents(el: HTMLElement, width: number, height: number) {
+  const base = resizeBases.get(el);
+  if (!base || base.pinned.length === 0 || !base.width || !base.height) return;
+  const sx = width / base.width;
+  const sy = height / base.height;
+  for (const p of base.pinned) {
+    p.el.style.inset = `${Math.round(p.top * sy)}px auto auto ${Math.round(p.left * sx)}px`;
+    p.el.style.width = `${Math.round(p.width * sx)}px`;
+    if (p.fixedHeight) p.el.style.height = `${Math.round(p.height * sy)}px`;
+  }
+}
+
+// A parent that clips (a card with overflow:hidden) made a dragged element vanish
+// at the card's edge, which reads as stuck (18% of elements on 229 recent slides
+// sit inside one). Once the element leaves the box, that parent stops clipping.
+function releaseClippingParents(el: HTMLElement) {
+  const win = el.ownerDocument.defaultView;
+  if (!win) return;
+  const r = el.getBoundingClientRect();
+  for (let n = el.parentElement; n && n.tagName !== "SECTION"; n = n.parentElement) {
+    if (win.getComputedStyle(n).overflow === "visible") continue;
+    const p = n.getBoundingClientRect();
+    if (r.left < p.left || r.top < p.top || r.right > p.right || r.bottom > p.bottom) {
+      n.style.overflow = "visible";
+    }
+  }
+}
+
 function applyResize(el: HTMLElement, width: number, height: number, transform: string) {
   const isText = (el.textContent ?? "").trim().length > 0;
   el.style.flex = "0 0 auto";
@@ -126,6 +180,7 @@ function applyResize(el: HTMLElement, width: number, height: number, transform: 
     el.style.height = `${Math.round(height)}px`;
   }
   el.style.transform = transform;
+  scalePinnedContents(el, width, height);
 }
 
 export function SlideEditor({
@@ -661,8 +716,11 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
       const onDbl = (e: MouseEvent) => {
         if (disabledRef.current) return; // locked/regen → no edit mode
         if ((e.target as HTMLElement | null)?.isContentEditable) return;
-        const unit = resolveHit(sec, e.clientX, e.clientY);
-        if (!unit) return;
+        const hitUnit = resolveHit(sec, e.clientX, e.clientY);
+        if (!hitUnit) return;
+        // A table moves as one object; a double-click edits the cell under it.
+        const cell = hitUnit.tagName === "TABLE" ? (e.target as HTMLElement).closest<HTMLElement>("td, th") : null;
+        const unit = cell ?? hitUnit;
         // Double-click a GROUPED element (from outside the group): ENTER the group
         // and select the clicked member individually. A second double-click — now
         // inside the group — falls through to text edit below. Membership via
@@ -835,6 +893,7 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
               for (const el of movable) {
                 const b = base.get(el)!;
                 applyTR(el, b.tx + dx, b.ty + dy, b.rot);
+                releaseClippingParents(el);
               }
               moveableRef.current?.updateRect();
             };
@@ -1311,8 +1370,11 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
                 // Custom canvas-centre snap as a POST-step (after react-moveable's edge
                 // snap). Absolute + idempotent, so re-reading the DOM next frame is safe.
                 centerSnap(e.target as HTMLElement);
+                releaseClippingParents(e.target as HTMLElement);
                 movedRef.current = true;
               }}
+              onResizeStart={(e) => captureResizeBase(e.target as HTMLElement)}
+              onResizeGroupStart={(e) => e.targets.forEach((t) => captureResizeBase(t as HTMLElement))}
               onResize={(e) => {
                 applyResize(e.target as HTMLElement, e.width, e.height, e.drag.transform);
                 movedRef.current = true;
@@ -1326,6 +1388,7 @@ ${faceCss ? `${faceCss}\n` : ""}  html,body{margin:0;padding:0;height:100%}
                 // box, so the box follows the whole selection (no stranded border).
                 e.events.forEach((sub) => {
                   (sub.target as HTMLElement).style.transform = sub.transform;
+                  releaseClippingParents(sub.target as HTMLElement);
                 });
                 movedRef.current = true;
               }}
@@ -1400,7 +1463,7 @@ function resolveHit(sec: Element, x: number, y: number): HTMLElement | null {
 // "is this measurable text, and where are its lines" preamble lives in one place.
 function textContentRects(el: HTMLElement): DOMRectList | null {
   const tag = el.tagName.toLowerCase();
-  if (tag === "img" || tag === "svg" || !(el.textContent || "").trim()) return null;
+  if (tag === "img" || tag === "svg" || tag === "table" || !(el.textContent || "").trim()) return null;
   const range = el.ownerDocument.createRange();
   range.selectNodeContents(el);
   return range.getClientRects();

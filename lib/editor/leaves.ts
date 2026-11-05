@@ -60,6 +60,10 @@ export function isTextLeaf(el: Element): boolean {
 // A visually-rendered leaf: a text run, an image, or a graphic. Layout/wrapper divs
 // are NOT leaves — neither selectable nor listed.
 export function isVisualLeaf(el: Element): boolean {
+  // A table is one object. A cell cannot be moved or sized on its own, and one
+  // loose cell per click made tables look broken (250 of 278 failed resizes on
+  // 229 recent slides). Double-click still edits a cell's text.
+  if (el.closest("table")) return el.tagName === "TABLE";
   if (el.tagName === "IMG") return true;
   if (el.tagName.toLowerCase() === "svg") return true;
   return isTextLeaf(el);
@@ -122,10 +126,15 @@ export function resolveSelectable(
   const paint = opts.paint ?? true;
   const svg = el.closest("svg");
   if (svg && svg !== sec && sec.contains(svg)) return svg as unknown as HTMLElement;
+  const table = el.closest("table");
+  if (table && sec.contains(table)) return table as HTMLElement;
   const win = el.ownerDocument?.defaultView ?? null;
   let n: Element | null = el;
   let best: HTMLElement | null = null;
   while (n && n !== sec) {
+    // The frame's own boxes are the page, not objects: a filled well is the whole
+    // slide, and dragging it moves everything off the canvas.
+    if (n.matches(".tq-well, .tq-well > .well")) break;
     if (n.tagName === "IMG") return n as HTMLElement;
     if (isTextLeaf(n)) {
       best = n as HTMLElement; // keep climbing to the OUTERMOST text leaf
