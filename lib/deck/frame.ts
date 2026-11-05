@@ -312,6 +312,33 @@ export function parseFrameRevises(sectionHtml: string): number | null {
   return Number.isInteger(n) && n >= 1 ? n - 1 : null;
 }
 
+// The frame owns the well's box (.tq-well > .well fills it). A model that sizes
+// the root itself breaks the slide: a redesigned cover wrote a 1920px well inside
+// the 1078px split well, so its content sat 842px off the slide, and the root
+// borrowed .tq-canvas, whose fill made the whole well selectable in the editor
+// (prod cmw1s5xv9008run6dbu4zvbm5, slide 1). Sizing goes; padding, gap and
+// colours stay.
+const WELL_BOX_PROPS =
+  /^(width|height|min-width|min-height|max-width|max-height|position|inset(-[a-z-]+)?|top|right|bottom|left|transform|translate|margin(-[a-z-]+)?|grid-area|flex)$/i;
+
+export function normalizeWellRoot(wellHtml: string): string {
+  return wellHtml.replace(/^(\s*)<div\b[^>]*>/i, (tag, lead: string) => {
+    const out = tag
+      .replace(/\sclass="([^"]*)"/i, (_m, cls: string) => {
+        const kept = cls.split(/\s+/).filter((c) => c && c !== "tq-canvas");
+        return ` class="${kept.join(" ")}"`;
+      })
+      .replace(/\sstyle="([^"]*)"/i, (_m, css: string) => {
+        const kept = css
+          .split(";")
+          .map((d) => d.trim())
+          .filter((d) => d && !WELL_BOX_PROPS.test(d.split(":")[0].trim()));
+        return kept.length ? ` style="${kept.join(";")}"` : "";
+      });
+    return lead + out.trimStart();
+  });
+}
+
 export function parseFrameSlide(sectionHtml: string): FrameSlideDecl {
   const openTag = /<section\b[^>]*>/i.exec(sectionHtml)?.[0] ?? "<section>";
   // Keep Claude's ENTIRE well div - its modifier classes ("well cov") carry
@@ -336,7 +363,7 @@ export function parseFrameSlide(sectionHtml: string): FrameSlideDecl {
     deckTitle: ((v) => (v == null ? null : decodeAttrEntities(v)))(attr(openTag, "data-deck-title")),
     deckSlides: attr(openTag, "data-deck-slides"),
     wellHtml: wellMatch
-      ? wellMatch[1]
+      ? normalizeWellRoot(wellMatch[1])
       : sectionHtml
           .replace(/^<section\b[^>]*>/i, "")
           .replace(/<\/section>\s*$/i, ""),
@@ -559,6 +586,7 @@ ${intent}
 RULES:
 - Reply with EXACTLY ONE corrected <section> in the generation contract: keep the declared data attributes from the section tag above (change data-bg-css only if your design needs it; keep data-label and data-role), containing exactly one <div class="well"> in PURE FLOW. No <style> block, no data-revises, no prose, no fences - the FIRST character of your reply is the < of the section.
 - Never copy position:absolute, left/top offsets, or fixed pixel insets from the current code - they are machine output, not design.
+- Never give the root <div class="well"> a width, height or position, and never add the class tq-canvas to it: the frame sizes it. On a split or band slide the well is narrower than the canvas, so design for the space the section's data-bg leaves.
 - Keep the message and text content as written${input.comments.length ? " except where a comment asks otherwise" : ""}.
 - Preserve every <img> src EXACTLY. Keep data-genimage boxes exactly as they are (same data-genimage, data-genaspect, data-gensource, and data-genref values, no new image slots). Keep every <img data-asset> (the user's own picture) and every <div data-table> and <div data-chart> box (the user's own table or chart) on the slide with its attributes and contents unchanged: you may move and resize them, never remove, replace or rewrite them.
 - Numerals in RTL decks: a digit block with dir="ltr" renders text-align:start as LEFT - keep dir=ltr, set text-align explicitly to place the numerals where the composition needs them.`;
