@@ -2148,6 +2148,15 @@ export const deckGenerate = inngest.createFunction(
     // `deck.regen.finished` notification fired on completion tells the
     // full story on its own. The project-channel broadcast above stays
     // so the live mid-regen banner still works for peers.
+    // How long the steps around the model take, for the deck_step_ms log line.
+    const timedStep = ((name: string, fn: () => Promise<unknown>) =>
+      step.run(name, async () => {
+        const startedAt = Date.now();
+        const out = await fn();
+        logger.info("deck_step_ms", { projectId, step: name, ms: Date.now() - startedAt });
+        return out;
+      })) as typeof step.run;
+
     await step.run("broadcast-deck-regen-started", () => {
       broadcastToProject(projectId, "deck.regen.started", {
         actorPrismaUserId,
@@ -2360,7 +2369,7 @@ export const deckGenerate = inngest.createFunction(
         teaserTotal != null
           ? Math.max(1, teaserTotal - (teaserPlan?.lockedCount ?? 0))
           : null;
-      const prep = await step.run("rasterize-and-upload-source", async () => {
+      const prep = await timedStep("rasterize-and-upload-source", async () => {
         const pngs = await sourceToSlideImages(sourcePath, sourceMime).catch(
           (err: unknown) => {
             // Missing LibreOffice / pdftoppm: no retry can fix it.
@@ -2438,7 +2447,7 @@ export const deckGenerate = inngest.createFunction(
       // Original pictures (owner rule 2026-10-15: never swapped, carried over).
       // Best-effort: a failure here falls back to the pre-carry behaviour
       // (photo slots / AI photos), never fails the deck.
-      const carried = await step.run("carry-source-pictures", async () => {
+      const carried = await timedStep("carry-source-pictures", async () => {
         try {
           // "Refresh my photos" (Enhance, opt-in, default off): a capped set of
           // the most important generic photos is re-made in the deck's style.
@@ -2580,7 +2589,7 @@ export const deckGenerate = inngest.createFunction(
       // and kept on the Job so the free-plan unlock follows the same plan.
       // Best-effort: null leaves the prompt exactly as before.
       const prepared = enhanceImages;
-      enhanceImages.plan = await step.run("enhance-redesign-plan", async () => {
+      enhanceImages.plan = await timedStep("enhance-redesign-plan", async () => {
         const flags = enhanceFlags(data.brief);
         const plan = await writeRedesignPlan({
           fileIds: prepared.fileIds,
@@ -2612,7 +2621,7 @@ export const deckGenerate = inngest.createFunction(
     let uploadPictures: CarriedPicture[] = [];
     const uploadFileId = sourceKind === "scratch" ? (readSource(data) as { anthropicFileId?: string } | null)?.anthropicFileId : undefined;
     if (uploadFileId) {
-      uploadPictures = await step.run("carry-upload-pictures", async () => {
+      uploadPictures = await timedStep("carry-upload-pictures", async () => {
         try {
           const pictures = await carryUploadPictures(projectId, uploadFileId);
           logger.info("create_upload_pictures", { projectId, pictures: pictures.length, logos: pictures.filter((p) => p.logo).length });
@@ -2624,7 +2633,7 @@ export const deckGenerate = inngest.createFunction(
       });
     }
 
-    const validated = await step.run("call-claude-and-validate", async () => {
+    const validated = await timedStep("call-claude-and-validate", async () => {
       const client = getClient();
       // Build the user-text portion. When the brief carries a
       // source.kind from an upload-driven flow (enhance / mimic /
@@ -3865,59 +3874,6 @@ export const deckGenerate = inngest.createFunction(
       });
     }
 
-    // "Slides to check" (lib/enhance/check.ts): the plan's signs of success,
-    // checked against the finished text, posted to the studio assistant
-    // thread. Before the save, so the note is there when the deck completes.
-    const checkPlan = readRedesignPlan(enhanceImages?.plan ?? null);
-    if (checkPlan && enhanceImages && manifest.slides.length > 0) {
-      const sourceTexts = enhanceImages.textPerSlide;
-      const pictures = enhanceImages.pictures ?? [];
-      await step.run("enhance-slide-check", async () => {
-        try {
-          const count = Math.min(sourceTexts.length, manifest.slides.length);
-          const htmls = manifest.slides.slice(0, count).map((sl) => sl.html ?? "");
-          const findings: MeasuredFinding[] = [];
-          for (let i = 0; i < count; i++) {
-            // Source-text noise (runs of zeros, ids with a leading zero) is not a
-            // number the user wrote; small icons and badges may be dropped by a
-            // redesign, so only content pictures count as lost.
-            const numbers = missingSourceNumbers([sourceTexts[i] ?? ""], [htmls[i]]).filter(
-              (n) => !/0{5,}/.test(n) && !/^0\d/.test(n),
-            );
-            const lostPictures = pictures.filter(
-              (p) => p.slideIndex === i && p.cls === "content" && !p.swap && !p.rebuild && !htmls[i].includes(p.assetId),
-            ).length;
-            if (numbers.length > 0 || lostPictures > 0) findings.push({ slide: i + 1, numbers, pictures: lostPictures });
-          }
-          const result = await checkRedesign({
-            plan: checkPlan,
-            sourceTexts: sourceTexts.slice(0, count),
-            slideHtml: htmls,
-            findings,
-            exactWording: !enhanceFlags(data.brief).textRework,
-          });
-          if (!result) return;
-          const project = await prisma.project.findUnique({ where: { id: projectId }, select: { userId: true } });
-          if (!project) return;
-          await prisma.assistantMessage.create({
-            data: {
-              projectId,
-              userId: project.userId,
-              role: "assistant",
-              content: slideCheckMessage(result, count),
-              proposalJson: { kind: "check", slides: result.issues.map((x) => x.slide) },
-            },
-          });
-          logger.info("enhance_slide_check", { projectId, issues: result.issues.length, findings: findings.length, dropped: result.dropped ?? 0 });
-        } catch (err) {
-          logger.warn("enhance_slide_check_failed", {
-            projectId,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
-      });
-    }
-
     await step.run("save-to-database", async () => {
       // Stamp the format the user picked onto the manifest so every
       // downstream consumer (renderer, lightbox, export) reads it from
@@ -4167,6 +4123,59 @@ export const deckGenerate = inngest.createFunction(
           });
       }
     });
+
+    // "Slides to check" (lib/enhance/check.ts): the plan's signs of success,
+    // checked against the finished text, posted to the studio assistant
+    // thread. After the save, so the deck opens first and the note follows.
+    const checkPlan = readRedesignPlan(enhanceImages?.plan ?? null);
+    if (checkPlan && enhanceImages && manifest.slides.length > 0) {
+      const sourceTexts = enhanceImages.textPerSlide;
+      const pictures = enhanceImages.pictures ?? [];
+      await timedStep("enhance-slide-check", async () => {
+        try {
+          const count = Math.min(sourceTexts.length, manifest.slides.length);
+          const htmls = manifest.slides.slice(0, count).map((sl) => sl.html ?? "");
+          const findings: MeasuredFinding[] = [];
+          for (let i = 0; i < count; i++) {
+            // Source-text noise (runs of zeros, ids with a leading zero) is not a
+            // number the user wrote; small icons and badges may be dropped by a
+            // redesign, so only content pictures count as lost.
+            const numbers = missingSourceNumbers([sourceTexts[i] ?? ""], [htmls[i]]).filter(
+              (n) => !/0{5,}/.test(n) && !/^0\d/.test(n),
+            );
+            const lostPictures = pictures.filter(
+              (p) => p.slideIndex === i && p.cls === "content" && !p.swap && !p.rebuild && !htmls[i].includes(p.assetId),
+            ).length;
+            if (numbers.length > 0 || lostPictures > 0) findings.push({ slide: i + 1, numbers, pictures: lostPictures });
+          }
+          const result = await checkRedesign({
+            plan: checkPlan,
+            sourceTexts: sourceTexts.slice(0, count),
+            slideHtml: htmls,
+            findings,
+            exactWording: !enhanceFlags(data.brief).textRework,
+          });
+          if (!result) return;
+          const project = await prisma.project.findUnique({ where: { id: projectId }, select: { userId: true } });
+          if (!project) return;
+          await prisma.assistantMessage.create({
+            data: {
+              projectId,
+              userId: project.userId,
+              role: "assistant",
+              content: slideCheckMessage(result, count),
+              proposalJson: { kind: "check", slides: result.issues.map((x) => x.slide) },
+            },
+          });
+          logger.info("enhance_slide_check", { projectId, issues: result.issues.length, findings: findings.length, dropped: result.dropped ?? 0 });
+        } catch (err) {
+          logger.warn("enhance_slide_check_failed", {
+            projectId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      });
+    }
 
     // ─── Credit settle (billing plan Phase A) ───────────────────────
     // Charge for what was actually made - the saved manifest's slide

@@ -55,7 +55,8 @@ export type EnhanceQuestions = {
   // Option labels fitted to the deck; a missing key falls back to the dictionary.
   labels: Partial<Record<EnhanceOptionKey, string>>;
   // How the deck's own pictures will hold up (lib/extract/picture-signal.ts):
-  // "replace" = many weak or crowded pictures, "Replace all" is preselected;
+  // "replace" = many weak or crowded pictures. It no longer preselects "Replace
+  // all", the slowest path (owner, 2026-11-05): it only steers the suggested style.
   // "photoRich" = many sharp photos, a photo-led style is suggested.
   pictureSuggest?: "replace" | "photoRich";
   // The file's pages are flat images, so a redesign reads the words from them.
@@ -77,11 +78,9 @@ export function recommendedAnswers(
     pictures:
       !imagesOn || questions?.pictures === false
         ? "keep"
-        : questions?.pictureSuggest === "replace"
-          ? "replace"
-          : rework
-            ? "redraw"
-            : "keep",
+        : rework
+          ? "redraw"
+          : "keep",
     display: questions?.display ?? "projected",
   };
 }
