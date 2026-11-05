@@ -35,7 +35,7 @@ import {
 
 // Cheap, fast metadata generation — the task is a 5-field summary, exactly
 // Haiku's tier. (User decision 2026-07-06: Haiku, on save-as-template only.)
-const SEO_MODEL = "claude-haiku-4-5";
+const SEO_MODEL = "claude-haiku-5-5";
 const MAX_OUTPUT_TOKENS = 1500;
 
 // How many -2/-3/… suffixes we try when the generated slug collides before
@@ -168,6 +168,7 @@ export const templateSeoGenerate = inngest.createFunction(
       const message = await client.messages.create({
         model: SEO_MODEL,
         max_tokens: MAX_OUTPUT_TOKENS,
+        thinking: { type: "disabled" },
         system: buildSystemPrompt(ctx.language),
         output_config: {
           format: {

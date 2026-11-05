@@ -83,7 +83,7 @@ const EXPRESSIVE: Record<string, string> = {
   "Sports / Energy": "diagonal cuts, speed stripes and giant numbers: sports, fitness, tournaments, energetic campaigns",
 };
 
-const MODEL = "claude-haiku-4-5";
+const MODEL = "claude-haiku-5-5";
 
 /**
  * Pick a deck style label (a DECK_STYLES `label`, the key of the prompt directives)
@@ -138,6 +138,7 @@ export async function suggestStyles(opts: {
     const message = await client.messages.create({
       model: MODEL,
       max_tokens: one ? 30 : 90,
+      thinking: { type: "disabled" },
       system: one
         ? "You choose the one design style that best fits a presentation's content, audience and tone. When unsure, choose a general style. Reply with the style name only, exactly as listed."
         : `You choose the ${opts.count} design styles that best fit a presentation's content, audience and tone, best first, each clearly different from the others. When unsure, choose general styles. Reply with the style names only, exactly as listed, one per line.`,

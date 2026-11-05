@@ -26,7 +26,7 @@ import { uploadSourceAsset } from "@/lib/storage/source-assets";
 export const CAP_PAID = 8;
 export const CAP_FREE = 2;
 const MIN_AREA = 0.08;
-const TAG_MODEL = "claude-haiku-4-5";
+const TAG_MODEL = "claude-haiku-5-5";
 const MAX_TAGGED = 16;
 const PARALLEL = 3;
 
@@ -117,7 +117,7 @@ export async function tagPhotos(
         `Reply with one line per image, exactly: <number>|<tag>|<description>`,
     });
     const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
-    const msg = await client.messages.create({ model: TAG_MODEL, max_tokens: 60 * list.length, temperature: 0, messages: [{ role: "user", content }] });
+    const msg = await client.messages.create({ model: TAG_MODEL, max_tokens: 60 * list.length, thinking: { type: "disabled" }, messages: [{ role: "user", content }] });
     const reply = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
     for (const line of reply.split("\n")) {
       const m = line.trim().match(/^(\d+)\s*\|\s*(person|specific|diagram|subject|mood)\s*\|\s*(.{1,200})$/i);
