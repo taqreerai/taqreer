@@ -28,7 +28,7 @@ import { prisma } from "@/lib/prisma";
 import { isPaidPlan } from "@/lib/plan";
 import { isRegionLimitedFree } from "@/lib/credits/region-model";
 import { generateImageWithRetry, type GeneratedImageResult } from "@/lib/images/gpt-image";
-import { findStockPhoto, stockPhotosEnabled } from "@/lib/images/pexels";
+import { findBroaderStockPhoto, findStockPhoto, stockPhotosEnabled } from "@/lib/images/pexels";
 import { mustNotGenerate } from "@/lib/images/never-generate";
 import { promptMedium } from "@/lib/images/image-medium";
 import type { GenImageAspect } from "@/lib/images/slide-images";
@@ -213,6 +213,12 @@ function fallbackQuery(prompt: string): string {
 export class NoImageMatchError extends Error {}
 export { NO_MATCH_SIZE };
 
+async function lastTry(projectId: string, prompt: string, aspect: GenImageAspect): Promise<GeneratedImageResult | null> {
+  const photo = await findBroaderStockPhoto(prompt, aspect);
+  console.info("stock_broader_try", { projectId, found: photo !== null });
+  return photo ? { b64: photo.b64, size: photo.size } : null;
+}
+
 export async function fillImage(opts: {
   projectId: string;
   prompt: string;
@@ -252,6 +258,8 @@ export async function fillImage(opts: {
       const photo = await findStockPhoto(attempt, opts.aspect, opts.prompt);
       if (photo) return { b64: photo.b64, size: photo.size };
     }
+    const broader = await lastTry(opts.projectId, opts.prompt, opts.aspect);
+    if (broader) return broader;
     throw new NoImageMatchError("region free plan: no fitting stock photo for this box");
   }
 
@@ -270,9 +278,17 @@ export async function fillImage(opts: {
       }
     }
   }
-  if (stock && mustNotGenerate(opts.prompt)) throw new NoImageMatchError("no stock photo for a subject that is never generated");
-  if (opts.rank !== undefined && opts.rank < FREE_AI_PER_DECK) {
+  const neverGenerate = stock && mustNotGenerate(opts.prompt);
+  if (!neverGenerate && opts.rank !== undefined && opts.rank < FREE_AI_PER_DECK) {
     return generateImageWithRetry({ prompt: opts.prompt, aspect: opts.aspect, referenceUrl: ref, quality: "low" });
   }
-  throw new NoImageMatchError("free plan: no library, stock or allowed AI image for this box");
+  if (!ref && promptMedium(opts.prompt, stock) !== "illustration") {
+    const broader = await lastTry(opts.projectId, opts.prompt, opts.aspect);
+    if (broader) return broader;
+  }
+  throw new NoImageMatchError(
+    neverGenerate
+      ? "no stock photo for a subject that is never generated"
+      : "free plan: no library, stock or allowed AI image for this box",
+  );
 }
