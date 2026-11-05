@@ -199,6 +199,12 @@ const NAMES: Record<string, string> = {
 /** Codes the detector can name, for a language picker. */
 export const LANGUAGE_CODES: readonly string[] = Object.keys(NAMES);
 
+// What a user can pick on Create: the Arabic and Latin scripts our deck fonts
+// cover. Other scripts need their own fonts and testing first. A file in one of
+// them still follows its own language.
+const NEEDS_FONTS: ReadonlySet<string> = new Set(["ru", "uk", "zh", "ja", "ko", "he", "el", "hi", "th", "am"]);
+export const WRITING_LANGUAGES: readonly string[] = LANGUAGE_CODES.filter((code) => !NEEDS_FONTS.has(code));
+
 /** True for right-to-left languages. */
 export function isRtlLanguage(code: string | null | undefined): boolean {
   return code != null && RTL.has(code);

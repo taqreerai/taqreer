@@ -47,6 +47,8 @@
 // this template" now lands here with ?template=<id> preselected. Brand kits
 // still hydrate from sessionStorage or the user's default.
 
+import { DeckLanguagePicker } from "@/components/create/DeckLanguagePicker";
+import { detectLanguage, isRtlLanguage, WRITING_LANGUAGES } from "@/lib/language/detect";
 import { type PickedTemplate } from "@/components/create/TemplatePickerGrid";
 import { uploadDesignReference } from "@/lib/extract/design-upload";
 import {
@@ -159,7 +161,7 @@ const LAST_STEP = 1;
 const SETTINGS_ROW =
   "border-t border-[var(--tq-border-hairline)] pt-4 stage:pt-3 stage-tight:pt-2";
 
-// SLIDE_COUNT_OPTIONS + LANGUAGE_OPTIONS are built inside the component so their
+// SLIDE_COUNT_OPTIONS is built inside the component so their
 // labels can come from the active-locale dictionary.
 
 // ─── Helpers ──────────────────────────────────────────────────────
@@ -209,10 +211,6 @@ export default function CreatePage() {
     { value: "auto" as const, label: t.auto },
     { value: "custom" as const, label: t.custom },
   ];
-  const LANGUAGE_OPTIONS: { value: LanguageCode; label: string }[] = [
-    { value: "ar", label: t.langArabic },
-    { value: "en", label: t.langEnglish },
-  ];
 
   // ─── Content state ─────────────────────────────────────────────
   const [contentText, setContentText] = useState<string>("");
@@ -234,7 +232,9 @@ export default function CreatePage() {
   // + pagination + persistent overlay). Language stays close to the
   // textarea since it modulates the typed content directly.
   const [slideSize, setSlideSize] = useState<SlideSize>("16:9");
-  const [language, setLanguage] = useState<LanguageCode>("ar");
+  // The deck's language: the user's pick, or the upload's own (see writingLanguage).
+  const [pickedLanguage, setPickedLanguage] = useState<string | null>(null);
+  const [fileLanguage, setFileLanguage] = useState<string | null>(null);
 
   // ─── Branding state ────────────────────────────────────────────
   // [] = palette "Auto": Claude picks a content-matched palette at
@@ -611,8 +611,14 @@ export default function CreatePage() {
       ),
     [slideCountMode, slideCountValue, hasFile, contentText, slideCap],
   );
+  // An upload follows its file; a typed prompt must choose, and so must a file
+  // whose language could not be read.
+  const writingLanguage = hasFile ? (fileLanguage ?? pickedLanguage) : pickedLanguage;
+  const language: LanguageCode = writingLanguage && !isRtlLanguage(writingLanguage) ? "en" : "ar";
+  const languageMissing = !writingLanguage && !fileExtracting;
+  const suggestedLanguage = useMemo(() => detectLanguage(contentText).lang, [contentText]);
   const generateDisabled =
-    !contentReady || submitting || fileExtracting;
+    !contentReady || submitting || fileExtracting || !writingLanguage;
   // A remembered-but-unresolved template (a visitor's pick, or one being
   // set up right after sign-in): generating must wait for its reference.
   const templatePending = !!template && !template.designAnthropicFileId;
@@ -653,6 +659,7 @@ export default function CreatePage() {
     // react-hooks/set-state-in-effect quiet — same pattern as
     // /enhance + /mimic.
     setContentAnthropicFileId(null);
+    setFileLanguage(null);
     setContentFileStage(guest ? "idle" : "extracting");
     setError("");
   };
@@ -709,11 +716,12 @@ export default function CreatePage() {
             | { status: "failed"; error: string }
             | {
                 status: "completed";
-                result: { anthropicFileId: string; fullText?: string; textPerSlide?: string[] };
+                result: { anthropicFileId: string; fullText?: string; textPerSlide?: string[]; contentLang?: string | null };
               };
           if (body.status === "completed") {
             if (!isCurrent) return;
             setContentAnthropicFileId(body.result.anthropicFileId);
+            setFileLanguage(body.result.contentLang ?? null);
             setContentFileText(
               (body.result.fullText?.trim()
                 ? body.result.fullText
@@ -777,7 +785,7 @@ export default function CreatePage() {
     () => ({
       step,
       contentText,
-      language,
+      language: pickedLanguage ?? "",
       persistentText,
       templateId: template && template.id !== DESIGN_UPLOAD_ID ? template.id : null,
       designStyle,
@@ -799,7 +807,7 @@ export default function CreatePage() {
     [
       step,
       contentText,
-      language,
+      pickedLanguage,
       persistentText,
       template,
       designStyle,
@@ -891,7 +899,7 @@ export default function CreatePage() {
       }
       const d = draft.settings;
       setContentText(d.contentText ?? "");
-      if (d.language === "ar" || d.language === "en") setLanguage(d.language);
+      if (d.language && WRITING_LANGUAGES.includes(d.language)) setPickedLanguage(d.language);
       setPersistentText(d.persistentText ?? "");
       setLookTab(d.lookTab === "templates" ? "templates" : "styles");
       setDesignStyle(d.designStyle ?? null);
@@ -1157,6 +1165,7 @@ export default function CreatePage() {
           brand,
           rules,
           language,
+          writingLanguage,
           saveBrandKit,
           slideCount:
             reducedSlideCount ??
@@ -1299,15 +1308,17 @@ export default function CreatePage() {
           <SplitStep visible={step === 0} label={t.contentCard}>
             <WizardCard
               title={t.contentCard}
-              end={
-                <SegmentedToggle
-                  options={LANGUAGE_OPTIONS}
-                  value={language}
-                  onChange={setLanguage}
-                  ariaLabel={t.contentLanguageAria}
-                />
-              }
             >
+              <div className="mb-3">
+                <DeckLanguagePicker
+                  value={pickedLanguage}
+                  fileLanguage={hasFile ? fileLanguage : null}
+                  suggested={suggestedLanguage}
+                  missing={hasContent && languageMissing}
+                  onChange={setPickedLanguage}
+                  disabled={submitting}
+                />
+              </div>
               <input
                 ref={contentInputRef}
                 type="file"
@@ -1326,7 +1337,7 @@ export default function CreatePage() {
                 }}
                 placeholder={t.contentPlaceholder}
                 rows={8}
-                dir={language === "en" ? "ltr" : "rtl"}
+                dir={writingLanguage ? (language === "en" ? "ltr" : "rtl") : "auto"}
                 // Mirrors the server's content.text 400 cap in /api/projects
                 // (brief-limits.ts) so the limit is felt here, not as a
                 // failed submit.
@@ -1511,13 +1522,13 @@ export default function CreatePage() {
           step={step}
           lastStep={LAST_STEP}
           onStep={goToStep}
-          nextDisabled={step === 0 && !hasContent}
+          nextDisabled={step === 0 && (!hasContent || languageMissing)}
           nextLabel={t.wizard.nextLook}
           wide
           busy={submitting}
           // The file poll keeps running after step 1; this explains a
           // disabled Generate the user can no longer see the cause of.
-          status={fileExtracting ? t.wizard.extracting : null}
+          status={fileExtracting ? t.wizard.extracting : hasContent && languageMissing ? t.chooseDeckLanguage : null}
           generate={
             <GenerateSplitButton
               guest={guest}

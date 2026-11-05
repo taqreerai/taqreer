@@ -39,6 +39,7 @@ import { paramsForQuality, usesLayoutRules } from "@/lib/anthropic/quality-param
 import { scopeDeckCss, unscopeDeckCss } from "@/lib/deck/scope-css";
 import { cutPagePictures } from "@/lib/extract/page-regions";
 import { sortTextPictures } from "@/lib/extract/text-pictures";
+import { languageName } from "@/lib/language/detect";
 import { buildSlideHtml, canvasFrameCss } from "@/lib/deck/scaffold";
 import {
   assembleFramedSlide,
@@ -225,15 +226,17 @@ export const deckUnlock = inngest.createFunction(
         select: { inputJson: true },
       });
       const input = job?.inputJson as {
-        brief?: { imagesMode?: boolean; refreshAll?: boolean; swapPictures?: boolean };
+        brief?: { imagesMode?: boolean; refreshAll?: boolean; swapPictures?: boolean; writingLanguage?: string };
         carried?: { pictures?: { cls?: string }[] };
       } | null;
-      if (input?.brief?.imagesMode !== true) return false;
-      if (input.brief.refreshAll === true || input.brief.swapPictures === true) return true;
-      return !(input.carried?.pictures ?? []).some((p) => p.cls === "content" || p.cls === "page");
+      const writing = input?.brief?.writingLanguage ?? null;
+      if (input?.brief?.imagesMode !== true) return { images: false, writing };
+      if (input.brief.refreshAll === true || input.brief.swapPictures === true) return { images: true, writing };
+      return { images: !(input.carried?.pictures ?? []).some((p) => p.cls === "content" || p.cls === "page"), writing };
     });
+    const writingName = languageName(imagesChosen.writing);
     const isImagesDeck =
-      imagesChosen || manifest.slides.some((s) => s.html.includes("data-genimage"));
+      imagesChosen.images || manifest.slides.some((s) => s.html.includes("data-genimage"));
     const systemPrompt = frameSystemPrompt({
       canvas: dims,
       language: manifest.language === "en" ? "en" : "ar",
@@ -424,7 +427,10 @@ export const deckUnlock = inngest.createFunction(
         sourceDeckCss,
       );
       const withAnswers = carried.answerLines.length > 0 ? `${continuation}\n${carried.answerLines.join("\n")}` : continuation;
-      const textMessage = carriedBlock ? `${withAnswers}\n${carriedBlock}` : withAnswers;
+      const withLanguage = writingName
+        ? `${withAnswers}\nLANGUAGE: write every visible string in ${writingName}, like the slides above.`
+        : withAnswers;
+      const textMessage = carriedBlock ? `${withLanguage}\n${carriedBlock}` : withLanguage;
       const pageImages = lockedPages.length > 0 ? await readLockedPages(projectId, lockedPages) : [];
       const userMessage: Anthropic.Messages.ContentBlockParam[] | string =
         pageImages.length > 0

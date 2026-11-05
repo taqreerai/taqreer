@@ -1,3 +1,4 @@
+import { LANGUAGE_CODES } from "@/lib/language/detect";
 import { NextResponse } from "next/server";
 import { regionFreePreset } from "@/lib/credits/region-model";
 import { cookies } from "next/headers";
@@ -281,6 +282,9 @@ type CreateProjectPayload = {
   // the guard below — same behavior the AR prompt has always
   // produced for mixed content.
   language?: "ar" | "en";
+  // The language the deck is written in, for any language (Create). `language`
+  // stays the layout family: Arabic for right-to-left, English for the rest.
+  writingLanguage?: string;
   // Phase 17.A — SourceMeta blob from the upload-driven create flows
   // (Enhance / Mimic / Data). Validated against SourceMetaSchema
   // below; missing or invalid → treated as scratch flow (the
@@ -1127,10 +1131,15 @@ export async function POST(request: Request) {
     if (autoStyle) briefRules = { ...briefRules, designStyle: autoStyle, designStyleSource: "auto" };
   }
 
+  const writingLanguage =
+    typeof payload.writingLanguage === "string" && LANGUAGE_CODES.includes(payload.writingLanguage)
+      ? payload.writingLanguage
+      : null;
   const brief = {
     title,
     language: contentLanguage,
     direction: contentDirection,
+    ...(writingLanguage ? { writingLanguage } : {}),
     content: payload.content,
     brand: claudeBrand,
     rules: briefRules,

@@ -262,6 +262,11 @@ function dropNeverGeneratedBg(decl: FrameSlideDecl): FrameSlideDecl {
   return { ...decl, bg: "color", bgPrompt: null };
 }
 
+/** The chosen deck language, when it is not plain Arabic or English on the old path. */
+function writingLanguageName(brief: unknown): string | null {
+  return languageName((brief as { writingLanguage?: string } | null)?.writingLanguage);
+}
+
 type PrepView = {
   pages: number;
   steps: { key: "read" | "pictures" | "text" | "plan"; n?: number }[];
@@ -1244,6 +1249,10 @@ function buildUserMessage(event: DeckGenerateEvent) {
       ? [
           `LANGUAGE: Match the attached source's LANGUAGE. Detect the language of each slide from the attached source (Arabic, English, mixed — whatever you see) and produce visible slide strings in that language. Do NOT translate, transliterate, or change script.`,
         ]
+      : writingLanguageName(event.brief)
+        ? [
+            `LANGUAGE: ${writingLanguageName(event.brief)}. Produce every visible slide string, headlines, body, captions and chrome labels, in ${writingLanguageName(event.brief)}, whatever language any attached file or the rules above are in. Keep names and terms a source wrote as they are. Latin digits only.`,
+          ]
       : briefLang === "en"
         ? [
             `LANGUAGE: English. Produce every visible slide string — headlines, body, captions, chrome labels — in English. Do NOT switch to Arabic for any slide.`,
