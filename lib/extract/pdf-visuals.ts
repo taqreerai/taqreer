@@ -56,6 +56,9 @@ const MAX_ASSET_BYTES = 15 * 1024 * 1024; // bucket limit is 20 MB
 const MIN_VISIBLE_PT = 6; // a visible region thinner than this is a hairline, not a picture
 const SCAN_MAX_WORDS = 15;
 const SCAN_MIN_PAGES = 3;
+// A flat page inside margins counts too: one export filled 83% of each page and
+// went through as ordinary pictures (prod cmw2rp4w3001ezo6dwu2z52he).
+const SCAN_AREA = 0.7;
 const SCAN_SHARE = 0.5;
 const DECOR_ASPECT = 8; // a small picture this much longer than wide is a strip, not a picture
 const FLAT_SD = 6; // colour spread (0..255) under which an image is a single flat colour
@@ -400,7 +403,7 @@ export function classifyPdfPictures(v: PdfVisuals): Map<PdfPicture, PdfPictureCl
   const many = (n: number) => n >= T.minRepeatSlides && n >= v.scannedPages * T.repeatShare;
   const area = (p: PdfPicture) => p.box.w * p.box.h;
   const lone = (p: PdfPicture) => !many(pagesByMedia.get(p.mediaKey)!.size) && !many(pagesByPlace.get(place(p))!.size);
-  const looksScanned = (p: PdfPicture) => area(p) >= T.fullBleedArea && (v.wordsByPage[p.pageIndex] ?? 0) < SCAN_MAX_WORDS && lone(p);
+  const looksScanned = (p: PdfPicture) => area(p) >= SCAN_AREA && (v.wordsByPage[p.pageIndex] ?? 0) < SCAN_MAX_WORDS && lone(p);
   // A scan file: most pages are a single full-page picture with no text.
   const scanPages = new Set(v.pictures.filter((p) => !p.faded && looksScanned(p)).map((p) => p.pageIndex));
   // (a 1 or 2 page file qualifies when every page looks like that)

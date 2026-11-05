@@ -108,6 +108,7 @@ import {
 } from "@/lib/deck/carried-assets";
 import { prepareCarriedPictures, type CarriedPicture, type CarriedTable } from "@/lib/extract/carried-pictures";
 import { cutPagePictures } from "@/lib/extract/page-regions";
+import { sortTextPictures } from "@/lib/extract/text-pictures";
 import { carryUploadPictures, uploadPicturesBlock } from "@/lib/create/upload-pictures";
 
 function getClient() {
@@ -2459,11 +2460,10 @@ export const deckGenerate = inngest.createFunction(
                   palette: Array.isArray(briefForRefresh.brand?.colors) ? briefForRefresh.brand.colors : [],
                 }
               : null;
-          // Flat PDF pages, when the user asked for anything past keeping the
-          // deck as it is: cut into their pictures so the slide can be redesigned
-          // (lib/extract/page-regions.ts). A free preview reads only the pages it
-          // builds; the unlock cuts the rest.
-          const cutPages = flags.textRework || flags.swapPictures || flags.replaceAll || briefForRefresh?.refreshPhotos === true;
+          // Flat PDF pages are always cut into their pictures, so a slide never
+          // shows a pasted page (lib/extract/page-regions.ts). A free preview
+          // reads only the pages it builds; the unlock cuts the rest.
+          const cutPages = true;
           const result = await prepareCarriedPictures({
             projectId,
             sourcePath,
@@ -2488,6 +2488,20 @@ export const deckGenerate = inngest.createFunction(
               pagesKept: cut.pagesKept,
               regions: cut.regions,
             });
+          }
+          // Test switch, admin decks only: pictures of text become slide text
+          // (lib/extract/text-pictures.ts).
+          if ((data.brief as { pictureSort?: boolean } | null)?.pictureSort === true) {
+            const owner = await prisma.project.findUnique({
+              where: { id: projectId },
+              select: { user: { select: { role: true } } },
+            });
+            if (owner?.user.role === "admin") {
+              const sorted = await sortTextPictures({ projectId, pictures: result.pictures });
+              result.pictures = sorted.pictures;
+              result.transcribed = sorted.transcribed;
+              logger.info("enhance_text_pictures", { projectId, transcribed: sorted.transcribed.length });
+            }
           }
           // Only "redraw" and "replace all" let a picture be swapped: otherwise
           // every picture is the user's and stays (the tags still pair labels by "shows").
@@ -2549,8 +2563,9 @@ export const deckGenerate = inngest.createFunction(
       }
       enhanceImages = {
         fileIds: prep.fileIds,
-        textPerSlide:
-          teaserTotal != null ? textPerSlide.slice(0, teaserTotal) : textPerSlide,
+        textPerSlide: (teaserTotal != null ? textPerSlide.slice(0, teaserTotal) : textPerSlide).map((t, i) =>
+          [t, ...(carried?.transcribed ?? []).filter((x) => x.slideIndex === i).map((x) => x.text)].join("\n"),
+        ),
         pictures: carried?.pictures ?? [],
         tables: carried?.tables ?? [],
         // A free redesign keeps the source order, so its cover is source

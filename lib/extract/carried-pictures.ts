@@ -118,6 +118,8 @@ export type CarriedPictures = {
   // first pages and must not borrow a photo from a page it does not show.
   coverPhotoIds?: string[];
   tables: CarriedTable[];
+  // Pictures of text read as words, by slide (lib/extract/text-pictures.ts).
+  transcribed?: { slideIndex: number; text: string }[];
 };
 
 export async function prepareCarriedPictures(opts: {
