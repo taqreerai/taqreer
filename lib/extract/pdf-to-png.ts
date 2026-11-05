@@ -10,7 +10,12 @@
 // Pipeline: PPTX → PDF (pptx-to-pdf.ts) → THIS → per-page PNG buffers.
 // PDF uploads skip the LibreOffice step and rasterize directly.
 //
-//   pdftoppm -png -r <dpi> input.pdf out/page   →   out/page-01.png …
+//   pdftoppm -r <dpi> input.pdf out/page   →   out/page-01.ppm …   →   sharp → PNG
+//
+// pdftoppm writes raw PPM here, not its own -png: its PNG encoder took 3-5 s
+// per image-heavy page and sharp takes about 0.3 s. Prod 2026-11-05: a 34-page
+// PDF went from 114 s, 6 s short of the timeout below, to about 30 s. Adaptive
+// filtering keeps the files as small as before, for vision uploads.
 //
 // ─── DPI / format ─────────────────────────────────────────────────
 // Default 72 DPI. Anthropic's vision pipeline downsamples images to
@@ -29,6 +34,7 @@
 // The runtime image must include poppler alongside LibreOffice.
 
 import { MissingToolError } from "@/lib/extract/missing-tool";
+import sharp from "sharp";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
@@ -65,6 +71,17 @@ const CANDIDATE_BINS = [
   "/usr/local/bin/pdftoppm",
 ].filter((v): v is string => typeof v === "string" && v.length > 0);
 
+/** One raw PPM page, as pdftoppm writes it, as a PNG. */
+export async function ppmToPng(ppm: Buffer): Promise<Buffer> {
+  const head = /^P6\s+(\d+)\s+(\d+)\s+255\s/.exec(ppm.subarray(0, 64).toString("latin1"));
+  if (!head) throw new Error("pdftoppm wrote an unexpected page format");
+  return sharp(ppm.subarray(head[0].length), {
+    raw: { width: Number(head[1]), height: Number(head[2]), channels: 3 },
+  })
+    .png({ adaptiveFiltering: true })
+    .toBuffer();
+}
+
 export type PdfToPngsOptions = {
   /** Render DPI. Defaults to 72 (≈ Anthropic's vision ceiling). */
   dpi?: number;
@@ -91,7 +108,7 @@ export async function pdfToPngs(
   const workDir = await mkdtemp(path.join(tmpdir(), "taqreer-pdfpng-"));
   const inputPath = path.join(workDir, "input.pdf");
   const outDir = path.join(workDir, "out");
-  // `pdftoppm <prefix>` writes `<prefix>-01.png`, `-02.png`, … with
+  // `pdftoppm <prefix>` writes `<prefix>-01.ppm`, `-02.ppm`, … with
   // zero-padded indices wide enough for the page count, so a plain
   // lexicographic sort preserves page order.
   const outPrefix = path.join(outDir, "page");
@@ -102,7 +119,6 @@ export async function pdfToPngs(
     await mkdir(outDir, { recursive: true });
 
     const args = [
-      "-png",
       "-r",
       String(dpi),
       inputPath,
@@ -113,16 +129,19 @@ export async function pdfToPngs(
     for (const bin of CANDIDATE_BINS) {
       try {
         await execFileAsync(bin, args, { timeout: RASTER_TIMEOUT_MS });
-        // Success — read every produced PNG in page order.
+        // Success — turn every produced page into a PNG, in page order. One
+        // at a time: a raw page is several MB.
         const files = (await readdir(outDir))
-          .filter((f) => f.toLowerCase().endsWith(".png"))
+          .filter((f) => f.toLowerCase().endsWith(".ppm"))
           .sort();
         if (files.length === 0) {
           throw new Error("pdftoppm produced no pages");
         }
-        return await Promise.all(
-          files.map((f) => readFile(path.join(outDir, f))),
-        );
+        const pngs: Buffer[] = [];
+        for (const f of files) {
+          pngs.push(await ppmToPng(await readFile(path.join(outDir, f))));
+        }
+        return pngs;
       } catch (err) {
         // ENOENT = the binary doesn't exist; try the next candidate.
         if (isMissingBinary(err)) {

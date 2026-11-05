@@ -23,6 +23,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import sharp from "sharp";
+import { ppmToPng } from "@/lib/extract/pdf-to-png";
 import { runTool, type PdfAsset } from "@/lib/extract/pdf-visuals";
 
 const COMPARE_DPI = 72;
@@ -115,10 +116,10 @@ export function hasInnerPatch(
 
 async function renderPage(pdf: string, page: number, dpi: number, dir: string): Promise<Buffer> {
   const out = path.join(dir, `p${page}-${dpi}`);
-  await runTool("pdftoppm", "PDFTOPPM_BIN", ["-png", "-r", String(dpi), "-f", String(page), "-l", String(page), "-singlefile", pdf, out], TOOL_TIMEOUT_MS);
-  const bytes = await readFile(`${out}.png`);
-  await rm(`${out}.png`, { force: true });
-  return bytes;
+  await runTool("pdftoppm", "PDFTOPPM_BIN", ["-r", String(dpi), "-f", String(page), "-l", String(page), "-singlefile", pdf, out], TOOL_TIMEOUT_MS);
+  const bytes = await readFile(`${out}.ppm`);
+  await rm(`${out}.ppm`, { force: true });
+  return ppmToPng(bytes);
 }
 
 /** Word boxes on a page, as fractions of the page. */
