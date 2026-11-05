@@ -39,6 +39,12 @@ const AskSchema = z.object({
 });
 
 
+function lockedReply(lang: string): string {
+  return lang === "en"
+    ? "AI edits need a paid plan, or buying this deck. Nothing on your slides has changed."
+    : "تعديلات الذكاء الاصطناعي تتطلب خطة مدفوعة أو شراء هذا العرض. لم يتغير شيء في شرائحك.";
+}
+
 const SELECT = { id: true, role: true, content: true, proposalJson: true, status: true, createdAt: true } as const;
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -80,6 +86,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     where: { id },
     select: {
       userId: true,
+      purchasedAt: true,
       user: { select: { role: true, plan: true } },
       presentation: { select: { id: true, currentVersionId: true } },
     },
@@ -165,6 +172,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         ownerId: project.userId,
         ownerRole: project.user?.role ?? "user",
         ownerPlan: project.user?.plan ?? null,
+        deckPurchased: project.purchasedAt != null,
         cost,
       });
       proposal = {
@@ -191,6 +199,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         ownerId: project.userId,
         ownerRole: project.user?.role ?? "user",
         ownerPlan: project.user?.plan ?? null,
+        deckPurchased: project.purchasedAt != null,
         cost: IMAGE_CREDITS_PER_IMAGE,
       });
       proposal = {
@@ -217,7 +226,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         projectId: id,
         userId,
         role: "assistant",
-        content: answer.reply,
+        // A locked edit is said plainly: the model's "I'll apply this" read as a
+        // promise, and a buyer confirmed twice before seeing it could not run.
+        content: proposal?.gate?.error === "ai_edit_locked" ? lockedReply(parsed.data.lang ?? manifest.data.language) : answer.reply,
         ...(proposal ? { proposalJson: toJson(proposal), status: "proposed" } : {}),
       },
       select: SELECT,

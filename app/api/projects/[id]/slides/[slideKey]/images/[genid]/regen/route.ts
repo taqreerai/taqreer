@@ -206,7 +206,9 @@ export async function POST(
         select: { plan: true, role: true },
       })
     : null;
-  const paid = !!regenUser && (regenUser.role === "admin" || isPaidPlan(regenUser.plan));
+  const bought = await prisma.project.findUnique({ where: { id: projectId }, select: { purchasedAt: true } });
+  const paid =
+    (!!regenUser && (regenUser.role === "admin" || isPaidPlan(regenUser.plan))) || bought?.purchasedAt != null;
   let isRetry = false;
   if (!paid) {
     // Atomic claim (check + flip in one statement) so parallel requests can't

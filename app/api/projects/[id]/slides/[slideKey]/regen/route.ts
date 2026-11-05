@@ -97,6 +97,7 @@ export async function POST(
     select: {
       id: true,
       userId: true,
+      purchasedAt: true,
       user: { select: { role: true, plan: true } },
       presentation: {
         select: { id: true, currentVersionId: true },
@@ -134,6 +135,7 @@ export async function POST(
     ownerId: project.userId,
     ownerRole: project.user?.role ?? "user",
       ownerPlan: project.user?.plan ?? null,
+      deckPurchased: project.purchasedAt != null,
     cost: regenCost(originalQuality, 1, creditCostFor, getRegenBaseCredits()),
   });
   if (regenGate) return NextResponse.json(regenGate, { status: 402 });

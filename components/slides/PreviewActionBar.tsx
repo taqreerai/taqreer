@@ -268,6 +268,7 @@ export function PreviewActionBar({
   onToggleLock,
   onRegenSlide,
   onCreditGate,
+  deckPurchased = false,
   assistant,
   aiRegionNudge,
   historyOpen,
@@ -340,6 +341,8 @@ export function PreviewActionBar({
   // route returns a 402 insufficient-credits gate, hand the payload up so
   // DeckView opens the shared CreditGateDialog instead of a generic error toast.
   onCreditGate?: (gate: CreditGatePayload) => void;
+  // A bought deck can be AI-edited on any plan (regenCreditGate agrees).
+  deckPurchased?: boolean;
   // Editor assistant (components/preview/AssistantBar, 2026-10-21): the
   // always-visible AI prompt beside the toolbar; it replaced the AI-mode
   // instruction input. A region drawn in AI mode scopes it. Omitted for users
@@ -439,7 +442,8 @@ export function PreviewActionBar({
     (FREE_PLAN_FEATURE_LOCKS || FREE_AI_EDIT_LOCK) &&
     !!creditData &&
     !creditData.isAdmin &&
-    creditData.plan === "free";
+    creditData.plan === "free" &&
+    !deckPurchased;
 
   // Measure the tool slot (pre-paint) so it springs to its pixel width when its
   // button set changes (editing posture, role).

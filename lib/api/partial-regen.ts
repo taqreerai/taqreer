@@ -187,6 +187,7 @@ export async function applyAiComments(
     select: {
       id: true,
       userId: true,
+      purchasedAt: true,
       user: { select: { role: true, plan: true } },
       presentation: { select: { id: true, currentVersionId: true } },
     },
@@ -243,6 +244,7 @@ export async function applyAiComments(
       ownerId: project.userId,
       ownerRole: project.user?.role ?? "user",
       ownerPlan: project.user?.plan ?? null,
+      deckPurchased: project.purchasedAt != null,
       cost: regenCost(
         originalQuality,
         gateSlideCount,

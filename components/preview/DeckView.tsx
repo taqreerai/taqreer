@@ -5525,6 +5525,7 @@ export function DeckView({
               <div className="pointer-events-auto">
                 <PreviewActionBar
                   horizontal
+                  deckPurchased={deckBought}
                   // Generating: present but inert + dimmed; enables on completion.
                   // A focused teaser (paywall-locked) slot dims it too - the
                   // whole editing surface is disabled for a locked slide.

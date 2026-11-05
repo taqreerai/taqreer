@@ -210,6 +210,9 @@ export async function regenCreditGate(args: {
   // The deck owner's plan: AI edits after generation are a paid feature
   // (2026-10-02), so a Free owner's regen is refused before any cost check.
   ownerPlan: string | null | undefined;
+  // A deck bought outright can be AI-edited on any plan: the edit still draws on
+  // the owner's credits, and each purchase includes some (DECK_PURCHASE_CREDITS).
+  deckPurchased?: boolean;
   cost: number;
   // false = not an AI edit (the full-deck regenerate, which also serves Retry
   // on a failed generation): skip the free-plan AI-edit lock.
@@ -218,7 +221,8 @@ export async function regenCreditGate(args: {
   if (args.ownerRole === "admin") return null;
   if (
     (FREE_PLAN_FEATURE_LOCKS || (FREE_AI_EDIT_LOCK && args.aiEdit !== false)) &&
-    normalizePlan(args.ownerPlan) === "free"
+    normalizePlan(args.ownerPlan) === "free" &&
+    !args.deckPurchased
   ) {
     return {
       error: "ai_edit_locked",
