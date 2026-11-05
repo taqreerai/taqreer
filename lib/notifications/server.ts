@@ -114,7 +114,7 @@ export type NotificationPayloadMap = {
     credits: number;
     // What put credits in: a renewal/upgrade, a top-up pack, or the
     // free signup gift - drives the row's sub-line.
-    reason: "renewal" | "topup" | "welcome";
+    reason: "renewal" | "topup" | "welcome" | "deck";
   };
   "credit.refund": {
     // Credits returned to the account.

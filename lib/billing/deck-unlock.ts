@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 import { sendInngestEventWithRetry, tierForUser } from "@/lib/inngest-helpers";
 import { toJson } from "@/lib/api/regen-helpers";
 import { grantTopup } from "@/lib/credits/server";
+import { fanOutNotification } from "@/lib/notifications/server";
 
 // Credits each purchase includes for AI edits on the deck (owner, 2026-11-05):
 // about two 5-slide edits. A buyer who paid can finish their deck; heavy editing
@@ -176,12 +177,26 @@ export async function recordDeckPurchase(opts: {
   }
   // Keyed on the Stripe session, so a retried webhook grants once. A failure
   // must not lose the unlock they paid for.
-  await grantTopup({
-    userId: opts.prismaUserId,
-    credits: DECK_PURCHASE_CREDITS,
-    sourceKey: `deck-purchase:${opts.sessionId}`,
-    reason: "deck purchase",
-  }).catch((err) => console.error("[deck-unlock] purchase credits failed", { projectId: opts.projectId, err }));
+  try {
+    const grant = await grantTopup({
+      userId: opts.prismaUserId,
+      credits: DECK_PURCHASE_CREDITS,
+      sourceKey: `deck-purchase:${opts.sessionId}`,
+      reason: "deck purchase",
+    });
+    if (grant.granted > 0) {
+      await fanOutNotification({
+        type: "billing.credited",
+        projectId: null,
+        actorPrismaUserId: null,
+        recipientUserIds: [opts.prismaUserId],
+        allowSelfEcho: true,
+        payload: { credits: grant.granted, reason: "deck" },
+      });
+    }
+  } catch (err) {
+    console.error("[deck-unlock] purchase credits failed", { projectId: opts.projectId, err });
+  }
   const dispatched = await dispatchTeaserUnlock(opts.projectId, opts.prismaUserId);
   if (!dispatched.ok) {
     // The purchase stands; the owner's unlock button (now entitled) retries.

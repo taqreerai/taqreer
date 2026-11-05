@@ -254,7 +254,7 @@ function formatNotificationRow(
       const credits =
         typeof payload.credits === "number" ? payload.credits : 0;
       const reason =
-        payload.reason === "topup" || payload.reason === "welcome"
+        payload.reason === "topup" || payload.reason === "welcome" || payload.reason === "deck"
           ? payload.reason
           : "renewal";
       title = n.billing.creditedTitle.replace(
@@ -262,7 +262,9 @@ function formatNotificationRow(
         credits.toLocaleString("en-US"),
       );
       desc = n.billing[
-        reason === "topup"
+        reason === "deck"
+          ? "creditedDeck"
+          : reason === "topup"
           ? "creditedTopup"
           : reason === "welcome"
             ? "creditedWelcome"

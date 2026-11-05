@@ -13,6 +13,8 @@ import { isCreditGatePayload, type CreditGatePayload } from "@/components/credit
 import type { CommentBounds } from "@/lib/types/comment";
 
 export type AssistantContext = {
+  // A deck bought outright: its AI edits run on the credits that came with it.
+  deckPurchased?: boolean;
   projectId: string;
   lang: "ar" | "en";
   slideId: string | null;

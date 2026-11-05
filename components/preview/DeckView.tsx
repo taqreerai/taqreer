@@ -5565,6 +5565,7 @@ export function DeckView({
                       ? {
                           projectId,
                           lang: locale === "en" ? "en" : "ar",
+                          deckPurchased: deckBought,
                           slideId: focusedSlide?.slideId ?? null,
                           slideNumber: focusedSlide ? focusedIndex + 1 : null,
                           area: pendingAiBounds,

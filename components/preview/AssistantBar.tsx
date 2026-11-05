@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useDict } from "@/components/i18n/LocaleProvider";
+import { useCreditBalance } from "@/lib/credits/store";
 import {
   AssistantBubble,
   isCheckNote,
@@ -43,6 +44,11 @@ export function AssistantBar({
   actions?: AssistantActions;
 }) {
   const t = useDict().editor.assistant;
+  const credit = useCreditBalance();
+  const boughtCredits =
+    ctx.deckPurchased && credit && !credit.isAdmin && credit.plan === "free" && credit.balance.total > 0
+      ? credit.balance.total
+      : null;
   // A run that just finished may have posted a note (Enhance "Slides to
   // check"): reload the thread when busy turns off (state adjusted during
   // render, the React pattern for reacting to a prop change).
@@ -338,7 +344,15 @@ export function AssistantBar({
               void send();
             }
           }}
-          placeholder={ctx.area ? t.placeholderArea : actions?.drawing ? t.drawHint : t.placeholder}
+          placeholder={
+            ctx.area
+              ? t.placeholderArea
+              : actions?.drawing
+                ? t.drawHint
+                : boughtCredits != null
+                  ? t.placeholderBought.replace("{n}", String(boughtCredits))
+                  : t.placeholder
+          }
           aria-label={t.placeholder}
           disabled={sending}
           className="min-w-0 flex-1 bg-transparent px-2 text-[13px] text-foreground outline-none placeholder:text-foreground/40 max-md:text-base"
