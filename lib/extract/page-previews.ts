@@ -2,11 +2,14 @@
 // 2026-11-05). The steps before the first slide take a minute or more, so the
 // studio shows the source pages at once and each is replaced as its slide is
 // built. Only the pages a free preview builds are stored here: locked pages stay
-// locked. Private like every carried picture (lib/storage/source-assets).
-// Best-effort: no previews, no harm. Server-only.
+// locked. Private like every carried picture (lib/storage/source-assets), and
+// deleted when the run ends: a whole source page must not outlive the wait,
+// since anyone who can view the deck could otherwise open a page the owner has
+// since removed. Best-effort: no previews, no harm. Server-only.
 
 import sharp from "sharp";
-import { uploadSourceAsset } from "@/lib/storage/source-assets";
+import { SOURCE_ASSETS_BUCKET, uploadSourceAsset } from "@/lib/storage/source-assets";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const MAX_PAGES = 30;
 const PAGE_WIDTH = 960;
@@ -14,6 +17,13 @@ const PARALLEL = 4;
 
 export function pagePreviewId(index: number): string {
   return `page-${String(index + 1).padStart(2, "0")}`;
+}
+
+/** Delete this run's previews. Never fails the run; a missing object is fine. */
+export async function removePagePreviews(projectId: string): Promise<void> {
+  const keys = Array.from({ length: MAX_PAGES }, (_, i) => `${projectId}/${pagePreviewId(i)}`);
+  const { error } = await getSupabaseAdmin().storage.from(SOURCE_ASSETS_BUCKET).remove(keys);
+  if (error) console.warn("[enhance] page preview cleanup failed:", error.message);
 }
 
 /** Store previews of these pages; returns how many are ready, in order from page 1. */

@@ -109,7 +109,7 @@ import {
 import { prepareCarriedPictures, type CarriedPicture, type CarriedTable } from "@/lib/extract/carried-pictures";
 import { cutPagePictures } from "@/lib/extract/page-regions";
 import { sortTextPictures } from "@/lib/extract/text-pictures";
-import { storePagePreviews } from "@/lib/extract/page-previews";
+import { removePagePreviews, storePagePreviews } from "@/lib/extract/page-previews";
 import { carryUploadPictures, uploadPicturesBlock } from "@/lib/create/upload-pictures";
 
 function getClient() {
@@ -2045,6 +2045,7 @@ export const deckGenerate = inngest.createFunction(
       };
       const { prisma } = await import("@/lib/prisma");
       const errorMsg = error instanceof Error ? error.message : String(error);
+      if (original.projectId) await removePagePreviews(original.projectId).catch(() => undefined);
 
       // Flush the transient enhance slide images FIRST — before the
       // job-status write below overwrites outputJson._sourceFileIds. The
@@ -3812,7 +3813,7 @@ export const deckGenerate = inngest.createFunction(
       if (enhanceImages && enhanceImages.fileIds.length > 0) {
         const idsToFlush = enhanceImages.fileIds;
         await step.run("flush-enhance-images-cancelled", () =>
-          flushSlideImages(idsToFlush),
+          Promise.all([flushSlideImages(idsToFlush), removePagePreviews(projectId)]),
         );
       }
       await step.run("mark-cancelled-and-release", async () => {
@@ -4413,6 +4414,7 @@ export const deckGenerate = inngest.createFunction(
     if (enhanceImages && enhanceImages.fileIds.length > 0) {
       const idsToFlush = enhanceImages.fileIds;
       await step.run("flush-enhance-images", async () => {
+        await removePagePreviews(projectId);
         const failed = await flushSlideImages(idsToFlush);
         if (failed > 0) {
           logger.warn("enhance_flush_partial", {
