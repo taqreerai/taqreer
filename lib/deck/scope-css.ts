@@ -315,12 +315,32 @@ function emitScopedRule(prelude: string, block: string, scope: string): string[]
 
 const AT_NAME = /^@([a-zA-Z-]+)/;
 
+/**
+ * Custom properties a rule declares on the well, for the slide root too. The
+ * slide's ground sits beside the well, not inside it, so a data-bg-css of
+ * var(--x) with --x set on .well paints nothing and the slide comes out white
+ * (prod 2026-11-05: a green deck, 17 of 1,023 decks).
+ */
+export function wellCustomProps(prelude: string, block: string): string {
+  const onWell = splitTopLevel(prelude, ",").some((sel) =>
+    /^(?:\.tq-canvas\s*)?\.(?:tq-)?well$/.test(sel.trim()),
+  );
+  if (!onWell) return "";
+  return splitTopLevel(block, ";")
+    .map((decl) => decl.trim())
+    .filter((decl) => /^--[\w-]+\s*:/.test(decl))
+    .join(";");
+}
+
 export function scopeDeckCss(css: string, scope = ".tq-canvas"): string {
   const nodes = tokenize(stripComments(css));
   const out: string[] = [];
   for (const node of nodes) {
     if (node.kind === "rule") {
       out.push(...emitScopedRule(node.prelude, node.block, scope));
+      const hoisted = wellCustomProps(node.prelude, node.block);
+      // A re-scope reads the copy back as :root; one is enough.
+      if (hoisted && !css.includes(`:root{${hoisted}}`)) out.push(`${scope}{${hoisted}}`);
     } else if (node.kind === "at-statement") {
       // Drop @import (remote-CSS exfil / injection); keep other statements.
       if (/^@import\b/i.test(node.text)) continue;
