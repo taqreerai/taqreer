@@ -45,6 +45,7 @@ import { PhotoSlotOverlay, PHOTO_SLOT_SELECTOR } from "@/components/preview/edit
 import { GenImageFailedOverlay } from "@/components/preview/editor/GenImageFailedOverlay";
 import { LayersPanel } from "@/components/preview/editor/LayersPanel";
 import { GenChatPanel } from "@/components/preview/GenChatPanel";
+import { GenPrepCard, type PrepView } from "@/components/preview/GenPrepCard";
 import { SegmentedToggle } from "@/components/create/controls";
 import { serializeSlideSection } from "@/lib/editor/serialize";
 import { fitArtboard } from "@/lib/editor/canvas-fit";
@@ -314,6 +315,8 @@ type Progress = {
   // the field is still read by the "is the run actually advancing"
   // stuck-detection heuristic in the polling effect below.
   thinkingTokens?: number;
+  // Steps before the first slide (components/preview/GenPrepCard).
+  prep?: PrepView;
 };
 
 function isProgress(value: unknown): value is Progress {
@@ -324,6 +327,11 @@ function isProgress(value: unknown): value is Progress {
     typeof v.currentSlide === "number" &&
     typeof v.estimatedTotal === "number"
   );
+}
+
+// A source page stored for the wait (lib/extract/page-previews.ts).
+function sourcePageUrl(projectId: string, index: number): string {
+  return `/api/assets/${projectId}/page-${String(index + 1).padStart(2, "0")}`;
 }
 
 // Fallback scale used while ResizeObserver is wiring up to the hero.
@@ -4976,6 +4984,7 @@ export function DeckView({
         kind: "placeholder",
         index: idx,
         state: isNextSlot ? "current" : cardStatus(idx),
+        ...(idx < (progress?.prep?.pages ?? 0) ? { pageUrl: sourcePageUrl(projectId, idx) } : {}),
       };
     },
   );
@@ -5844,6 +5853,12 @@ export function DeckView({
               ) : (
                 <div
                   dir={dir}
+                  style={
+                    (progress?.prep?.pages ?? 0) > 0
+                      // A veil in the theme colour keeps the text and card readable in light and dark.
+                      ? { backgroundImage: `linear-gradient(color-mix(in srgb, var(--tq-bg) 60%, transparent), color-mix(in srgb, var(--tq-bg) 60%, transparent)), url("${sourcePageUrl(projectId, 0)}")`, backgroundSize: "cover", backgroundPosition: "center" }
+                      : undefined
+                  }
                   className="flex h-full w-full flex-col items-center justify-center gap-4 px-6 text-center text-foreground"
                 >
                   <h1 className="font-headline-lg text-[28px] font-bold">
@@ -5876,6 +5891,7 @@ export function DeckView({
                       {slowCaption}
                     </span>
                   )}
+                  {progress?.prep ? <GenPrepCard prep={progress.prep} dir={dir} /> : null}
                 </div>
               )
             ) : editMode ? (

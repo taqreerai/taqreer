@@ -2224,7 +2224,11 @@
       "readingSource": "Reading source and design style…",
       "extracting": "Extracting text and brand identity…",
       "writing": "Writing content and designing slides…",
-      "startingDesign": "Starting design…"
+      "startingDesign": "Starting design…",
+      "prepRead": "Read {n} pages of your file",
+      "prepPictures": "Found {n} pictures",
+      "prepText": "Turned {n} pictures of text into editable text",
+      "prepPlan": "Planning your redesign"
     },
     "errors": {
       "serverBusy": "Server is under heavy load, this may take a while",

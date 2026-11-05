@@ -32,6 +32,9 @@ export type RedesignPlan = {
   changes: string;
   stays: string;
   success: string[];
+  // Two short sentences for the user, in the deck's language, shown while the
+  // deck is built. The rest of the plan is English, for the designer model.
+  preview?: string;
 };
 
 export type RedesignPlanInput = {
@@ -57,6 +60,8 @@ export type RedesignPlanInput = {
   addPhotos?: boolean;
   // The user's own words from the Enhance page ("Something else..." lands here).
   instructions?: string | null;
+  // The deck's language, for the user-facing preview.
+  language?: string | null;
 };
 
 // One line of plan text: no em / en dash (house rule), no markup.
@@ -138,7 +143,8 @@ Reply with ONLY a JSON object, in English, no dashes:
 "purpose": 1 to 2 sentences: what the deck is, who it is for, how it is shown, and what the redesign is.
 "changes": what changes, slide references where useful (design, the info strip, decoration, imagery), at most 180 words; refer to long content by a short quote, never copy it whole.
 "stays": what must stay exactly (the words per the user's answer, EVERY content picture and graphic from the list above by slide, never a subset, tables, reading direction), at most 140 words. Only pictures marked decorative clip-art may be dropped or redrawn.
-"success": 3 to 6 short checks a reviewer can verify by reading the finished slides (each one line).`,
+"success": 3 to 6 short checks a reviewer can verify by reading the finished slides (each one line).
+"preview": 2 short plain sentences telling the user what will happen to their deck, written in ${input.language === "ar" ? "Arabic" : "English"}, addressed to them, naming something specific to this deck.`,
   });
 
   try {
@@ -162,7 +168,8 @@ Reply with ONLY a JSON object, in English, no dashes:
       .filter((s): s is string => !!s)
       .slice(0, MAX_SUCCESS_ITEMS);
     if (!purpose || !changes || !stays) return null;
-    return { purpose, changes, stays, success };
+    const preview = clean(parsed.preview, MAX_SUCCESS_CHARS * 2);
+    return { purpose, changes, stays, success, ...(preview ? { preview } : {}) };
   } catch (err) {
     console.warn("[enhance] redesign plan failed:", err instanceof Error ? err.message : err);
     return null;

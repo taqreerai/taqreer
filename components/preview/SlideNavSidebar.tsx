@@ -46,7 +46,7 @@ export const RAIL_BOTTOM = 96; // clears the bottom action bar
 type PlaceholderState = "done" | "current" | "pending";
 
 export type NavItem =
-  | { kind: "placeholder"; index: number; state: PlaceholderState }
+  | { kind: "placeholder"; index: number; state: PlaceholderState; pageUrl?: string }
   | {
       kind: "slide";
       index: number;
@@ -474,6 +474,11 @@ export function SlideNavSidebar({
               >
                 {item.kind === "placeholder" ? (
                   <div
+                    style={
+                      item.pageUrl
+                        ? { backgroundImage: `url("${item.pageUrl}")`, backgroundSize: "cover", backgroundPosition: "center" }
+                        : undefined
+                    }
                     className={`flex h-full w-full items-center justify-center bg-foreground/5 ${
                       item.state === "pending" || item.state === "current"
                         ? "animate-pulse"

@@ -109,6 +109,7 @@ import {
 import { prepareCarriedPictures, type CarriedPicture, type CarriedTable } from "@/lib/extract/carried-pictures";
 import { cutPagePictures } from "@/lib/extract/page-regions";
 import { sortTextPictures } from "@/lib/extract/text-pictures";
+import { storePagePreviews } from "@/lib/extract/page-previews";
 import { carryUploadPictures, uploadPicturesBlock } from "@/lib/create/upload-pictures";
 
 function getClient() {
@@ -259,6 +260,23 @@ function enhanceAddsPhotos(brief: unknown, enhanceImages: EnhanceImages | null):
 function dropNeverGeneratedBg(decl: FrameSlideDecl): FrameSlideDecl {
   if (!decl.bgPrompt || decl.bgSource === "stock" || !mustNotGenerate(decl.bgPrompt)) return decl;
   return { ...decl, bg: "color", bgPrompt: null };
+}
+
+type PrepView = {
+  pages: number;
+  steps: { key: "read" | "pictures" | "text" | "plan"; n?: number }[];
+  preview?: string;
+};
+
+function prepAfterPictures(view: PrepView, pictures: readonly { cls: string }[], transcribed: number): PrepView {
+  return {
+    ...view,
+    steps: [
+      ...view.steps,
+      { key: "pictures", n: pictures.filter((p) => p.cls !== "small").length },
+      { key: "text", n: transcribed },
+    ],
+  };
 }
 
 // Enhance's start answers as the generator reads them (lib/enhance/answers.ts):
@@ -2148,6 +2166,15 @@ export const deckGenerate = inngest.createFunction(
     // `deck.regen.finished` notification fired on completion tells the
     // full story on its own. The project-channel broadcast above stays
     // so the live mid-regen banner still works for peers.
+    // What the studio shows before the first slide (components/preview/
+    // GenPrepCard). Rebuilt from step results, so a replay gives the same value;
+    // jsonb_set keeps the brief that the first full progress write replaces.
+    let prepView: PrepView = { pages: 0, steps: [] };
+    const writePrep = async (view: PrepView) => {
+      const progress = JSON.stringify({ stage: "thinking", currentSlide: 0, estimatedTotal: Math.max(1, declaredTotalForPrep()), genStartedAt, prep: view });
+      await prisma.$executeRaw`UPDATE "PresentationVersion" SET "slideJson" = jsonb_set(COALESCE("slideJson", '{}'::jsonb), '{progress}', ${progress}::jsonb) WHERE id = ${versionId}`.catch(() => undefined);
+    };
+
     // How long the steps around the model take, for the deck_step_ms log line.
     const timedStep = ((name: string, fn: () => Promise<unknown>) =>
       step.run(name, async () => {
@@ -2301,6 +2328,7 @@ export const deckGenerate = inngest.createFunction(
     // clock so the stuck-detection banner survives a tab reload mid-run.
     // ISO format for clean JSON round-trip through Prisma's Json column.
     const genStartedAt = new Date().toISOString();
+    const declaredTotalForPrep = () => declaredTotal ?? 1;
 
     // ── Enhance prep (generation-time, transient) ──────────────────
     // The enhance flow rasterizes the ORIGINAL upload to one PNG per
@@ -2377,6 +2405,8 @@ export const deckGenerate = inngest.createFunction(
             throw err;
           },
         );
+        const previewPages = await storePagePreviews(projectId, teaserVisible != null ? pngs.slice(0, teaserVisible) : pngs);
+        await writePrep({ pages: previewPages, steps: [{ key: "read", n: pngs.length }] });
         const fileIds = await uploadSlideImages(
           teaserVisible != null ? pngs.slice(0, teaserVisible) : pngs,
         );
@@ -2423,8 +2453,9 @@ export const deckGenerate = inngest.createFunction(
             })
             .catch(() => undefined);
         }
-        return { fileIds, pageCount: pngs.length };
+        return { fileIds, pageCount: pngs.length, previewPages };
       });
+      prepView = { pages: prep.previewPages ?? 0, steps: [{ key: "read", n: prep.pageCount ?? prep.fileIds.length }] };
       // Older memoized step results (a retry of a run started before this
       // change) carry no pageCount: every page was uploaded then.
       const pageCount = prep.pageCount ?? prep.fileIds.length;
@@ -2506,6 +2537,7 @@ export const deckGenerate = inngest.createFunction(
           });
           result.pictures = sorted.pictures;
           result.transcribed = sorted.transcribed;
+          await writePrep(prepAfterPictures(prepView, result.pictures, sorted.transcribed.length));
           logger.info("enhance_text_pictures", { projectId, transcribed: sorted.transcribed.length });
           // Only "redraw" and "replace all" let a picture be swapped: otherwise
           // every picture is the user's and stays (the tags still pair labels by "shows").
@@ -2565,6 +2597,7 @@ export const deckGenerate = inngest.createFunction(
           brief.imagesMode = false;
         }
       }
+      prepView = prepAfterPictures(prepView, carried?.pictures ?? [], carried?.transcribed?.length ?? 0);
       enhanceImages = {
         fileIds: prep.fileIds,
         textPerSlide: (teaserTotal != null ? textPerSlide.slice(0, teaserTotal) : textPerSlide).map((t, i) =>
@@ -2590,6 +2623,7 @@ export const deckGenerate = inngest.createFunction(
       // Best-effort: null leaves the prompt exactly as before.
       const prepared = enhanceImages;
       enhanceImages.plan = await timedStep("enhance-redesign-plan", async () => {
+        await writePrep({ ...prepView, steps: [...prepView.steps, { key: "plan" }] });
         const flags = enhanceFlags(data.brief);
         const plan = await writeRedesignPlan({
           fileIds: prepared.fileIds,
@@ -2601,6 +2635,7 @@ export const deckGenerate = inngest.createFunction(
           swapPictures: flags.swapPictures || flags.replaceAll,
           imagesOn: isImagesMode(data),
           addPhotos: isImagesMode(data) && enhanceAddsPhotos(data.brief, prepared),
+          language: (data.brief as { language?: string } | null)?.language ?? null,
           instructions: (data.enhance as { instructions?: unknown } | null | undefined)?.instructions as string | undefined,
         });
         if (plan && jobId) {
@@ -2611,9 +2646,15 @@ export const deckGenerate = inngest.createFunction(
             data: { inputJson: { ...input, enhancePlan: plan } as Prisma.InputJsonValue },
           });
         }
+        if (plan?.preview) await writePrep({ ...prepView, steps: [...prepView.steps, { key: "plan" }], preview: plan.preview });
         logger.info("enhance_redesign_plan", { projectId, ok: plan != null, checks: plan?.success.length ?? 0 });
         return plan;
       });
+    }
+
+    if (enhanceImages?.plan) {
+      const preview = (enhanceImages.plan as { preview?: string }).preview;
+      prepView = { ...prepView, steps: [...prepView.steps, { key: "plan" }], ...(preview ? { preview } : {}) };
     }
 
     // /create upload: the pictures its content depends on, placed by the
@@ -2625,6 +2666,7 @@ export const deckGenerate = inngest.createFunction(
         try {
           const pictures = await carryUploadPictures(projectId, uploadFileId);
           logger.info("create_upload_pictures", { projectId, pictures: pictures.length, logos: pictures.filter((p) => p.logo).length });
+          await writePrep(prepAfterPictures(prepView, pictures, 0));
           return pictures;
         } catch (err) {
           logger.warn("create_upload_pictures_failed", { projectId, error: err instanceof Error ? err.message : String(err) });
@@ -2632,6 +2674,8 @@ export const deckGenerate = inngest.createFunction(
         }
       });
     }
+
+    if (uploadPictures.length > 0) prepView = prepAfterPictures(prepView, uploadPictures, 0);
 
     const validated = await timedStep("call-claude-and-validate", async () => {
       const client = getClient();
@@ -2702,6 +2746,7 @@ export const deckGenerate = inngest.createFunction(
                       ? Math.max(declaredTotal, currentSlide)
                       : Math.max(currentSlide, 1),
                   genStartedAt,
+                  prep: prepView,
                   ...(extra ?? {}),
                 },
                 slides: [],
