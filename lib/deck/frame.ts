@@ -14,7 +14,7 @@
 // pipeline (warm dispatch + reconcile) generates and fills them - the frame
 // adds no new image machinery.
 
-import { isolateLatinRuns } from "@/lib/deck/bidi-isolate";
+import { isolateLatinRuns, ltrLatinBlocks } from "@/lib/deck/bidi-isolate";
 import { isBgAssetSrc } from "@/lib/deck/carried-assets";
 
 // ── geometry ────────────────────────────────────────────────────────────────
@@ -108,8 +108,9 @@ export function frameSystemPrompt(opts: {
   // Direction is NATIVE to the deck language (owner contract 2026-07-10): no
   // authored-LTR mirroring - bg photos don't flip, so mirrored compositions
   // break against them. RTL drift is caught downstream, never guess-rewritten.
+  // The one exception is English that stands alone (lib/deck/bidi-isolate.ts).
   const langBlock = ar
-    ? `‼️ LANGUAGE & DIRECTION - this deck is ARABIC: design natively RTL. The system sets dir="rtl" on every slide root (do NOT set dir yourself). The eye enters from the RIGHT: lead text blocks and columns anchor to the visual RIGHT, secondary/decorative elements to the LEFT; body text right-aligned. Flex keywords are LOGICAL under RTL: align-items/justify-content flex-START anchors to the reading side (the RIGHT) and flex-END anchors LEFT - to anchor content to the reading edge use flex-start, never flex-end. Do NOT set dir on child blocks that contain Latin letters; for an inline Latin run inside an Arabic sentence (URL, email, English word) wrap just that run in <span dir="ltr">. Digit-only blocks (pagination "01 / 07", dates, phone numbers) - dir="ltr" on that block IS fine (the digits would otherwise reorder under the RTL paragraph direction), but give it an explicit text-align: dir=ltr makes start-alignment mean LEFT. Numbers are ALWAYS Latin digits (0-9), never Arabic-Indic (٠-٩). letter-spacing on Arabic-bearing elements is stripped at export.`
+    ? `‼️ LANGUAGE & DIRECTION - this deck is ARABIC: design natively RTL. The system sets dir="rtl" on every slide root (do NOT set dir yourself). The eye enters from the RIGHT: lead text blocks and columns anchor to the visual RIGHT, secondary/decorative elements to the LEFT; body text right-aligned. Flex keywords are LOGICAL under RTL: align-items/justify-content flex-START anchors to the reading side (the RIGHT) and flex-END anchors LEFT - to anchor content to the reading edge use flex-start, never flex-end. A block whose text is entirely English (or another Latin-script language) stays LTR: the system sets dir="ltr" on it, so place it on the LEFT with its text left-aligned, and never right-align it. Do NOT set dir on blocks that mix Arabic and Latin; for an inline Latin run inside an Arabic sentence (URL, email, English word) wrap just that run in <span dir="ltr">. Digit-only blocks (pagination "01 / 07", dates, phone numbers) - dir="ltr" on that block IS fine (the digits would otherwise reorder under the RTL paragraph direction), but give it an explicit text-align: dir=ltr makes start-alignment mean LEFT. Numbers are ALWAYS Latin digits (0-9), never Arabic-Indic (٠-٩). letter-spacing on Arabic-bearing elements is stripped at export.`
     : `LANGUAGE & DIRECTION - this deck is ENGLISH (LTR). The system sets dir="ltr" on every slide root (do NOT set dir yourself).`;
 
   const bgKinds = imagesMode
@@ -471,11 +472,11 @@ export function assembleFramedSlide(
   }
 
   // ── Layer 1: the well (Claude's flow design, verbatim) ──
-  // RTL decks: Latin / number runs get their LTR isolation here whatever the model
-  // did (lib/deck/bidi-isolate.ts) - the one chokepoint generation, vision
-  // revisions and partial regen all share.
+  // RTL decks: English blocks go LTR and Latin / number runs get their isolation
+  // here whatever the model did (lib/deck/bidi-isolate.ts) - the one chokepoint
+  // generation, vision revisions and partial regen all share.
   const wellBody =
-    ctx.direction === "rtl" ? isolateLatinRuns(decl.wellHtml) : decl.wellHtml;
+    ctx.direction === "rtl" ? isolateLatinRuns(ltrLatinBlocks(decl.wellHtml)) : decl.wellHtml;
   const wellHtml = `<div class="tq-well"${wellStyle}>${wellBody}</div>`;
 
   // ── Layer 2: chrome = an EMPTY structure sentinel ──
