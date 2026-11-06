@@ -153,6 +153,7 @@ function __tqCompressOverflow(well, opts) {
     // parseFloat degrades "normal" (row-gap on non-flex) to NaN -> 0.
     targets.push({
       el: el,
+      style: el.getAttribute("style"),
       pt: parseFloat(cs.paddingTop) || 0,
       pb: parseFloat(cs.paddingBottom) || 0,
       mt: parseFloat(cs.marginTop) || 0,
@@ -226,12 +227,34 @@ function __tqCompressOverflow(well, opts) {
     }
   };
 
-  var ws = search(applyWs, WS_FLOOR);
-  var img = { f: 1, fit: ws.fit };
-  if (!ws.fit && pics.length > 0) img = search(applyImg, IMG_FLOOR);
-  var font = { f: 1, fit: ws.fit || img.fit };
-  if (!font.fit) font = search(applyFont, FONT_FLOOR);
+  var ws, img, font;
+  var fit = function () {
+    ws = search(applyWs, WS_FLOOR);
+    img = { f: 1, fit: ws.fit };
+    if (!ws.fit && pics.length > 0) img = search(applyImg, IMG_FLOOR);
+    font = { f: 1, fit: ws.fit || img.fit };
+    if (!font.fit) font = search(applyFont, FONT_FLOOR);
+  };
+  fit();
   var after = overflowBottomPx();
+  // The safe margin could not be cleared: a pinned footer does not move when the
+  // slide shrinks, so the floors cost a quarter of the type for no gain
+  // (2026-11-06: 20px text frozen at 15px, 30px over before and after; a slide
+  // 3px past the edge went the same way). Start again from the authored slide
+  // and fix only what is really clipped, if anything.
+  if (after > 1 && SAFE_BOTTOM > 0) {
+    for (var u = 0; u < targets.length; u++) {
+      if (targets[u].style === null) targets[u].el.removeAttribute("style");
+      else targets[u].el.setAttribute("style", targets[u].style);
+    }
+    wr.bottom = wr0.bottom;
+    var clipped = overflowBottomPx();
+    if (clipped <= 1) {
+      return { changed: false, beforePx: Math.round(before), afterPx: Math.round(before), wsFactor: 1, fontFactor: 1, imgFactor: 1 };
+    }
+    fit();
+    after = overflowBottomPx();
+  }
   return {
     changed: true,
     beforePx: Math.round(before),
