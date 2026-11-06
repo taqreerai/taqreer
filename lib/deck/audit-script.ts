@@ -34,6 +34,7 @@ export type FrameAuditFinding = {
     | "anchor"
     | "underfill"
     | "quality"
+    | "collision"
     | "structure"
     | "contrast"
     | "crowding"
@@ -170,6 +171,53 @@ function __tqAuditWell(well, dir) {
       type: "overflow",
       detail: "content clipped by the well: " + worstTag + " extends " + Math.round(worst) + "px past the well edge",
     });
+  }
+
+  // ── collision: body text on or past the footer ──
+  // The footer sits inside the well, so the edge check above passes a slide whose
+  // text runs through it, and expand-to-fill grew type into it unseen (prod
+  // 2026-11-06, cmw55c599002zvi6dfzcn68fk slide 4: type x1.4, last lines on and
+  // below the footer). Line boxes are trimmed: Arabic ones are far taller than
+  // the ink, and neighbouring lines' boxes touch.
+  var footer = [], body = [];
+  var colWalker = well.ownerDocument.createTreeWalker(well, 4);
+  var colNode;
+  while ((colNode = colWalker.nextNode())) {
+    var colText = (colNode.textContent || "").trim();
+    var colEl = colNode.parentElement;
+    if (!colText || !colEl || colEl.tagName === "STYLE" || colEl.tagName === "SCRIPT" || colEl.closest("svg")) continue;
+    var colCs = view.getComputedStyle(colEl);
+    if (colCs.display === "none" || colCs.visibility === "hidden") continue;
+    var isFoot = !!colEl.closest(".foot, .footer, .pg, [data-anchor]") ||
+      (colText.length < 40 && parseFloat(colCs.fontSize) <= 22 && colEl.getBoundingClientRect().top >= wr.top + wr.height * 0.85);
+    var colRange = well.ownerDocument.createRange();
+    colRange.selectNodeContents(colNode);
+    var colRects = colRange.getClientRects();
+    for (var cr = 0; cr < colRects.length; cr++) {
+      var q = colRects[cr];
+      if (q.width < 1 || q.height < 1) continue;
+      (isFoot ? footer : body).push({ l: q.left, r: q.right, t: q.top + q.height * 0.2, b: q.bottom - q.height * 0.2 });
+    }
+  }
+  var lowFooter = footer.filter(function (f) { return f.t >= wr.top + wr.height * 0.75; });
+  if (lowFooter.length) {
+    var footTop = wr.bottom, footL = wr.right, footR = wr.left;
+    for (var lf = 0; lf < lowFooter.length; lf++) {
+      footTop = Math.min(footTop, lowFooter[lf].t);
+      footL = Math.min(footL, lowFooter[lf].l);
+      footR = Math.max(footR, lowFooter[lf].r);
+    }
+    var colHits = 0;
+    for (var bi = 0; bi < body.length; bi++) {
+      var br0 = body[bi];
+      if (br0.l < footR && br0.r > footL && br0.b > footTop + 8) colHits++;
+    }
+    if (colHits > 0) {
+      findings.push({
+        type: "collision",
+        detail: colHits + " line(s) of text run into or below the footer: end the content above the footer by cutting words, reducing spacing or simplifying the layout",
+      });
+    }
   }
 
   // ── spill: text escaping its OWN drawn shape (a card, pill, badge or

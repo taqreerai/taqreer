@@ -142,7 +142,8 @@ export async function measureQuality(
 
 // What is wrong with a slide, as measured findings for the fix call. A cover is
 // meant to be sparse, so only its text size counts.
-export function qualityIssues(q: SlideQuality, isCover: boolean): string[] {
+// `words` off for the Opus review: a paying user's own long text is theirs.
+export function qualityIssues(q: SlideQuality, isCover: boolean, opts?: { words?: boolean }): string[] {
   const issues: string[] = [];
   if (q.bodyMinPx !== null && q.bodyMinPx < BODY_MIN_PX) {
     issues.push(`the smallest sentence is ${q.bodyMinPx}px: all body and card text must be at least ${BODY_TARGET_PX}px, so cut words or simplify the layout to make room`);
@@ -154,7 +155,7 @@ export function qualityIssues(q: SlideQuality, isCover: boolean): string[] {
   if (q.emptyBoxes > 0) {
     issues.push(`${q.emptyBoxes} box(es) are mostly empty: enlarge their text, or make the boxes only as tall as their content`);
   }
-  if (q.words > WORDS_MAX) {
+  if (opts?.words !== false && q.words > WORDS_MAX) {
     issues.push(`the slide has ${q.words} words: cut it to about ${WORDS_TARGET} words by shortening sentences, keeping every idea`);
   }
   return issues;

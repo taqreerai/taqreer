@@ -460,7 +460,12 @@ export const deckFreezeBake = inngest.createFunction(
               thumbs.push(`data:image/jpeg;base64,${thumb.toString("base64")}`);
             }
           }
-          if (haikuFix) {
+          // The same measures decide what a full review looks at: the older
+          // filter passed a paid deck with 18px text and half-empty slides, so
+          // it got no review at all (prod 2026-11-06). Small bakes review every
+          // slide anyway, and a regen stays as the user asked for it.
+          const measureFlags = haikuFix || pendingIds.length > REVIEW_ALL_AT_OR_BELOW;
+          if (measureFlags) {
             const quality = await measureQuality(page, pendingIds);
             for (const sid of pendingIds) {
               const q = quality[sid];
@@ -468,9 +473,11 @@ export const deckFreezeBake = inngest.createFunction(
               qualityBefore[sid] = q;
               findings[sid] = [
                 ...(findings[sid] ?? []),
-                ...qualityIssues(q, sid === coverId).map((detail) => ({ type: "quality" as const, detail })),
+                ...qualityIssues(q, sid === coverId, { words: haikuFix }).map((detail) => ({ type: "quality" as const, detail })),
               ];
             }
+          }
+          if (haikuFix) {
             // Underfill is report-only, as in the reviewed path's fixWorthy.
             reviewIds = new Set(
               pendingIds.filter((sid) => (findings[sid] ?? []).some((f) => f.type !== "underfill")),
@@ -515,6 +522,7 @@ export const deckFreezeBake = inngest.createFunction(
             f.type === "structure" ||
             f.type === "contrast" ||
             f.type === "crowding" ||
+            f.type === "collision" ||
             f.type === "spill",
         ).length;
       for (const [sid, fs] of Object.entries(findings)) {
@@ -880,6 +888,33 @@ export const deckFreezeBake = inngest.createFunction(
         // (no double capture - the page is unmutated in between).
         const revisedShots = new Map<string, Buffer>();
         const auditFixed = new Set<string>();
+        // The highlight fix runs before the review, so a rewrite never passed it
+        // and the tall fill came back over the line above (2026-11-06).
+        if (revisedIds.length > 0) {
+          await page.evaluate(
+            `${LEADING_NORMALIZE_SCRIPT}; window.__tqFixHl = __tqFixHighlights;`,
+          );
+          const highlighted = (await page.evaluate((ids) => {
+            const out: Record<string, string> = {};
+            for (const sid of ids) {
+              const escaped = sid.replace(/[^a-zA-Z0-9_-]/g, "\\$&");
+              const sec = document
+                .querySelector(`[data-slide-id="${escaped}"]`)
+                ?.querySelector("section");
+              const well = sec?.querySelector(":scope > .tq-well");
+              if (!sec || !well) continue;
+              const fixed = (
+                window as unknown as { __tqFixHl: (w: Element) => number }
+              ).__tqFixHl(well);
+              if (fixed > 0) out[sid] = sec.outerHTML;
+            }
+            return out;
+          }, revisedIds)) as Record<string, string>;
+          for (const [sid, html] of Object.entries(highlighted)) {
+            const ci = composed.findIndex((s) => s.slideId === sid);
+            if (ci >= 0) composed[ci] = { ...composed[ci], html };
+          }
+        }
         if (revisedIds.length > 0) {
           const reAudit = await auditSlides(
             page,
@@ -910,6 +945,7 @@ export const deckFreezeBake = inngest.createFunction(
                 f.type === "structure" ||
                 f.type === "contrast" ||
                 f.type === "crowding" ||
+                f.type === "collision" ||
             f.type === "spill",
             ).length;
             const before = observed.fixWorthyBefore[sid] ?? 0;
