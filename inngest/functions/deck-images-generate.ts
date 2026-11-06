@@ -80,7 +80,7 @@ export const deckImagesGenerate = inngest.createFunction(
     // run leaves placeholder gradients + regenerable boxes (Phase 4).
   },
   async ({ event, step, logger }) => {
-    const { projectId, versionId, freezeAfter, review } = event.data as {
+    const { projectId, versionId, freezeAfter, review, haikuFix, imageRegion } = event.data as {
       projectId: string;
       versionId: string;
       // FRAME decks (context/frame-architecture-2026-07-10.md): the freeze
@@ -92,6 +92,9 @@ export const deckImagesGenerate = inngest.createFunction(
       // Forwarded to deck.freeze.bake: false = skip the vision revision
       // pass (enhance decks; owner decision 2026-07-11).
       review?: boolean;
+      haikuFix?: boolean;
+      // Who the deck's people should look like (brief.imageRegion).
+      imageRegion?: string | null;
     };
     if (!projectId || !versionId) {
       throw new Error(
@@ -108,7 +111,7 @@ export const deckImagesGenerate = inngest.createFunction(
         .send({
           id: `freeze:${projectId}:${versionId}`,
           name: "deck.freeze.bake",
-          data: { projectId, versionId, review },
+          data: { projectId, versionId, review, haikuFix },
         })
         .catch((err) => {
           logger.warn("deck_freeze_dispatch_failed", {
@@ -303,6 +306,7 @@ export const deckImagesGenerate = inngest.createFunction(
               stock: b.stock,
               // Deck order (free decks: AI only for the first few boxes).
               rank: boxes.findIndex((x) => x.genid === b.genid),
+              audience: imageRegion,
             });
             const url = await storeGeneratedImage({
               projectId,

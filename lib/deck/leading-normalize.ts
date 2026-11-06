@@ -27,6 +27,31 @@
 // already at >= 1.25 is skipped.
 
 export const LEADING_NORMALIZE_SCRIPT = `
+// A highlighted word is an inline span, and an inline background paints the
+// font's full height. Arabic fonts are tall, so the fill outgrew its line and
+// covered the words of the line above (Startup style, 2026-11-06). As an
+// inline-block its box is the line height. Returns how many changed.
+function __tqFixHighlights(well) {
+  var view = well.ownerDocument.defaultView;
+  var els = well.querySelectorAll("span, mark, em, strong, b, i, u");
+  var fixed = 0;
+  for (var i = 0; i < els.length; i++) {
+    var el = els[i];
+    if (el.closest("svg") || !(el.textContent || "").trim()) continue;
+    var cs = view.getComputedStyle(el);
+    if (cs.display !== "inline") continue;
+    var bg = cs.backgroundColor;
+    var painted = (bg && bg !== "transparent" && bg !== "rgba(0, 0, 0, 0)") || cs.backgroundImage !== "none";
+    if (!painted) continue;
+    var lh = parseFloat(cs.lineHeight);
+    var rects = el.getClientRects();
+    if (!lh || !rects.length || rects[0].height <= lh * 1.05) continue;
+    el.style.display = "inline-block";
+    el.style.lineHeight = lh + "px";
+    fixed += 1;
+  }
+  return fixed;
+}
 function __tqNormalizeLeadingWell(well) {
   var TARGET_LH = 1.3;      // audit minimum is 1.25; 1.3 gives margin + matches the audit's advice copy
   var MIN_FS_RATIO = 0.72;  // never shrink a headline below 72% of its authored size

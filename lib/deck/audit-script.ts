@@ -33,6 +33,7 @@ export type FrameAuditFinding = {
     | "overflow"
     | "anchor"
     | "underfill"
+    | "quality"
     | "structure"
     | "contrast"
     | "crowding"
@@ -258,6 +259,10 @@ function __tqAuditWell(well, dir) {
   for (var j = 0; j < level.length; j++) {
     var b = level[j];
     if (b.tagName === "STYLE" || b.tagName === "SCRIPT") continue;
+    // Pictures are not text, and a page number sits at the far edge on purpose:
+    // both fired on nearly every slide (2026-11-06), and the fix pass then moved
+    // correct page numbers to the wrong side.
+    if (/^(img|svg|video|canvas)$/i.test(b.tagName) || b.closest(".foot, [data-anchor]")) continue;
     var bcs = view.getComputedStyle(b);
     if (bcs.display === "none" || bcs.display.indexOf("inline") === 0) continue;
     if (!hasInk(b)) continue;

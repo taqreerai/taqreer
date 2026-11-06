@@ -76,6 +76,7 @@ import { ownerGetsVisionReview } from "@/lib/deck/review-gate";
 import { FIT_SCRIPT, type FitCompressResult } from "@/lib/deck/fit-script";
 import { LEADING_NORMALIZE_SCRIPT } from "@/lib/deck/leading-normalize";
 import { EXPAND_TO_FILL_SCRIPT } from "@/lib/deck/expand-to-fill";
+import { fixImproved, measureQuality, qualityIssues, type SlideQuality } from "@/lib/deck/quality-check";
 import { EQUALIZE_PEERS_SCRIPT } from "@/lib/deck/equalize-peers";
 import {
   AUDIT_SCRIPT,
@@ -139,6 +140,8 @@ const REVIEW_FLAG_COVER_PCT = 45;
 // Haiku) has no model to catch a sparse slide, so the same guarded growth runs
 // under a higher coverage bar. Both enforce the 20px type floor.
 const NO_REVIEW_FILL_COVER_PCT = 60;
+// Haiku decks get a cheap fix pass in place of the Opus review (2026-11-06).
+const HAIKU_FIX_MODEL = "claude-haiku-5-5";
 const TYPE_FLOOR_PX = 20;
 // Output ceiling for the vision call - a ceiling, not a target ("OK" costs
 // ~1 token). Bounds a rogue full-deck re-emission at roughly 10 slides.
@@ -182,6 +185,11 @@ export const deckFreezeBake = inngest.createFunction(
     // TRUE (create / social / mimic / datasheet / regen bakes / ops
     // re-bakes all review).
     const reviewRequested = (event.data as { review?: boolean }).review !== false;
+    // A deck with no review (Haiku, free plan) sends its weak slides
+    // (lib/deck/quality-check.ts) to Haiku once, through the same call and the
+    // same guards. Quiet:
+    // the user is not shown a review they did not get. Off when a review runs.
+    const haikuFixRequested = (event.data as { haikuFix?: boolean }).haikuFix === true;
     if (!projectId || !versionId) {
       throw new Error("deck-freeze-bake: event missing projectId / versionId");
     }
@@ -257,13 +265,15 @@ export const deckFreezeBake = inngest.createFunction(
     // genChat key, so a concurrent slide edit can never be clobbered by a
     // chat tick. Handler-scoped: steps 2 AND 3 both write. Best-effort:
     // the feed must never fail a bake.
+    const haikuFix = haikuFixRequested && !review;
+    const coverId = manifest.slides[0]?.slideId;
     const chatWrite = (mutate: (chat: GenChatEntry[]) => void): Promise<void> =>
       appendGenChat(projectId, versionId, mutate, (msg, meta) =>
         logger.warn(msg, meta),
       );
 
     const observed = await step.run("observe-and-revise", async () => {
-      if (!review) {
+      if (!review && !haikuFix) {
         // Vision pass disabled for this bake (enhance): no render, no
         // audit, no model call - the freeze step renders once and gates.
         logger.info("deck_vision_skipped", {
@@ -321,6 +331,7 @@ export const deckFreezeBake = inngest.createFunction(
           fixWorthyBefore: {} as Record<string, number>,
           overflowPxBefore: {} as Record<string, number>,
           normalized: normalizedNoReview,
+          qualityBefore: {} as Record<string, SlideQuality>,
         };
       }
       // 2a. One clean render: audit findings + a downscaled shot per
@@ -336,6 +347,8 @@ export const deckFreezeBake = inngest.createFunction(
       // bake only slides with a measured finding or a dead zone are sent; the
       // rest freeze as authored. Small bakes (single-slide regen etc.) review all.
       let reviewIds: Set<string> | null = null;
+      const qualityBefore: Record<string, SlideQuality> = {};
+      const reviewChat: typeof chatWrite = haikuFix ? async () => undefined : chatWrite;
       // Deterministic Arabic-leading fix (crowded headlines → line-height 1.3,
       // measured-fit, never overflow). Runs BEFORE the audit so crowding is
       // already resolved: the audit stops flagging it and the vision round is
@@ -375,7 +388,7 @@ export const deckFreezeBake = inngest.createFunction(
               page,
               pendingIds,
               manifest.direction,
-              REVIEW_FLAG_COVER_PCT,
+              haikuFix ? NO_REVIEW_FILL_COVER_PCT : REVIEW_FLAG_COVER_PCT,
             );
             let filled = 0;
             for (const sid of pendingIds) {
@@ -447,7 +460,27 @@ export const deckFreezeBake = inngest.createFunction(
               thumbs.push(`data:image/jpeg;base64,${thumb.toString("base64")}`);
             }
           }
-          if (pendingIds.length > REVIEW_ALL_AT_OR_BELOW) {
+          if (haikuFix) {
+            const quality = await measureQuality(page, pendingIds);
+            for (const sid of pendingIds) {
+              const q = quality[sid];
+              if (!q) continue;
+              qualityBefore[sid] = q;
+              findings[sid] = [
+                ...(findings[sid] ?? []),
+                ...qualityIssues(q, sid === coverId).map((detail) => ({ type: "quality" as const, detail })),
+              ];
+            }
+            // Underfill is report-only, as in the reviewed path's fixWorthy.
+            reviewIds = new Set(
+              pendingIds.filter((sid) => (findings[sid] ?? []).some((f) => f.type !== "underfill")),
+            );
+            logger.info("deck_haiku_fix_scope", {
+              versionId,
+              pending: pendingIds.length,
+              flagged: reviewIds.size,
+            });
+          } else if (pendingIds.length > REVIEW_ALL_AT_OR_BELOW) {
             reviewIds = new Set(
               pendingIds.filter((sid) => {
                 const dz = auditRes[sid]?.deadZone;
@@ -471,7 +504,7 @@ export const deckFreezeBake = inngest.createFunction(
       }
       // The review ASK, as a chat message with the sent screenshots (the
       // client renders the localized ask copy; kind "review" carries it).
-      await chatWrite((chat) =>
+      await reviewChat((chat) =>
         chat.push({ role: "user", kind: "review", thumbs, at: Date.now() }),
       );
       const fixWorthy = (fs: FrameAuditFinding[]) =>
@@ -562,7 +595,7 @@ export const deckFreezeBake = inngest.createFunction(
               // per token ($4/$20 vs $5/$25). Thinking is always on for
               // this model (adaptive below) and effort is set explicitly,
               // since Opus 5.5 defaults to medium rather than high.
-              model: "claude-opus-5-5",
+              model: haikuFix ? HAIKU_FIX_MODEL : "claude-opus-5-5",
               max_tokens: VISION_MAX_TOKENS,
               // summarized: the stream carries a user-readable reasoning
               // summary - relayed live into the GenChat feed below.
@@ -573,7 +606,7 @@ export const deckFreezeBake = inngest.createFunction(
               // slide") - and low-effort reviews DID under-fix (the
               // contrast round-1 partial). Costs more thinking tokens,
               // buys real per-slide study.
-              output_config: { effort: "medium" },
+              output_config: { effort: haikuFix ? "low" : "medium" },
               system: [
                 {
                   type: "text",
@@ -617,7 +650,7 @@ export const deckFreezeBake = inngest.createFunction(
               chatBusy = true;
               const text =
                 snapshot.length > 600 ? `…${snapshot.slice(-600)}` : snapshot;
-              void chatWrite(putThinking(text)).finally(() => {
+              void reviewChat(putThinking(text)).finally(() => {
                 chatBusy = false;
               });
             });
@@ -627,7 +660,7 @@ export const deckFreezeBake = inngest.createFunction(
             // slide now. The" - owner report 2026-07-10, read as "the
             // review died"). Persist the full summary once the call ends.
             if (latestThinking) {
-              await chatWrite(
+              await reviewChat(
                 putThinking(
                   latestThinking.length > 1900
                     ? `…${latestThinking.slice(-1900)}`
@@ -746,7 +779,7 @@ export const deckFreezeBake = inngest.createFunction(
               .filter((l) => /^SLIDE\s+\d+\s*:/i.test(l))
               .join("\n")
               .slice(0, 1900);
-            await chatWrite((chat) => {
+            await reviewChat((chat) => {
               if (verdictText) {
                 chat.push({
                   role: "assistant",
@@ -785,6 +818,7 @@ export const deckFreezeBake = inngest.createFunction(
         // Leading-normalized html per changed slide — the base the freeze
         // composes + freezes (so the deterministic leading fix persists).
         normalized,
+        qualityBefore,
       };
     });
 
@@ -845,6 +879,7 @@ export const deckFreezeBake = inngest.createFunction(
         // reused below as the flow shots for the ones that go on to freeze
         // (no double capture - the page is unmutated in between).
         const revisedShots = new Map<string, Buffer>();
+        const auditFixed = new Set<string>();
         if (revisedIds.length > 0) {
           const reAudit = await auditSlides(
             page,
@@ -889,6 +924,7 @@ export const deckFreezeBake = inngest.createFunction(
             const OVERFLOW_SLACK = 4;
             const overflowPxNow = worstOverflowPx(after);
             const overflowPxBefore = observed.overflowPxBefore[sid] ?? 0;
+            if (now < before) auditFixed.add(sid);
             if (
               now > before ||
               overflowPxNow > overflowPxBefore + OVERFLOW_SLACK
@@ -902,6 +938,23 @@ export const deckFreezeBake = inngest.createFunction(
                 overflowPxNow,
               });
             }
+          }
+        }
+
+        // The Haiku fix has to measure better, not just no worse: it is a
+        // cheaper writer and it was told to change the slide.
+        if (haikuFix && revisedIds.length > 0) {
+          const qualityAfter = await measureQuality(page, revisedIds);
+          for (const sid of revisedIds) {
+            const before = observed.qualityBefore[sid];
+            const after = qualityAfter[sid];
+            if (!before || !after || !fixImproved(before, after, sid === coverId, auditFixed.has(sid))) reverted.add(sid);
+            logger.info("deck_haiku_fix_slide", {
+              slideId: sid,
+              before,
+              after,
+              kept: !reverted.has(sid),
+            });
           }
         }
 
@@ -1559,7 +1612,7 @@ async function normalizeLeading(
   slideIds: string[],
 ): Promise<Record<string, { html: string; adjusted: number; shrunk: number }>> {
   await page.evaluate(
-    `${LEADING_NORMALIZE_SCRIPT}; window.__tqNormLead = __tqNormalizeLeadingWell;`,
+    `${LEADING_NORMALIZE_SCRIPT}; window.__tqNormLead = __tqNormalizeLeadingWell; window.__tqFixHl = __tqFixHighlights;`,
   );
   return (await page.evaluate((ids) => {
     const out: Record<
@@ -1576,18 +1629,19 @@ async function normalizeLeading(
         out[sid] = { html: "", adjusted: 0, shrunk: 0 };
         continue;
       }
-      const res = (
-        window as unknown as {
-          __tqNormLead: (w: Element) => {
-            adjusted: number;
-            shrunk: number;
-            reverted: number;
-          };
-        }
-      ).__tqNormLead(well);
+      const win = window as unknown as {
+        __tqFixHl: (w: Element) => number;
+        __tqNormLead: (w: Element) => {
+          adjusted: number;
+          shrunk: number;
+          reverted: number;
+        };
+      };
+      const highlights = win.__tqFixHl(well);
+      const res = win.__tqNormLead(well);
       // Capture only when the DOM actually changed; else keep the stored html.
       out[sid] = {
-        html: res.adjusted > 0 ? sec.outerHTML : "",
+        html: res.adjusted > 0 || highlights > 0 ? sec.outerHTML : "",
         adjusted: res.adjusted,
         shrunk: res.shrunk,
       };

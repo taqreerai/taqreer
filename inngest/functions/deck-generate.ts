@@ -68,6 +68,7 @@ import { detectLanguage, languageName, toLegacyLanguage } from "@/lib/language/d
 import { isGulfImageContext } from "@/lib/geo/image-region";
 import { injectLogoMarkers, logoImgTag } from "@/lib/deck/logo-inject";
 import { scopeDeckCss } from "@/lib/deck/scope-css";
+import { haikuDeckRules, haikuPostRules, HAIKU_DEPTH_REMINDER } from "@/lib/deck/haiku-rules";
 import { StreamingHtmlSplitter, type ParsedSlide } from "@/lib/deck/html-stream";
 import { signBrandAssetUrl } from "@/lib/storage/sign";
 import { sourceToSlideImages } from "@/lib/extract/source-to-slide-images";
@@ -2827,6 +2828,8 @@ export const deckGenerate = inngest.createFunction(
         const paletteReference =
           !briefHasBrandColors(data.brief) &&
           (htmlSourceKind === "mimic" || enhanceTemplate);
+        // Haiku tier depth rules; Enhance rebuilds the user's own slides as they are.
+        const isHaikuAuthored = callParams.model.startsWith("claude-haiku") && data.type !== "enhance" && htmlSourceKind !== "enhance";
         const htmlSystem = [
           // The FRAME base (context/frame-architecture-2026-07-10.md) is the
           // ONLY generation contract since the 2026-07-10 cutover. It embeds
@@ -2862,6 +2865,7 @@ export const deckGenerate = inngest.createFunction(
             ? ENHANCE_ADD_PHOTOS_ADDENDUM
             : null,
           enhanceTemplate ? ENHANCE_TEMPLATE_ADDENDUM : null,
+          isHaikuAuthored ? (data.type === "social" ? haikuPostRules : haikuDeckRules)(isImagesMode(data), (data.brief as { imageRegion?: string } | null)?.imageRegion) : null,
         ]
           .filter(Boolean)
           .join("\n\n");
@@ -2874,7 +2878,7 @@ export const deckGenerate = inngest.createFunction(
           data.type === "social"
             ? `Design the post now: emit the \`<section>\` cards using the provided design system, starting with the hook card. The first character of your reply must be \`<\`.`
             : `Author the deck now: emit the \`<section>\` slides using the provided design system, starting with the cover. The first character of your reply must be \`<\`.`;
-        const userText = `${baseUserMessage}\n\n${closer}`;
+        const userText = [baseUserMessage, isHaikuAuthored && data.type !== "social" ? HAIKU_DEPTH_REMINDER : null, closer].filter(Boolean).join("\n\n");
 
         // ── GENCHAT (backend-transparency feed) ────────────────────────────
         // What the studio's layers rail shows while the deck generates: the
@@ -4376,6 +4380,9 @@ export const deckGenerate = inngest.createFunction(
     // no type), so the 2026-07-11 skip never applied: read the source kind.
     const isEnhanceDeck = data.type === "enhance" || readSource(data)?.kind === "enhance";
     const review = !isEnhanceDeck && !isHaikuRun;
+    // No review (Haiku, or the free plan's gate in the bake): the cheap Haiku fix
+    // pass runs instead. The bake turns it off when a review runs.
+    const haikuFix = !isEnhanceDeck;
     if (isImagesMode(data)) {
       await inngest
         .send({
@@ -4384,7 +4391,14 @@ export const deckGenerate = inngest.createFunction(
           // the bake's read-modify-write on slideJson would otherwise race the
           // reconcile's write on the same blob (lost update). deck-images-
           // generate dispatches deck.freeze.bake on its way out when set.
-          data: { projectId, versionId, freezeAfter: true, review },
+          data: {
+            projectId,
+            versionId,
+            freezeAfter: true,
+            review,
+            haikuFix,
+            imageRegion: (data.brief as { imageRegion?: string } | null)?.imageRegion ?? null,
+          },
         })
         .catch((err) => {
           logger.warn("deck_images_dispatch_failed", {
@@ -4403,7 +4417,7 @@ export const deckGenerate = inngest.createFunction(
         .send({
           id: `freeze:${projectId}:${versionId}`,
           name: "deck.freeze.bake",
-          data: { projectId, versionId, review },
+          data: { projectId, versionId, review, haikuFix },
         })
         .catch((err) => {
           logger.warn("deck_freeze_dispatch_failed", {
