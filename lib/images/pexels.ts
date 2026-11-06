@@ -152,7 +152,9 @@ export async function findStockPhoto(
       // A failed check keeps the old behaviour (first result), except for a flag.
       const picked = verdict ? (verdict.pick !== null ? thumbs[verdict.pick]?.photo : undefined) : thumbs[0]?.photo;
       if (!picked) {
-        const flag = !broad && verdict?.flag ? await flagCard(verdict.flag, aspect) : null;
+        // The check also names a country for "Saudi man" or "Yemeni teacher", so
+        // only a box that asks for a flag may get one (prod 2026-11-05: 9 of 9).
+        const flag = !broad && verdict?.flag && /\bflags?\b/i.test(check) ? await flagCard(verdict.flag, aspect) : null;
         return flag ? { ...flag, photographer: null } : null;
       }
       photos = [picked];
