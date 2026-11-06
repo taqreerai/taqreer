@@ -54,6 +54,9 @@ const MAX_EDGE = 2400;
 const JPEG_QUALITY = 85;
 const MAX_ASSET_BYTES = 15 * 1024 * 1024; // bucket limit is 20 MB
 const MIN_VISIBLE_PT = 6; // a visible region thinner than this is a hairline, not a picture
+const STRIP_MIN_ASPECT = 2; // a slice of a figure is much wider than tall
+const STRIP_EDGE = 0.004; // of the page: how far apart two slices' edges may sit
+const STRIP_SAME_WIDTH = 0.9; // a slice's bitmap is at least this share of the widest one
 const SCAN_MAX_WORDS = 15;
 const SCAN_MIN_PAGES = 3;
 // A flat page inside margins counts too: one export filled 83% of each page and
@@ -378,8 +381,9 @@ export async function extractPdfPictures(buffer: Buffer): Promise<PdfVisuals> {
           .filter((p) => p.bytes.length > 0);
       },
     );
+    const joined = await mapPool(perPage, PAGE_PARALLEL, joinStrips);
     // Document order within a page: top to bottom, then left to right.
-    const pictures = perPage.flatMap((list) => list.sort((a, b) => a.box.y - b.box.y || a.box.x - b.box.x));
+    const pictures = joined.flatMap((list) => list.sort((a, b) => a.box.y - b.box.y || a.box.x - b.box.x));
     return { pageCount, scannedPages, wordsByPage, pictures };
   } finally {
     await rm(dir, { recursive: true, force: true }).catch(() => undefined);
@@ -489,6 +493,86 @@ async function cutPicture(p: PdfPicture): Promise<Cut> {
   let enc = await encode(img);
   if (enc.data.length > MAX_ASSET_BYTES) enc = await encode(sharpOf(enc.data).resize({ width: 1600, height: 1600, fit: "inside" }));
   return { bytes: enc.data, contentType: hasAlpha ? "image/png" : "image/jpeg", width: enc.info.width, height: enc.info.height };
+}
+
+// Some exporters store one figure as horizontal strips, so each slice became its
+// own picture: cut through its boxes, captioned as a separate figure, and its
+// words repeated beside it (prod 2026-11-05, cmw3yrb9b000y4r6d34av2wzm).
+function continuesStrip(a: PdfPicture, b: PdfPicture): boolean {
+  const wide = (p: PdfPicture) => p.box.w / Math.max(p.box.h, 1e-6) >= STRIP_MIN_ASPECT;
+  if (!wide(a) || !wide(b) || a.skewed || b.skewed || a.faded || b.faded) return false;
+  return (
+    a.mediaKey !== b.mediaKey &&
+    Math.abs(a.box.x - b.box.x) <= STRIP_EDGE &&
+    Math.abs(a.box.w - b.box.w) <= STRIP_EDGE &&
+    Math.abs(a.box.y + a.box.h - b.box.y) <= STRIP_EDGE
+  );
+}
+
+export async function joinStrips(list: PdfPicture[]): Promise<PdfPicture[]> {
+  const ordered = [...list].sort((a, b) => a.box.y - b.box.y);
+  const chains: PdfPicture[][] = [];
+  for (const p of ordered) {
+    const chain = chains.find((c) => continuesStrip(c[c.length - 1], p));
+    if (chain) chain.push(p);
+    else chains.push([p]);
+  }
+  if (chains.length === list.length) return list;
+  const out: PdfPicture[] = [];
+  for (const chain of chains) {
+    if (chain.length === 1) {
+      out.push(chain[0]);
+      continue;
+    }
+    try {
+      const cuts = await Promise.all(chain.map(cutPicture));
+      const width = Math.max(...cuts.map((c) => c.width));
+      // Slices of one figure share a width. Checked before the resize: a crafted
+      // 2x2400 bitmap in a wide box would otherwise grow to gigapixels and kill
+      // the process (native, so no catch), past the decode cap.
+      const height = cuts.reduce((sum, c) => sum + Math.round((c.height * width) / c.width), 0);
+      if (cuts.some((c) => c.width < width * STRIP_SAME_WIDTH) || width * height > MAX_PIXELS) {
+        throw new Error("not slices of one figure");
+      }
+      const rows = await Promise.all(
+        cuts.map((c) => sharpOf(c.bytes).flatten({ background: "#ffffff" }).resize({ width }).png().toBuffer({ resolveWithObject: true })),
+      );
+      const total = rows.reduce((sum, r) => sum + r.info.height, 0);
+      let top = 0;
+      const layers = rows.map((r) => {
+        const layer = { input: r.data, left: 0, top };
+        top += r.info.height;
+        return layer;
+      });
+      const bytes = await sharp({ create: { width, height: total, channels: 3, background: "#ffffff" }, limitInputPixels: MAX_PIXELS })
+        .composite(layers)
+        .png()
+        .toBuffer();
+      const first = chain[0], last = chain[chain.length - 1];
+      const visible: Rect = [
+        Math.min(...chain.map((p) => p.visible[0])),
+        first.visible[1],
+        Math.max(...chain.map((p) => p.visible[2])),
+        last.visible[3],
+      ];
+      out.push({
+        pageIndex: first.pageIndex,
+        mediaKey: createHash("sha1").update(bytes).digest("hex").slice(0, 16),
+        box: { x: first.box.x, y: first.box.y, w: Math.max(...chain.map((p) => p.box.w)), h: last.box.y + last.box.h - first.box.y },
+        bytes,
+        maskBytes: null,
+        imgW: width,
+        imgH: total,
+        matrix: [(visible[2] - visible[0]) / width, 0, 0, (visible[3] - visible[1]) / total, visible[0], visible[1]],
+        visible,
+        faded: false,
+        skewed: false,
+      });
+    } catch {
+      out.push(...chain); // a slice that will not decode: leave them as they were
+    }
+  }
+  return out;
 }
 
 // Flat single-colour images (drop shadows, glows, solid fills) and how white a
