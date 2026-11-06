@@ -213,8 +213,8 @@ function fallbackQuery(prompt: string): string {
 export class NoImageMatchError extends Error {}
 export { NO_MATCH_SIZE };
 
-async function lastTry(projectId: string, prompt: string, aspect: GenImageAspect): Promise<GeneratedImageResult | null> {
-  const photo = await findBroaderStockPhoto(prompt, aspect);
+async function lastTry(projectId: string, prompt: string, aspect: GenImageAspect, audience?: string | null): Promise<GeneratedImageResult | null> {
+  const photo = await findBroaderStockPhoto(prompt, aspect, audience);
   console.info("stock_broader_try", { projectId, found: photo !== null });
   return photo ? { b64: photo.b64, size: photo.size } : null;
 }
@@ -229,6 +229,8 @@ export async function fillImage(opts: {
   // first FREE_AI_PER_DECK may fall back to gpt-image. Absent (a user's
   // regenerate) = no AI fallback on free.
   rank?: number;
+  // The brief's imageRegion: stock photos of people must fit it.
+  audience?: string | null;
 }): Promise<GeneratedImageResult> {
   const tier = await projectImageTier(opts.projectId);
   const stock = opts.stock === true;
@@ -255,10 +257,10 @@ export async function fillImage(opts: {
     const q = stock ? opts.prompt : regionQuery || fallbackQuery(opts.prompt);
     for (const attempt of [q, q.split(" ").slice(0, 2).join(" ")]) {
       if (!attempt || !stockPhotosEnabled()) continue;
-      const photo = await findStockPhoto(attempt, opts.aspect, opts.prompt);
+      const photo = await findStockPhoto(attempt, opts.aspect, opts.prompt, false, opts.audience);
       if (photo) return { b64: photo.b64, size: photo.size };
     }
-    const broader = await lastTry(opts.projectId, opts.prompt, opts.aspect);
+    const broader = await lastTry(opts.projectId, opts.prompt, opts.aspect, opts.audience);
     if (broader) return broader;
     throw new NoImageMatchError("region free plan: no fitting stock photo for this box");
   }
@@ -273,7 +275,7 @@ export async function fillImage(opts: {
       for (const attempt of [q, q.split(" ").slice(0, 2).join(" ")]) {
         if (!attempt) continue;
         // Checked against the box's own description (lib/images/pexels.ts).
-        const photo = await findStockPhoto(attempt, opts.aspect, opts.prompt);
+        const photo = await findStockPhoto(attempt, opts.aspect, opts.prompt, false, opts.audience);
         if (photo) return { b64: photo.b64, size: photo.size };
       }
     }
@@ -283,7 +285,7 @@ export async function fillImage(opts: {
     return generateImageWithRetry({ prompt: opts.prompt, aspect: opts.aspect, referenceUrl: ref, quality: "low" });
   }
   if (!ref && promptMedium(opts.prompt, stock) !== "illustration") {
-    const broader = await lastTry(opts.projectId, opts.prompt, opts.aspect);
+    const broader = await lastTry(opts.projectId, opts.prompt, opts.aspect, opts.audience);
     if (broader) return broader;
   }
   throw new NoImageMatchError(
