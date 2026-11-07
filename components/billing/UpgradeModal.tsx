@@ -23,6 +23,7 @@ import { BillingSection } from "@/components/billing/BillingSection";
 import { EmbeddedCheckout } from "@/components/billing/EmbeddedCheckout";
 import { CheckoutBoundary } from "@/components/billing/CheckoutBoundary";
 import { planLabel, type KnownPlan } from "@/lib/plan";
+import { useCreditBalance } from "@/lib/credits/store";
 import { useFocusTrap } from "@/lib/hooks/useFocusTrap";
 
 // Why the modal opened. `tier` (lowest plan that unlocks it), `feature` (which
@@ -72,6 +73,8 @@ export function UpgradeModal({
   // null = plans step; a lookupKey = checkout step; "done" = success.
   const [lookupKey, setLookupKey] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  // Deck-unlock sheet: the full plan grid stays folded under "See all plans".
+  const [allPlans, setAllPlans] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   useFocusTrap(panelRef, open);
   const minTier = requiredTier ?? gateContext?.tier ?? null;
@@ -85,6 +88,7 @@ export function UpgradeModal({
     if (open) {
       setLookupKey(initialLookupKey);
       setDone(false);
+      setAllPlans(false);
     }
   }
 
@@ -233,11 +237,15 @@ export function UpgradeModal({
                 ) : (
                   <CheckoutBoundary where="upgrade-modal-plans">
                     {deckUnlock ? (
-                      <DeckUnlockOffer
-                        priceCents={deckUnlock.priceCents}
-                        onBuy={() => setLookupKey(DECK_UNLOCK_KEY)}
+                      <PlusFirstOffer
+                        oneTimeCents={deckUnlock.priceCents}
+                        onSubscribe={() => setLookupKey(PLUS_MONTHLY_KEY)}
+                        onOneTime={() => setLookupKey(DECK_UNLOCK_KEY)}
+                        allPlans={allPlans}
+                        onAllPlans={() => setAllPlans(true)}
                       />
                     ) : null}
+                    {!deckUnlock || allPlans ? (
                     <BillingSection
                       variant="modal"
                       minTier={minTier}
@@ -246,6 +254,7 @@ export function UpgradeModal({
                       highlightFeature={gateContext?.feature ?? null}
                       onBuy={(key) => setLookupKey(key)}
                     />
+                    ) : null}
                   </CheckoutBoundary>
                 )}
               </div>
@@ -266,37 +275,89 @@ function formatUsd(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-/** "Just this presentation": one payment, no subscription, nothing renews. */
-function DeckUnlockOffer({ priceCents, onBuy }: { priceCents: number; onBuy: () => void }) {
-  const t = useDict().components.upgradeModal;
-  const price = formatUsd(priceCents);
+// Plus, monthly: the plan the deck-unlock sheet leads with (2026-11-07,
+// owner: "the money is in the recurring subscription").
+const PLUS_MONTHLY_KEY = "tier_plus_monthly";
+// A typical auto deck at the Engaging level (sonnet-fast): what "about N decks
+// a month" is counted in.
+const TYPICAL_DECK_SLIDES = 15;
+
+/**
+ * The deck-unlock sheet (2026-11-07): Plus first and highlighted, with what a
+ * deck costs on it next to the one-time price; the one-time unlock as a quiet
+ * link; the full plan grid folded under "See all plans". A repeat one-time
+ * buyer is told Plus would have included this deck.
+ */
+function PlusFirstOffer({
+  oneTimeCents,
+  onSubscribe,
+  onOneTime,
+  allPlans,
+  onAllPlans,
+}: {
+  oneTimeCents: number;
+  onSubscribe: () => void;
+  onOneTime: () => void;
+  allPlans: boolean;
+  onAllPlans: () => void;
+}) {
+  const dict = useDict();
+  const t = dict.components.upgradeModal;
+  const credits = useCreditBalance();
+  const oneTime = formatUsd(oneTimeCents);
+  const plusPrice = credits?.tierPrices?.find((p) => p.plan === "plus")?.monthly ?? 0;
+  const plusCredits = credits?.tierNumbers?.find((n) => n.plan === "plus")?.credits ?? 0;
+  const sonnet = credits?.presets?.find((p) => p.key === "sonnet-fast");
+  const deckCredits = sonnet ? sonnet.baseCredits + TYPICAL_DECK_SLIDES * sonnet.perSlideCredits : 0;
+  const decks = deckCredits > 0 ? Math.floor(plusCredits / deckCredits) : 0;
+  const perDeck = decks > 0 && plusPrice > 0 ? `${(plusPrice / decks).toFixed(2)}` : null;
   return (
-    <div className="mb-6 flex flex-col gap-4">
+    <div className="mb-6 flex flex-col gap-3">
       <div className="surface-card flex flex-col gap-4 rounded-2xl border-2 border-[var(--tq-brand-blue)] p-5 md:flex-row md:items-center md:justify-between md:p-6">
         <div className="flex min-w-0 flex-col gap-2">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <h4 className="text-lg font-bold text-foreground">{t.deckUnlockTitle}</h4>
-            <span className="text-2xl font-bold text-foreground" dir="ltr">
-              {price}
-            </span>
+            <h4 className="text-lg font-bold text-foreground">{planLabel(dict.components.planUsage, "plus")}</h4>
+            {plusPrice > 0 ? (
+              <span className="text-2xl font-bold text-foreground" dir="ltr">
+                ${plusPrice}
+                <span className="ms-1 text-sm font-medium text-muted">{dict.landing.pricing.perMonth}</span>
+              </span>
+            ) : null}
+            <span className="badge-premium">{t.plusOfferBadge}</span>
           </div>
-          <p className="text-sm font-medium text-[var(--tq-brand-blue)]">{t.deckUnlockOnce}</p>
           <ul className="flex flex-col gap-1.5 text-sm text-muted">
-            {t.deckUnlockPoints.map((point: string) => (
-              <li key={point} className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[16px] text-[var(--tq-status-ok-dot)]" aria-hidden>
-                  check
-                </span>
-                {point}
-              </li>
-            ))}
+            {t.plusOfferPoints
+              .filter((point: string) => decks > 0 || !point.includes("{decks}"))
+              .map((point: string) => (
+                <li key={point} className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[16px] text-[var(--tq-status-ok-dot)]" aria-hidden>
+                    check
+                  </span>
+                  {point.replace("{decks}", String(decks))}
+                </li>
+              ))}
           </ul>
+          {perDeck ? (
+            <p className="text-sm font-medium text-[var(--tq-brand-blue)]">
+              {t.plusOfferValue.replace("{perDeck}", perDeck).replace("{oneTime}", oneTime)}
+            </p>
+          ) : null}
+          {(credits?.deckPurchases ?? 0) > 0 ? <p className="text-xs text-muted">{t.repeatBuyer}</p> : null}
         </div>
-        <button type="button" onClick={onBuy} className="btn-gradient shrink-0 px-6 py-3 text-sm">
-          {t.deckUnlockCta.replace("{price}", price)}
+        <button type="button" onClick={onSubscribe} className="btn-gradient shrink-0 px-6 py-3 text-sm">
+          {t.plusOfferCta}
         </button>
       </div>
-      <p className="text-center text-sm font-semibold text-foreground">{t.deckUnlockOr}</p>
+      <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-sm">
+        <button type="button" onClick={onOneTime} className="text-muted underline-offset-4 hover:text-foreground hover:underline">
+          {t.oneTimeLink.replace("{price}", oneTime)}
+        </button>
+        {!allPlans ? (
+          <button type="button" onClick={onAllPlans} className="text-muted underline-offset-4 hover:text-foreground hover:underline">
+            {t.seeAllPlans}
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }

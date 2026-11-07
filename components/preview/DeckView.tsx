@@ -39,7 +39,6 @@ import {
 } from "@/lib/billing/deck-unlock-brackets";
 import { teaserVisibleForFlow } from "@/lib/credits/cost";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
-import { BasicModelChip } from "@/components/preview/BasicModelChip";
 import { SlideEditor } from "@/components/preview/editor/SlideEditor";
 import { StylePill, type RegenImageInput, type RegenImageResult } from "@/components/preview/editor/StylePill";
 import { PhotoSlotOverlay, PHOTO_SLOT_SELECTOR } from "@/components/preview/editor/PhotoSlotOverlay";
@@ -5293,13 +5292,18 @@ export function DeckView({
           trailing={
             !generating && exportManifest ? (
               <>
-                {showBasicModel ? (
+                {/* The free deck's one conversion action, next to Export:
+                    opens the same Plus-first sheet as the locked slides. */}
+                {effectiveTeaserLocked > 0 ? (
                   <>
                     <span className="mx-1.5 h-5 w-px bg-[var(--tq-border-hairline)]" aria-hidden />
-                    <BasicModelChip
-                      priceCents={deckUnlockOffer?.priceCents ?? null}
-                      onUnlock={handleTeaserUnlock}
-                    />
+                    <button type="button" className="btn-unlock" onClick={handleTeaserUnlock}>
+                      <span className="material-symbols-outlined leading-none" style={{ fontSize: 16 }} aria-hidden>
+                        lock_open
+                      </span>
+                      {dict.components.creditGate.unlockFullDeck}
+                      <span className="btn-unlock-count tabular-nums">{effectiveTeaserLocked}</span>
+                    </button>
                   </>
                 ) : null}
                 <span className="mx-1.5 h-5 w-px bg-[var(--tq-border-hairline)]" aria-hidden />

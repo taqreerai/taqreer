@@ -1358,6 +1358,48 @@ html.app-shell-scroll body {
      state strong enough affordance. */
 }
 
+/* ─── Unlock button (studio top bar, 2026-11-07) ──────────────────────
+   The free deck's one conversion action, next to Export: a brand-blue
+   STROKE with a slow soft pulse ring so it reads as the thing to press,
+   without filling the bar with colour. Reduced motion: stroke only. */
+.btn-unlock {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 9999px;
+  padding: 0.375rem 0.85rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--tq-text-primary);
+  background: color-mix(in oklab, var(--tq-brand-blue) 10%, transparent);
+  border: 1.5px solid var(--tq-brand-blue);
+  white-space: nowrap;
+  cursor: pointer;
+  animation: tq-unlock-pulse 2.6s ease-out infinite;
+  transition: background 0.2s ease;
+}
+.btn-unlock:hover {
+  background: color-mix(in oklab, var(--tq-brand-blue) 20%, transparent);
+}
+.btn-unlock-count {
+  min-width: 1.25rem;
+  border-radius: 9999px;
+  padding: 0 0.35rem;
+  font-size: 0.6875rem;
+  line-height: 1.25rem;
+  text-align: center;
+  color: #fff;
+  background: var(--tq-brand-blue);
+}
+@keyframes tq-unlock-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--tq-brand-blue) 45%, transparent); }
+  70% { box-shadow: 0 0 0 7px color-mix(in oklab, var(--tq-brand-blue) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--tq-brand-blue) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-unlock { animation: none; }
+}
+
 /* ─── Aura glow — the "Popular" pricing tier ─────────────────────────
    `.tq-aura`: the popular tier's card FACE is a living aura (user
    direction 2026-07-13, applied on PricingTiers + BillingSection,

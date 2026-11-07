@@ -124,9 +124,12 @@ export async function GET() {
   // so they disappear from the picker; an added preset appears with no deploy.
   const presets = activePresetPayload();
 
-  const [tierPrices, topupPacks] = await Promise.all([
+  const [tierPrices, topupPacks, deckPurchases] = await Promise.all([
     getDisplayPrices(),
     getTopupDisplayPacks(),
+    // One-time unlocks bought (not refunded): the unlock sheet tells a repeat
+    // buyer that Plus would have included this deck.
+    prisma.deckPurchase.count({ where: { userId: dbUser.id, refundedAt: null } }),
   ]);
 
   return NextResponse.json({
@@ -140,6 +143,7 @@ export async function GET() {
     freePreset: freeModelPreset(dbUser),
     // Same accounts pay the regional one-time unlock price (deck-unlock-brackets).
     regionPricing: isRegionLimitedFree(dbUser),
+    deckPurchases,
     // Per-run slide ceiling for this user's tier (admin -> the 75 system cap).
     // The slide steppers cap their max here so a free user (10) can't pick a
     // count preflight would reject.

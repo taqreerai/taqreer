@@ -54,6 +54,8 @@ export type CreditData = {
   regionPreset?: string | null;
   // The preset this account runs on (region or FREE_HAIKU_ALL); picker only.
   freePreset?: string | null;
+  // One-time deck unlocks this account bought (unlock sheet, repeat-buyer line).
+  deckPurchases?: number;
   // Region-limited free account: one-time unlocks use the regional price.
   regionPricing?: boolean;
   // Per-run slide ceiling for the user's tier (free = 10; admin = system cap).
