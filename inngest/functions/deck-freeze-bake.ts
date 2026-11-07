@@ -478,7 +478,7 @@ export const deckFreezeBake = inngest.createFunction(
               qualityBefore[sid] = q;
               findings[sid] = [
                 ...(findings[sid] ?? []),
-                ...qualityIssues(q, sid === coverId, { words: haikuFix }).map((detail) => ({ type: "quality" as const, detail })),
+                ...qualityIssues(q, sid === coverId, { words: haikuFix && !(enhanceRequested || projectType === "enhance") }).map((detail) => ({ type: "quality" as const, detail })),
               ];
             }
           }

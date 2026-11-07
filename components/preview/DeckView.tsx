@@ -5296,7 +5296,10 @@ export function DeckView({
                 {showBasicModel ? (
                   <>
                     <span className="mx-1.5 h-5 w-px bg-[var(--tq-border-hairline)]" aria-hidden />
-                    <BasicModelChip />
+                    <BasicModelChip
+                      priceCents={deckUnlockOffer?.priceCents ?? null}
+                      onUnlock={handleTeaserUnlock}
+                    />
                   </>
                 ) : null}
                 <span className="mx-1.5 h-5 w-px bg-[var(--tq-border-hairline)]" aria-hidden />

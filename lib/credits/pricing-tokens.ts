@@ -17,7 +17,7 @@ export function fillPricingTokens(
   },
 ): string {
   let out = text;
-  if (vals.model && vals.levels && out.includes("{levels}")) {
+  if (vals.model && vals.levels && (out.includes("{levels}") || out.includes("{topLevel}"))) {
     const names = [
       ...new Set(
         vals.model
@@ -31,6 +31,9 @@ export function fillPricingTokens(
         ? (names[0] ?? vals.model)
         : names.slice(0, -1).join(vals.levels.sep) + vals.levels.lastSep + names[names.length - 1];
     out = out.replaceAll("{levels}", joined);
+    // {topLevel}: only the highest level (the English card, where the full
+    // list overflows the Max card).
+    out = out.replaceAll("{topLevel}", names[names.length - 1] ?? vals.model);
   }
   if (vals.credits != null) {
     out = out.replaceAll("{credits}", vals.credits.toLocaleString("en-US"));

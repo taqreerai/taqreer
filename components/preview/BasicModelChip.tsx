@@ -1,16 +1,24 @@
 "use client";
 
-// "Made with Basic model" chip in the studio's top bar (owner, 2026-11-07):
-// a free deck designed on the Basic model (Claude Haiku) says so, and a short
-// card explains what paid plans add, with a link to the plans page. Shown by
-// DeckView only to the owner of a free, unpurchased Haiku deck.
+// "Make it engaging" chip in the studio's top bar (owner, 2026-11-07): an
+// upgrade nudge, not a label. Shown by DeckView to the owner of a free,
+// unpurchased deck designed at the Simple level. Its card sells the one-time
+// unlock (the whole deck redesigned at the Engaging level, no watermark) and
+// starts it; a deck with nothing locked points to the plans instead.
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { localizedHref } from "@/lib/i18n/navigation";
 
-export function BasicModelChip() {
+export function BasicModelChip({
+  priceCents,
+  onUnlock,
+}: {
+  // The deck's one-time unlock price; null = no unlock offer for this deck.
+  priceCents: number | null;
+  onUnlock: () => void;
+}) {
   const dict = useDict();
   const { locale } = useLocale();
   const t = dict.editor.basicModel;
@@ -34,6 +42,9 @@ export function BasicModelChip() {
     };
   }, [open]);
 
+  // Latin numerals in both languages (owner rule).
+  const price = priceCents !== null ? `$${(priceCents / 100).toFixed(2)}` : null;
+
   return (
     <div ref={wrapRef} className="relative">
       <button
@@ -44,10 +55,10 @@ export function BasicModelChip() {
       >
         <span
           className="material-symbols-outlined leading-none text-[var(--tq-brand-blue)]"
-          style={{ fontSize: 14 }}
+          style={{ fontSize: 15 }}
           aria-hidden
         >
-          info
+          auto_awesome
         </span>
         {t.chip}
       </button>
@@ -58,14 +69,29 @@ export function BasicModelChip() {
           className="surface-popover absolute end-0 top-full z-50 mt-2 w-72 rounded-2xl p-4 text-start"
         >
           <p className="text-sm font-semibold text-foreground">{t.title}</p>
-          <p className="mt-1.5 text-xs leading-relaxed text-foreground/60">{t.body}</p>
-          <Link
-            href={localizedHref("/plans", locale)}
-            className="btn-gradient mt-3 inline-flex px-4 py-2 text-xs no-underline"
-            onClick={() => setOpen(false)}
-          >
-            {t.cta}
-          </Link>
+          <p className="mt-1.5 text-xs leading-relaxed text-foreground/60">
+            {price ? t.body : t.bodyPlans}
+          </p>
+          {price ? (
+            <button
+              type="button"
+              className="btn-gradient mt-3 inline-flex px-4 py-2 text-xs"
+              onClick={() => {
+                setOpen(false);
+                onUnlock();
+              }}
+            >
+              {t.unlock.replace("{price}", price)}
+            </button>
+          ) : (
+            <Link
+              href={localizedHref("/plans", locale)}
+              className="btn-gradient mt-3 inline-flex px-4 py-2 text-xs no-underline"
+              onClick={() => setOpen(false)}
+            >
+              {t.cta}
+            </Link>
+          )}
         </div>
       ) : null}
     </div>

@@ -4389,7 +4389,10 @@ export const deckGenerate = inngest.createFunction(
     const review = !isHaikuRun;
     // No review (Haiku, or the free plan's gate in the bake): the cheap Haiku fix
     // pass runs instead. The bake turns it off when a review runs.
-    const haikuFix = !isEnhanceDeck;
+    // Enhance included since 2026-11-07 (owner): free enhance decks had no
+    // model pass at all. The bake keeps their wording (no word-count finding,
+    // and the keep-every-word rule in the prompt).
+    const haikuFix = true;
     if (isImagesMode(data)) {
       await inngest
         .send({

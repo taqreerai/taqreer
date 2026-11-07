@@ -212,7 +212,7 @@
       { "q": "Is there a free plan?", "a": "Yes. Try it free with {credits} credits at signup, no card required; we design the first few slides of each deck. Upgrade later as you need." },
       { "q": "How do credits work?", "a": "Each deck uses credits based on its slide count and the model used. You get monthly credits with your plan, and can buy top-up packs when needed." },
       { "q": "Can I upgrade or cancel anytime?", "a": "Yes. Upgrade, downgrade, or cancel anytime from your account settings, with no long-term commitment." },
-      { "q": "What is the difference between monthly and yearly?", "a": "Yearly costs less per month than monthly with the same features. Choose monthly for flexibility or yearly to save." }
+      { "q": "What is the difference between monthly and yearly?", "a": "Yearly costs less per month than monthly with the same features. Choose monthly for flexibility or yearly to save." }, {"q": "Which AI models power the design levels?", "a": "Simple runs on Claude Haiku, Engaging on Claude Sonnet, Impressive on Claude Opus and Exceptional on Claude Fable, all from Anthropic. We may move a level to a newer model as they improve."}
     ]
   },
   "aiPresentations": {
@@ -1716,10 +1716,10 @@
       "generationQuality": "Design level",
       "thinking": "Thinking",
       "fast": "Fast",
-      "liteDesign": "Simple", "liteDesignDesc": "Clear, quick slides for drafts and ideas", "draftDesign": "Basic", "regionModelNote": "Paid plans unlock higher design levels.",
-      "standardDesign": "Advanced",
-      "premiumDesign": "Pro",
-      "proDesign": "Pro",
+      "liteDesign": "Simple", "liteDesignDesc": "Clear, quick slides for drafts and ideas", "draftDesign": "Engaging", "regionModelNote": "Paid plans unlock higher design levels.",
+      "standardDesign": "Impressive",
+      "premiumDesign": "Exceptional",
+      "proDesign": "Exceptional",
       "draftDesignDesc": "Polished, varied slides for everyday work",
       "standardDesignDesc": "Richer design and sharper writing that persuades",
       "premiumDesignDesc": "Thinks through every slide, for decks that matter",
@@ -1814,13 +1814,13 @@
       "billedYearly": "Billed {total} yearly",
       "mostPopular": "Most popular",
       "perMonth": "/ month",
-      "levelNames": {"haiku": "Simple", "sonnet": "Basic", "opus": "Advanced", "fable": "Pro"}, "levelSep": ", ", "levelLastSep": " and ",
+      "levelNames": {"haiku": "Simple", "sonnet": "Engaging", "opus": "Impressive", "fable": "Exceptional"}, "levelSep": ", ", "levelLastSep": " and ",
       "tiers": [
         {
           "name": "Free",
           "description": "We design the first few slides of the deck",
           "credits": "{credits} credits to try the tool",
-          "features": ["Simple design (Claude {model})", "Up to 10 slides per deck", "Editable PPTX + all formats", "All creation methods", "Custom brand identity", "Templates and styles", "AI edits after generation", "No watermark", "Full decks, nothing locked"],
+          "features": ["Simple design", "Up to 10 slides per deck", "Editable PPTX + all formats", "All creation methods", "Custom brand identity", "Templates and styles", "AI edits after generation", "No watermark", "Full decks, nothing locked"],
           "footnote": "Upgrade anytime",
           "cta": "Try it free"
         },
@@ -1828,7 +1828,7 @@
           "name": "Plus",
           "description": "To create decks regularly with every creation method.",
           "credits": "{credits} credits / month",
-          "features": ["{levels} design", "Full decks up to {slides} slides", "Editable PPTX + all formats", "No watermark", "All creation methods + AI edits", "Smart photos for your content", "Custom brand identity", "Templates and styles", "Processing priority"],
+          "features": ["Up to {topLevel} design", "Full decks up to {slides} slides", "Editable PPTX + all formats", "No watermark", "All creation methods + AI edits", "Smart photos for your content", "Custom brand identity", "Templates and styles", "Processing priority"],
           "footnote": "Upgrade or downgrade anytime",
           "cta": "Start now"
         },
@@ -1836,7 +1836,7 @@
           "name": "Pro",
           "description": "For pros who want higher quality and more capacity.",
           "credits": "{credits} credits / month",
-          "features": ["{levels} design", "Full decks up to {slides} slides", "Editable PPTX + all formats", "No watermark", "All creation methods + AI edits", "Smart photos for your content", "Custom brand identity", "Templates and styles", "Processing priority"],
+          "features": ["Up to {topLevel} design", "Full decks up to {slides} slides", "Editable PPTX + all formats", "No watermark", "All creation methods + AI edits", "Smart photos for your content", "Custom brand identity", "Templates and styles", "Processing priority"],
           "footnote": "Upgrade or downgrade anytime",
           "cta": "Start now"
         },
@@ -1844,7 +1844,7 @@
           "name": "Max",
           "description": "For heavy use, with maximum capacity and priority.",
           "credits": "{credits} credits / month",
-          "features": ["{levels} design", "Full decks up to {slides} slides", "Editable PPTX + all formats", "No watermark", "All creation methods + AI edits", "Smart photos for your content", "Custom brand identity", "Templates and styles", "Processing priority"],
+          "features": ["Up to {topLevel} design", "Full decks up to {slides} slides", "Editable PPTX + all formats", "No watermark", "All creation methods + AI edits", "Smart photos for your content", "Custom brand identity", "Templates and styles", "Processing priority"],
           "footnote": "You can downgrade anytime",
           "cta": "Start now"
         }
@@ -1965,10 +1965,10 @@
     "premiumGate": {"lockedFlowTitle":"This feature is on the {tier} plan","lockedFlowBody":"You can look around and prepare your content here. Generating needs the {tier} plan or higher.","upgrade":"Upgrade","slideCapHint":"The Free plan designs only the first few slides; the rest unlock when you subscribe","lockedCardHint":"Needs the {tier} plan","logoLockedTitle":"Your logo on Plus","logoLockedBody":"Free decks carry the taqreer.ai mark"},
     "supportWidget": { "whatsappLabel": "Chat with us on WhatsApp", "whatsappGreeting": "Hi, I need help with taqreer.ai", "helpLabel": "Help", "popoverTitle": "Need help?", "popoverBody": "Message our team on WhatsApp and we'll get back to you.", "whatsappCta": "Contact us via WhatsApp" },
     "desktopEditHint": { "title": "Full editing is on desktop", "body": "On a computer you can edit everything directly: text, elements, and colors. On mobile you can preview and edit with AI.", "gotIt": "Got it", "close": "Close" },
-    "upgradeModal": { "deckUnlockTitle": "Unlock just this presentation", "deckUnlockOnce": "One payment, no subscription", "deckUnlockPoints": ["The whole deck redesigned at the Basic level", "All watermarks removed from this deck and its exports", "Export to PowerPoint, PDF and images"], "deckUnlockCta": "Unlock for {price}", "deckUnlockOr": "Or subscribe for better value: several presentations every month", "deckUnlockSuccess": "Payment received. We're designing the rest of your slides now; they'll appear here in a few minutes. You also have 400 credits for AI edits on this deck.", "title": "Upgrade your plan", "requiresTier": "This level requires the {tier} plan", "requiredBadge": "Needed for this", "checkoutTitle": "Complete your subscription", "back": "Back to plans", "successTitle": "Payment successful!", "successBody": "Payment received - your plan and credits will update within moments.", "done": "Close" },
+    "upgradeModal": { "deckUnlockTitle": "Unlock just this presentation", "deckUnlockOnce": "One payment, no subscription", "deckUnlockPoints": ["The whole deck redesigned at the Engaging level", "All watermarks removed from this deck and its exports", "Export to PowerPoint, PDF and images"], "deckUnlockCta": "Unlock for {price}", "deckUnlockOr": "Or subscribe for better value: several presentations every month", "deckUnlockSuccess": "Payment received. We're designing the rest of your slides now; they'll appear here in a few minutes. You also have 400 credits for AI edits on this deck.", "title": "Upgrade your plan", "requiresTier": "This level requires the {tier} plan", "requiredBadge": "Needed for this", "checkoutTitle": "Complete your subscription", "back": "Back to plans", "successTitle": "Payment successful!", "successBody": "Payment received - your plan and credits will update within moments.", "done": "Close" },
     "planUsage": { "plan": "{plan} plan", "free": "Free", "plus": "Plus", "pro": "Pro", "max": "Max", "creditUsage": "Credit usage this cycle", "remainingPercent": "{percentage}% left", "creditsLeft": "{count} / {limit} credits left", "upgrade": "Upgrade plan", "renewalDate": "Renews: {date}", "noRenewal": "No renewal date" },
     "watermarkUpsell": {"title": "Remove the watermark from all your decks", "body": "Upgrade to Plus and the watermark disappears right away from every deck, old and new.", "perks": ["No watermark or closing slide on decks and images", "Fully editable PowerPoint files", "Your own logo and AI edits"], "cta": "Upgrade to Plus · {price}/month", "yearly": "or {price}/month billed yearly", "reassure": "Cancel anytime", "allPlans": "All plans"},
-    "exportImages": {"loading": "Preparing images {loaded}/{total}", "missing": "{missing} of {total} images didn't load. Press export again to export with what loaded."}, "creditGate": { "chooseTier": "Choose a plan to upgrade.", "subscribeCta": "Subscribe to a plan", "subscribeHint": "Top-up packs are available to subscribers - pick a plan to get monthly credits.", "insufficientTitle": "Not enough credits", "insufficientBody": "This deck needs {needed} credits - you have {have}.", "reduceCta": "Generate {slides} slides instead", "reduceHint": "fits your balance - {credits} credits", "topupCta": "Top up {credits} credits", "topupHint": "packs never expire with the monthly reset", "flowLockedTitle": "This flow needs a higher plan", "flowLockedBody": "Enhance, Your own template and Datasheet are available from the {tier} plan.", "presetLockedTitle": "This design level needs a higher plan", "presetLockedBody": "Pick an unlocked level, or upgrade to use this one.", "capTitle": "This file is larger than your plan's limit", "capBody": "Your plan generates up to {cap} slides per deck. Upgrade for more.", "exportLockedTitle": "Exporting needs a higher plan", "exportLockedBody": "This export format is available from the {tier} plan.", "imagesLockedTitle": "Generated images are on the {tier} plan", "imagesLockedBody": "Choose {tier} or higher to add AI photos to your slides and keep going.", "aiEditLockedTitle": "AI edits are on the {tier} plan", "aiEditLockedBody": "Asking the AI to change or redesign slides after generation is available on the {tier} plan and above. You can still edit every slide by hand.", "watermarkTitle": "Upgrade and remove all watermarks", "watermarkBody": "The Designed with taqreer mark disappears from all your decks and exports on any paid plan.", "teaserUnlockCta": "Unlock slides", "teaserUnlocking": "Unlocking your slides", "teaserWatermarkNote": "Unlocking the full deck removes all watermarks.", "teaserBasicNote": "You're on the free plan at the Simple level. Unlocking redesigns the whole deck at the Basic level.", "teaserUnlockTitle": "Unlock the rest of your slides", "teaserUnlockBody": "The last {count} slides are ready to design. Unlock them to get the whole deck at the Basic level, with all watermarks removed.", "seePlans": "See plans", "notNow": "Not now", "cancel": "Cancel" },
+    "exportImages": {"loading": "Preparing images {loaded}/{total}", "missing": "{missing} of {total} images didn't load. Press export again to export with what loaded."}, "creditGate": { "chooseTier": "Choose a plan to upgrade.", "subscribeCta": "Subscribe to a plan", "subscribeHint": "Top-up packs are available to subscribers - pick a plan to get monthly credits.", "insufficientTitle": "Not enough credits", "insufficientBody": "This deck needs {needed} credits - you have {have}.", "reduceCta": "Generate {slides} slides instead", "reduceHint": "fits your balance - {credits} credits", "topupCta": "Top up {credits} credits", "topupHint": "packs never expire with the monthly reset", "flowLockedTitle": "This flow needs a higher plan", "flowLockedBody": "Enhance, Your own template and Datasheet are available from the {tier} plan.", "presetLockedTitle": "This design level needs a higher plan", "presetLockedBody": "Pick an unlocked level, or upgrade to use this one.", "capTitle": "This file is larger than your plan's limit", "capBody": "Your plan generates up to {cap} slides per deck. Upgrade for more.", "exportLockedTitle": "Exporting needs a higher plan", "exportLockedBody": "This export format is available from the {tier} plan.", "imagesLockedTitle": "Generated images are on the {tier} plan", "imagesLockedBody": "Choose {tier} or higher to add AI photos to your slides and keep going.", "aiEditLockedTitle": "AI edits are on the {tier} plan", "aiEditLockedBody": "Asking the AI to change or redesign slides after generation is available on the {tier} plan and above. You can still edit every slide by hand.", "watermarkTitle": "Upgrade and remove all watermarks", "watermarkBody": "The Designed with taqreer mark disappears from all your decks and exports on any paid plan.", "teaserUnlockCta": "Unlock slides", "teaserUnlocking": "Unlocking your slides", "teaserWatermarkNote": "Unlocking the full deck removes all watermarks.", "teaserBasicNote": "You're on the free plan at the Simple level. Unlocking redesigns the whole deck at the Engaging level.", "teaserUnlockTitle": "Unlock the rest of your slides", "teaserUnlockBody": "The last {count} slides are ready to design. Unlock them to get the whole deck with an engaging design, with all watermarks removed.", "seePlans": "See plans", "notNow": "Not now", "cancel": "Cancel" },
     "invite": {"title": "Invite colleagues, earn credits", "body": "Share your link with colleagues. Everyone who signs up from it gets {bonus} extra credits, and you get {reward} credits when they subscribe to any paid plan (up to {cap} rewards a month).", "copy": "Copy link", "copied": "Copied", "whatsapp": "Share on WhatsApp", "stats": "Joined from your link: {invited} · Subscribed: {rewarded}", "message": "I design my presentations in Arabic with taqreer. Sign up from my link and get {bonus} extra credits free:"},
     "billing": { "title": "Billing", "tabPlans": "Plans", "tabBilling": "Billing", "tabInvoices": "Invoices", "tabUsage": "Usage", "subscriptionTitle": "Subscription", "cancelSub": "Cancel subscription", "resumeSub": "Resume subscription", "cancelConfirmTitle": "Cancel your subscription?", "cancelConfirmBody": "Your plan stays active until {date}. You can keep using your credits until then.", "keepSub": "Keep my plan", "confirmCancel": "Cancel subscription", "noSubscription": "No active subscription. Upgrade from the Plans tab.", "paymentMethodsTitle": "Payment methods", "addCard": "Add card", "saveCard": "Save card", "savingCard": "Saving…", "noCards": "No saved cards yet.", "defaultBadge": "Default", "setDefault": "Set as default", "removeCard": "Remove", "expires": "Expires {date}", "removeDefaultBlocked": "This card pays your subscription. Set another card as default first.", "cardError": "Could not save the card. Please try again.", "noInvoices": "No invoices yet.", "invoiceView": "View", "loadFailed": "Could not load invoices - refresh to retry.", "statusPaid": "Paid", "statusOpen": "Open", "statusVoid": "Void", "statusUncollectible": "Uncollectible", "planTitle": "Plan", "currentPlan": "Current plan", "renews": "Renews {date}", "renewsYearly": "Renews {date}", "endsOn": "Plan ends {date}", "noRenewal": "No active subscription", "manage": "Manage subscription", "changePlan": "Change plan", "perMonth": "/mo", "creditsMo": "credits / mo", "creditsOnce": "credits (signup)", "current": "Current", "upgrade": "Upgrade", "downgrade": "Downgrade", "downgradeFree": "Downgrade to Free", "packsTitle": "Top-up packs", "topupSubscribersOnly": "Top-up packs are available on paid plans. Pick a plan first.", "packsHint": "Stack on your balance, survive monthly resets, expire after {months} months", "buy": "Buy", "pastDue": "Your last payment failed. Update your payment method to keep your plan.", "pastDueCta": "Update payment method", "monthly": "Monthly", "yearly": "Yearly", "yearlyHint": "billed yearly", "monthlyHint": "billed monthly", "cancelScheduledFree": "Cancel via Manage subscription", "loading": "Loading…" },
     "usage": { "title": "Usage", "summarySpent": "Spent", "summaryAdded": "Added", "filters": { "label": "Date range", "thisMonth": "This month", "last30": "Last 30 days", "allTime": "All time", "custom": "Custom", "from": "From", "to": "To" }, "events": { "create": "Created a presentation", "enhance": "Enhanced a presentation", "mimic": "Used your own template", "datasheet": "Generated from data", "regen": "Regenerated slides", "signup": "Welcome credits", "subscription": "Plan credits added", "reset": "Monthly renewal", "topup": "Top-up pack", "expired": "Top-up expired", "generation": "Presentation generated" }, "types": { "spent": "Spent", "added": "Added", "expired": "Expired" }, "slidesSuffix": "{count} slides", "loading": "Loading…", "empty": "No usage in this period yet.", "loadFailed": "Could not load usage - refresh to retry.", "loadMore": "Load more" },
@@ -2089,7 +2089,7 @@
     "cancelDialog": {
       "title": "Cancel generation",
       "close": "Close",
-      "body": "Are you sure you want to cancel? Claude will stop immediately and any partially-generated slides will be deleted.",
+      "body": "Are you sure you want to cancel? Generation will stop immediately and any partially-generated slides will be deleted.",
       "continue": "Continue",
       "cancelling": "Cancelling…",
       "confirmCancel": "Confirm cancel"
@@ -2097,13 +2097,13 @@
     "share": "Share",
     "presence": "and {n} others",
     "basicModel": {
-      "chip": "Made at the Simple level",
-      "title": "Made at the Simple level (Claude Haiku)",
-      "body": "Free decks use the Simple level, designed by Claude Haiku. Paid plans unlock the Basic, Advanced and Pro levels for richer layouts and better writing.",
-      "cta": "See plans"
+      "chip": "Make it engaging",
+      "title": "Make your deck stand out",
+      "body": "Unlock the full deck with an engaging design and no watermark.",
+      "cta": "See plans", "unlock": "Unlock for {price}", "bodyPlans": "Paid plans design at higher levels, with richer layouts, better writing and no watermark."
     },
     "genchat": {
-      "basicModel": "Designing at the Simple level (Claude Haiku). Paid plans unlock higher levels for richer layouts and writing.",
+      "basicModel": "Designing at the Simple level. Paid plans unlock higher levels for richer layouts and writing.",
       "title": "Activity",
       "thinking": "Thinking",
       "starting": "Preparing the design...",

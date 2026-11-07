@@ -1564,25 +1564,25 @@ export default async function BrandPage() {
                   </div>
                   <div className="p-1.5">
                     <PresetRow
-                      model="Simple · Claude Haiku"
+                      model="Simple (Haiku)"
                       thinking={false}
                       credits={deckCost("haiku-5-5-fast")}
                       active
                     />
                     <PresetRow
-                      model="Basic · Claude Sonnet"
+                      model="Engaging (Sonnet)"
                       thinking={false}
                       gate="Plus"
                       credits={deckCost("sonnet-fast")}
                     />
                     <PresetRow
-                      model="Advanced · Claude Opus"
+                      model="Impressive (Opus)"
                       thinking={false}
                       gate="Plus"
                       credits={deckCost("opus-fast")}
                     />
                     <PresetRow
-                      model="Pro · Claude Fable"
+                      model="Exceptional (Fable)"
                       thinking
                       gate="Max"
                       credits={deckCost("fable-low")}
@@ -1594,11 +1594,11 @@ export default async function BrandPage() {
                 <p>
                   Four design levels, named by model family (2026-11-07):{" "}
                   <span className="text-foreground">بسيط / Simple</span> = Haiku,{" "}
-                  <span className="text-foreground">أساسي / Basic</span> = Sonnet,{" "}
-                  <span className="text-foreground">متقدم / Advanced</span> = Opus,{" "}
-                  <span className="text-foreground">احترافي / Pro</span> = Fable.
-                  The row line is what the level gives, then the family with no
-                  version number.
+                  <span className="text-foreground">جذاب / Engaging</span> = Sonnet,{" "}
+                  <span className="text-foreground">مبهر / Impressive</span> = Opus,{" "}
+                  <span className="text-foreground">استثنائي / Exceptional</span> = Fable.
+                  The row line is what the level gives, with no model name (the
+                  pricing FAQ names the models).
                 </p>
                 <p>
                   Free accounts run Simple (FREE_HAIKU_ALL). The crown pill is

@@ -424,9 +424,9 @@ export function GenerateSplitButton({
                     : level === "standard"
                       ? dict.flows.generate.standardDesignDesc
                       : dict.flows.generate.draftDesignDesc;
-              // What the level gives, then the model FAMILY (no version
-              // number: a lower row showing a newer version read as worse).
-              const rowDesc = `${descTemplate} · Claude ${modelFamilyName(preset.label || preset.key)}`;
+              // What the level gives. No model name (owner, 2026-11-07): the
+              // levels are the product; the models are named in the pricing FAQ.
+              const rowDesc = descTemplate;
               const rowCost = (slides: number) =>
                 preset.baseCredits +
                 slides * preset.perSlideCredits +
