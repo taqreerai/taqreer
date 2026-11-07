@@ -190,6 +190,10 @@ export const deckFreezeBake = inngest.createFunction(
     // same guards. Quiet:
     // the user is not shown a review they did not get. Off when a review runs.
     const haikuFixRequested = (event.data as { haikuFix?: boolean }).haikuFix === true;
+    // An enhance deck (sent by deck-generate; an enhance deck can carry the
+    // project type "create", so the type alone is not enough): the review
+    // keeps the user's wording and only moves, resizes and rescales.
+    const enhanceRequested = (event.data as { enhance?: boolean }).enhance === true;
     if (!projectId || !versionId) {
       throw new Error("deck-freeze-bake: event missing projectId / versionId");
     }
@@ -633,7 +637,9 @@ export const deckFreezeBake = inngest.createFunction(
               messages: [
                 {
                   role: "user",
-                  content: frameVisionUserBlocks(visionInputs, deckCss),
+                  content: frameVisionUserBlocks(visionInputs, deckCss, {
+                    enhance: enhanceRequested || projectType === "enhance",
+                  }),
                 },
               ],
             });

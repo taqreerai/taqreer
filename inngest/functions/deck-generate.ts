@@ -4379,7 +4379,12 @@ export const deckGenerate = inngest.createFunction(
     // An Enhance deck reaches here as type "create" (the /enhance page sends
     // no type), so the 2026-07-11 skip never applied: read the source kind.
     const isEnhanceDeck = data.type === "enhance" || readSource(data)?.kind === "enhance";
-    const review = !isEnhanceDeck && !isHaikuRun;
+    // Enhance joined the review on 2026-11-07 (owner decision): the review is
+    // flagged-only since 2026-10-14, so its cost follows the slides with a
+    // measured problem, not the deck's length, and enhance is the flow with
+    // the most of them (crammed tables, sparse source pages). The bake's plan
+    // gate keeps it to paid owners; it is told the deck's wording is fixed.
+    const review = !isHaikuRun;
     // No review (Haiku, or the free plan's gate in the bake): the cheap Haiku fix
     // pass runs instead. The bake turns it off when a review runs.
     const haikuFix = !isEnhanceDeck;
@@ -4397,6 +4402,7 @@ export const deckGenerate = inngest.createFunction(
             freezeAfter: true,
             review,
             haikuFix,
+            enhance: isEnhanceDeck,
             imageRegion: (data.brief as { imageRegion?: string } | null)?.imageRegion ?? null,
           },
         })
@@ -4417,7 +4423,7 @@ export const deckGenerate = inngest.createFunction(
         .send({
           id: `freeze:${projectId}:${versionId}`,
           name: "deck.freeze.bake",
-          data: { projectId, versionId, review, haikuFix },
+          data: { projectId, versionId, review, haikuFix, enhance: isEnhanceDeck },
         })
         .catch((err) => {
           logger.warn("deck_freeze_dispatch_failed", {

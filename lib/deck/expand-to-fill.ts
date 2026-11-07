@@ -75,12 +75,96 @@ function __tqExpandToFillWell(well, dir, opts) {
     }
   }
 
+  // Phase 0: tables (2026-11-07, owner report: a paid enhance deck's tables sat
+  // tiny in the top half of four slides). Phase 1 skips short text as chrome,
+  // and a table is nearly all short cells ("$5", "01"), so a table never grew.
+  // Here each table on a sparse, finding-free slide grows its cell type and row
+  // padding together (largest factor first, cell type capped at TABLE_MAX_FS),
+  // with an enhance table's fixed-height box released to fit. Every try is kept only when
+  // the audit stays clean, exactly like Phase 1; else the table is restored.
+  var TABLE_FACTORS = [2.2, 1.9, 1.6, 1.4, 1.2];
+  var TABLE_MAX_FS = 44;
+  var tables = well.querySelectorAll("table");
+  if (tables.length && base.findings.length === 0 && dz0.coverPct < COVER_BELOW) {
+    for (var t = 0; t < tables.length; t++) {
+      var table = tables[t];
+      if (table.closest("svg")) continue;
+      var box = table.closest("[data-table]");
+      var touched = [table];
+      if (box && well.contains(box)) touched.push(box);
+      var cells = table.querySelectorAll("th, td");
+      var texts = [];
+      var tEls = table.querySelectorAll("*");
+      for (var e = 0; e < tEls.length; e++) {
+        var own = "";
+        for (var n = 0; n < tEls[e].childNodes.length; n++) {
+          if (tEls[e].childNodes[n].nodeType === 3) own += tEls[e].childNodes[n].textContent || "";
+        }
+        if (own.trim()) texts.push(tEls[e]);
+      }
+      var all = touched.concat(Array.prototype.slice.call(cells), texts);
+      var saved = [];
+      for (var a = 0; a < all.length; a++) saved.push({ el: all[a], orig: all[a].getAttribute("style") });
+      var measured = [];
+      for (var m = 0; m < texts.length; m++) {
+        var tcs = view.getComputedStyle(texts[m]);
+        measured.push({ el: texts[m], fs: parseFloat(tcs.fontSize) || 0, lh: parseFloat(tcs.lineHeight) || 0 });
+      }
+      var pads = [];
+      for (var p = 0; p < cells.length; p++) {
+        var pcs = view.getComputedStyle(cells[p]);
+        pads.push({ el: cells[p], top: parseFloat(pcs.paddingTop) || 0, bottom: parseFloat(pcs.paddingBottom) || 0 });
+      }
+      var restore = function () {
+        for (var r2 = 0; r2 < saved.length; r2++) {
+          if (saved[r2].orig === null) saved[r2].el.removeAttribute("style");
+          else saved[r2].el.setAttribute("style", saved[r2].orig);
+        }
+      };
+      var tryTable = function (f, typeToo) {
+        if (box) { box.style.height = "auto"; box.style.minHeight = "0"; }
+        table.style.height = "auto";
+        if (typeToo) {
+          for (var q2 = 0; q2 < measured.length; q2++) {
+            var mm = measured[q2];
+            if (!mm.fs) continue;
+            var nfs = Math.min(mm.fs * f, Math.max(mm.fs, TABLE_MAX_FS));
+            mm.el.style.fontSize = nfs + "px";
+            if (mm.lh) mm.el.style.lineHeight = (mm.lh * nfs / mm.fs) + "px";
+          }
+        }
+        for (var q3 = 0; q3 < pads.length; q3++) {
+          pads[q3].el.style.paddingTop = (pads[q3].top * f) + "px";
+          pads[q3].el.style.paddingBottom = (pads[q3].bottom * f) + "px";
+        }
+        var res0 = __tqAuditWell(well, dir);
+        var dzt = res0.deadZone || { gapPct: 0, coverPct: 0 };
+        return res0.findings.length === 0 && dzt.gapPct <= Math.max(GAP_MAX, dz0.gapPct) && dzt.coverPct >= dz0.coverPct + MIN_GAIN;
+      };
+      // Type and padding grow together. Padding alone was tried and dropped: on
+      // a table too wide for bigger type it only spaced the rows, a marginal
+      // coverage gain that read worse than the original.
+      var grown = false;
+      for (var tf = 0; tf < TABLE_FACTORS.length; tf++) {
+        if (tryTable(TABLE_FACTORS[tf], true)) { grown = true; out.applied += 1; out.factor = TABLE_FACTORS[tf]; break; }
+        restore();
+      }
+      if (grown) {
+        // Later tables and Phase 1 measure from the grown slide.
+        base = __tqAuditWell(well, dir);
+        dz0 = base.deadZone || { gapPct: 0, coverPct: 100 };
+        out.cover1 = dz0.coverPct; out.gap1 = dz0.gapPct;
+      }
+    }
+  }
+
   // Phase 1: grow the type of a sparse, finding-free slide.
   if (base.findings.length === 0 && dz0.coverPct < COVER_BELOW) {
     // Short text that is small (eyebrows, page counters) or sits on its own painted
     // box (chips, pills, number badges) is chrome, not content: growing it only
     // makes it collide with the headline or wrap.
-    var cands = collect().filter(function (x) { return !(x.len < 24 && (x.fs < 26 || x.painted)); });
+    // Table text belongs to Phase 0 (never grown twice).
+    var cands = collect().filter(function (x) { return !(x.len < 24 && (x.fs < 26 || x.painted)) && !x.el.closest("table"); });
     var gapCap = Math.max(GAP_MAX, dz0.gapPct);
     for (var f = 0; cands.length && f < FACTORS.length; f++) {
       for (var s = 0; s < cands.length; s++) {

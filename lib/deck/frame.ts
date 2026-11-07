@@ -751,6 +751,7 @@ type VisionBlock =
 export function frameVisionUserBlocks(
   slides: FrameVisionSlideInput[],
   deckCss: string,
+  opts: { enhance?: boolean } = {},
 ): VisionBlock[] {
   const blocks: VisionBlock[] = [
     {
@@ -801,7 +802,11 @@ RULES:
 - ‼️ MEASURED findings are DEFECTS, not suggestions. A slide with a measured finding MUST be REVISING - the only alternative is DISPUTING when the measurement is factually wrong in the rendered image. "It reads as a stylistic choice" is NOT a dispute; the measurements encode this product's design law.
 - THEN emit the corrected <section> for every REVISING slide, in the exact generation contract (same declared attributes unless the fix requires changing one, exactly one <div class="well">) PLUS data-revises="<the slide's position number>".
 - Beyond the findings, revise when a correction genuinely improves the slide: a real defect or a clear visual upgrade. Never re-emit for a minor taste difference.
-- Keep the message and text content as written (trim or rewrap text only when the defect demands it).
+${
+      opts.enhance
+        ? "- ‼️ This deck rebuilds the user's OWN document: keep every word exactly as the slide has it now. Never trim, shorten, merge, reword or drop text, rows or items. Fix every defect by resizing, rescaling, rearranging and rewrapping only. A table or list that is crammed small grows to use the free space of the well (bigger type, taller rows), never cut."
+        : "- Keep the message and text content as written (trim or rewrap text only when the defect demands it)."
+    }
 - Preserve every <img> src EXACTLY. Keep data-genimage boxes exactly as they are (same data-genimage, data-genaspect, data-gensource, and data-genref values, no new image slots). Keep every <img data-asset> (the user's own picture) and every <div data-table> and <div data-chart> box (the user's own table or chart) on the slide with its attributes and contents unchanged: you may move and resize them, never remove, replace or rewrite them.
 - Numerals in RTL decks: a digit block with dir="ltr" renders text-align:start as LEFT - keep dir=ltr, set text-align explicitly to place the numerals where the composition needs them.`,
   });

@@ -82,7 +82,7 @@ export const deckImagesGenerate = inngest.createFunction(
     // run leaves placeholder gradients + regenerable boxes (Phase 4).
   },
   async ({ event, step, logger }) => {
-    const { projectId, versionId, freezeAfter, review, haikuFix, imageRegion } = event.data as {
+    const { projectId, versionId, freezeAfter, review, haikuFix, enhance, imageRegion } = event.data as {
       projectId: string;
       versionId: string;
       // FRAME decks (context/frame-architecture-2026-07-10.md): the freeze
@@ -95,6 +95,8 @@ export const deckImagesGenerate = inngest.createFunction(
       // pass (enhance decks; owner decision 2026-07-11).
       review?: boolean;
       haikuFix?: boolean;
+      // Forwarded to deck.freeze.bake: the review keeps an enhance deck's words.
+      enhance?: boolean;
       // Who the deck's people should look like (brief.imageRegion).
       imageRegion?: string | null;
     };
@@ -113,7 +115,7 @@ export const deckImagesGenerate = inngest.createFunction(
         .send({
           id: `freeze:${projectId}:${versionId}`,
           name: "deck.freeze.bake",
-          data: { projectId, versionId, review, haikuFix },
+          data: { projectId, versionId, review, haikuFix, enhance },
         })
         .catch((err) => {
           logger.warn("deck_freeze_dispatch_failed", {
