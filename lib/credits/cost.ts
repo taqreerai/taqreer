@@ -207,7 +207,8 @@ export type TierConfig = {
 // are the seed + client-safe fallback (parity asserted vs SEED_TIERS).
 export const TIERS: Record<KnownPlan, TierConfig> = {
   // Preset ladder 2026-07-21 (Sonnet restructure): free = Sonnet entry model
-  // only; Plus adds opus-fast; Pro/Max add opus-balanced. Must mirror
+  // only; Plus adds opus-fast; Max adds fable-low. opus-balanced (Opus 4.8
+  // thinking) retired 2026-11-07 for the four design levels. Must mirror
   // SEED_TIERS.unlockedPresetKeys (parity asserted).
   free: {
     priceUsd: 0,
@@ -230,7 +231,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     monthlyAllotment: 10000,
     signupGrant: 0,
     slideCap: 60,
-    presets: ["sonnet-fast", "opus-fast", "opus-balanced"],
+    presets: ["sonnet-fast", "opus-fast"],
     flows: ALL_FLOWS,
   },
   max: {
@@ -238,7 +239,7 @@ export const TIERS: Record<KnownPlan, TierConfig> = {
     monthlyAllotment: 30000,
     signupGrant: 0,
     slideCap: 75,
-    presets: ["sonnet-fast", "opus-fast", "opus-balanced", "fable-low"],
+    presets: ["sonnet-fast", "opus-fast", "fable-low"],
     flows: ALL_FLOWS,
   },
 };

@@ -1564,25 +1564,25 @@ export default async function BrandPage() {
                   </div>
                   <div className="p-1.5">
                     <PresetRow
-                      model="Sonnet 5"
+                      model="Simple · Claude Haiku"
                       thinking={false}
-                      credits={deckCost("sonnet-fast")}
+                      credits={deckCost("haiku-5-5-fast")}
                       active
                     />
                     <PresetRow
-                      model="Opus 4.8"
+                      model="Basic · Claude Sonnet"
+                      thinking={false}
+                      gate="Plus"
+                      credits={deckCost("sonnet-fast")}
+                    />
+                    <PresetRow
+                      model="Advanced · Claude Opus"
                       thinking={false}
                       gate="Plus"
                       credits={deckCost("opus-fast")}
                     />
                     <PresetRow
-                      model="Opus 4.8"
-                      thinking
-                      gate="Pro"
-                      credits={deckCost("opus-balanced")}
-                    />
-                    <PresetRow
-                      model="Fable 5"
+                      model="Pro · Claude Fable"
                       thinking
                       gate="Max"
                       credits={deckCost("fable-low")}
@@ -1592,21 +1592,22 @@ export default async function BrandPage() {
               </Frame>
               <Frame className="space-y-3 text-[13px] leading-relaxed text-muted-foreground">
                 <p>
-                  <span className="text-foreground">sonnet-fast</span> (Basic /
-                  أساسي) is the Free default: the Sonnet 5 entry model, no
-                  thinking, cheapest. Opus is a paid feature.
+                  Four design levels, named by model family (2026-11-07):{" "}
+                  <span className="text-foreground">بسيط / Simple</span> = Haiku,{" "}
+                  <span className="text-foreground">أساسي / Basic</span> = Sonnet,{" "}
+                  <span className="text-foreground">متقدم / Advanced</span> = Opus,{" "}
+                  <span className="text-foreground">احترافي / Pro</span> = Fable.
+                  The row line is what the level gives, then the family with no
+                  version number.
                 </p>
                 <p>
-                  The blue pill is the tier where a preset unlocks:{" "}
+                  Free accounts run Simple (FREE_HAIKU_ALL). The crown pill is
+                  the plan where a level unlocks:{" "}
+                  <span className="text-foreground">sonnet-fast</span> and{" "}
                   <span className="text-foreground">opus-fast</span> at Plus,{" "}
-                  <span className="text-foreground">opus-balanced</span> at Pro,{" "}
                   <span className="text-foreground">fable-low</span> at Max. A
-                  gated row upsells instead of selecting. (opus-medium retired.)
-                </p>
-                <p>
-                  <span className="text-foreground">fable-low</span> (Claude Fable
-                  5, احترافي / Professional) is the Max-exclusive top tier -
-                  thinking required, priced 960 + 72/slide.
+                  gated row upsells instead of selecting. opus-balanced (Opus 4.8
+                  thinking) and opus-medium are retired.
                 </p>
                 <p className="text-[12px]">
                   Source of truth: <Tag>lib/types/quality.ts</Tag> +{" "}

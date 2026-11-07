@@ -11,9 +11,27 @@ export function fillPricingTokens(
     credits?: number | null;
     slides?: number | null;
     model?: string | null;
+    // {levels}: the tier's model families ("Sonnet / Opus") as design-level
+    // names ("Basic and Advanced"), joined with the dictionary's separators.
+    levels?: { names: Record<string, string>; sep: string; lastSep: string } | null;
   },
 ): string {
   let out = text;
+  if (vals.model && vals.levels && out.includes("{levels}")) {
+    const names = [
+      ...new Set(
+        vals.model
+          .split("/")
+          .map((f) => vals.levels!.names[f.trim().toLowerCase()])
+          .filter((n): n is string => !!n),
+      ),
+    ];
+    const joined =
+      names.length <= 1
+        ? (names[0] ?? vals.model)
+        : names.slice(0, -1).join(vals.levels.sep) + vals.levels.lastSep + names[names.length - 1];
+    out = out.replaceAll("{levels}", joined);
+  }
   if (vals.credits != null) {
     out = out.replaceAll("{credits}", vals.credits.toLocaleString("en-US"));
   }

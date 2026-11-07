@@ -44,7 +44,7 @@ import {
   formatCredits,
   type CreditPreset,
 } from "@/lib/credits/store";
-import { fillPricingTokens } from "@/lib/credits/pricing-tokens";
+import { modelFamilyName } from "@/lib/credits/pricing-tokens";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
 import { SlideCapUpsellDialog } from "./SlideCapUpsellDialog";
 import type { KnownPlan } from "@/lib/plan";
@@ -67,18 +67,26 @@ const FALLBACK_PRESETS: CreditPreset[] = QUALITY_PRESETS.filter(
   gateTier: TIER_ORDER.find((t) => TIERS[t].presets.includes(p.key)) ?? null,
 }));
 
-// Design-quality name by LADDER RANK (Sonnet restructure + Fable-for-Max
-// 2026-07-21). Multiple no-thinking presets exist (Sonnet + opus-fast), so the
-// old thinking-based level collided. Name by position instead - presets arrive
-// sorted by sortOrder (cheapest first): 0 = standard, 1 = balanced, 2 = advanced,
-// 3+ = pro (Fable, Max-only). The four "level" keys map to the dict labels
-// (draftDesign="قياسي", standardDesign="متوازن", premiumDesign="متقدم",
-// proDesign="احترافي").
-// The Haiku preset(s): the lowest rung, named "Basic model (Claude Haiku)" on
-// its own (2026-11-07, free-plan disclosure; the Sonnet rung moved from "Basic"
-// to "Standard" so the two never share a name), so adding it
-// never renames the existing rungs (designLevel ranks the others without it).
+// Fallback design-level name by LADDER RANK, only for a preset whose model
+// family familyLevel() below does not know. Presets arrive sorted by sortOrder
+// (cheapest first). The level keys map to the dict labels (liteDesign="بسيط",
+// draftDesign="أساسي", standardDesign="متقدم", premiumDesign / proDesign=
+// "احترافي").
+// The Haiku preset(s): the lowest rung, "بسيط / Simple", kept apart from the
+// ranked rungs.
 const isLitePreset = (key: string) => key.startsWith("haiku");
+
+// The four design levels (owner, 2026-11-07) follow the MODEL FAMILY, not the
+// ladder rank, so retiring or adding a preset never renames the others:
+// Haiku = بسيط / Simple (the "lite" keys), Sonnet = أساسي / Basic ("draft"),
+// Opus = متقدم / Advanced ("standard"), Fable = احترافي / Pro ("premium").
+function familyLevel(label: string): "draft" | "standard" | "premium" | null {
+  const f = modelFamilyName(label).toLowerCase();
+  if (f.startsWith("sonnet")) return "draft";
+  if (f.startsWith("opus")) return "standard";
+  if (f.startsWith("fable")) return "premium";
+  return null;
+}
 
 function designLevel(rank: number): "draft" | "standard" | "premium" | "pro" {
   if (rank <= 0) return "draft";
@@ -400,7 +408,7 @@ export function GenerateSplitButton({
               // Ladder rank drives the design-quality name (see designLevel);
               // Lite rows are named apart and don't shift the other rungs.
               const lite = isLitePreset(preset.key);
-              const level = designLevel(presetRank - liteCount);
+              const level = familyLevel(preset.label) ?? designLevel(presetRank - liteCount);
               // The row's sub-line names the MODEL. `{model}` is filled from the
               // preset's LIVE label (DB-driven once /api/credits resolves), so an
               // admin model swap shows up here instead of the old hardcoded
@@ -416,13 +424,9 @@ export function GenerateSplitButton({
                     : level === "standard"
                       ? dict.flows.generate.standardDesignDesc
                       : dict.flows.generate.draftDesignDesc;
-              const rowDesc = `${fillPricingTokens(descTemplate, {
-                model: preset.label || preset.key,
-              })}${
-                preset.thinking
-                  ? ` ${dict.flows.generate.thinkingSuffix}`
-                  : ""
-              }`;
+              // What the level gives, then the model FAMILY (no version
+              // number: a lower row showing a newer version read as worse).
+              const rowDesc = `${descTemplate} · Claude ${modelFamilyName(preset.label || preset.key)}`;
               const rowCost = (slides: number) =>
                 preset.baseCredits +
                 slides * preset.perSlideCredits +
@@ -523,7 +527,9 @@ export function GenerateSplitButton({
                     {/* The suggested row is the one the page starts on
                         (use-default-quality): Opus for Max and admins, Sonnet
                         for everyone else. */}
-                    {!lite && preset.key === recommendedKey ? (
+                    {/* Only on a row this account can pick (a free user saw it
+                        on a locked Plus row). */}
+                    {!lite && !gated && preset.key === recommendedKey ? (
                       <span className="quality-recommended shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold leading-none">
                         {dict.flows.generate.recommended}
                       </span>

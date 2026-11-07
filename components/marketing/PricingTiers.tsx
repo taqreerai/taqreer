@@ -247,7 +247,11 @@ function PricingCard({
     // features[0] is the generation-model line ({model} = the label of the top
     // preset this tier unlocks), so it tracks admin Settings, not a dict literal.
     ...copy.features.map((f) =>
-      fillPricingTokens(f, { slides: nums?.slides, model: nums?.model }),
+      fillPricingTokens(f, {
+        slides: nums?.slides,
+        model: nums?.model,
+        levels: { names: pricing.levelNames, sep: pricing.levelSep, lastSep: pricing.levelLastSep },
+      }),
     ),
   ];
 

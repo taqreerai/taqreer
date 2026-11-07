@@ -279,6 +279,7 @@ export function BillingSection({
                 fillPricingTokens(f, {
                   slides: num.slides,
                   model: num.model || seedModel,
+                  levels: { names: pricing.levelNames, sep: pricing.levelSep, lastSep: pricing.levelLastSep },
                 }),
               ),
             ];
