@@ -987,7 +987,15 @@ model LlmUsage {
   cacheReadTokens     Int      @default(0)
   cacheCreationTokens Int      @default(0)
   projectId           String?
+  // Who and what the call was for (lib/anthropic/usage-log.ts attribution):
+  // the account, and before a deck exists the extraction job / request key.
+  userId              String?
+  sourceKey           String?
+  // Real cost at write time, micro-dollars (lib/anthropic/pricing.ts).
+  costMicros          Int      @default(0)
 
   @@index([createdAt])
   @@index([purpose, createdAt])
+  @@index([projectId])
+  @@index([sourceKey])
 }

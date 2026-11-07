@@ -24,6 +24,7 @@
 //      that somehow lands outside the idempotency window; a stored box just
 //      re-broadcasts its URL instead of re-billing.
 
+import { projectOf, withUsageContext } from "@/lib/anthropic/usage-log";
 import { inngest } from "@/inngest/client";
 import { fillImage, NO_MATCH_SIZE, NoImageMatchError } from "@/lib/images/image-source";
 import {
@@ -75,7 +76,7 @@ export const deckImageWarm = inngest.createFunction(
     concurrency: { limit: 5 },
     triggers: [{ event: "deck.image.warm" }],
   },
-  async ({ event, step, logger }) => {
+  async ({ event, step, logger }) => withUsageContext(projectOf(event.data as Record<string, unknown>), async () => {
     const { projectId, slideKey, versionId, box } = event.data as {
       projectId: string;
       slideKey: string;
@@ -180,5 +181,5 @@ export const deckImageWarm = inngest.createFunction(
         return { filled: 0, skipped: 0, failed: 1 };
       }
     });
-  },
+  }),
 );

@@ -22,6 +22,7 @@
 // Realtime progressive swap (placeholder→spinner→image) is layered on top
 // in Phase 2b; this server-fill phase is verified by refresh-to-see.
 
+import { projectOf, withUsageContext } from "@/lib/anthropic/usage-log";
 import { mustNotGenerate } from "@/lib/images/never-generate";
 import { Prisma } from "@prisma/client";
 import { inngest } from "@/inngest/client";
@@ -81,7 +82,7 @@ export const deckImagesGenerate = inngest.createFunction(
     // No onFailure user surface: generated images are decorative. A failed
     // run leaves placeholder gradients + regenerable boxes (Phase 4).
   },
-  async ({ event, step, logger }) => {
+  async ({ event, step, logger }) => withUsageContext(projectOf(event.data as Record<string, unknown>), async () => {
     const { projectId, versionId, freezeAfter, review, haikuFix, enhance, imageRegion } = event.data as {
       projectId: string;
       versionId: string;
@@ -475,5 +476,5 @@ export const deckImagesGenerate = inngest.createFunction(
     await dispatchFreeze();
 
     return { boxes: boxes.length, ...result };
-  },
+  }),
 );

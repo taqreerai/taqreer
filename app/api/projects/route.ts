@@ -47,6 +47,8 @@ import {
 import { normalizePlan } from "@/lib/plan";
 import { mintTemplateDesignFile } from "@/lib/template/mint-design";
 import { pickAutoStyle } from "@/lib/create/auto-style";
+import { randomUUID } from "node:crypto";
+import { enterUsageContext, rekeyUsage } from "@/lib/anthropic/usage-log";
 import { uploadedEnhanceAnalysis, uploadedSourceText } from "@/lib/create/source-sample";
 import { parseEnhanceAnswers, recommendedAnswers, type BriefEnhanceAnswers } from "@/lib/enhance/answers";
 import { maybeGrantSignupCredits } from "@/lib/credits/signup";
@@ -615,6 +617,10 @@ export async function POST(request: Request) {
       signupCity: geo.city,
     },
   });
+  // Cost attribution (lib/anthropic/usage-log.ts): the AI calls this request
+  // makes before the deck exists (auto style and font, picture checks) carry a
+  // request key, moved onto the new deck once it is created (rekeyUsage).
+  const usageCtx = enterUsageContext({ userId: dbUser.id, sourceKey: `req:${randomUUID()}` });
   // Gate on signupGrantedAt (the idempotent grant anchor), NOT row-
   // existence - another path (dashboard / user-sync / invite) may have
   // created the User row first, which would otherwise skip the grant.
@@ -1395,6 +1401,7 @@ export async function POST(request: Request) {
 
     return { project, presentation, version, job, dbUser };
   });
+  await rekeyUsage(usageCtx, result.project.id);
 
   try {
     await sendInngestEventWithRetry({

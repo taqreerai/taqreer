@@ -16,6 +16,7 @@
 // recovery, buildSlideHtml) so the tail can't drift from the deck's look. A deck
 // with images on gets its boxes filled by the regen's image pass.
 
+import { projectOf, withUsageContext } from "@/lib/anthropic/usage-log";
 import { enhanceAnswerLines, readBriefAnswers } from "@/lib/enhance/answers";
 import { readRedesignPlan, redesignPlanLines } from "@/lib/enhance/plan";
 import { toSdkThinking } from "@/lib/anthropic/model-thinking";
@@ -133,7 +134,7 @@ export const deckUnlock = inngest.createFunction(
         .catch((e) => console.error("deck-unlock onFailure: job write failed", e));
     },
   },
-  async ({ event, step, logger }) => {
+  async ({ event, step, logger }) => withUsageContext(projectOf(event.data as Record<string, unknown>), async () => {
     const data = event.data as UnlockEvent;
     const { projectId, presentationId, sourceVersionId } = data;
     const lockedCount = Math.max(0, Math.floor(Number(data.lockedCount) || 0));
@@ -744,5 +745,5 @@ export const deckUnlock = inngest.createFunction(
     }
 
     return { authored: newSlides.length, versionId: saved.id };
-  },
+  }),
 );

@@ -4,6 +4,8 @@
 import { notFound } from "next/navigation";
 import { requireAdminPage } from "@/lib/api/admin-context";
 import { CompareClient } from "@/components/admin/CompareClient";
+import { DeckCostPanel } from "@/components/admin/DeckCostPanel";
+import { getDeckCost } from "@/lib/admin/deck-cost";
 import { prisma } from "@/lib/prisma";
 import { SlideManifestSchema } from "@/lib/schema/slide";
 
@@ -37,7 +39,10 @@ export default async function AdminCompareDeckPage({ params }: { params: Promise
     select: { model: true, status: true },
   });
 
+  const cost = await getDeckCost(id);
+
   return (
+    <div className="flex flex-col gap-4">
     <CompareClient
       projectId={project.id}
       title={project.title}
@@ -50,5 +55,7 @@ export default async function AdminCompareDeckPage({ params }: { params: Promise
       lockedCount={project.teaserLockedCount ?? 0}
       manifest={parsed?.success ? parsed.data : null}
     />
+    <DeckCostPanel cost={cost} />
+    </div>
   );
 }

@@ -1,4 +1,5 @@
 import { enhanceAnswerLines, readBriefAnswers } from "@/lib/enhance/answers";
+import { projectOf, tracked, withUsageContext } from "@/lib/anthropic/usage-log";
 import { checkRedesign, slideCheckMessage, type MeasuredFinding } from "@/lib/enhance/check";
 import { readRedesignPlan, redesignPlanLines, writeRedesignPlan, type RedesignPlan } from "@/lib/enhance/plan";
 import { mustNotGenerate, stripNeverGenerated } from "@/lib/images/never-generate";
@@ -118,7 +119,8 @@ function getClient() {
   if (!apiKey) {
     throw new Error("ANTHROPIC_API_KEY is not set in the runtime environment");
   }
-  return new Anthropic({ apiKey });
+  // Per-call usage + cost (LlmUsage), on top of the Job totals.
+  return tracked(new Anthropic({ apiKey }), "deck-generate");
 }
 
 // Upload per-slide PNG buffers to the Anthropic Files API with bounded
@@ -2148,7 +2150,7 @@ export const deckGenerate = inngest.createFunction(
       await Promise.all(updates);
     },
   },
-  async ({ event, step, logger }) => {
+  async ({ event, step, logger }) => withUsageContext(projectOf(event.data as Record<string, unknown>), async () => {
     const data = event.data as DeckGenerateEvent;
     const { projectId, versionId, jobId } = data;
     const actorPrismaUserId = data.actorPrismaUserId ?? null;
@@ -4505,5 +4507,5 @@ export const deckGenerate = inngest.createFunction(
     }
 
     return { success: true, projectId };
-  },
+  }),
 );

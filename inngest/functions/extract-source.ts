@@ -38,6 +38,7 @@
 // projectId is nullable, which fits: extraction runs BEFORE the
 // project exists.
 
+import { withUsageContext } from "@/lib/anthropic/usage-log";
 import type { ReworkDecision } from "@/lib/extract/rework-score";
 import type { EnhanceQuestions } from "@/lib/enhance/answers";
 import type { Prisma } from "@prisma/client";
@@ -350,7 +351,7 @@ export const extractSource = inngest.createFunction(
       });
     },
   },
-  async ({ event, step, logger }) => {
+  async ({ event, step, logger }) => withUsageContext({ sourceKey: typeof (event.data as { jobId?: unknown }).jobId === "string" ? (event.data as { jobId: string }).jobId : null }, async () => {
     const data = parseExtractRequestedEvent(event.data);
     const { jobId, fileBucketPath, fileName, mime, flowKind, mimicRole } = data;
 
@@ -401,5 +402,5 @@ export const extractSource = inngest.createFunction(
     );
 
     return { jobId, status: "completed" };
-  },
+  }),
 );

@@ -53,6 +53,7 @@
 // Spike numbers (2026-07-10, scratchpad/frame-gen): worst slide 0.014% pixel
 // diff; serialize-reload roundtrip 0.000%.
 
+import { projectOf, withUsageContext } from "@/lib/anthropic/usage-log";
 import sharp from "sharp";
 import { hasCarried, keepPageBackdrop, restoreCarried, snapshotCarried } from "@/lib/deck/carried-assets";
 import { Prisma } from "@prisma/client";
@@ -169,7 +170,7 @@ export const deckFreezeBake = inngest.createFunction(
       });
     },
   },
-  async ({ event, step, logger }) => {
+  async ({ event, step, logger }) => withUsageContext(projectOf(event.data as Record<string, unknown>), async () => {
     const { projectId, versionId, force } = event.data as {
       projectId: string;
       versionId: string;
@@ -1510,7 +1511,7 @@ export const deckFreezeBake = inngest.createFunction(
       skippedStale: result.skippedStale,
     });
     return { versionId, ...result };
-  },
+  }),
 );
 
 // ─── render helpers ─────────────────────────────────────────────────────────

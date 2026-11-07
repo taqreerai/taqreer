@@ -35,6 +35,7 @@ import { sendInngestEventWithRetry } from "@/lib/inngest-helpers";
 import { prisma } from "@/lib/prisma";
 import { isPaidPlan } from "@/lib/plan";
 import { resolveProjectAccess } from "@/lib/api/project-access";
+import { enterUsageContext } from "@/lib/anthropic/usage-log";
 import { generatedImageExists, generatedImageSource, genImageIdentityHash, publicGeneratedImageUrl } from "@/lib/images/store";
 import { scanGenImages, type GenImageAspect } from "@/lib/images/slide-images";
 import { chargeCredits, refundCredits } from "@/lib/credits/server";
@@ -73,6 +74,8 @@ export async function POST(
   if ("error" in access) {
     return NextResponse.json({ error: access.error }, { status: access.status });
   }
+  // Cost attribution: the prompt rewrite and image call (lib/anthropic/usage-log.ts).
+  enterUsageContext({ projectId, userId: access.user.prismaId ?? null });
 
   let raw: Body;
   try {

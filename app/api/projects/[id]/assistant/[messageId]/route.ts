@@ -10,6 +10,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
+import { enterUsageContext } from "@/lib/anthropic/usage-log";
 import { applyAiComments } from "@/lib/api/partial-regen";
 import { toJson } from "@/lib/api/regen-helpers";
 import type { AssistantProposal } from "@/lib/assistant/assistant";
@@ -31,6 +32,8 @@ export async function POST(
   if ("error" in access) return NextResponse.json({ error: access.error }, { status: access.status });
   const userId = access.user.prismaId;
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Cost attribution: this deck's assistant calls (lib/anthropic/usage-log.ts).
+  enterUsageContext({ projectId: id, userId });
   const body = BodySchema.safeParse(await request.json().catch(() => null));
   if (!body.success) return NextResponse.json({ error: "Invalid request" }, { status: 400 });
 

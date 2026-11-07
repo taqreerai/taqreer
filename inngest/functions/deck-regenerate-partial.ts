@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { projectOf, tracked, withUsageContext } from "@/lib/anthropic/usage-log";
 import { toSdkThinking } from "@/lib/anthropic/model-thinking";
 import { NonRetriableError } from "inngest";
 import {
@@ -72,7 +73,8 @@ function getClient() {
   if (!apiKey) {
     throw new Error("ANTHROPIC_API_KEY is not set in the runtime environment");
   }
-  return new Anthropic({ apiKey });
+  // Per-call usage + cost (LlmUsage), on top of the Job totals.
+  return tracked(new Anthropic({ apiKey }), "deck-regenerate");
 }
 
 // Heartbeat stage taxonomy. Phase ordering decides which heartbeat
@@ -576,7 +578,7 @@ export const deckRegeneratePartial = inngest.createFunction(
       }
     },
   },
-  async ({ event, step, logger }) => {
+  async ({ event, step, logger }) => withUsageContext(projectOf(event.data as Record<string, unknown>), async () => {
     const data = event.data as RegenPartialEvent;
     const {
       projectId,
@@ -1442,5 +1444,5 @@ export const deckRegeneratePartial = inngest.createFunction(
     );
 
     return { success: true, regenerated: regenResults.length };
-  },
+  }),
 );

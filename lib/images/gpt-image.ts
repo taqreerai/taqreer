@@ -14,6 +14,7 @@ import { mustNotGenerate } from "@/lib/images/never-generate";
 import OpenAI, { toFile } from "openai";
 
 import { isAllowedProductRefUrl } from "@/lib/images/product-ref";
+import { logImageUsage } from "@/lib/anthropic/usage-log";
 
 export type ImageAspect = "landscape" | "portrait" | "square";
 
@@ -126,6 +127,7 @@ export async function generateImage(opts: {
       quality: opts.quality ?? QUALITY,
       n: 1,
     });
+    logImageUsage("image-product", `${MODEL}:${opts.quality ?? QUALITY}`, res.usage);
     const b64 = res.data?.[0]?.b64_json;
     if (!b64) throw new Error("gpt-image-2 returned no image data");
     return { b64, size };
@@ -138,6 +140,7 @@ export async function generateImage(opts: {
     quality: opts.quality ?? QUALITY,
     n: 1,
   });
+  logImageUsage("image-gen", `${MODEL}:${opts.quality ?? QUALITY}`, res.usage);
 
   const b64 = res.data?.[0]?.b64_json;
   if (!b64) throw new Error("gpt-image-2 returned no image data");
@@ -206,6 +209,7 @@ async function editPhoto(opts: {
     quality: QUALITY,
     n: 1,
   });
+  logImageUsage("photo-edit", `${MODEL}:${QUALITY}`, res.usage);
   const b64 = res.data?.[0]?.b64_json;
   if (!b64) throw new Error("gpt-image-2 returned no image data");
   return { b64, size };
