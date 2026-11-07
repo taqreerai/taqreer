@@ -22,6 +22,7 @@ import { toSdkThinking } from "@/lib/anthropic/model-thinking";
 import { applyImageMedium, deckMedium } from "@/lib/images/image-medium";
 import { enlargeSmallGenImages } from "@/lib/images/min-size";
 import Anthropic from "@anthropic-ai/sdk";
+import { tracked } from "@/lib/anthropic/usage-log";
 import { isEmptySlideHtml, readLockedPages, type LockedPage } from "@/lib/deck/locked-pages";
 import { NonRetriableError } from "inngest";
 import { inngest } from "@/inngest/client";
@@ -82,7 +83,7 @@ function getClient(): Anthropic {
   if (!apiKey) {
     throw new Error("ANTHROPIC_API_KEY is not set in the runtime environment");
   }
-  return new Anthropic({ apiKey });
+  return tracked(new Anthropic({ apiKey }), "deck-unlock");
 }
 
 type UnlockEvent = {

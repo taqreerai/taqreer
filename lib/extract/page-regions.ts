@@ -20,6 +20,7 @@
 // upload itself may be purged by then). Vision cost is absorbed. Server-only.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { tracked } from "@/lib/anthropic/usage-log";
 import sharp from "sharp";
 import { thinkingOffFor, toSdkThinking } from "@/lib/anthropic/model-thinking";
 import { readSourceAsset, uploadSourceAsset } from "@/lib/storage/source-assets";
@@ -121,7 +122,7 @@ export async function readPage(bytes: Buffer, model: string = MODEL): Promise<Pa
       .flatten({ background: "#ffffff" })
       .jpeg({ quality: 82 })
       .toBuffer();
-    const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
+    const client = tracked(new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 }), "extract-page-regions");
     const msg = await client.messages.create({
       model,
       max_tokens: 700,

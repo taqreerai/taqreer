@@ -8,6 +8,7 @@
 // Best-effort: any failure returns no labels and the slide simply goes without.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { tracked } from "@/lib/anthropic/usage-log";
 import JSZip from "jszip";
 import { extractPptxVisuals, classifyPptxPictures, type PptxVisuals } from "@/lib/extract/pptx-visuals";
 
@@ -65,7 +66,7 @@ export async function readOrnamentLabels(
     }
     if (slidesByMedia.size === 0) return out;
     const zip = await JSZip.loadAsync(buffer);
-    const client = new Anthropic({ apiKey, timeout: 20_000, maxRetries: 1 });
+    const client = tracked(new Anthropic({ apiKey, timeout: 20_000, maxRetries: 1 }), "extract-ornaments");
     for (const [media, slides] of [...slidesByMedia].slice(0, MAX_MEDIA)) {
       const mediaType = MEDIA_TYPES[media.split(".").pop()?.toLowerCase() ?? ""];
       const file = zip.files[media];

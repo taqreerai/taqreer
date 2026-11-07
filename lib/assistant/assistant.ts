@@ -10,6 +10,7 @@
 // cost points.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { tracked } from "@/lib/anthropic/usage-log";
 import type { CreditGate402 } from "@/lib/api/regen-helpers";
 import { scanGenImages } from "@/lib/images/slide-images";
 import { PICTURE_ASSET_ID_RE, pictureTextInstruction } from "@/lib/assistant/picture-text";
@@ -212,7 +213,7 @@ export async function askAssistant(args: {
     args.scope.kind === "deck"
       ? "Scope: deck (the whole presentation)."
       : `Scope: ${args.scope.kind} on slide ${args.scopeSlideNumber}${args.scope.kind === "area" ? " (the user drew a box around one area of that slide; the edit applies to that area)" : ""}.`;
-  const client = new Anthropic({ apiKey, timeout: 45_000, maxRetries: 1 });
+  const client = tracked(new Anthropic({ apiKey, timeout: 45_000, maxRetries: 1 }), "assistant");
   const messages: Anthropic.Messages.MessageParam[] = [
     {
       role: "user",

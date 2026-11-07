@@ -128,6 +128,9 @@ export async function preflightGenerate(args: {
   // Region-limited free account (lib/credits/region-model): the ONLY preset
   // this user may run, replacing the tier's list. Ignored for admins.
   regionPreset?: string | null;
+  // The only preset this account may run (region-limited, or every free
+  // account under FREE_HAIKU_ALL). Falls back to regionPreset when absent.
+  forcedPreset?: string | null;
   now?: Date;
 }): Promise<PreflightResult> {
   const now = args.now ?? new Date();
@@ -141,8 +144,8 @@ export async function preflightGenerate(args: {
         unlockedPresetKeys: getActivePresetKeys(),
         slideCap: SYSTEM_SLIDE_CAP,
       }
-    : args.regionPreset
-      ? { ...baseTier, unlockedPresetKeys: [args.regionPreset] }
+    : (args.forcedPreset ?? args.regionPreset)
+      ? { ...baseTier, unlockedPresetKeys: [(args.forcedPreset ?? args.regionPreset) as string] }
       : baseTier;
   // Social carousels cap well below the deck tier cap (see slideCapForFlow) so
   // AUTO holds a carousel-sane ceiling; every `tier.slideCap` read below then

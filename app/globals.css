@@ -1556,6 +1556,20 @@ html.app-shell-scroll body {
 .tq-teaser-lock-scrim.is-ghost {
   background: rgba(0, 0, 0, 0.22);
 }
+/* Basic-model line under the unlock button (2026-11-07). Its own dark pill:
+   the ghost scrim is light (0.22), so white text alone could sit on a pale
+   slide. */
+.tq-teaser-lock-note {
+  max-width: 26rem;
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
 .tq-teaser-lock-icon {
   color: #fff;
   opacity: 0.92;

@@ -597,7 +597,8 @@ export const deckFreezeBake = inngest.createFunction(
           }
           if (visionInputs.length > 0) {
             const Anthropic = (await import("@anthropic-ai/sdk")).default;
-            const client = new Anthropic({ apiKey });
+            const { tracked } = await import("@/lib/anthropic/usage-log");
+            const client = tracked(new Anthropic({ apiKey }), haikuFix ? "freeze-haiku-fix" : "freeze-review", { projectId });
             const stream = client.messages.stream({
               // Opus 5.5 (2026-10-02, was Opus 4.8): newer and 20% cheaper
               // per token ($4/$20 vs $5/$25). Thinking is always on for

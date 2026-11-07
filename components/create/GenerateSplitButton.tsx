@@ -21,7 +21,7 @@
 // (per "reuse existing components" rule). Both call sites pass
 // their own `onGenerate`, `quality`, `disabled`, `loading`.
 
-import { TEASER_DEFAULT_TOTAL, TEASER_VISIBLE_COUNT } from "@/lib/credits/cost";
+import { TEASER_DEFAULT_TOTAL, TEASER_MIN_LOCKED, TEASER_VISIBLE_COUNT } from "@/lib/credits/cost";
 import { imageCreditsForPlan } from "@/lib/images/images-gating";
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -70,11 +70,13 @@ const FALLBACK_PRESETS: CreditPreset[] = QUALITY_PRESETS.filter(
 // Design-quality name by LADDER RANK (Sonnet restructure + Fable-for-Max
 // 2026-07-21). Multiple no-thinking presets exist (Sonnet + opus-fast), so the
 // old thinking-based level collided. Name by position instead - presets arrive
-// sorted by sortOrder (cheapest first): 0 = basic, 1 = balanced, 2 = advanced,
+// sorted by sortOrder (cheapest first): 0 = standard, 1 = balanced, 2 = advanced,
 // 3+ = pro (Fable, Max-only). The four "level" keys map to the dict labels
-// (draftDesign="أساسي", standardDesign="متوازن", premiumDesign="متقدم",
+// (draftDesign="قياسي", standardDesign="متوازن", premiumDesign="متقدم",
 // proDesign="احترافي").
-// The Haiku preset(s): the lowest rung, named "Lite" on its own so adding it
+// The Haiku preset(s): the lowest rung, named "Basic model (Claude Haiku)" on
+// its own (2026-11-07, free-plan disclosure; the Sonnet rung moved from "Basic"
+// to "Standard" so the two never share a name), so adding it
 // never renames the existing rungs (designLevel ranks the others without it).
 const isLitePreset = (key: string) => key.startsWith("haiku");
 
@@ -239,7 +241,7 @@ export function GenerateSplitButton({
   // model still shows, crowned, so they see what a paid plan unlocks. The
   // server runs the region preset whatever is sent.
   const regionPreset = !isAdmin
-    ? (credits?.regionPreset ?? guestPresets?.regionPreset ?? null)
+    ? (credits?.freePreset ?? credits?.regionPreset ?? guestPresets?.regionPreset ?? null)
     : null;
   const allPresets = credits?.presets ?? guestPresets?.presets ?? FALLBACK_PRESETS;
   const visible = regionPreset
@@ -467,7 +469,11 @@ export function GenerateSplitButton({
                     TIER_ORDER.indexOf(userPlan) < TIER_ORDER.indexOf(gateTier)));
               const affordable = credits
                 ? (teaserPriced
-                    ? rowCost(Math.min(rowSlides, teaserVisible))
+                    ? rowCost(
+                        // The built part, as the server holds it: shrunk so
+                        // at least TEASER_MIN_LOCKED slides stay locked.
+                        Math.max(1, Math.min(teaserVisible, rowSlides - TEASER_MIN_LOCKED)),
+                      )
                     : cost) <= credits.balance.total
                 : true;
               const active = effectiveQuality === preset.key;
@@ -580,6 +586,8 @@ export function GenerateSplitButton({
         open={showSlideCapUpsell}
         cap={teaserVisible}
         posts={posts}
+        // Free account on the Basic model (Haiku): the pop-up says so.
+        basicModel={!!regionPreset && regionPreset.startsWith("haiku")}
         max={SYSTEM_SLIDE_CAP}
         // Dismiss (X / Esc / outside-click): cancel, don't generate.
         onClose={() => setShowSlideCapUpsell(false)}

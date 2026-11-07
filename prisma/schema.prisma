@@ -973,3 +973,21 @@ model DeckPurchase {
   @@index([userId])
   @@index([paymentIntentId])
 }
+
+// Anthropic token usage for calls NOT already recorded on a Job row
+// (2026-11-07): PDF reading, reviews, unlocks, picture checks, the assistant.
+// One row per call, written by lib/anthropic/usage-log.ts. No user content.
+model LlmUsage {
+  id                  String   @id @default(cuid())
+  createdAt           DateTime @default(now())
+  purpose             String
+  model               String
+  inputTokens         Int      @default(0)
+  outputTokens        Int      @default(0)
+  cacheReadTokens     Int      @default(0)
+  cacheCreationTokens Int      @default(0)
+  projectId           String?
+
+  @@index([createdAt])
+  @@index([purpose, createdAt])
+}

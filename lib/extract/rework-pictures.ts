@@ -12,6 +12,7 @@
 // listed as before (the safe side).
 
 import Anthropic from "@anthropic-ai/sdk";
+import { tracked } from "@/lib/anthropic/usage-log";
 import sharp from "sharp";
 import { thinkingOffFor, toSdkThinking } from "@/lib/anthropic/model-thinking";
 
@@ -56,7 +57,7 @@ export async function tagReworkPictures(
         `(one object: its name; several objects in one picture: "group: " and their names; a blank or texture: "blank").\n` +
         `Reply with one line per image, exactly: <number>|<words: yes or no>|<keep or swap>|<what it shows>`,
     });
-    const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
+    const client = tracked(new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 }), "extract-rework-pictures");
     const msg = await client.messages.create({
       model: MODEL,
       max_tokens: 600 + 40 * list.length,
@@ -130,7 +131,7 @@ export async function tagReplacePictures(
         `Also say what it shows in at most 6 plain English words.\n` +
         `Reply with one line per image, exactly: <number>|<logo, screen, data, support or drop>|<what it shows>`,
     });
-    const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
+    const client = tracked(new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 }), "extract-rework-pictures");
     const msg = await client.messages.create({
       model: MODEL,
       max_tokens: 600 + 40 * list.length,
@@ -188,7 +189,7 @@ export async function describeScreens(
         `Leave out anything not readable rather than guess. ` +
         `Reply with one block per screenshot, each starting with a line "### <number>".`,
     });
-    const client = new Anthropic({ apiKey, timeout: 90_000, maxRetries: 1 });
+    const client = tracked(new Anthropic({ apiKey, timeout: 90_000, maxRetries: 1 }), "extract-rework-pictures");
     const msg = await client.messages.create({
       model: SCREEN_MODEL,
       max_tokens: 600 + 320 * list.length,

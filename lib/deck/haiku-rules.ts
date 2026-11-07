@@ -20,7 +20,8 @@ const LAYOUT_RULES = `LAYOUT VARIETY (required):
 const PICTURE_RULES = `PICTURES (required):
 - Put a picture on at least four slides of a ten-slide deck, and in that proportion for other sizes.
 - Unless the deck's image style is illustration, cartoon, 3D or flat art, make the pictures real photos: add data-gensource="stock" to each box, or data-bg-source="stock" on a background, with a short ENGLISH search query of 2 to 4 common words. Search for what a stock library really holds ("teacher in classroom", "team planning meeting"), not a detailed scene.
-- Never use two pictures of the same kind of scene.`;
+- Never use two pictures of the same kind of scene.
+- A picture about one specific real person or a named landmark: add data-genname="<exact English Wikipedia title>" (e.g. "Lionel Messi") to its box. Its stock query still shows their world WITHOUT any person ("football stadium night", "golden trophy"), never a stranger standing in for them.`;
 
 const PEOPLE_RULE = "- Prefer people doing the slide's activity over empty rooms.";
 

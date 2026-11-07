@@ -13,6 +13,7 @@
 // "Restore original"). Any failure keeps the original.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { tracked } from "@/lib/anthropic/usage-log";
 import sharp from "sharp";
 import { findStockPhoto } from "@/lib/images/pexels";
 
@@ -35,7 +36,7 @@ async function jpegPreview(bytes: Buffer, edge: number): Promise<string> {
 }
 
 async function ask(content: Anthropic.Messages.ContentBlockParam[], maxTokens: number): Promise<string> {
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 60_000, maxRetries: 1 });
+  const client = tracked(new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 60_000, maxRetries: 1 }), "extract-hd-pictures");
   const msg = await client.messages.create({ model: MODEL, max_tokens: maxTokens, thinking: { type: "disabled" }, messages: [{ role: "user", content }] });
   return msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
 }

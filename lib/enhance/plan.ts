@@ -18,6 +18,7 @@
 // call returns null and the deck generates exactly as before.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { tracked } from "@/lib/anthropic/usage-log";
 import type { BriefEnhanceAnswers } from "@/lib/enhance/answers";
 
 const MODEL = "claude-haiku-5-5";
@@ -148,7 +149,7 @@ Reply with ONLY a JSON object, in English, no dashes:
   });
 
   try {
-    const client = new Anthropic({ apiKey });
+    const client = tracked(new Anthropic({ apiKey }), "enhance-plan");
     const msg = await client.messages.create(
       {
         model: MODEL,

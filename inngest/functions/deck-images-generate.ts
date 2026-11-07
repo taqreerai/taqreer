@@ -58,6 +58,8 @@ type ImageBox = {
   ref: string | null;
   // data-gensource="stock": `prompt` is a Pexels search query (lib/images/pexels.ts).
   stock?: boolean;
+  // data-genname: a real person / landmark looked up on Wikimedia Commons.
+  name?: string | null;
   // sha256→12hex identity of `prompt` (+ ref when present -
   // genImageIdentityHash). Folds the identity into the storage path so this
   // reconcile adopts ONLY a warm image whose prompt AND reference match the
@@ -304,6 +306,7 @@ export const deckImagesGenerate = inngest.createFunction(
               aspect: b.aspect,
               referenceUrl: b.ref,
               stock: b.stock,
+              name: b.name,
               // Deck order (free decks: AI only for the first few boxes).
               rank: boxes.findIndex((x) => x.genid === b.genid),
               audience: imageRegion,

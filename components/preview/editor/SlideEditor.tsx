@@ -171,6 +171,11 @@ function applyResize(el: HTMLElement, width: number, height: number, transform: 
   const isText = (el.textContent ?? "").trim().length > 0;
   el.style.flex = "0 0 auto";
   el.style.maxWidth = "none";
+  // The freeze pins photos (and some boxes) with an inline max-height, which
+  // capped a resize at the frozen height: the box only grew wider and an
+  // object-fit:contain photo stayed the same size (owner report 2026-11-07,
+  // 6 of 10 photos on cmw6fa90900564z6dpelgz882). A drawn size always wins.
+  el.style.maxHeight = "none";
   el.style.width = `${Math.round(width)}px`;
   if (isText) {
     el.style.removeProperty("white-space");

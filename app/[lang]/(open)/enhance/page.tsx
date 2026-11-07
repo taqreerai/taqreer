@@ -70,7 +70,7 @@ import {
 import { seedFromExtraction } from "@/lib/create/seed-from-extraction";
 import { useCreditBalance, useSlideCap } from "@/lib/credits/store";
 import { normalizePlan } from "@/lib/plan";
-import { TEASER_VISIBLE_COUNT } from "@/lib/credits/cost";
+import { TEASER_FULLY_FREE_MAX, TEASER_VISIBLE_COUNT } from "@/lib/credits/cost";
 import posthog from "posthog-js";
 import { useIsGuest } from "@/components/app/GuestContext";
 import { GuestSignupDialog } from "@/components/create/GuestSignupDialog";
@@ -1196,7 +1196,7 @@ export default function EnhanceContentPage() {
         .replace("{pages}", String(pageCount))
         .replace("{cap}", String(slideCap));
   const trialPagesNote =
-    stage === "ready" && freeTrial && !overCap && pageCount > TEASER_VISIBLE_COUNT
+    stage === "ready" && freeTrial && !overCap && pageCount > TEASER_FULLY_FREE_MAX
       ? (pageCount > slideCap ? dict.flows.trialPagesNoteOver : dict.flows.trialPagesNote)
           .replace("{visible}", String(TEASER_VISIBLE_COUNT))
           .replace("{cap}", String(slideCap))

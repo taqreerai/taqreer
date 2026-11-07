@@ -1,6 +1,6 @@
 import { LANGUAGE_CODES } from "@/lib/language/detect";
 import { NextResponse } from "next/server";
-import { regionFreePreset } from "@/lib/credits/region-model";
+import { freeModelPreset, regionFreePreset } from "@/lib/credits/region-model";
 import { cookies } from "next/headers";
 import type { Prisma } from "@prisma/client";
 import { createClient as createSupabaseAdminClient } from "@supabase/supabase-js";
@@ -38,10 +38,10 @@ import {
   SOCIAL_AUTO_AIM,
   SOCIAL_MIN_POSTS,
   teaserDefaultTotalForFlow,
-  teaserVisibleForFlow,
   teaserVisibleFor,
   estimateSlides,
   teaserMinTotalForFlow,
+  teaserFullyFreeMaxForFlow,
   slideCapForFlow,
 } from "@/lib/credits/cost";
 import { normalizePlan } from "@/lib/plan";
@@ -836,8 +836,10 @@ export async function POST(request: Request) {
   await ensureFresh();
   // Region-limited free accounts run the region preset whatever the client
   // sent (lib/credits/region-model); everyone else keeps their pick.
+  // FREE_HAIKU_ALL extends the model (only) to every free account.
   const regionPreset = regionFreePreset(dbUser);
-  const quality = regionPreset ?? resolveQuality(payload.quality);
+  const forcedPreset = freeModelPreset(dbUser);
+  const quality = forcedPreset ?? resolveQuality(payload.quality);
 
   // ─── Enhance + template (2026-10-05) ────────────────────────────────
   // A redesign in a deck template's look: the template's design reference is
@@ -973,9 +975,10 @@ export async function POST(request: Request) {
   await ensureFresh();
   const isFreeTrial =
     dbUser.role !== "admin" && normalizePlan(dbUser.plan) === "free";
-  // Visible part of a teaser: 5 slides, 3 posts for social (2026-10-07).
-  // At or below this many slides a deck is fully free (nothing to lock).
-  const teaserFreeMax = teaserVisibleForFlow(creditFlow);
+  // At or below this many slides a deck is fully free (nothing to lock):
+  // 5 slides, 3 posts for social. Above it the deck is a teaser that builds
+  // up to 10 slides (3 posts) and keeps at least 3 locked (2026-11-07).
+  const teaserFreeMax = teaserFullyFreeMaxForFlow(creditFlow);
   let teaserPlannedTotal = 0;
   if (isFreeTrial) {
     const est = estimateSlides(slideInput);
@@ -991,7 +994,9 @@ export async function POST(request: Request) {
     if (wanted > teaserFreeMax) teaserPlannedTotal = wanted;
   }
   const isTeaser = teaserPlannedTotal > 0;
-  // Built part: 5 slides, shrunk so at least TEASER_MIN_LOCKED stay locked.
+  // Built part: 10 slides (3 posts), shrunk so at least TEASER_MIN_LOCKED
+  // stay locked. Stored as aiPrompt.slideCount (cappedSlideCount below), which
+  // the viewer and the unlock checkout read back as the deck's built count.
   const teaserVisible = isTeaser ? teaserVisibleFor(creditFlow, teaserPlannedTotal) : teaserFreeMax;
   const teaserLockedCount = isTeaser ? teaserPlannedTotal - teaserVisible : 0;
 
@@ -1009,6 +1014,7 @@ export async function POST(request: Request) {
     // still generates; the hold is waived in the pipeline (owner role).
     isAdmin: dbUser.role === "admin",
     regionPreset,
+    forcedPreset,
   });
   if (!preflight.ok) {
     return NextResponse.json(

@@ -119,6 +119,18 @@ export type InitialState = {
   teaserLockedCount: number;
   teaserUnlocked: boolean;
   /**
+   * Free deck designed on the Basic model (a Haiku preset), shown to the owner
+   * as a disclosure + upsell chip (2026-11-07). Only while the deck still
+   * carries the free watermark: a bought deck or a paid owner never sees it.
+   */
+  madeWithBasicModel: boolean;
+  /**
+   * Slides a teaser deck built before its locked tail (aiPrompt.slideCount,
+   * written at creation). 0 when unknown: the viewer falls back to the flow
+   * default. Varies per deck since 2026-11-07 (up to 10, at least 3 locked).
+   */
+  teaserBuiltCount: number;
+  /**
    * Reload-defense for partial-slide regen (2026-05-27). When a Job
    * row of type `deck.regenerate.partial` is still in flight (status:
    * queued / processing / running), this carries the target slide
@@ -495,6 +507,25 @@ export async function loadProject(
     project.presentation?.id ?? null,
   );
 
+  const brandingWatermark =
+    !isPaidPlan(project.user.plan) &&
+    project.user.role !== "admin" &&
+    project.purchasedAt == null;
+  // The model the deck was generated on: Job.quality is filled once the job
+  // runs, inputJson.quality from the moment the project is created.
+  let madeWithBasicModel = false;
+  if (brandingWatermark) {
+    const job = await prisma.job.findFirst({
+      where: { projectId, type: "deck.generate" },
+      orderBy: { createdAt: "desc" },
+      select: { quality: true, inputJson: true },
+    });
+    const input = job?.inputJson as { quality?: unknown } | null | undefined;
+    const quality =
+      job?.quality ?? (typeof input?.quality === "string" ? input.quality : null);
+    madeWithBasicModel = !!quality?.startsWith("haiku");
+  }
+
   return {
     projectTitle: project.title,
     presentationId: project.presentation?.id ?? null,
@@ -515,13 +546,15 @@ export async function loadProject(
     initialFormat: narrowFormat(project.format),
     initialIsSocial: project.type === "social",
     initialActiveRegen,
-    brandingWatermark:
-      !isPaidPlan(project.user.plan) &&
-      project.user.role !== "admin" &&
-      project.purchasedAt == null,
+    brandingWatermark,
     deckPurchased: project.purchasedAt != null,
     teaserLockedCount: project.teaserLockedCount,
     teaserUnlocked: project.teaserUnlockedAt != null,
+    madeWithBasicModel,
+    teaserBuiltCount:
+      project.teaserLockedCount > 0 && typeof prompt?.slideCount === "number"
+        ? prompt.slideCount
+        : 0,
   };
 }
 

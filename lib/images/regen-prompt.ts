@@ -9,6 +9,7 @@
 // the raw prompt (that stays behind "Advanced").
 
 import Anthropic from "@anthropic-ai/sdk";
+import { tracked } from "@/lib/anthropic/usage-log";
 import { IMAGE_CREDITS_PER_IMAGE } from "@/lib/credits/cost";
 
 // A re-rolled image costs what an image costs at generation.
@@ -34,7 +35,7 @@ export async function mergeImageChange(prompt: string, change: string): Promise<
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return fallback;
   try {
-    const client = new Anthropic({ apiKey, timeout: 20_000, maxRetries: 1 });
+    const client = tracked(new Anthropic({ apiKey, timeout: 20_000, maxRetries: 1 }), "image-regen-prompt");
     const msg = await client.messages.create({
       model: "claude-haiku-5-5",
       max_tokens: 500,

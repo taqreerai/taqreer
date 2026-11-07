@@ -33,6 +33,7 @@ import { isPaidPlan, normalizePlan } from "@/lib/plan";
 import {
   bracketForSlides,
   deckUnlockLookupKey,
+  teaserBuiltFromPrompt,
   teaserTotalSlides,
 } from "@/lib/billing/deck-unlock-brackets";
 import { captureServerEvent } from "@/lib/analytics/posthog-server";
@@ -78,6 +79,7 @@ export async function POST(request: Request) {
         teaserLockedCount: true,
         teaserUnlockedAt: true,
         purchasedAt: true,
+        aiPrompt: true,
       },
     });
     if (!project || project.userId !== dbUser.id) {
@@ -95,7 +97,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "already_entitled" }, { status: 409 });
     }
     const bracket = bracketForSlides(
-      teaserTotalSlides(project.type, project.teaserLockedCount),
+      teaserTotalSlides(
+        project.type,
+        project.teaserLockedCount,
+        teaserBuiltFromPrompt(project.aiPrompt),
+      ),
     );
     if (!bracket) {
       return NextResponse.json({ error: "subscription_required" }, { status: 400 });

@@ -26,6 +26,7 @@ export function SlideCapUpsellDialog({
   cap,
   max,
   posts = false,
+  basicModel = false,
 }: {
   open: boolean;
   // Dismiss WITHOUT proceeding — the X, Esc, and outside-click. Cancels the
@@ -41,6 +42,9 @@ export function SlideCapUpsellDialog({
   max: number;
   // Social carousel: the copy says posts, not slides (2026-10-07).
   posts?: boolean;
+  // This account designs on the Basic model (Claude Haiku): one more line
+  // says so and what paid plans add (owner, 2026-11-07).
+  basicModel?: boolean;
 }) {
   const dict = useDict();
   const { dir } = useLocale();
@@ -70,10 +74,16 @@ export function SlideCapUpsellDialog({
 
   if (typeof window === "undefined") return null;
 
-  // Latin numerals only, even inside Arabic copy (String(number) is 0-9).
-  const body = (posts ? t.bodyPosts : t.body)
-    .replace("{cap}", String(cap))
-    .replace("{max}", String(max));
+  // Three short points instead of two paragraphs (owner, 2026-11-07: "a
+  // mouthful"). Latin numerals only, even inside Arabic copy (String() is
+  // 0-9). "Simple design" only for an account on the Basic model (Haiku), so
+  // it is never claimed of a deck that runs on a smarter model.
+  const points = [
+    (posts ? t.freePosts : t.free).replace("{count}", String(cap)),
+    basicModel ? t.simple : null,
+    posts ? t.fullPosts : t.full,
+  ].filter((p): p is string => !!p);
+  void max;
 
   return createPortal(
     <AnimatePresence>
@@ -127,11 +137,23 @@ export function SlideCapUpsellDialog({
                 </button>
               </header>
 
-              <div className="px-5 py-5">
-                <p className="text-sm leading-relaxed text-foreground/80">
-                  {body}
-                </p>
-              </div>
+              <ul className="flex flex-col gap-2.5 px-5 py-5">
+                {points.map((point) => (
+                  <li
+                    key={point}
+                    className="flex items-center gap-2.5 text-sm text-foreground/80"
+                  >
+                    <span
+                      className="material-symbols-outlined shrink-0 leading-none text-[var(--tq-brand-blue)]"
+                      style={{ fontSize: 18 }}
+                      aria-hidden
+                    >
+                      check
+                    </span>
+                    {point}
+                  </li>
+                ))}
+              </ul>
 
               <footer className="flex items-center justify-end gap-2 border-t border-foreground/[0.08] px-5 py-3">
                 <button
@@ -139,7 +161,7 @@ export function SlideCapUpsellDialog({
                   onClick={onContinue}
                   className="btn-pill px-5 py-2 text-sm"
                 >
-                  {(posts ? t.continuePosts : t.continue).replace("{cap}", String(cap))}
+                  {posts ? t.continuePosts : t.continue}
                 </button>
                 <button
                   type="button"

@@ -41,8 +41,27 @@ export function bracketForSlides(slides: number): DeckUnlockBracket | null {
   return DECK_UNLOCK_BRACKETS.find((b) => slides <= b.maxSlides)?.key ?? null;
 }
 
-/** Planned size of a teaser deck: the built (visible) part plus the tail. */
-export function teaserTotalSlides(projectType: string, lockedCount: number): number {
+/** Planned size of a teaser deck: the built (visible) part plus the tail.
+ *  `builtCount` is the deck's own built count (aiPrompt.slideCount); since the
+ *  built part varies per deck (2026-11-07: up to 10, at least 3 locked), it
+ *  wins over the flow default, which only covers decks that lack it. */
+export function teaserTotalSlides(
+  projectType: string,
+  lockedCount: number,
+  builtCount?: number | null,
+): number {
   const flow = projectType === "social" ? "social" : "create";
-  return teaserVisibleForFlow(flow) + Math.max(0, lockedCount);
+  const built = builtCount && builtCount > 0 ? builtCount : teaserVisibleForFlow(flow);
+  return built + Math.max(0, lockedCount);
+}
+
+/** The built count a teaser deck stored at creation (aiPrompt.slideCount). */
+export function teaserBuiltFromPrompt(aiPrompt: string | null | undefined): number | null {
+  if (!aiPrompt) return null;
+  try {
+    const n = (JSON.parse(aiPrompt) as { slideCount?: unknown }).slideCount;
+    return typeof n === "number" && n > 0 ? n : null;
+  } catch {
+    return null;
+  }
 }

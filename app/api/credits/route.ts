@@ -3,7 +3,7 @@
 // render from this one payload + the `credit.balance.changed`
 // broadcast, so they can never disagree.
 
-import { isRegionLimitedFree, regionFreePreset } from "@/lib/credits/region-model";
+import { freeModelPreset, isRegionLimitedFree, regionFreePreset } from "@/lib/credits/region-model";
 import { activePresetPayload } from "@/lib/credits/public-presets";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -135,6 +135,9 @@ export async function GET() {
     // Free accounts from a region-limited country see (and run) only this
     // preset; null = the tier's normal presets.
     regionPreset: regionFreePreset(dbUser),
+    // The preset this account runs on (region, or every free account under
+    // FREE_HAIKU_ALL). Drives the model picker only, never the image lock.
+    freePreset: freeModelPreset(dbUser),
     // Same accounts pay the regional one-time unlock price (deck-unlock-brackets).
     regionPricing: isRegionLimitedFree(dbUser),
     // Per-run slide ceiling for this user's tier (admin -> the 75 system cap).

@@ -21,7 +21,8 @@ type TeaserLockCanvasProps = {
   ghost?: ReactNode;
   onUnlock: () => void;
   unlocking?: boolean;
-  labels: { cta: string; unlocking: string };
+  // `note`: optional line under the button (the Basic-model disclosure).
+  labels: { cta: string; unlocking: string; note?: string };
 };
 
 export function TeaserLockCanvas({
@@ -53,6 +54,7 @@ export function TeaserLockCanvas({
         >
           {unlocking ? labels.unlocking : labels.cta}
         </button>
+        {labels.note ? <p className="tq-teaser-lock-note">{labels.note}</p> : null}
       </div>
     </div>
   );

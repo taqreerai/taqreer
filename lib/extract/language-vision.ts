@@ -9,6 +9,7 @@
 // caller keeps its old default.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { tracked } from "@/lib/anthropic/usage-log";
 import { PDFDocument } from "pdf-lib";
 
 const SAMPLE_PAGES = 3;
@@ -27,7 +28,7 @@ export async function detectLanguageFromPages(
     pages.forEach((p) => sample.addPage(p));
     const data = Buffer.from(await sample.save()).toString("base64");
 
-    const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
+    const client = tracked(new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 }), "extract-language");
     const msg = await client.messages.create({
       model: "claude-haiku-5-5",
       max_tokens: 400, // thinking can eat a small budget and leave no text

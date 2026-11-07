@@ -114,8 +114,18 @@ export const TEASER_LOCKED_COUNT = 5;
 // TEASER_VISIBLE_COUNT slides; the rest of the requested length is locked.
 // TEASER_DEFAULT_TOTAL is the planned length when the user picked "auto" and
 // the flow has no estimate of its own.
-export const TEASER_VISIBLE_COUNT = 5;
-export const TEASER_DEFAULT_TOTAL = 10;
+// 2026-11-07 (owner decision): 10 free slides, always at least
+// TEASER_MIN_LOCKED locked, auto plans 15 (10 built + 5 locked). Was 5 / 10.
+export const TEASER_VISIBLE_COUNT = 10;
+export const TEASER_DEFAULT_TOTAL = 15;
+// The shortest plan a free create / mimic deck may have (picking "3 slides"
+// plans this many). Kept at the old 5 + 3 when the visible count went to 10,
+// so a short request is not padded to 13 slides.
+export const TEASER_MIN_TOTAL = 8;
+// At or below this many slides a free deck is fully free (nothing locked):
+// the old visible count, so short enhance files keep today's behaviour and a
+// 10-slide deck is never fully free now that 10 slides are visible.
+export const TEASER_FULLY_FREE_MAX = 5;
 // Social (owner direction 2026-10-07): a carousel has at least
 // SOCIAL_MIN_POSTS posts, and a free one builds only the first
 // SOCIAL_TEASER_VISIBLE posts; the rest are locked until the user pays.
@@ -150,7 +160,13 @@ export function teaserVisibleFor(flow: Flow, total: number): number {
  *  paywall. Enhance is exempt: it rebuilds the source 1:1, so its page count
  *  is the deck and cannot be padded. */
 export function teaserMinTotalForFlow(flow: Flow): number {
-  return flow === "enhance" ? 0 : teaserVisibleForFlow(flow) + TEASER_MIN_LOCKED;
+  if (flow === "enhance") return 0;
+  return flow === "social" ? SOCIAL_TEASER_VISIBLE + TEASER_MIN_LOCKED : TEASER_MIN_TOTAL;
+}
+
+/** A free deck at or below this length is fully free (no locked tail). */
+export function teaserFullyFreeMaxForFlow(flow: Flow): number {
+  return flow === "social" ? SOCIAL_TEASER_VISIBLE : TEASER_FULLY_FREE_MAX;
 }
 
 /** The planned length of a free auto deck / carousel for this flow. */

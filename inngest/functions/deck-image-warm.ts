@@ -43,6 +43,8 @@ type WarmBox = {
   ref?: string | null;
   // data-gensource="stock": `prompt` is a Pexels search query (lib/images/pexels.ts).
   stock?: boolean;
+  // data-genname: a real person / landmark looked up on Wikimedia Commons.
+  name?: string | null;
   // sha256→12hex identity of `prompt` (+ ref when present) - lib/images/store
   // genImageIdentityHash. Folded into the storage path AND the idempotency
   // key so a drift's changed prompt (or a ref'd vs no-ref box) is a distinct
@@ -108,6 +110,7 @@ export const deckImageWarm = inngest.createFunction(
           aspect: box.aspect,
           referenceUrl: box.ref ?? null,
           stock: box.stock === true,
+          name: box.name ?? null,
           rank: box.rank,
         });
         const url = await storeGeneratedImage({

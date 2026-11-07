@@ -49,6 +49,10 @@ export interface GenImageMarker {
   /** data-gensource="stock": `prompt` is a search query for a real photo
    *  (lib/images/pexels.ts), not an image-model prompt. */
   stock: boolean;
+  /** data-genname: the exact English Wikipedia title of the ONE real person
+   *  or landmark the box shows (lib/images/commons.ts). `prompt` is then the
+   *  people-free fallback. null for ordinary boxes. */
+  name: string | null;
 }
 
 // Accept only safe genids. The genid flows into a Supabase storage path
@@ -192,7 +196,9 @@ export function scanGenImages(html: string): GenImageMarker[] {
         ? (aspectRaw as GenImageAspect)
         : (deriveAspectFromStyle(tag) ?? "landscape");
     seen.add(genid);
-    out.push({ genid, prompt, role, aspect, ref: readGenRef(tag), stock: readAttr(tag, "data-gensource") === "stock" });
+    const nameRaw = readAttr(tag, "data-genname");
+    const name = nameRaw ? decodeEntities(nameRaw).replace(/\s+/g, " ").trim().slice(0, 120) || null : null;
+    out.push({ genid, prompt, role, aspect, ref: readGenRef(tag), stock: readAttr(tag, "data-gensource") === "stock", name });
   }
   return out;
 }
@@ -302,7 +308,7 @@ export function neutralizeGenImages(
     // the seed scan — exactly the never-fillable boxes this guard
     // exists to strip. The CSS shimmer selector matches all of them.
     const stripped = tag.replace(
-      /\s(?:data-genimage|data-genid|data-genrole|data-genaspect|data-gensource|data-genref)(?=\s|=|\/?>)(?:\s*=\s*("[^"]*"|'[^']*'|[^\s>]*))?/gi,
+      /\s(?:data-genimage|data-genid|data-genrole|data-genaspect|data-gensource|data-genref|data-genname)(?=\s|=|\/?>)(?:\s*=\s*("[^"]*"|'[^']*'|[^\s>]*))?/gi,
       "",
     );
     out += html.slice(last, start) + stripped;

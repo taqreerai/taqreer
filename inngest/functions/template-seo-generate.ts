@@ -22,6 +22,7 @@
 // (length caps, SLUG_RE, house copy rules) before any DB write.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { tracked } from "@/lib/anthropic/usage-log";
 import { inngest } from "@/inngest/client";
 import { NonRetriableError } from "inngest";
 import { SlideManifestSchema } from "@/lib/schema/slide";
@@ -164,7 +165,7 @@ export const templateSeoGenerate = inngest.createFunction(
       if (!apiKey) {
         throw new Error("ANTHROPIC_API_KEY is not set in the runtime environment");
       }
-      const client = new Anthropic({ apiKey });
+      const client = tracked(new Anthropic({ apiKey }), "template-seo");
       const message = await client.messages.create({
         model: SEO_MODEL,
         max_tokens: MAX_OUTPUT_TOKENS,

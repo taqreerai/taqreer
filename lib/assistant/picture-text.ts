@@ -8,6 +8,7 @@
 // automatic: it replaces the user's own picture, so only the user asks for it.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { tracked } from "@/lib/anthropic/usage-log";
 
 const MODEL = "claude-haiku-5-5";
 const MAX_WORDS_CHARS = 2500;
@@ -40,7 +41,7 @@ export async function transcribePicture(projectId: string, assetId: string): Pro
   const media = asset?.contentType.split(";")[0].trim().toLowerCase() ?? "";
   if (!asset || !MEDIA.has(media) || asset.bytes.length > MAX_IMAGE_BYTES) return null;
   try {
-    const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
+    const client = tracked(new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 }), "picture-text");
     const msg = await client.messages.create({
       model: MODEL,
       max_tokens: 1500,

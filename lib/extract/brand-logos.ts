@@ -13,6 +13,7 @@
 // redesign puts it in its chrome (CARRIED_LOGO_RULE). Any failure = none.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { tracked } from "@/lib/anthropic/usage-log";
 import JSZip from "jszip";
 import sharp from "sharp";
 import type { PictureClass, PptxVisuals, TemplatePicture } from "@/lib/extract/pptx-visuals";
@@ -113,7 +114,7 @@ export async function findBrandLogos(buffer: Buffer, candidates: readonly Candid
         `Also answer no for a badge or watermark of the software or website that made the deck ("Made with ...", "Powered by ...", "Created in ...", a presentation app's own badge): it is not the presenter's organisation.\n` +
         `Reply with one line per image, exactly: <number>|<yes or no>`,
     });
-    const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
+    const client = tracked(new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 }), "extract-brand-logos");
     const msg = await client.messages.create({
       model: MODEL,
       max_tokens: 200,

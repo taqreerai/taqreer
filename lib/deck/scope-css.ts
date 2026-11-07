@@ -223,6 +223,86 @@ function neutralizeIdSpecificity(sel: string): string {
   return out;
 }
 
+// Split a selector at its LAST top-level combinator: [before, combinator,
+// subject]. `.card > p` → [".card", " > ", "p"]; `.num` → ["", "", ".num"].
+function splitLastCompound(sel: string): [string, string, string] {
+  let depth = 0;
+  let str: '"' | "'" | null = null;
+  let combStart = -1;
+  let lastStart = -1;
+  let lastEnd = -1;
+  for (let i = 0; i < sel.length; i++) {
+    const c = sel[i];
+    if (str) {
+      if (c === "\\") i++;
+      else if (c === str) str = null;
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      str = c;
+    } else if (c === "(" || c === "[") {
+      depth++;
+    } else if (c === ")" || c === "]") {
+      depth--;
+    }
+    const isComb =
+      depth === 0 && !str && (c === " " || c === "\t" || c === "\n" || c === ">" || c === "+" || c === "~");
+    if (isComb) {
+      if (combStart < 0) combStart = i;
+    } else if (combStart >= 0) {
+      if (combStart > 0) {
+        lastStart = combStart;
+        lastEnd = i;
+      }
+      combStart = -1;
+    }
+  }
+  if (lastStart < 0) return ["", "", sel];
+  return [sel.slice(0, lastStart), sel.slice(lastStart, lastEnd), sel.slice(lastEnd)];
+}
+
+// A rule whose SUBJECT is a bare tag under a class (`.card p`, `.row > div`)
+// is the author's "text in a card" default; a class on the element itself
+// (`.num`) is the specific intent and must win. Scoped as-is, `.card p` scores
+// (0,2,1) and beat `.num` at (0,2,0): a stat card's 240px number rendered at
+// the card's 26px body size (owner report 2026-11-07, a Messi vs Ronaldo
+// deck). Wrapping the ancestor part in :where() drops it to (0,1,1), the same
+// as a plain scoped `p`, so source order still decides between those two.
+const BARE_TYPE_SUBJECT = /^(?:[a-zA-Z][\w-]*|\*)$/;
+
+export function lowerTypeSubjectSpecificity(sel: string, scope: string): string {
+  if (!sel.startsWith(scope)) return sel;
+  const rest = sel.slice(scope.length);
+  const descendant = /^\s/.test(rest);
+  let body = rest.trimStart();
+  // `section > .a p` scopes to `.tq-canvas > .a p`: the leading combinator
+  // stays outside the wrap (`:where(> .a)` is invalid and matched nothing).
+  const lead = /^([>+~])\s*/.exec(body);
+  if (lead) body = body.slice(lead[0].length);
+  const [before, comb, subject] = splitLastCompound(body);
+  if (!before || !BARE_TYPE_SUBJECT.test(subject)) return sel;
+  // Only an ancestor that carries a class / attribute raises the score.
+  if (!/[.[]/.test(before) || before.includes("::") || before.includes("&")) return sel;
+  // Wrap EACH ancestor compound on its own, so the combinators (and so the
+  // matching) stay exactly as authored: `.a .b span` → `:where(.a) :where(.b) span`.
+  const parts: string[] = [];
+  let tail = before;
+  for (;;) {
+    const [head, c, last] = splitLastCompound(tail);
+    parts.unshift(last);
+    if (!c) break;
+    parts.unshift(c);
+    tail = head;
+  }
+  const lowered = parts
+    .map((p, i) =>
+      i % 2 === 1 || !/[.[]/.test(p) || /^:where\(.*\)$/.test(p) ? p : `:where(${p})`,
+    )
+    .join("");
+  if (lowered === before) return sel;
+  return `${scope}${lead ? ` ${lead[1]} ` : descendant ? " " : ""}${lowered}${comb}${subject}`;
+}
+
 // One scoped arm: the selector plus whether its SUBJECT is the scope root
 // itself (a compound on the `<section>`, e.g. `.tq-canvas.content`) rather
 // than a descendant. Root-subject arms get the geometry-filtered declaration
@@ -292,9 +372,9 @@ function neutralizeFixedPosition(block: string): string {
 // root-subject arms get the geometry/hiding-filtered block (dropped entirely
 // when nothing survives the filter).
 function emitScopedRule(prelude: string, block: string, scope: string): string[] {
-  const arms = splitTopLevel(prelude, ",").flatMap((sel) =>
-    scopeOneSelector(sel, scope),
-  );
+  const arms = splitTopLevel(prelude, ",")
+    .flatMap((sel) => scopeOneSelector(sel, scope))
+    .map((a) => ({ ...a, sel: lowerTypeSubjectSpecificity(a.sel, scope) }));
   const safeBlock = neutralizeFixedPosition(block);
   const rootArms = arms.filter((a) => a.rootSubject).map((a) => a.sel);
   const descArms = arms.filter((a) => !a.rootSubject).map((a) => a.sel);

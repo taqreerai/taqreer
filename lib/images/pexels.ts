@@ -15,6 +15,7 @@
 // per hour, 20,000 per month.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { tracked } from "@/lib/anthropic/usage-log";
 import sharp from "sharp";
 import type { GeneratedImageResult } from "@/lib/images/gpt-image";
 import { GULF_KHALEEJI_DESCRIPTOR } from "@/lib/geo/image-region";
@@ -93,7 +94,7 @@ async function checkResults(
         `Also say whether the description asks for a national flag, and if so its ISO 3166-1 alpha-2 country code.\n` +
         `Reply with ONLY one line, no explanation: <photo number or none>|<country code or none>`,
     });
-    const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
+    const client = tracked(new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 }), "stock-check");
     const msg = await client.messages.create({ model: CHECK_MODEL, max_tokens: 150, thinking: { type: "disabled" }, messages: [{ role: "user", content }] });
     const reply = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
     const m = reply.match(/^\s*(\d+|none)\s*\|\s*([a-z]{2}|none)\s*$/im);
@@ -191,7 +192,7 @@ async function broaderQueries(description: string, audience?: string | null): Pr
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return [];
   try {
-    const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
+    const client = tracked(new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 }), "stock-check");
     const msg = await client.messages.create({
       model: CHECK_MODEL,
       max_tokens: 100,

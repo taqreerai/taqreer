@@ -39,6 +39,7 @@ import {
 } from "@/lib/billing/deck-unlock-brackets";
 import { teaserVisibleForFlow } from "@/lib/credits/cost";
 import { UpgradeModal } from "@/components/billing/UpgradeModal";
+import { BasicModelChip } from "@/components/preview/BasicModelChip";
 import { SlideEditor } from "@/components/preview/editor/SlideEditor";
 import { StylePill, type RegenImageInput, type RegenImageResult } from "@/components/preview/editor/StylePill";
 import { PhotoSlotOverlay, PHOTO_SLOT_SELECTOR } from "@/components/preview/editor/PhotoSlotOverlay";
@@ -287,6 +288,11 @@ type Props = {
    */
   teaserLockedCount?: number;
   teaserUnlocked?: boolean;
+  // Free deck on the Basic model (Claude Haiku): the generation chat says so
+  // and the top bar shows the "Made with Basic model" chip (owner only).
+  madeWithBasicModel?: boolean;
+  // Slides this teaser deck built before its locked tail (0 = flow default).
+  teaserBuiltCount?: number;
   /**
    * Bought outright (one-time unlock, 2026-10-08): no free watermark on this
    * deck, and its exports come out clean (DeckPurchaseContext).
@@ -444,6 +450,8 @@ export function DeckView({
   teaserLockedCount = 0,
   teaserUnlocked = false,
   deckPurchased = false,
+  madeWithBasicModel = false,
+  teaserBuiltCount = 0,
 }: Props) {
   // One-time unlock bought in THIS session flips the deck clean right away
   // (the server agrees from the next load: Project.purchasedAt).
@@ -2811,12 +2819,12 @@ export function DeckView({
   const deckUnlockOffer = useMemo(() => {
     if (!brandingWatermark || role !== "owner" || teaserLockedCount <= 0) return null;
     const bracket = bracketForSlides(
-      teaserTotalSlides(initialIsSocial ? "social" : "create", teaserLockedCount),
+      teaserTotalSlides(initialIsSocial ? "social" : "create", teaserLockedCount, teaserBuiltCount),
     );
     if (!bracket) return null;
     // Same rule the checkout charges by (region-limited free owner -> regional).
     return { projectId, priceCents: deckUnlockPriceCents(bracket, !!unlockCredits?.regionPricing) };
-  }, [brandingWatermark, role, teaserLockedCount, initialIsSocial, projectId, unlockCredits?.regionPricing]);
+  }, [brandingWatermark, role, teaserLockedCount, teaserBuiltCount, initialIsSocial, projectId, unlockCredits?.regionPricing]);
 
   // The unlock button. A free / unpaid owner opens the UpgradeModal (the unlock
   // fires on subscribe success); a paid owner / admin fires the unlock directly.
@@ -4945,11 +4953,15 @@ export function DeckView({
   // payment that lands outside this tab swaps the full manifest in (peer sync)
   // without flipping teaserUnlockedState, which left 5 phantom locked tiles
   // after 10 real slides (prod 2026-11-03, project cmw0f4feb01fk0x6d94w0074r).
-  const beyondTeaser =
-    (manifest?.slides.length ?? 0) > teaserVisibleForFlow(initialIsSocial ? "social" : "create");
+  // The built part varies per deck (2026-11-07: up to 10, at least 3 locked),
+  // so read the deck's own count; the flow default covers older decks.
+  const teaserBuiltSlots =
+    teaserBuiltCount > 0
+      ? teaserBuiltCount
+      : teaserVisibleForFlow(initialIsSocial ? "social" : "create");
+  const beyondTeaser = (manifest?.slides.length ?? 0) > teaserBuiltSlots;
   const teaserActive =
     role === "owner" && !teaserUnlockedState && teaserLockedCount > 0 && !beyondTeaser;
-  const teaserBuiltSlots = teaserVisibleForFlow(initialIsSocial ? "social" : "create");
   const rawSlotCount = initialSlideCountAuto
     ? Math.max(streamingPreview.length + 1, autoTotalHint, 1)
     : placeholders.length;
@@ -5097,6 +5109,10 @@ export function DeckView({
   // (and after any legacy teaser slots). Never in slideJson; read-only; gone
   // once the owner upgrades.
   const brandLang: "ar" | "en" = (viewManifest?.language ?? "ar") === "en" ? "en" : "ar";
+  // Basic-model disclosure (chat line + top-bar chip): owner of a free,
+  // unpurchased deck that was designed on a Haiku preset.
+  const showBasicModel =
+    madeWithBasicModel && role === "owner" && brandingWatermark;
   const showBrandSlide =
     BRANDED_CLOSING_SLIDE && brandingWatermark && !generating && viewSlides.length > 0;
   if (showBrandSlide) navItems.push({ kind: "brand", index: navItems.length });
@@ -5277,6 +5293,12 @@ export function DeckView({
           trailing={
             !generating && exportManifest ? (
               <>
+                {showBasicModel ? (
+                  <>
+                    <span className="mx-1.5 h-5 w-px bg-[var(--tq-border-hairline)]" aria-hidden />
+                    <BasicModelChip />
+                  </>
+                ) : null}
                 <span className="mx-1.5 h-5 w-px bg-[var(--tq-border-hairline)]" aria-hidden />
                 <StudioActions
                   projectId={projectId}
@@ -5435,6 +5457,7 @@ export function DeckView({
               isPost={isPostFormat}
               collapsed={layersCollapsed}
               tabsSlot={editMode ? railTabsSlot : undefined}
+              basicModel={showBasicModel}
             />
           </motion.div>
         ) : null}
@@ -6193,6 +6216,14 @@ export function DeckView({
                 labels={{
                   cta: dict.components.creditGate.teaserUnlockCta,
                   unlocking: dict.components.creditGate.teaserUnlocking,
+                  note: brandingWatermark
+                    ? [
+                        showBasicModel ? dict.components.creditGate.teaserBasicNote : null,
+                        dict.components.creditGate.teaserWatermarkNote,
+                      ]
+                        .filter(Boolean)
+                        .join(" ")
+                    : undefined,
                 }}
               />
             </div>

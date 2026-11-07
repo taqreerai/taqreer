@@ -30,6 +30,7 @@ export function GenChatPanel({
   isPost = false,
   collapsed = false,
   tabsSlot,
+  basicModel = false,
 }: {
   entries: GenChatEntry[];
   language: "ar" | "en";
@@ -42,6 +43,9 @@ export function GenChatPanel({
   // crossfade in the same rail slot). Omitted -> plain title header (the
   // standalone chat during generation, before the editor exists).
   tabsSlot?: ReactNode;
+  // Free deck on the Basic model (Claude Haiku): a pinned first line says so
+  // and that paid plans design with smarter models (owner, 2026-11-07).
+  basicModel?: boolean;
 }) {
   const dict = useDict();
   const t = dict.editor.genchat;
@@ -130,6 +134,18 @@ export function GenChatPanel({
         ref={scrollRef}
         className="flex-1 space-y-3 overflow-y-auto px-1 py-3"
       >
+        {basicModel ? (
+          <p className="flex items-start gap-2 rounded-2xl bg-foreground/[0.04] px-3 py-2 text-[11px] leading-relaxed text-foreground/60">
+            <span
+              className="material-symbols-outlined shrink-0 leading-none text-[var(--tq-brand-blue)]"
+              style={{ fontSize: 14 }}
+              aria-hidden
+            >
+              info
+            </span>
+            {t.basicModel}
+          </p>
+        ) : null}
         {entries.map((e, i) => {
           if (e.role === "user") {
             // The REVIEW ask: localized copy + the exact screenshots sent

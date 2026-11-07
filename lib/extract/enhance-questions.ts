@@ -9,6 +9,7 @@
 // failed call returns null and the page starts on the suggested answers.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { tracked } from "@/lib/anthropic/usage-log";
 import type { EnhanceOptionKey, EnhanceQuestions } from "@/lib/enhance/answers";
 
 const MODEL = "claude-haiku-5-5";
@@ -56,7 +57,7 @@ export async function writeEnhanceQuestions(input: EnhanceQuestionsInput): Promi
       ? `The file has ${input.contentPictures} content pictures and ${input.decorPictures} decorative ones (template art, frames, ribbons, repeated badges).`
       : "The file's pictures are not counted.";
   try {
-    const client = new Anthropic({ apiKey });
+    const client = tracked(new Anthropic({ apiKey }), "extract-enhance-questions");
     const msg = await client.messages.create({
       model: MODEL,
       max_tokens: 700,

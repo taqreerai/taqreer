@@ -13,6 +13,7 @@
 // this only runs when the brief carries no font at all. Server-only.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { tracked } from "@/lib/anthropic/usage-log";
 
 export const AUTO_FONT_DEFAULT = "Noto Sans Arabic";
 // The standard deck fonts (non-social Auto).
@@ -138,7 +139,7 @@ export async function pickAutoFont(opts: {
   const topic = `${opts.title}\n${opts.text}`.trim().slice(0, 800);
   if (!apiKey || !topic) return done(AUTO_FONT_DEFAULT, "default");
   try {
-    const client = new Anthropic({ apiKey, timeout: 3000, maxRetries: 0 });
+    const client = tracked(new Anthropic({ apiKey, timeout: 3000, maxRetries: 0 }), "auto-font");
     const message = await client.messages.create({
       model: "claude-haiku-5-5",
       max_tokens: 40,

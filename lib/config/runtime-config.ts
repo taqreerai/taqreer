@@ -338,9 +338,15 @@ export function pricingDisplayNumbers(): {
       slides: t.slideCap,
       // Every model family the tier offers ("Sonnet / Opus"), cheapest first; the
       // Free card also advertises Haiku (the region-limited free preset).
+      // FREE_HAIKU_ALL (lib/credits/region-model freeHaikuForAll, inlined to
+      // avoid a circular import): every free account runs Haiku only, so the
+      // Free card names just Haiku ("Basic model (Claude Haiku)").
       model:
-        unlockedModelNames(ladder, t.unlockedPresetKeys, plan === "free" ? "haiku" : undefined) ??
-        fallbackLabel,
+        unlockedModelNames(
+          ladder,
+          plan === "free" && process.env.FREE_HAIKU_ALL === "1" ? [] : t.unlockedPresetKeys,
+          plan === "free" ? "haiku" : undefined,
+        ) ?? fallbackLabel,
     };
   });
 }

@@ -26,8 +26,10 @@ export const WATERMARK_BRAND = "taqreer";
 /** The appended branded closing slide (studio, PNG + PPTX export). Off since
  *  2026-10-04: users deleted it or skipped exporting because of it. */
 export const BRANDED_CLOSING_SLIDE = false;
-/** Watermark opacity: present but barely visible (owner, 2026-10-04). */
-export const WATERMARK_OPACITY = 0.38;
+/** Watermark opacity: was 0.38 "present but barely visible" (owner,
+ *  2026-10-04); raised to 0.6 to read a bit more (owner, 2026-11-07). One value
+ *  for the studio layer and the PNG / PDF / PPTX exports. */
+export const WATERMARK_OPACITY = 0.6;
 export const SITE_LABEL = "taqreer.ai";
 
 /** Closing-slide + cover-badge slogan in the deck's language (owner picks

@@ -9,6 +9,7 @@
 // stays stored. Server-only.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { tracked } from "@/lib/anthropic/usage-log";
 import sharp from "sharp";
 import { thinkingOffFor, toSdkThinking } from "@/lib/anthropic/model-thinking";
 import { stripTextDashes } from "@/lib/deck/strip-dashes";
@@ -95,7 +96,7 @@ export async function sortTextPictures<T extends SortablePicture>(opts: {
 }): Promise<{ pictures: T[]; transcribed: { slideIndex: number; text: string }[] }> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { pictures: [...opts.pictures], transcribed: [] };
-  const client = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 });
+  const client = tracked(new Anthropic({ apiKey, timeout: 60_000, maxRetries: 1 }), "extract-text-pictures");
   const candidates = opts.pictures
     .filter((p) => p.cls === "content" && (p.kind === "graphic" || p.kind === "document") && !p.swap && !p.logo && !!p.native && p.native.w <= MAX_WIDTH)
     .filter((p) => opts.shouldRead?.(p) ?? true)

@@ -52,6 +52,8 @@ export type CreditData = {
   isAdmin?: boolean;
   // Region-limited free account: the only preset it may run (null = tier presets).
   regionPreset?: string | null;
+  // The preset this account runs on (region or FREE_HAIKU_ALL); picker only.
+  freePreset?: string | null;
   // Region-limited free account: one-time unlocks use the regional price.
   regionPricing?: boolean;
   // Per-run slide ceiling for the user's tier (free = 10; admin = system cap).

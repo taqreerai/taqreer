@@ -13,6 +13,7 @@
 // Server-only.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { tracked } from "@/lib/anthropic/usage-log";
 
 import { DECK_STYLES } from "@/lib/design-styles";
 
@@ -134,7 +135,7 @@ export async function suggestStyles(opts: {
   const one = opts.count <= 1;
 
   try {
-    const client = new Anthropic({ apiKey, timeout: opts.timeoutMs, maxRetries: 0 });
+    const client = tracked(new Anthropic({ apiKey, timeout: opts.timeoutMs, maxRetries: 0 }), "auto-style");
     const message = await client.messages.create({
       model: MODEL,
       max_tokens: one ? 30 : 90,

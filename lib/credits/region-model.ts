@@ -47,7 +47,7 @@ export function isRegionLimitedFree(user: {
  */
 export function regionPresetForCountry(country: string | null): string | null {
   const c = country?.toUpperCase();
-  if (!c || !HAIKU_FREE_COUNTRIES.has(c)) return null;
+  if (!freeHaikuForAll() && (!c || !HAIKU_FREE_COUNTRIES.has(c))) return null;
   return getActivePresetKeys().includes(REGION_FREE_PRESET) ? REGION_FREE_PRESET : null;
 }
 
@@ -56,6 +56,32 @@ export function regionPresetForCountry(country: string | null): string | null {
  * presets apply. Also null when the Haiku preset is missing or inactive, so a
  * deactivated preset falls back to the tier instead of blocking generation.
  */
+/**
+ * Haiku for EVERY free account (owner decision 2026-11-07, tested live):
+ * FREE_HAIKU_ALL=1 in the server env turns it on, removing it (plus a restart)
+ * rolls back. Only the MODEL changes: image limits and the regional unlock
+ * price stay keyed on HAIKU_FREE_COUNTRIES (isRegionLimitedFree).
+ */
+export function freeHaikuForAll(): boolean {
+  return process.env.FREE_HAIKU_ALL === "1";
+}
+
+/**
+ * The single preset this user's generations run on, or null for the tier's
+ * normal presets: the region preset, or (with FREE_HAIKU_ALL) the same preset
+ * for every other free account. Null when the preset is inactive.
+ */
+export function freeModelPreset(user: {
+  plan: string | null;
+  role: string | null;
+  signupCountry: string | null;
+}): string | null {
+  const region = regionFreePreset(user);
+  if (region) return region;
+  if (!freeHaikuForAll() || user.role === "admin" || normalizePlan(user.plan) !== "free") return null;
+  return getActivePresetKeys().includes(REGION_FREE_PRESET) ? REGION_FREE_PRESET : null;
+}
+
 export function regionFreePreset(user: {
   plan: string | null;
   role: string | null;

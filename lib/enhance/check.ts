@@ -14,6 +14,7 @@
 // failed call returns null and no note is posted.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { tracked } from "@/lib/anthropic/usage-log";
 import type { RedesignPlan } from "@/lib/enhance/plan";
 
 const MODEL = "claude-haiku-5-5";
@@ -143,7 +144,7 @@ export async function checkRedesign(input: {
     .filter((f) => f.slide >= 1 && f.slide <= count && (f.numbers.length > 0 || f.pictures > 0))
     .map((f) => ({ slide: f.slide, note: measuredNote({ ...f, numbers: f.numbers.slice(0, 6) }, lang) }));
   try {
-    const client = new Anthropic({ apiKey });
+    const client = tracked(new Anthropic({ apiKey }), "enhance-check");
     const msg = await client.messages.create({
       model: MODEL,
       max_tokens: 900,

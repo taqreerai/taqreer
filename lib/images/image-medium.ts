@@ -101,6 +101,8 @@ export function applyImageMedium(html: string, medium: ImageMedium): string {
     const next = `${cleaned.replace(/[.,;:\s]+$/, "")}. ${SUFFIX[medium]}`;
     return tag
       .replace(/\s+data-gensource="stock"/i, "")
+      // An illustrated deck takes no real photo of a named person either.
+      .replace(/\s+data-genname="[^"]*"/i, "")
       .replace(/\bdata-genimage="[^"]*"/i, `data-genimage="${encode(next)}"`);
   });
 }

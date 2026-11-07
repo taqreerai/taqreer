@@ -19,6 +19,7 @@
 // The original stays stored: the studio offers "Restore original".
 
 import Anthropic from "@anthropic-ai/sdk";
+import { tracked } from "@/lib/anthropic/usage-log";
 import sharp from "sharp";
 import { aspectForRatio, generateImage, restylePhoto } from "@/lib/images/gpt-image";
 import { uploadSourceAsset } from "@/lib/storage/source-assets";
@@ -116,7 +117,7 @@ export async function tagPhotos(
         `Also describe what it shows in at most 20 English words.\n` +
         `Reply with one line per image, exactly: <number>|<tag>|<description>`,
     });
-    const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
+    const client = tracked(new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 }), "extract-photo-refresh");
     const msg = await client.messages.create({ model: TAG_MODEL, max_tokens: 60 * list.length, thinking: { type: "disabled" }, messages: [{ role: "user", content }] });
     const reply = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("");
     for (const line of reply.split("\n")) {

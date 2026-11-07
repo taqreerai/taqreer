@@ -23,6 +23,7 @@
 
 import { NO_MATCH_SIZE } from "@/lib/images/slide-images";
 import Anthropic from "@anthropic-ai/sdk";
+import { tracked } from "@/lib/anthropic/usage-log";
 import sharp from "sharp";
 import { prisma } from "@/lib/prisma";
 import { isPaidPlan } from "@/lib/plan";
@@ -30,6 +31,7 @@ import { isRegionLimitedFree } from "@/lib/credits/region-model";
 import { generateImageWithRetry, type GeneratedImageResult } from "@/lib/images/gpt-image";
 import { findBroaderStockPhoto, findStockPhoto, stockPhotosEnabled } from "@/lib/images/pexels";
 import { mustNotGenerate } from "@/lib/images/never-generate";
+import { findCommonsPhoto } from "@/lib/images/commons";
 import { promptMedium } from "@/lib/images/image-medium";
 import type { GenImageAspect } from "@/lib/images/slide-images";
 
@@ -158,7 +160,7 @@ async function choose(
       `none|<a 2 to 4 word English stock-photo search query for the description's main subject>`,
   });
   try {
-    const client = new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 });
+    const client = tracked(new Anthropic({ apiKey, timeout: 30_000, maxRetries: 1 }), "image-check");
     const msg = await client.messages.create({ model: MODEL, max_tokens: 150, thinking: { type: "disabled" }, messages: [{ role: "user", content }] });
     const reply = msg.content.map((b) => (b.type === "text" ? b.text : "")).join("").trim();
     // The answer line may follow a sentence of reasoning: read it from any line.
@@ -231,10 +233,31 @@ export async function fillImage(opts: {
   rank?: number;
   // The brief's imageRegion: stock photos of people must fit it.
   audience?: string | null;
+  // data-genname: the ONE real person / landmark the box shows. A licensed
+  // Wikimedia Commons photo of them comes first on every plan (free, no image
+  // cost); without one, `prompt` is a people-free fallback (lib/images/commons).
+  name?: string | null;
+  // Internal: an extra line the stock checks read with the prompt.
+  checkNote?: string;
 }): Promise<GeneratedImageResult> {
   const tier = await projectImageTier(opts.projectId);
   const stock = opts.stock === true;
   const ref = opts.referenceUrl ?? null;
+
+  // An illustrated box keeps its look: no real photo among drawings.
+  if (opts.name && !ref && promptMedium(opts.prompt, stock) !== "illustration") {
+    const real = await findCommonsPhoto(opts.name, opts.aspect);
+    if (real) return real;
+    // No real photo: a stranger must never stand in for them (owner,
+    // 2026-11-07: a random young player on "What distinguishes Ronaldo?").
+    // The stock check reads this as the box's description.
+    opts = {
+      ...opts,
+      name: null,
+      checkNote: `No person may be visible: the slide is about ${opts.name}, and nobody else may stand in for them.`,
+    };
+  }
+  const check = opts.checkNote ? `${opts.prompt}. ${opts.checkNote}` : opts.prompt;
 
   if (tier === "paid") {
     if (!ref && !stock) {
@@ -257,10 +280,10 @@ export async function fillImage(opts: {
     const q = stock ? opts.prompt : regionQuery || fallbackQuery(opts.prompt);
     for (const attempt of [q, q.split(" ").slice(0, 2).join(" ")]) {
       if (!attempt || !stockPhotosEnabled()) continue;
-      const photo = await findStockPhoto(attempt, opts.aspect, opts.prompt, false, opts.audience);
+      const photo = await findStockPhoto(attempt, opts.aspect, check, false, opts.audience);
       if (photo) return { b64: photo.b64, size: photo.size };
     }
-    const broader = await lastTry(opts.projectId, opts.prompt, opts.aspect, opts.audience);
+    const broader = await lastTry(opts.projectId, check, opts.aspect, opts.audience);
     if (broader) return broader;
     throw new NoImageMatchError("region free plan: no fitting stock photo for this box");
   }
@@ -275,7 +298,7 @@ export async function fillImage(opts: {
       for (const attempt of [q, q.split(" ").slice(0, 2).join(" ")]) {
         if (!attempt) continue;
         // Checked against the box's own description (lib/images/pexels.ts).
-        const photo = await findStockPhoto(attempt, opts.aspect, opts.prompt, false, opts.audience);
+        const photo = await findStockPhoto(attempt, opts.aspect, check, false, opts.audience);
         if (photo) return { b64: photo.b64, size: photo.size };
       }
     }
@@ -285,7 +308,7 @@ export async function fillImage(opts: {
     return generateImageWithRetry({ prompt: opts.prompt, aspect: opts.aspect, referenceUrl: ref, quality: "low" });
   }
   if (!ref && promptMedium(opts.prompt, stock) !== "illustration") {
-    const broader = await lastTry(opts.projectId, opts.prompt, opts.aspect, opts.audience);
+    const broader = await lastTry(opts.projectId, check, opts.aspect, opts.audience);
     if (broader) return broader;
   }
   throw new NoImageMatchError(
