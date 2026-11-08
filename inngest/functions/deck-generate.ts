@@ -1,5 +1,5 @@
 import { enhanceAnswerLines, readBriefAnswers } from "@/lib/enhance/answers";
-import { projectOf, tracked, withUsageContext } from "@/lib/anthropic/usage-log";
+import { logUsage, projectOf, tracked, withUsageContext } from "@/lib/anthropic/usage-log";
 import { checkRedesign, slideCheckMessage, type MeasuredFinding } from "@/lib/enhance/check";
 import { readRedesignPlan, redesignPlanLines, writeRedesignPlan, type RedesignPlan } from "@/lib/enhance/plan";
 import { mustNotGenerate, stripNeverGenerated } from "@/lib/images/never-generate";
@@ -3359,6 +3359,18 @@ export const deckGenerate = inngest.createFunction(
           usage.cacheReadTokens += startUsage?.cache_read_input_tokens ?? 0;
           usage.cacheCreationTokens += startUsage?.cache_creation_input_tokens ?? 0;
           usage.outputTokens += outputTokens;
+          // An aborted stream never emits finalMessage, so tracked() records
+          // nothing for it; every free teaser deck ends here (capped at its
+          // free slides). Record the same counted usage as one per-call row.
+          logUsage("deck-generate", {
+            model: callParams.model,
+            usage: {
+              input_tokens: startUsage?.input_tokens ?? 0,
+              output_tokens: outputTokens,
+              cache_read_input_tokens: startUsage?.cache_read_input_tokens ?? 0,
+              cache_creation_input_tokens: startUsage?.cache_creation_input_tokens ?? 0,
+            },
+          });
           logger.info("claude_usage", {
             label: "create-html",
             reason,

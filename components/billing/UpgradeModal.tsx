@@ -136,7 +136,13 @@ export function UpgradeModal({
               // (max-w-md, same as the other confirm modals); the
               // plans/checkout steps need the wide panel.
               className={`surface-modal pointer-events-auto flex max-h-[90vh] w-full flex-col rounded-2xl ${
-                done ? "max-w-md" : "max-w-6xl"
+                done
+                  ? "max-w-md"
+                  : deckUnlock && !allPlans && !lookupKey
+                    ? // The deck-unlock sheet with the plan grid folded: one
+                      // focused offer, not a wide empty panel.
+                      "max-w-2xl"
+                    : "max-w-6xl"
               }`}
             >
               {/* Header row: title + contextual hint + close. */}
@@ -310,10 +316,12 @@ function PlusFirstOffer({
   const sonnet = credits?.presets?.find((p) => p.key === "sonnet-fast");
   const deckCredits = sonnet ? sonnet.baseCredits + TYPICAL_DECK_SLIDES * sonnet.perSlideCredits : 0;
   const decks = deckCredits > 0 ? Math.floor(plusCredits / deckCredits) : 0;
-  const perDeck = decks > 0 && plusPrice > 0 ? `${(plusPrice / decks).toFixed(2)}` : null;
+  const perDeck = decks > 0 && plusPrice > 0 ? formatUsd(Math.round((plusPrice / decks) * 100)) : null;
   return (
-    <div className="mb-6 flex flex-col gap-3">
-      <div className="surface-card flex flex-col gap-4 rounded-2xl border-2 border-[var(--tq-brand-blue)] p-5 md:flex-row md:items-center md:justify-between md:p-6">
+    <div className="mb-2 flex flex-col gap-4">
+      {/* One column: the offer, then its button, then the two other paths
+          right beneath it (the wide row pushed the button to the far edge). */}
+      <div className="surface-card flex flex-col gap-4 rounded-2xl border-2 border-[var(--tq-brand-blue)] p-5 md:p-6">
         <div className="flex min-w-0 flex-col gap-2">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <h4 className="text-lg font-bold text-foreground">{planLabel(dict.components.planUsage, "plus")}</h4>
@@ -344,18 +352,30 @@ function PlusFirstOffer({
           ) : null}
           {(credits?.deckPurchases ?? 0) > 0 ? <p className="text-xs text-muted">{t.repeatBuyer}</p> : null}
         </div>
-        <button type="button" onClick={onSubscribe} className="btn-gradient shrink-0 px-6 py-3 text-sm">
+        <button type="button" onClick={onSubscribe} className="btn-gradient w-full px-6 py-3 text-sm">
           {t.plusOfferCta}
         </button>
       </div>
-      <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-sm">
-        <button type="button" onClick={onOneTime} className="text-muted underline-offset-4 hover:text-foreground hover:underline">
+      {/* Secondary paths: plainly links (always underlined), quieter than Plus. */}
+      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm">
+        <button
+          type="button"
+          onClick={onOneTime}
+          className="text-foreground/75 underline decoration-foreground/30 underline-offset-4 hover:text-foreground hover:decoration-foreground"
+        >
           {t.oneTimeLink.replace("{price}", oneTime)}
         </button>
         {!allPlans ? (
-          <button type="button" onClick={onAllPlans} className="text-muted underline-offset-4 hover:text-foreground hover:underline">
-            {t.seeAllPlans}
-          </button>
+          <>
+            <span className="text-muted" aria-hidden>·</span>
+            <button
+              type="button"
+              onClick={onAllPlans}
+              className="text-foreground/75 underline decoration-foreground/30 underline-offset-4 hover:text-foreground hover:decoration-foreground"
+            >
+              {t.seeAllPlans}
+            </button>
+          </>
         ) : null}
       </div>
     </div>
