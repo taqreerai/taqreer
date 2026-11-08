@@ -1,4 +1,5 @@
 import { LANGUAGE_CODES } from "@/lib/language/detect";
+import { resolveTranslateTarget } from "@/lib/enhance/translate";
 import { NextResponse } from "next/server";
 import { freeModelPreset, regionFreePreset } from "@/lib/credits/region-model";
 import { cookies } from "next/headers";
@@ -287,6 +288,8 @@ type CreateProjectPayload = {
   // The language the deck is written in, for any language (Create). `language`
   // stays the layout family: Arabic for right-to-left, English for the rest.
   writingLanguage?: string;
+  // Enhance: "keep" | "ar" | "en"; absent = follow the user's note.
+  translateTo?: unknown;
   // Phase 17.A — SourceMeta blob from the upload-driven create flows
   // (Enhance / Mimic / Data). Validated against SourceMetaSchema
   // below; missing or invalid → treated as scratch flow (the
@@ -779,9 +782,22 @@ export async function POST(request: Request) {
       ? Math.max(SOCIAL_MIN_POSTS, payload.slideCount)
       : payload.slideCount ?? null;
 
-  const contentLanguage = resolveLanguage(payload.language);
-  const contentDirection = directionForLanguage(contentLanguage);
   let validatedSource = resolveSource(payload.source);
+  // Enhance translation (lib/enhance/translate.ts): the card's "Translate to"
+  // choice, else what the user's own note asks for. A translated deck takes
+  // the target's language and direction from the start.
+  const enhanceTranslateTo =
+    validatedSource?.kind === "enhance"
+      ? resolveTranslateTarget(
+          payload.translateTo,
+          payload.enhance?.instructions,
+          (validatedSource as { contentLang?: string }).contentLang ?? null,
+        )
+      : null;
+  const contentLanguage = enhanceTranslateTo
+    ? resolveLanguage(enhanceTranslateTo)
+    : resolveLanguage(payload.language);
+  const contentDirection = directionForLanguage(contentLanguage);
   // AUTHORIZE the enhance source path — same threat as the logo path
   // above. `source.sourcePath` round-trips through the client, and at
   // generation time deck-generate downloads it with SERVICE-ROLE creds
@@ -1143,8 +1159,13 @@ export async function POST(request: Request) {
     if (autoStyle) briefRules = { ...briefRules, designStyle: autoStyle, designStyleSource: "auto" };
   }
 
-  const writingLanguage =
-    typeof payload.writingLanguage === "string" && LANGUAGE_CODES.includes(payload.writingLanguage)
+  // Enhance carries its translation target here (deck-generate reads it as
+  // "translate the file into this language").
+  const writingLanguage = enhanceTranslateTo
+    ? enhanceTranslateTo
+    : validatedSource?.kind !== "enhance" &&
+        typeof payload.writingLanguage === "string" &&
+        LANGUAGE_CODES.includes(payload.writingLanguage)
       ? payload.writingLanguage
       : null;
   const brief = {

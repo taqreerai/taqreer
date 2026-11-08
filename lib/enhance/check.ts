@@ -16,6 +16,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { tracked } from "@/lib/anthropic/usage-log";
 import type { RedesignPlan } from "@/lib/enhance/plan";
+import { languageName } from "@/lib/language/detect";
 
 const MODEL = "claude-haiku-5-5";
 const MAX_SLIDE_CHARS = 1200;
@@ -126,13 +127,21 @@ export async function checkRedesign(input: {
   // Numbers and pictures code found missing, reported as measured.
   findings: readonly MeasuredFinding[];
   exactWording: boolean;
+  // The deck was translated into this language (lib/enhance/translate.ts):
+  // the check judges meaning, and the note speaks the deck's new language.
+  translatedTo?: string | null;
 }): Promise<SlideCheckResult | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return null;
   input = { ...input, sourceTexts: input.sourceTexts.map(withoutPictureCredits) };
   const count = Math.min(input.sourceTexts.length, input.slideHtml.length);
   if (count === 0 || input.plan.success.length === 0) return null;
-  const lang = deckLang(input.sourceTexts);
+  const target = languageName(input.translatedTo);
+  const lang: "ar" | "en" =
+    input.translatedTo === "ar" ? "ar" : input.translatedTo === "en" ? "en" : deckLang(input.sourceTexts);
+  const translationRule = target
+    ? `The user asked for the deck TRANSLATED into ${target}: each REDESIGN slide must carry the full meaning of its SOURCE slide in ${target}. A source sentence, fact, term or item whose meaning is nowhere in the REDESIGN is a failure, and so is a REDESIGN slide still written in the source language. Different words are expected: judge meaning, never wording; "missing" still quotes the SOURCE words whose meaning was lost.\n`
+    : null;
   const pairs: string[] = [];
   for (let i = 0; i < count; i++) {
     pairs.push(
@@ -162,7 +171,7 @@ What stays: ${input.plan.stays}
 
 The plan's signs of success:
 ${input.plan.success.map((s) => `- ${s}`).join("\n")}
-${input.exactWording ? "The user asked to keep every word exactly as written: a missing, changed or added word on a slide is a failure.\n" : "The user asked for tidied wording: rephrasing is fine, a lost fact, term, number or exercise item is a failure. A lesson-info strip repeated on several source slides may be shown once, on the opening slide: a strip value that appears anywhere in the deck's REDESIGN text is not missing. A strip value that is nowhere in the REDESIGN (often a page, stage, skill or strategy that differs per slide) IS missing.\n"}
+${translationRule ? translationRule : input.exactWording ? "The user asked to keep every word exactly as written: a missing, changed or added word on a slide is a failure.\n" : "The user asked for tidied wording: rephrasing is fine, a lost fact, term, number or exercise item is a failure. A lesson-info strip repeated on several source slides may be shown once, on the opening slide: a strip value that appears anywhere in the deck's REDESIGN text is not missing. A strip value that is nowhere in the REDESIGN (often a page, stage, skill or strategy that differs per slide) IS missing.\n"}
 List the source words the redesign LOST, at most ${MAX_ISSUES}, the most important first. Judge only words: never comment on layout, spacing, looks, pictures or numbers (those are measured separately). Every issue quotes, in "missing", the exact words copied from that slide's SOURCE (2 to 10 words) that are not in the REDESIGN. Before listing one, search the REDESIGN text for those words: if they are there, even with different diacritics or spacing, it is not an issue. A slide that passes is not listed; an empty list is a good answer.
 
 Reply with ONLY a JSON object: {"issues":[{"slide":<number>,"missing":"<exact words from that slide's SOURCE>","note":"<ONE plain sentence of at most 18 words naming what is missing, in ${lang === "ar" ? "Arabic" : "English"}, Latin digits, no dashes>"}]}.`,

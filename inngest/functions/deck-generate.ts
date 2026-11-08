@@ -1,4 +1,5 @@
 import { enhanceAnswerLines, readBriefAnswers } from "@/lib/enhance/answers";
+import { translationLines } from "@/lib/enhance/translate";
 import { logUsage, projectOf, tracked, withUsageContext } from "@/lib/anthropic/usage-log";
 import { checkRedesign, slideCheckMessage, type MeasuredFinding } from "@/lib/enhance/check";
 import { readRedesignPlan, redesignPlanLines, writeRedesignPlan, type RedesignPlan } from "@/lib/enhance/plan";
@@ -269,6 +270,17 @@ function dropNeverGeneratedBg(decl: FrameSlideDecl): FrameSlideDecl {
 function writingLanguageName(brief: unknown): string | null {
   return languageName((brief as { writingLanguage?: string } | null)?.writingLanguage);
 }
+
+// Enhance translation (lib/enhance/translate.ts): /api/projects stores the
+// target as brief.writingLanguage on an enhance brief. Null = keep the file's
+// language (the default).
+function enhanceTranslateTarget(brief: unknown): { code: string; name: string } | null {
+  const b = brief as { writingLanguage?: string; source?: { kind?: string } } | null;
+  if (b?.source?.kind !== "enhance" || !b.writingLanguage) return null;
+  const name = languageName(b.writingLanguage);
+  return name ? { code: b.writingLanguage, name } : null;
+}
+
 
 type PrepView = {
   pages: number;
@@ -1249,7 +1261,11 @@ function buildUserMessage(event: DeckGenerateEvent) {
       "enhance" ||
     (event.brief as { source?: { kind?: string } } | null)?.source?.kind ===
       "mimic"
-      ? [
+      ? enhanceTranslateTarget(event.brief)
+        ? [
+            `LANGUAGE: ${enhanceTranslateTarget(event.brief)!.name}. The user asked for the attached source deck TRANSLATED into ${enhanceTranslateTarget(event.brief)!.name}: every visible slide string is ${enhanceTranslateTarget(event.brief)!.name} (see TRANSLATION below). Latin digits only.`,
+          ]
+        : [
           `LANGUAGE: Match the attached source's LANGUAGE. Detect the language of each slide from the attached source (Arabic, English, mixed — whatever you see) and produce visible slide strings in that language. Do NOT translate, transliterate, or change script.`,
         ]
       : writingLanguageName(event.brief)
@@ -1741,7 +1757,10 @@ function buildSourceTextDirective(
     // The source text's real language (lib/language/detect.ts), so a French or
     // Turkish deck stays that language and is not read as "not Arabic = English".
     const srcLangName = languageName((source as { contentLang?: string }).contentLang);
-    const srcLangLine = srcLangName
+    const translateTo = enhanceTranslateTarget(event.brief);
+    const srcLangLine = translateTo
+      ? translationLines(translateTo, srcLangName).join("\n")
+      : srcLangName
       ? `SOURCE LANGUAGE: the deck is written in ${srcLangName}. Keep every word in ${srcLangName}: do not translate it, and do not switch any heading or label to English. Set lang="${(source as { contentLang?: string }).contentLang}" on the slides' text and follow ${srcLangName} typography (its quotation marks, number and punctuation spacing).`
       : null;
     lines.push(
@@ -1767,7 +1786,9 @@ function buildSourceTextDirective(
       // so the redesign rule has to say where their words come from.
       `  • No added labels: never add an eyebrow, kicker, tag, chip, category word or section label (e.g. "Overview", "Budget", "Annual report", "Key results") whose words are not on that source slide. A small label is allowed only when it repeats text the source slide already has (its own heading, a heading of the same deck, the deck title as running chrome) or is a plain number (step, page). When a slide needs a label and the source has none, design without one.`,
       `  • A colon that ends a heading ("About the Firm:") is punctuation of the old layout: drop it, keep the words.`,
-      `  • Keep each slide's own language and script (Arabic stays Arabic, English stays English, mixed stays mixed) — do NOT translate or transliterate.`,
+      translateTo
+        ? `  • Translated deck: every slide is in ${translateTo.name} (TRANSLATION above); "exact words" means their faithful translation.`
+        : `  • Keep each slide's own language and script (Arabic stays Arabic, English stays English, mixed stays mixed) — do NOT translate or transliterate.`,
       ...(answers ? enhanceAnswerLines(answers) : []),
       ...(enhanceImages?.plan ? redesignPlanLines(enhanceImages.plan) : []),
       ``,
@@ -2649,6 +2670,7 @@ export const deckGenerate = inngest.createFunction(
           imagesOn: isImagesMode(data),
           addPhotos: isImagesMode(data) && enhanceAddsPhotos(data.brief, prepared),
           language: (data.brief as { language?: string } | null)?.language ?? null,
+          translateTo: enhanceTranslateTarget(data.brief)?.code ?? null,
           instructions: (data.enhance as { instructions?: unknown } | null | undefined)?.instructions as string | undefined,
         });
         if (plan && jobId) {
@@ -4227,6 +4249,7 @@ export const deckGenerate = inngest.createFunction(
             slideHtml: htmls,
             findings,
             exactWording: !enhanceFlags(data.brief).textRework,
+            translatedTo: enhanceTranslateTarget(data.brief)?.code ?? null,
           });
           if (!result) return;
           const project = await prisma.project.findUnique({ where: { id: projectId }, select: { userId: true } });

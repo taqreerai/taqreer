@@ -42,6 +42,7 @@ import { scopeDeckCss, unscopeDeckCss } from "@/lib/deck/scope-css";
 import { cutPagePictures } from "@/lib/extract/page-regions";
 import { sortTextPictures } from "@/lib/extract/text-pictures";
 import { languageName } from "@/lib/language/detect";
+import { isTranslateTarget, translationLines } from "@/lib/enhance/translate";
 import { buildSlideHtml, canvasFrameCss } from "@/lib/deck/scaffold";
 import {
   assembleFramedSlide,
@@ -284,6 +285,18 @@ export const deckUnlock = inngest.createFunction(
         replaceAll = brief?.refreshAll === true;
         const answers = readBriefAnswers(brief);
         answerLines = answers ? enhanceAnswerLines(answers) : [];
+        // A translated deck (lib/enhance/translate.ts): the tail is translated too.
+        const translateTo = (brief as { writingLanguage?: unknown } | undefined)?.writingLanguage;
+        const translateName = isTranslateTarget(translateTo) ? languageName(translateTo) : null;
+        if (isTranslateTarget(translateTo) && translateName) {
+          answerLines = [
+            ...translationLines(
+              { code: translateTo, name: translateName },
+              languageName((src as { contentLang?: string }).contentLang),
+            ),
+            ...answerLines,
+          ];
+        }
         // The redesign plan the visible slides followed (lib/enhance/plan.ts).
         const plan = readRedesignPlan((j.inputJson as { enhancePlan?: unknown } | null)?.enhancePlan);
         if (plan) answerLines = [...answerLines, ...redesignPlanLines(plan)];

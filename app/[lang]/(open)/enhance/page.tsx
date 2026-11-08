@@ -100,6 +100,7 @@ import { ApiError, apiError, useErrorText } from "@/lib/api/error-message";
 import { readSource, clearSource } from "@/lib/types/source";
 import { ContentLanguageDropdown } from "@/components/create/ContentLanguageDropdown";
 import { isRtlLanguage } from "@/lib/language/detect";
+import { resolveTranslateTarget, translateTargetFromNote, type TranslatePick } from "@/lib/enhance/translate";
 import { MAX_ENHANCE_INSTRUCTIONS_CHARS } from "@/lib/types/brief-limits";
 import { useDefaultQuality } from "@/lib/credits/use-default-quality";
 import { LockedFlowBanner } from "@/components/billing/LockedFlowBanner";
@@ -309,6 +310,8 @@ export default function EnhanceContentPage() {
   const [step, setStep] = useState(0);
   // The language picker: null = Auto (what extraction detected), else the user's pick.
   const [langOverride, setLangOverride] = useState<string | null>(null);
+  // Translate to (lib/enhance/translate.ts): undefined = Auto (the user's note decides).
+  const [translatePick, setTranslatePick] = useState<TranslatePick>(undefined);
   const [stage, setStage] = useState<Stage>("idle");
   const [extracted, setExtracted] = useState<
     ExtractCompletedResponse["result"] | null
@@ -1103,6 +1106,8 @@ export default function EnhanceContentPage() {
       };
 
       const designInstructions = [instructions.trim(), start.notes].filter(Boolean).join("\n\n");
+      // The translation that will run (the server resolves the same answer).
+      const translateTo = resolveTranslateTarget(translatePick, designInstructions, langOverride ?? extracted.contentLang ?? null);
 
       // Content stub — enhance flow has no text content; the source
       // file IS the content.
@@ -1127,7 +1132,9 @@ export default function EnhanceContentPage() {
           // streaming preview's `streamingLanguage`, so the
           // SlideNavSidebar renders in the right direction from
           // first paint instead of flipping mid-stream.
-          language: langOverride ? (isRtlLanguage(langOverride) ? "ar" : "en") : (extracted.language ?? "ar"),
+          language: translateTo ?? (langOverride ? (isRtlLanguage(langOverride) ? "ar" : "en") : (extracted.language ?? "ar")),
+          // The picked translation ("keep" or a target); absent = the server reads the note.
+          ...(translatePick ? { translateTo: translatePick } : {}),
           saveBrandKit,
           imagesMode: imagesOn,
           enhanceAnswers: start.answers,
@@ -1283,6 +1290,9 @@ export default function EnhanceContentPage() {
                   value={langOverride}
                   detected={extracted.contentLang ?? null}
                   onChange={setLangOverride}
+                  translatePick={translatePick}
+                  noteTarget={translateTargetFromNote(instructions, langOverride ?? extracted.contentLang ?? null)}
+                  onTranslateChange={setTranslatePick}
                 />
               ) : undefined
             }

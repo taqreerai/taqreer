@@ -10,11 +10,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { LANGUAGE_CODES } from "@/lib/language/detect";
+import { TRANSLATE_TARGETS, type TranslatePick, type TranslateTarget } from "@/lib/enhance/translate";
 
 export function ContentLanguageDropdown({
   value,
   detected,
   onChange,
+  translatePick,
+  noteTarget = null,
+  onTranslateChange,
   disabled = false,
 }: {
   // The user's pick, or null for Auto.
@@ -22,6 +26,12 @@ export function ContentLanguageDropdown({
   // What extraction found (null = nothing to go on).
   detected: string | null;
   onChange: (code: string | null) => void;
+  // Translate to (lib/enhance/translate.ts): undefined = Auto (follow the
+  // user's note, whose target is noteTarget), "keep", or a target. Without
+  // onTranslateChange the menu has no translate section.
+  translatePick?: TranslatePick;
+  noteTarget?: TranslateTarget | null;
+  onTranslateChange?: (pick: TranslatePick) => void;
   disabled?: boolean;
 }) {
   const dict = useDict();
@@ -56,11 +66,30 @@ export function ContentLanguageDropdown({
   }, [open]);
 
   const auto = dict.flows.enhance.langAuto;
-  const current = value
-    ? nameOf(value)
-    : detected
-      ? `${auto} · ${nameOf(detected)}`
-      : auto;
+  const fileLang = value ?? detected;
+  // The translation that will run: the pick, else what the note asks for.
+  const translateTo: TranslateTarget | null =
+    translatePick === "keep" ? null : (translatePick ?? noteTarget ?? null);
+  const translating = !!onTranslateChange && !!translateTo && translateTo !== fileLang;
+  const current = translating
+    ? dict.flows.enhance.langTranslateChip.replace("{lang}", nameOf(translateTo))
+    : value
+      ? nameOf(value)
+      : detected
+        ? `${auto} · ${nameOf(detected)}`
+        : auto;
+  const heading = (text: string) => (
+    <div className="px-3 pb-1 pt-2 text-[11px] font-semibold text-foreground/50">{text}</div>
+  );
+  const optionClass = (selected: boolean) =>
+    `flex w-full items-center gap-2 rounded-lg border border-transparent px-3 py-2 text-start text-sm transition-colors hover:bg-foreground/5 hover:text-foreground ${
+      selected ? "text-foreground" : "text-foreground/80"
+    }`;
+  const check = (
+    <span className="material-symbols-outlined ms-auto text-foreground/60" style={{ fontSize: 15 }}>
+      check
+    </span>
+  );
 
   return (
     <div ref={wrapperRef} className="relative">
@@ -72,7 +101,11 @@ export function ContentLanguageDropdown({
         aria-expanded={open}
         aria-label={dict.flows.enhance.langAria}
         className={`flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2 text-[11px] font-semibold text-foreground transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-          open ? "border-foreground/40" : "border-foreground/15 hover:border-foreground/30"
+          translating
+            ? "border-[var(--tq-brand-blue)]"
+            : open
+              ? "border-foreground/40"
+              : "border-foreground/15 hover:border-foreground/30"
         }`}
         style={{ background: "var(--tq-surface)" }}
       >
@@ -93,6 +126,37 @@ export function ContentLanguageDropdown({
           role="listbox"
           aria-label={dict.flows.enhance.langAria}
         >
+          {onTranslateChange ? (
+            <>
+              {heading(dict.flows.enhance.langTranslateHeading)}
+              {(["keep", ...TRANSLATE_TARGETS] as const).map((pick) => {
+                if (pick !== "keep" && pick === fileLang) return null;
+                const selected = pick === "keep" ? !translating : translating && translateTo === pick;
+                return (
+                  <button
+                    key={pick}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    onClick={() => {
+                      onTranslateChange(pick);
+                      setOpen(false);
+                    }}
+                    className={optionClass(selected)}
+                  >
+                    <span className="truncate">
+                      {pick === "keep" ? dict.flows.enhance.langKeep : nameOf(pick)}
+                      {pick !== "keep" && translatePick === undefined && noteTarget === pick ? (
+                        <span className="ms-1 text-foreground/50">· {dict.flows.enhance.langFromNote}</span>
+                      ) : null}
+                    </span>
+                    {selected ? check : null}
+                  </button>
+                );
+              })}
+              {heading(dict.flows.enhance.langFileHeading)}
+            </>
+          ) : null}
           {[null, ...LANGUAGE_CODES].map((code) => {
             const selected = code === value;
             return (
