@@ -9,6 +9,7 @@
 import { useMemo } from "react";
 import { useDict, useLocale } from "@/components/i18n/LocaleProvider";
 import { WRITING_LANGUAGES } from "@/lib/language/detect";
+import { SegmentedToggle } from "@/components/create/controls";
 
 const MAIN = ["ar", "en", "fr"];
 
@@ -56,42 +57,56 @@ export function DeckLanguagePicker({
       <p className={`text-sm font-semibold ${missing ? "text-red-400" : "text-foreground"}`}>
         {missing ? t.chooseDeckLanguage : t.deckLanguage}
       </p>
-      <div role="radiogroup" aria-label={t.deckLanguage} className="flex flex-wrap items-center gap-2">
-        {MAIN.map((code) => (
-          <button
-            key={code}
-            type="button"
-            role="radio"
-            aria-checked={value === code}
+      <div className="flex flex-wrap items-stretch gap-2">
+        {/* The main three as the shared segmented track (one look with the
+            other Create choices); nothing is active until the user picks. */}
+        <SegmentedToggle
+          options={MAIN.map((code) => ({
+            value: code,
+            label: (
+              <>
+                {nameOf(code)}
+                {suggested === code ? <span className="ms-1 opacity-80">· {t.suggestedLanguage}</span> : null}
+              </>
+            ),
+          }))}
+          value={value !== null && MAIN.includes(value) ? value : ""}
+          onChange={(code) => !disabled && onChange(code)}
+          ariaLabel={t.deckLanguage}
+          variant="primary"
+          size="comfortable"
+        />
+        {/* Native select for the long list, with its own arrow hidden and a
+            chevron pinned to the inline end so it sits centred in both
+            directions. */}
+        <div className="relative">
+          <select
+            aria-label={t.moreLanguages}
             disabled={disabled}
-            onClick={() => onChange(code)}
-            className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
-              value === code
-                ? "border-[var(--tq-blue)] bg-[var(--tq-blue)] text-white"
-                : "border-[var(--tq-border-hairline)] text-foreground hover:bg-foreground/5"
+            value={pickedOther ? (value as string) : ""}
+            onChange={(event) => event.target.value && onChange(event.target.value)}
+            className={`h-full cursor-pointer appearance-none rounded-full border bg-[var(--tq-card)] pe-8 ps-3 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+              pickedOther
+                ? "border-[var(--tq-blue)] text-foreground"
+                : "border-[var(--tq-border-hairline)] text-foreground/60 hover:text-foreground"
             }`}
           >
-            {nameOf(code)}
-            {suggested === code ? <span className="ms-1 text-xs opacity-80">· {t.suggestedLanguage}</span> : null}
-          </button>
-        ))}
-        <select
-          aria-label={t.moreLanguages}
-          disabled={disabled}
-          value={pickedOther ? (value as string) : ""}
-          onChange={(event) => event.target.value && onChange(event.target.value)}
-          className={`rounded-full border bg-transparent px-3 py-1.5 text-sm text-foreground ${
-            pickedOther ? "border-[var(--tq-blue)]" : "border-[var(--tq-border-hairline)]"
-          }`}
-        >
-          <option value="">{t.moreLanguages}</option>
-          {others.map((code) => (
-            <option key={code} value={code}>
-              {nameOf(code)}
-              {suggested === code ? ` · ${t.suggestedLanguage}` : ""}
-            </option>
-          ))}
-        </select>
+            <option value="">{t.moreLanguages}</option>
+            {others.map((code) => (
+              <option key={code} value={code}>
+                {nameOf(code)}
+                {suggested === code ? ` · ${t.suggestedLanguage}` : ""}
+              </option>
+            ))}
+          </select>
+          {/* The icon font sets direction:ltr, so the wrapper (page direction)
+              carries the inline-end position. */}
+          <span className="pointer-events-none absolute inset-y-0 end-2.5 flex items-center text-foreground/60" aria-hidden>
+            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+              expand_more
+            </span>
+          </span>
+        </div>
       </div>
     </div>
   );

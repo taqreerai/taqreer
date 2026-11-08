@@ -5299,10 +5299,9 @@ export function DeckView({
                     <span className="mx-1.5 h-5 w-px bg-[var(--tq-border-hairline)]" aria-hidden />
                     <button type="button" className="btn-unlock" onClick={handleTeaserUnlock}>
                       <span className="material-symbols-outlined leading-none" style={{ fontSize: 16 }} aria-hidden>
-                        lock_open
+                        auto_awesome
                       </span>
                       {dict.components.creditGate.unlockFullDeck}
-                      <span className="btn-unlock-count tabular-nums">{effectiveTeaserLocked}</span>
                     </button>
                   </>
                 ) : null}

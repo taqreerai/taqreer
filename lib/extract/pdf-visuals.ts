@@ -103,7 +103,7 @@ export type PdfPicture = {
 export type PdfVisuals = {
   pageCount: number;
   scannedPages: number;
-  wordsByPage: number[]; // text layer word count per scanned page
+  wordsByPage: number[]; // visible text layer word count per scanned page (0 when no glyph is drawn)
   pictures: PdfPicture[];
 };
 
@@ -355,6 +355,13 @@ export async function extractPdfPictures(buffer: Buffer): Promise<PdfVisuals> {
         const svg = await readFile(out, "utf8");
         if (svg.length > MAX_SVG_BYTES) throw new Error(`page ${pageIndex + 1} svg too large`);
         await rm(out, { force: true });
+        // Text that is never drawn: an "export as images" PDF puts each slide
+        // in as one picture with an invisible (OCR-like) text layer on top.
+        // pdftotext still reads those words, but cairo draws no glyph, so the
+        // page is a picture of a slide, not artwork with live text over it
+        // (prod cmw7s9h1d003zoy6dtangtd6n carried every whole old slide as a
+        // photo). Its words count as none.
+        if (!/href="#glyph/.test(svg)) wordsByPage[pageIndex] = 0;
         const { width, height, placements, blobs } = parsePageSvg(svg);
         if (!width || !height) return [];
         const area = (p: Placement) => (p.visible[2] - p.visible[0]) * (p.visible[3] - p.visible[1]);
