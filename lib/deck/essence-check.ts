@@ -147,7 +147,13 @@ export function reworkRepairMessage(
   pictureBlocks: ReadonlyMap<number, string>,
 ): string {
   const parts = broken.map((b) => {
-    const text = (sourceTexts[b.slide - 1] ?? "").trim() || "(no text on this source slide)";
+    // A PDF source has no text layer per slide (sourceTexts is empty): the
+    // model read the words off the page image. "No text" here made it rebuild
+    // the slide as its pictures only and drop every word (prod
+    // cmw8focgb00ca6u6dirhjk4u6, slide 9), so it keeps its own words instead.
+    const text =
+      (sourceTexts[b.slide - 1] ?? "").trim() ||
+      "(no text layer for this source slide: keep every word your version of this slide already has, and read anything missing off its source image)";
     const why = [
       b.kept < 1 ? `only ${Math.round(b.kept * 100)}% of its words made it` : "",
       b.missingPictures.length > 0 ? `content pictures left out: ${b.missingPictures.join(", ")}` : "",
