@@ -145,8 +145,19 @@ const NO_REVIEW_FILL_COVER_PCT = 60;
 const HAIKU_FIX_MODEL = "claude-haiku-5-5";
 const TYPE_FLOOR_PX = 20;
 // Output ceiling for the vision call - a ceiling, not a target ("OK" costs
-// ~1 token). Bounds a rogue full-deck re-emission at roughly 10 slides.
+// ~1 token). It grows with the slides sent for review: a flat 32k ran out
+// on 12 flagged slides (prod cmw85af9x00096u6dxflc3f9r: thinking plus
+// rewrites hit max_tokens and 3 asked slides came back unrevised). Per
+// slide ~6k covers the thinking and one full rewrite; the cap stays under
+// each model's output limit.
 const VISION_MAX_TOKENS = 32_000;
+const VISION_TOKENS_PER_SLIDE = 6_000;
+const VISION_MAX_TOKENS_CEILING = { opus: 96_000, haiku: 64_000 } as const;
+const visionMaxTokens = (slides: number, haiku: boolean) =>
+  Math.min(
+    Math.max(VISION_MAX_TOKENS, slides * VISION_TOKENS_PER_SLIDE),
+    haiku ? VISION_MAX_TOKENS_CEILING.haiku : VISION_MAX_TOKENS_CEILING.opus,
+  );
 
 export const deckFreezeBake = inngest.createFunction(
   {
@@ -610,7 +621,7 @@ export const deckFreezeBake = inngest.createFunction(
               // this model (adaptive below) and effort is set explicitly,
               // since Opus 5.5 defaults to medium rather than high.
               model: haikuFix ? HAIKU_FIX_MODEL : "claude-opus-5-5",
-              max_tokens: VISION_MAX_TOKENS,
+              max_tokens: visionMaxTokens(visionInputs.length, haikuFix),
               // summarized: the stream carries a user-readable reasoning
               // summary - relayed live into the GenChat feed below.
               thinking: { type: "adaptive", display: "summarized" },
