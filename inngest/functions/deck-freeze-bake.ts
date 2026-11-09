@@ -159,6 +159,23 @@ const visionMaxTokens = (slides: number, haiku: boolean) =>
     haiku ? VISION_MAX_TOKENS_CEILING.haiku : VISION_MAX_TOKENS_CEILING.opus,
   );
 
+/**
+ * Classes a revision uses that nothing defines: not in the stored slide's
+ * stylesheet and not already used by the stored slide itself (section and
+ * frame classes like "content" or "cover" carry no CSS of their own).
+ */
+function undefinedClasses(revisionHtml: string, storedHtml: string): string[] {
+  const css = /<style>([\s\S]*?)<\/style>/.exec(storedHtml)?.[1] ?? "";
+  const known = new Set([...css.matchAll(/\.(-?[A-Za-z_][\w-]*)/g)].map((m) => m[1]));
+  const classesOf = (html: string) =>
+    html
+      .replace(/<style>[\s\S]*?<\/style>/g, "")
+      .match(/\sclass="[^"]*"/g)
+      ?.flatMap((a) => a.slice(8, -1).split(/\s+/).filter(Boolean)) ?? [];
+  for (const c of classesOf(storedHtml)) known.add(c);
+  return [...new Set(classesOf(revisionHtml))].filter((c) => !known.has(c));
+}
+
 export const deckFreezeBake = inngest.createFunction(
   {
     id: "deck-freeze-bake",
@@ -740,6 +757,23 @@ export const deckFreezeBake = inngest.createFunction(
                     continue;
                   }
                   reviewBody = restored.html;
+                }
+                // A revision may not invent its own classes: it cannot emit
+                // CSS, so a class the deck stylesheet does not define styles
+                // nothing. The Haiku fix pass rewrote 9 of 10 slides on made-up
+                // classes ("s-hd", "s-ttl", "s-row") and they froze as tiny
+                // unstyled text (prod cmw88n3pl009i6u6d9u537pkr); the audit
+                // read them as cleaner (no contrast issue left). A stray class
+                // or two is harmless; 3+ unknown ones mean a design the deck
+                // cannot render, so the slide keeps its current version.
+                const unknownClasses = undefinedClasses(reviewBody, slide.html);
+                if (unknownClasses.length >= 3) {
+                  logger.warn("deck_vision_unknown_classes", {
+                    versionId,
+                    slideId: target.slideId,
+                    classes: unknownClasses.slice(0, 12).join(" "),
+                  });
+                  continue;
                 }
                 const decl = parseFrameSlide(reviewBody);
                 // A page-artwork slide keeps its backdrop through the review.
