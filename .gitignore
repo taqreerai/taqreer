@@ -52,3 +52,6 @@ supa-signin.png
 
 # Saved implementation plan (local note, not source)
 winback-email.md
+
+# Local lab fixtures (real deck HTML, never committed)
+/.lab/

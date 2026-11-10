@@ -1399,6 +1399,114 @@ html.app-shell-scroll body {
 @media (prefers-reduced-motion: reduce) {
   .btn-unlock { animation: none; }
 }
+/* ─── Live slide build (2026-11-10, lib/deck/live-build) ─────────────
+   The pen while a slide types itself in, the light sweep when a slide is
+   done, and the deck setup card (colours, font, title) before slide 1. */
+.live-build-caret {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--lb-accent);
+  box-shadow: 0 0 12px var(--lb-accent);
+  pointer-events: none;
+  transition: transform 70ms linear, height 120ms ease, opacity 200ms ease;
+  z-index: 5;
+}
+.live-build-caret.is-idle {
+  animation: lb-caret-blink 1.05s ease-in-out infinite;
+}
+@keyframes lb-caret-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.15; }
+}
+.live-build-sweep {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 6;
+  background: linear-gradient(100deg, transparent 30%, rgb(255 255 255 / 0.42) 50%, transparent 70%);
+  background-size: 260% 100%;
+  animation: lb-sweep 700ms cubic-bezier(.3,.6,.3,1) forwards;
+}
+@keyframes lb-sweep {
+  from { background-position: 130% 0; }
+  to { background-position: -130% 0; }
+}
+.live-build-setup {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.4rem;
+  animation: lb-fade-in 400ms ease-out;
+}
+.live-build-swatch {
+  width: 44px;
+  height: 44px;
+  border-radius: 9999px;
+  box-shadow: 0 6px 18px -8px rgb(0 0 0 / 0.45);
+  opacity: 0;
+  animation: lb-drop 520ms cubic-bezier(.2,.8,.25,1.15) forwards;
+}
+@keyframes lb-drop {
+  from { opacity: 0; transform: translateY(-18px) scale(0.6); }
+  to { opacity: 1; transform: none; }
+}
+.live-build-specimen {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  font-size: 3.25rem;
+  font-weight: 700;
+  line-height: 1.1;
+  opacity: 0;
+  animation: lb-fade-in 600ms ease-out 900ms forwards;
+}
+.live-build-specimen small {
+  font-size: 0.8rem;
+  font-weight: 500;
+  opacity: 0.55;
+}
+.live-build-title {
+  max-width: 80%;
+  min-height: 1.4em;
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+.live-build-title-caret {
+  display: inline-block;
+  width: 3px;
+  height: 1.1em;
+  margin-inline-start: 3px;
+  vertical-align: -0.15em;
+  border-radius: 2px;
+  animation: lb-caret-blink 1.05s ease-in-out infinite;
+}
+.live-build-thumb-in {
+  animation: lb-fade-in 350ms ease-out 450ms both;
+}
+.live-build-thumb-pending {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, color-mix(in oklab, var(--tq-brand-blue) 18%, transparent) 50%, transparent 70%);
+  background-size: 260% 100%;
+  animation: lb-sweep 1.6s linear infinite;
+}
+@keyframes lb-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-build-caret.is-idle, .live-build-title-caret, .live-build-thumb-pending { animation: none; }
+  .live-build-sweep { display: none; }
+}
+
 /* Nudge under the unlock button (2026-11-10): once a free deck finishes,
    a small card points up at the button and says the deck is the Simple
    design. Arrow sits under the button on the inline end. */
