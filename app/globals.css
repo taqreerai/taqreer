@@ -1399,6 +1399,41 @@ html.app-shell-scroll body {
 @media (prefers-reduced-motion: reduce) {
   .btn-unlock { animation: none; }
 }
+/* Nudge under the unlock button (2026-11-10): once a free deck finishes,
+   a small card points up at the button and says the deck is the Simple
+   design. Arrow sits under the button on the inline end. */
+.unlock-nudge {
+  position: absolute;
+  top: calc(100% + 12px);
+  inset-inline-end: 0;
+  z-index: 50;
+  width: 284px;
+  border-radius: 12px;
+  border: 1px solid var(--tq-border-hairline);
+  background: var(--tq-surface);
+  color: var(--tq-text-primary);
+  box-shadow: 0 10px 30px -12px rgb(0 0 0 / 0.35);
+  padding: 0.75rem 0.875rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  text-align: start;
+}
+.unlock-nudge::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  inset-inline-end: 1.75rem;
+  width: 10px;
+  height: 10px;
+  transform: rotate(45deg);
+  background: var(--tq-surface);
+  border-top: 1px solid var(--tq-border-hairline);
+  border-inline-start: 1px solid var(--tq-border-hairline);
+}
+[dir="rtl"] .unlock-nudge::before {
+  border-inline-start: none;
+  border-inline-end: 1px solid var(--tq-border-hairline);
+}
 
 /* ─── Aura glow — the "Popular" pricing tier ─────────────────────────
    `.tq-aura`: the popular tier's card FACE is a living aura (user

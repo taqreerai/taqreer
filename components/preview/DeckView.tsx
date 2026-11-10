@@ -2837,6 +2837,26 @@ export function DeckView({
     void fireTeaserUnlock();
   }, [brandingWatermark, fireTeaserUnlock]);
 
+  // The nudge under the unlock button (owner, 2026-11-10): shown once the
+  // free deck has finished, until the user closes it or presses unlock.
+  // Remembered per project in this browser only.
+  const nudgeKey = `tq-unlock-nudge:${projectId}`;
+  const [unlockNudgeClosed, setUnlockNudgeClosed] = useState(() => {
+    try {
+      return typeof window !== "undefined" && window.localStorage.getItem(nudgeKey) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const closeUnlockNudge = useCallback(() => {
+    setUnlockNudgeClosed(true);
+    try {
+      window.localStorage.setItem(nudgeKey, "1");
+    } catch {
+      /* storage blocked: closes for this visit only */
+    }
+  }, [nudgeKey]);
+
   // Touch swipe → prev/next slide (phones). Direction-aware via `dir` so the
   // gesture follows the reading flow. Clamped to the slide range; navigateToSlide
   // saves any dirty edit before flipping. The spread is gated in the JSX to the
@@ -5297,12 +5317,37 @@ export function DeckView({
                 {effectiveTeaserLocked > 0 ? (
                   <>
                     <span className="mx-1.5 h-5 w-px bg-[var(--tq-border-hairline)]" aria-hidden />
-                    <button type="button" className="btn-unlock" onClick={handleTeaserUnlock}>
-                      <span className="material-symbols-outlined leading-none" style={{ fontSize: 16 }} aria-hidden>
-                        auto_awesome
-                      </span>
-                      {dict.components.creditGate.unlockFullDeck}
-                    </button>
+                    <span className="relative inline-flex">
+                      <button
+                        type="button"
+                        className="btn-unlock"
+                        onClick={() => {
+                          closeUnlockNudge();
+                          handleTeaserUnlock();
+                        }}
+                      >
+                        <span className="material-symbols-outlined leading-none" style={{ fontSize: 16 }} aria-hidden>
+                          auto_awesome
+                        </span>
+                        {dict.components.creditGate.unlockFullDeck}
+                      </button>
+                      {!unlockNudgeClosed ? (
+                        <div className="unlock-nudge" role="status">
+                          <button
+                            type="button"
+                            onClick={closeUnlockNudge}
+                            aria-label={dict.components.creditGate.notNow}
+                            className="absolute end-2 top-2 flex text-foreground/50 hover:text-foreground"
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: 16 }} aria-hidden>
+                              close
+                            </span>
+                          </button>
+                          <p className="pe-5 font-semibold">{dict.components.creditGate.unlockNudgeTitle}</p>
+                          <p className="mt-1 text-foreground/70">{dict.components.creditGate.unlockNudgeBody}</p>
+                        </div>
+                      ) : null}
+                    </span>
                   </>
                 ) : null}
                 <span className="mx-1.5 h-5 w-px bg-[var(--tq-border-hairline)]" aria-hidden />
