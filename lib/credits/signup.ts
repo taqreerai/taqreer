@@ -39,8 +39,36 @@ import { grantSignupCreditsGuarded } from "@/lib/credits/server";
 import { applyReferralAtSignup } from "@/lib/referral";
 import { isDisposableEmail } from "@/lib/auth/disposable-email";
 
-const IP_VELOCITY_LIMIT = 3;
+// One grant per network per day (2026-11-10, owner): at 3 a person on one
+// connection farmed a second grant 19 minutes after the first.
+const IP_VELOCITY_LIMIT = 1;
 const IP_VELOCITY_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+// After a duplicate-device block, the same network and email domain get no
+// grant for this long: the farmer's next move is a cleared browser (new
+// device id) on the same connection, or a VPN with the same inbox provider.
+const FLAG_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+// Public inbox providers are shared by everyone, so a block never flags them.
+const PUBLIC_EMAIL_DOMAINS = new Set([
+  "gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com", "msn.com",
+  "yahoo.com", "ymail.com", "icloud.com", "me.com", "mac.com", "aol.com",
+  "proton.me", "protonmail.com", "gmx.com", "mail.com", "yandex.com", "zoho.com",
+]);
+
+/**
+ * The network an IP belongs to: an IPv4 address as is, an IPv6 address as
+ * its /64 (one home or phone line; the device rotates the rest freely).
+ */
+export function ipNetOf(ip: string): string {
+  if (!ip.includes(":")) return ip;
+  const lower = ip.toLowerCase().split("%")[0];
+  const [head, tail] = lower.split("::");
+  const a = head ? head.split(":") : [];
+  const b = tail !== undefined && tail ? tail.split(":") : [];
+  const groups = tail !== undefined ? [...a, ...Array(Math.max(0, 8 - a.length - b.length)).fill("0"), ...b] : a;
+  return `${groups.slice(0, 4).map((g) => (g.replace(/^0+/, "") || "0")).join(":")}::/64`;
+}
 
 // 5. COUNTRY BLOCK (2026-08-30, owner direction): signup-grant farming is
 // overwhelmingly concentrated from these countries and they are outside
@@ -185,8 +213,10 @@ export async function maybeGrantSignupCredits(args: {
   // Collision keys: any two concurrent signups that share an inbox, a
   // signup IP, or a device are serialized so each guard below observes the
   // other's committed grant instead of racing past a stale read.
+  const ipNet = args.ip ? ipNetOf(args.ip) : null;
   const lockKeys = [
-    args.ip ? `signup:ip:${args.ip}` : null,
+    ipNet ? `signup:ip:${ipNet}` : null,
+    domain ? `signup:domain:${domain}` : null,
     domain ? `signup:email:${normalized}` : null,
     `signup:device:${deviceId}`,
   ].filter((k): k is string => k !== null);
@@ -197,9 +227,10 @@ export async function maybeGrantSignupCredits(args: {
     metadata: {
       deviceId,
       ...(args.ip ? { ip: args.ip } : {}),
+      ...(ipNet ? { ipNet } : {}),
       ...(args.geo?.country ? { country: args.geo.country } : {}),
     },
-    guard: (tx) => runSignupGuards(tx, args, normalized, domain, selfName, deviceId),
+    guard: (tx) => runSignupGuards(tx, args, ipNet, normalized, domain, selfName, deviceId),
   });
   if (result.granted > 0 && args.referralCode) {
     await applyReferralAtSignup({ userId: args.userId, rawCode: args.referralCode });
@@ -214,7 +245,8 @@ type BlockReason =
   | "device_missing"
   | "same_person"
   | "country_blocked"
-  | "disposable_email";
+  | "disposable_email"
+  | "flagged_after_dup";
 
 /**
  * The cross-account abuse guards, run INSIDE the serialized grant
@@ -226,6 +258,7 @@ type BlockReason =
 async function runSignupGuards(
   tx: Prisma.TransactionClient,
   args: { userId: string; ip?: string | null },
+  ipNet: string | null,
   normalized: string,
   domain: string | null,
   selfName: string | null,
@@ -266,14 +299,18 @@ async function runSignupGuards(
     }
   }
 
-  // 2. IP velocity - cap grants per IP per 24h.
-  if (args.ip) {
+  // 2. IP velocity - cap grants per network (ipNetOf) per 24h. Grants from
+  //    before ipNet was recorded match on the exact address.
+  if (args.ip && ipNet) {
     const since = new Date(Date.now() - IP_VELOCITY_WINDOW_MS);
     const recent = await tx.usageEvent.count({
       where: {
         eventType: "credit.grant.signup",
         createdAt: { gte: since },
-        metadata: { path: ["ip"], equals: args.ip },
+        OR: [
+          { metadata: { path: ["ipNet"], equals: ipNet } },
+          { metadata: { path: ["ip"], equals: args.ip } },
+        ],
       },
     });
     if (recent >= IP_VELOCITY_LIMIT) {
@@ -319,6 +356,45 @@ async function runSignupGuards(
     }
   }
 
+  // 3b. Flagged after a duplicate-device block: for FLAG_WINDOW_MS that
+  //     network and that email domain (unless a public provider) get no
+  //     grant, so a cleared browser or a VPN on the same inbox domain does
+  //     not get one either (prod 2026-11-09, accounts 3 and 4 of 5).
+  const flagDomain = domain && !PUBLIC_EMAIL_DOMAINS.has(domain) ? domain : null;
+  const flagMatch: Prisma.UsageEventWhereInput[] = [
+    ...(ipNet ? [{ metadata: { path: ["ipNet"], equals: ipNet } }] : []),
+    ...(args.ip ? [{ metadata: { path: ["ip"], equals: args.ip } }] : []),
+    ...(flagDomain ? [{ metadata: { path: ["domain"], equals: flagDomain } }] : []),
+  ];
+  if (flagMatch.length > 0) {
+    const flagged = await tx.usageEvent.findFirst({
+      where: {
+        eventType: "credit.signup.blocked",
+        createdAt: { gte: new Date(Date.now() - FLAG_WINDOW_MS) },
+        userId: { not: args.userId },
+        AND: [{ metadata: { path: ["reason"], equals: "device_dup" } }, { OR: flagMatch }],
+      },
+      select: { userId: true },
+    });
+    if (flagged) {
+      await tx.usageEvent.create({
+        data: {
+          userId: args.userId,
+          eventType: "credit.signup.blocked",
+          amount: 0,
+          metadata: {
+            reason: "flagged_after_dup",
+            matchedUserId: flagged.userId,
+            ...(args.ip ? { ip: args.ip } : {}),
+            ...(ipNet ? { ipNet } : {}),
+            ...(domain ? { domain } : {}),
+          },
+        },
+      });
+      return "flagged_after_dup";
+    }
+  }
+
   // 4. Device dedupe - one grant per `tq_did` browser id, ever.
   const priorFromDevice = await tx.usageEvent.count({
     where: {
@@ -336,6 +412,8 @@ async function runSignupGuards(
           reason: "device_dup",
           deviceId,
           ...(args.ip ? { ip: args.ip } : {}),
+          ...(ipNet ? { ipNet } : {}),
+          ...(domain ? { domain } : {}),
         },
       },
     });
