@@ -2262,7 +2262,7 @@
       "cancelFailed": "تعذر إلغاء العملية (HTTP {status})"
     },
     "screen": {
-      "designing": "جار تصميم عرضك…",
+      "designing": "جار تصميم عرضك…", "designerNotes": "ملاحظات المصمم",
       "designingPost": "جار تصميم منشورك…",
       "redesigning": "جار إعادة التصميم…",
       "createFailedTitle": "تعذر إنشاء العرض",

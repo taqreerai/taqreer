@@ -435,6 +435,8 @@ export function SlideNavSidebar({
             <button
               key={item.index}
               type="button"
+              // The live build flies a finished slide into this thumbnail.
+              data-nav-index={item.kind === "slide" || item.kind === "placeholder" ? item.index : undefined}
               onClick={() =>
                 item.kind === "teaser"
                   ? onTeaserSelect?.(item.lockedIndex)

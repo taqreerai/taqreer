@@ -143,6 +143,15 @@ export class StreamingHtmlSplitter {
     return [];
   }
 
+  // The top-level section still being written (from its `<section` on), or
+  // null when none is open. Feeds the live build (lib/deck/live-build): the
+  // studio shows this slide being built before it closes.
+  getOpenSection(): string | null {
+    const { spans, openStart } = scanSections(this.buffer);
+    if (openStart < 0 || spans.length > this.yielded) return null;
+    return this.buffer.slice(openStart);
+  }
+
   // Everything the model streamed BEFORE the first top-level `<section>` — i.e.
   // its design-system `<style>`(s), in the Claude-authored model. Stable once the
   // first section opens (the `<style>` is complete by then). "" before that, or

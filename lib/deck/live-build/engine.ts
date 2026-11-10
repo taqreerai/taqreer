@@ -52,6 +52,11 @@ type Opts = {
   /** Current visual scale of the host (screen px per slide px), for FLIP. */
   scale: () => number;
   reducedMotion?: boolean;
+  /**
+   * Phones and slow devices: no blur and no sliding of pushed neighbours,
+   * only a short fade-up. Also switched on by itself when frames run slow.
+   */
+  lite?: boolean;
   /** Called every frame with the caret's place (host px), or null when hidden. */
   onCaret?: (caret: { x: number; y: number; h: number; idle: boolean } | null) => void;
   /** Called once playback has caught up with a complete slide. */
@@ -70,10 +75,22 @@ export class LiveSlideBuild {
   private last = 0;
   private idleSince = 0;
   private done = false;
+  private lite: boolean;
+  private slowFrames = 0;
+  private aheadCache = 0;
+  private aheadAt = -1;
+  private aheadLen = -1;
+  private caretDir: { node: Text; rtl: boolean } | null = null;
   private readonly dp = getClientDOMPurify();
 
   constructor(private readonly o: Opts) {
+    this.lite = Boolean(o.lite || o.reducedMotion);
     o.host.replaceChildren();
+  }
+
+  /** True once playback has caught up with a complete slide. */
+  get finished(): boolean {
+    return this.done;
   }
 
   /** The slide's text so far (each call passes the whole, growing string). */
@@ -86,6 +103,16 @@ export class LiveSlideBuild {
     }
   }
 
+  /** Has any text arrived for this slide. */
+  get hasContent(): boolean {
+    return this.source.length > 0;
+  }
+
+  /** The slide's end was missed (a gap between updates): play out what we have. */
+  finishNow(): void {
+    this.push(this.source, true);
+  }
+
   stop(): void {
     cancelAnimationFrame(this.raf);
     this.raf = 0;
@@ -96,6 +123,11 @@ export class LiveSlideBuild {
   private frame = (now: number) => {
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
+    // A device that cannot keep up drops to the light effects for good.
+    if (!this.lite) {
+      this.slowFrames = dt > 0.034 ? this.slowFrames + 1 : Math.max(0, this.slowFrames - 1);
+      if (this.slowFrames > 20) this.lite = true;
+    }
 
     const ahead = this.unitsAhead();
     let want = Math.max(MIN_RATE, ahead / TARGET_LAG_S);
@@ -132,6 +164,18 @@ export class LiveSlideBuild {
 
   // Rough count of playback units still buffered (letters + elements).
   private unitsAhead(): number {
+    // Rescanning every frame is wasted work: only when the text grew or
+    // playback moved on by a fair step.
+    if (this.aheadLen === this.source.length && this.pos - this.aheadAt < 200) {
+      return Math.max(0, this.aheadCache - (this.pos - this.aheadAt));
+    }
+    this.aheadLen = this.source.length;
+    this.aheadAt = this.pos;
+    this.aheadCache = this.countAhead();
+    return this.aheadCache;
+  }
+
+  private countAhead(): number {
     const s = this.source;
     let units = 0;
     let inTag = false;
@@ -258,7 +302,7 @@ export class LiveSlideBuild {
     const parent = this.stack[this.stack.length - 1] ?? this.o.host;
     const isRoot = this.stack.length === 0;
     const animate = !isRoot && name !== "style" && !INLINE.has(name);
-    const before = animate && !this.o.reducedMotion ? this.measure(parent) : null;
+    const before = animate && !this.lite ? this.measure() : null;
 
     parent.appendChild(el);
     this.text = null;
@@ -278,11 +322,16 @@ export class LiveSlideBuild {
   private enter(el: Element): void {
     const frames = this.o.reducedMotion
       ? [{ opacity: 0 }, { opacity: 1 }]
-      : [
-          { opacity: 0, translate: "0 14px", filter: "blur(2px)" },
-          { opacity: 1, translate: "0 0", filter: "blur(0)" },
-        ];
-    el.animate(frames, { duration: this.o.reducedMotion ? 200 : ENTER_MS, easing: EASE_OUT });
+      : this.lite
+        ? [
+            { opacity: 0, translate: "0 8px" },
+            { opacity: 1, translate: "0 0" },
+          ]
+        : [
+            { opacity: 0, translate: "0 14px", filter: "blur(2px)" },
+            { opacity: 1, translate: "0 0", filter: "blur(0)" },
+          ];
+    el.animate(frames, { duration: this.o.reducedMotion ? 200 : this.lite ? 300 : ENTER_MS, easing: EASE_OUT });
   }
 
   private fadeOnLoad(img: HTMLImageElement): void {
@@ -297,16 +346,16 @@ export class LiveSlideBuild {
   }
 
   // FLIP: where every element in the slide sits before the insert...
-  private measure(scope: Element): Map<Element, DOMRect> {
+  private measure(): Map<Element, DOMRect> {
     const root = this.stack[0];
     const out = new Map<Element, DOMRect>();
     if (!root) return out;
-    // The new element only moves things in its own branch and later
-    // siblings; measuring the whole slide stays cheap at slide sizes.
-    void scope;
-    root.querySelectorAll("*").forEach((el) => {
-      if (el.localName !== "style" && out.size < 400) out.set(el, el.getBoundingClientRect());
-    });
+    // Boxes only: text-level elements ride along with their block.
+    for (const el of root.querySelectorAll("*")) {
+      if (out.size >= 250) break;
+      if (el.localName === "style" || INLINE.has(el.localName)) continue;
+      out.set(el, el.getBoundingClientRect());
+    }
     return out;
   }
 
@@ -356,7 +405,10 @@ export class LiveSlideBuild {
       return;
     }
     const host = this.o.host.getBoundingClientRect();
-    const rtl = getComputedStyle(t.parentElement ?? this.o.host).direction === "rtl";
+    if (this.caretDir?.node !== t) {
+      this.caretDir = { node: t, rtl: getComputedStyle(t.parentElement ?? this.o.host).direction === "rtl" };
+    }
+    const rtl = this.caretDir.rtl;
     cb({ x: (rtl ? box.left : box.right) - host.left, y: box.top - host.top, h: box.height, idle });
   }
 

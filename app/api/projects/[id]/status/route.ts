@@ -40,6 +40,16 @@ type SlideJson = {
   streamingManifestVersion?: unknown;
 };
 
+const LIVE_MAX_CHARS = 200_000;
+
+function liveSlideOf(value: unknown): { index: number; html: string } | null {
+  const v = value as { index?: unknown; html?: unknown } | null;
+  if (!v || typeof v !== "object") return null;
+  if (typeof v.index !== "number" || !Number.isInteger(v.index) || v.index < 0 || v.index > 200) return null;
+  if (typeof v.html !== "string" || v.html.length > LIVE_MAX_CHARS) return null;
+  return { index: v.index, html: v.html };
+}
+
 function getSlideJson(value: unknown): SlideJson | null {
   if (!value || typeof value !== "object") return null;
   return value as SlideJson;
@@ -360,11 +370,25 @@ export async function GET(
     }
   }
 
+  // Live build (lib/deck/live-build): the slide still being written, the
+  // last closed one in the same form, and their stylesheet. Shape-checked
+  // and size-capped here; the client sanitises every element it draws.
+  const live = slideJson as { liveSlide?: unknown; liveDone?: unknown; liveCss?: unknown } | null;
+  const liveSlide = liveSlideOf(live?.liveSlide);
+  const liveDone = liveSlideOf(live?.liveDone);
+  const liveCss =
+    (liveSlide || liveDone) && typeof live?.liveCss === "string" && live.liveCss.length <= LIVE_MAX_CHARS
+      ? live.liveCss
+      : null;
+
   return NextResponse.json({
     status: inferredStatus,
     slideCount,
     progress,
     streamingPreview,
+    liveSlide,
+    liveDone,
+    liveCss,
     streamingManifestVersion,
     streamingTheme,
     streamingDirection,

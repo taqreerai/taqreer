@@ -1488,6 +1488,98 @@ html.app-shell-scroll body {
   border-radius: 2px;
   animation: lb-caret-blink 1.05s ease-in-out infinite;
 }
+/* Designer's notes: the model's thinking typed on the canvas before slide 1
+   (components/preview/DesignerNotes). Newest lines at the bottom, older ones
+   fading out at the top; sized down on phones. */
+.designer-notes {
+  display: flex;
+  width: min(100%, 560px);
+  flex-direction: column;
+  gap: 0.6rem;
+  text-align: start;
+  animation: lb-fade-in 400ms ease-out;
+}
+.designer-notes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.designer-notes-swatch {
+  width: 22px;
+  height: 22px;
+}
+.designer-notes-font {
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0;
+  animation: lb-fade-in 500ms ease-out 700ms forwards;
+}
+.designer-notes-font small {
+  margin-inline-start: 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+  opacity: 0.55;
+}
+.designer-notes-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--tq-text-secondary, inherit);
+  opacity: 0.7;
+}
+.designer-notes-body {
+  display: flex;
+  height: 9.5em;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--tq-text-primary);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 45%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 45%);
+}
+.designer-notes-body > span:first-child {
+  display: inline;
+}
+.designer-notes-caret {
+  display: inline-block;
+  width: 3px;
+  height: 1.05em;
+  margin-inline-start: 2px;
+  vertical-align: -0.15em;
+  border-radius: 2px;
+  background: var(--lb-accent);
+  box-shadow: 0 0 10px var(--lb-accent);
+}
+.designer-notes-caret.is-idle {
+  animation: lb-caret-blink 1.05s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .designer-notes-caret.is-idle { animation: none; }
+}
+/* The canvas is the container: on a phone a 16:9 canvas is ~220px tall, so
+   the screen tightens by the canvas's own height, not the viewport's. */
+.gen-thinking-screen {
+  container-type: size;
+  container-name: gen-thinking;
+}
+@container (max-height: 420px) {
+  .gen-thinking-screen h1 { font-size: 20px; }
+  .designer-notes { gap: 0.35rem; }
+  .designer-notes-body { height: 5.2em; font-size: 0.82rem; line-height: 1.5; }
+  .designer-notes-swatch { width: 16px; height: 16px; }
+  .designer-notes-font { font-size: 1rem; }
+}
+@container (max-height: 280px) {
+  .gen-thinking-screen h1 { font-size: 16px; }
+  .gen-thinking-status, .designer-notes-label { display: none; }
+  .designer-notes-body { height: 4.6em; font-size: 0.75rem; }
+}
 .live-build-thumb-in {
   animation: lb-fade-in 350ms ease-out 450ms both;
 }

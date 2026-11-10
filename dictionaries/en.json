@@ -2262,7 +2262,7 @@
       "cancelFailed": "Couldn't cancel the operation (HTTP {status})"
     },
     "screen": {
-      "designing": "Designing your presentation…",
+      "designing": "Designing your presentation…", "designerNotes": "Designer notes",
       "designingPost": "Designing your post…",
       "redesigning": "Redesigning…",
       "createFailedTitle": "Couldn't create the presentation",

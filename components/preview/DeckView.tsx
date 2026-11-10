@@ -46,6 +46,8 @@ import { GenImageFailedOverlay } from "@/components/preview/editor/GenImageFaile
 import { LayersPanel } from "@/components/preview/editor/LayersPanel";
 import { GenChatPanel } from "@/components/preview/GenChatPanel";
 import { GenPrepCard, type PrepView } from "@/components/preview/GenPrepCard";
+import { LiveSlideStage, type LiveFeed } from "@/components/preview/LiveSlideStage";
+import { DesignerNotes } from "@/components/preview/DesignerNotes";
 import { SegmentedToggle } from "@/components/create/controls";
 import { serializeSlideSection } from "@/lib/editor/serialize";
 import { fitArtboard } from "@/lib/editor/canvas-fit";
@@ -688,6 +690,15 @@ export function DeckView({
   // first slide closes in the stream — typically 30–60 s into a
   // generation. Reset to [] when status leaves "generating".
   const [streamingPreview, setStreamingPreview] = useState<SlideType[]>([]);
+  // Live build (components/preview/LiveSlideStage): the slide being written,
+  // the last closed one, and their stylesheet, off the progress poll.
+  // `liveShownCount` = slides that have finished PLAYING; the nav holds a
+  // thumbnail back until its slide has been shown being built.
+  const [liveFeed, setLiveFeed] = useState<{ slide: LiveFeed | null; done: LiveFeed | null; css: string | null } | null>(null);
+  const [liveShownCount, setLiveShownCount] = useState(0);
+  const handleLiveShown = useCallback((index: number) => {
+    setLiveShownCount((c) => Math.max(c, index + 1));
+  }, []);
   // GenChat transparency feed accumulated from the generation status poll;
   // after completion the manifest's own genChat (which the bake keeps
   // appending to) takes over - see the genChatFeed derivation.
@@ -3457,10 +3468,15 @@ export function DeckView({
   useEffect(() => {
     if (status !== "generating") return;
     if (previewManualClickRef.current) return;
+    // Live build: focus the slide being built (the slot after the shown ones).
+    if (liveFeed) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setCurrentSlideIndex(Math.min(streamingPreview.length, liveShownCount));
+      return;
+    }
     if (streamingPreview.length === 0) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentSlideIndex(streamingPreview.length - 1);
-  }, [status, streamingPreview.length]);
+  }, [status, streamingPreview.length, liveFeed, liveShownCount]);
 
   // BAKE-PENDING POLLER - the deck.baked broadcast's fallback, mirroring the
   // image-fill poller's rationale: broadcasts have no replay, and a tab whose
@@ -3854,6 +3870,29 @@ export function DeckView({
             if (parsed.success) feed.push(parsed.data);
           }
           setLiveGenChat((prev) => (feed.length >= prev.length ? feed : prev));
+        }
+        // Live build feed. Index and length only grow within a run, so an
+        // out-of-order poll carrying older text is dropped.
+        {
+          const raw = data as unknown as { liveSlide?: unknown; liveDone?: unknown; liveCss?: unknown };
+          const slide = liveFeedOf(raw.liveSlide);
+          const done = liveFeedOf(raw.liveDone);
+          const css = typeof raw.liveCss === "string" ? raw.liveCss : null;
+          if (slide || done) {
+            setLiveFeed((prev) => {
+              const pick = (a: LiveFeed | null, b: LiveFeed | null) =>
+                !a ? b : !b ? a : b.index > a.index || (b.index === a.index && b.html.length >= a.html.length) ? b : a;
+              const nextSlide = slide && (!prev?.done || slide.index > prev.done.index) ? pick(prev?.slide ?? null, slide) : prev?.slide ?? null;
+              const nextDone = pick(prev?.done ?? null, done);
+              const liveNow = nextSlide && nextDone && nextDone.index >= nextSlide.index ? null : nextSlide;
+              const nextCss = css ?? prev?.css ?? null;
+              if (prev && prev.slide === liveNow && prev.done === nextDone && prev.css === nextCss) return prev;
+              return { slide: liveNow, done: nextDone, css: nextCss };
+            });
+          } else {
+            // Nothing being written any more: let the last slide play out.
+            setLiveFeed((prev) => (prev?.slide ? { ...prev, slide: null } : prev));
+          }
         }
         // Live-preview slides — validate each via SlideSchema before
         // accepting (the server already validated, but the wire format
@@ -4916,6 +4955,12 @@ export function DeckView({
   // them. Cheap to compute always — they read the streaming state, empty when
   // not generating.
   const generating = status === "generating";
+  // The live build runs when this run sends its slides as they are written
+  // (older runs and other flows keep the finished-slides-only view).
+  const liveActive = generating && liveFeed !== null;
+  const liveShownSlides = liveActive
+    ? Math.min(streamingPreview.length, liveShownCount)
+    : streamingPreview.length;
   // Edit-mode workspace fit: in edit mode the motion.div below is the WHOLE workspace
   // (the iframe fills it), and the artboard floats centred + fit-scaled inside. The AI
   // halo + comment overlay must sit on THAT inner rect, so derive it from the same
@@ -4995,7 +5040,7 @@ export function DeckView({
   // progress.currentSlide ticks past it.
   const genNavItems: NavItem[] = Array.from({ length: slotCount }).map(
     (_, idx) => {
-      const previewSlide = streamingPreview[idx];
+      const previewSlide = idx < liveShownSlides ? streamingPreview[idx] : undefined;
       if (previewSlide && streamingTheme) {
         return {
           kind: "slide",
@@ -5010,7 +5055,7 @@ export function DeckView({
           draft: true,
         };
       }
-      const isNextSlot = idx === streamingPreview.length;
+      const isNextSlot = idx === liveShownSlides;
       return {
         kind: "placeholder",
         index: idx,
@@ -5249,6 +5294,97 @@ export function DeckView({
       onAiBoundsChange={handleAiBoundsChange}
     />
   );
+
+  // Generation canvas: the finished slide in focus, or the thinking screen
+  // before the first one. The live build (LiveSlideStage) plays over it
+  // whenever there is a slide being written and the focus is on it.
+  // The model's live thinking summary, typed on the canvas before slide 1.
+  const thinkingNotes = generating
+    ? (liveGenChat.findLast((e) => e.role === "thinking")?.text ?? null)
+    : null;
+  const genFallback = (
+    // ── Generation canvas: the streaming hero (once a slide closes)
+    // or the thinking screen + progress bar until then. Same wrapper
+    // as the editor canvas, so completion only swaps the INNER
+    // content — the frame never remounts.
+    previewHeroSlide && streamingTheme ? (
+      <SlideRenderer
+        slide={previewHeroSlide}
+        theme={streamingTheme}
+        direction={streamingDirection}
+        language={streamingLanguage}
+        width={canvasW}
+        height={canvasH}
+        scale={gridScale}
+      />
+    ) : (
+      <div
+        dir={dir}
+        style={
+          (progress?.prep?.pages ?? 0) > 0
+            // A veil in the theme colour keeps the text and card readable in light and dark.
+            ? { backgroundImage: `linear-gradient(color-mix(in srgb, var(--tq-bg) 60%, transparent), color-mix(in srgb, var(--tq-bg) 60%, transparent)), url("${sourcePageUrl(projectId, 0)}")`, backgroundSize: "cover", backgroundPosition: "center" }
+            : undefined
+        }
+        className="gen-thinking-screen flex h-full w-full flex-col items-center justify-center gap-4 px-6 text-center text-foreground"
+      >
+        <h1 className="font-headline-lg text-[28px] font-bold">
+          {isPostFormat
+            ? dict.editor.screen.designingPost
+            : dict.editor.screen.designing}
+        </h1>
+        <div className="gen-thinking-status text-muted flex items-center justify-center gap-3 text-sm">
+          <span className="spinner h-4 w-4 rounded-full border-2 border-foreground/20 border-t-white" />
+          <span>
+            {progress?.stage === "thinking"
+              ? dict.editor.progress.thinking
+              : progress?.stage === "validating"
+                ? dict.editor.progress.validating
+                : progress?.stage === "saving"
+                  ? dict.editor.progress.saving
+                  : progress?.currentSlide
+                    ? initialSourceKind === "data"
+                      ? dict.editor.progress.analyzingData
+                      : initialSourceKind === "mimic"
+                        ? dict.editor.progress.readingSource
+                        : initialSourceKind === "enhance"
+                          ? dict.editor.progress.extracting
+                          : dict.editor.progress.writing
+                    : dict.editor.progress.startingDesign}
+          </span>
+        </div>
+        {isSlow && (
+          <span className="text-[11px] leading-relaxed text-foreground/60">
+            {slowCaption}
+          </span>
+        )}
+        {thinkingNotes ? (
+          <DesignerNotes text={thinkingNotes} theme={streamingTheme} label={dict.editor.screen.designerNotes} />
+        ) : progress?.prep ? (
+          <GenPrepCard prep={progress.prep} dir={dir} />
+        ) : null}
+      </div>
+    )
+  );
+  const genCanvas =
+    liveActive && streamingTheme && currentSlideIndex >= liveShownSlides ? (
+      <LiveSlideStage
+        live={liveFeed?.slide ?? null}
+        done={liveFeed?.done ?? null}
+        css={liveFeed?.css ?? null}
+        finishedCount={streamingPreview.length}
+        theme={streamingTheme}
+        direction={streamingDirection}
+        language={streamingLanguage}
+        width={canvasW}
+        height={canvasH}
+        scale={gridScale}
+        onShown={handleLiveShown}
+        fallback={genFallback}
+      />
+    ) : (
+      genFallback
+    );
 
   return (
     <DeckPurchaseContext.Provider value={deckBought}>
@@ -5918,64 +6054,7 @@ export function DeckView({
             }`}
           >
             {generating ? (
-              // ── Generation canvas: the streaming hero (once a slide closes)
-              // or the thinking screen + progress bar until then. Same wrapper
-              // as the editor canvas, so completion only swaps the INNER
-              // content — the frame never remounts.
-              previewHeroSlide && streamingTheme ? (
-                <SlideRenderer
-                  slide={previewHeroSlide}
-                  theme={streamingTheme}
-                  direction={streamingDirection}
-                  language={streamingLanguage}
-                  width={canvasW}
-                  height={canvasH}
-                  scale={gridScale}
-                />
-              ) : (
-                <div
-                  dir={dir}
-                  style={
-                    (progress?.prep?.pages ?? 0) > 0
-                      // A veil in the theme colour keeps the text and card readable in light and dark.
-                      ? { backgroundImage: `linear-gradient(color-mix(in srgb, var(--tq-bg) 60%, transparent), color-mix(in srgb, var(--tq-bg) 60%, transparent)), url("${sourcePageUrl(projectId, 0)}")`, backgroundSize: "cover", backgroundPosition: "center" }
-                      : undefined
-                  }
-                  className="flex h-full w-full flex-col items-center justify-center gap-4 px-6 text-center text-foreground"
-                >
-                  <h1 className="font-headline-lg text-[28px] font-bold">
-                    {isPostFormat
-                      ? dict.editor.screen.designingPost
-                      : dict.editor.screen.designing}
-                  </h1>
-                  <div className="text-muted flex items-center justify-center gap-3 text-sm">
-                    <span className="spinner h-4 w-4 rounded-full border-2 border-foreground/20 border-t-white" />
-                    <span>
-                      {progress?.stage === "thinking"
-                        ? dict.editor.progress.thinking
-                        : progress?.stage === "validating"
-                          ? dict.editor.progress.validating
-                          : progress?.stage === "saving"
-                            ? dict.editor.progress.saving
-                            : progress?.currentSlide
-                              ? initialSourceKind === "data"
-                                ? dict.editor.progress.analyzingData
-                                : initialSourceKind === "mimic"
-                                  ? dict.editor.progress.readingSource
-                                  : initialSourceKind === "enhance"
-                                    ? dict.editor.progress.extracting
-                                    : dict.editor.progress.writing
-                              : dict.editor.progress.startingDesign}
-                    </span>
-                  </div>
-                  {isSlow && (
-                    <span className="text-[11px] leading-relaxed text-foreground/60">
-                      {slowCaption}
-                    </span>
-                  )}
-                  {progress?.prep ? <GenPrepCard prep={progress.prep} dir={dir} /> : null}
-                </div>
-              )
+              genCanvas
             ) : editMode ? (
               <SlideEditor
                 slide={focusedSlide}
@@ -6391,4 +6470,13 @@ export function DeckView({
     </GenImageProvider>
     </DeckPurchaseContext.Provider>
   );
+}
+
+// One live-build entry off the poll (shape-checked by the status route too).
+function liveFeedOf(value: unknown): LiveFeed | null {
+  const v = value as { index?: unknown; html?: unknown } | null;
+  if (!v || typeof v !== "object") return null;
+  if (typeof v.index !== "number" || !Number.isInteger(v.index) || v.index < 0) return null;
+  if (typeof v.html !== "string") return null;
+  return { index: v.index, html: v.html };
 }

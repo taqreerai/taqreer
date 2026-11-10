@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LiveSlideBuild } from "@/lib/deck/live-build/engine";
+import { DesignerNotes } from "@/components/preview/DesignerNotes";
 import { sanitizeSlideHtml } from "@/lib/export/sanitize";
 import { themeToCssVars } from "@/lib/export/theme-css-vars";
 import type { ThemeType } from "@/lib/schema/slide";
@@ -67,7 +68,7 @@ function fakeStream(
   // Each stored slide carries the whole deck style sheet, which a real run
   // streams once before slide 1 (the setup card): it arrives at once here.
   at = styleEnd(slides[0]);
-  timer = window.setTimeout(tick, 3200 * (SPEEDS.opus / charsPerSec));
+  timer = window.setTimeout(tick, 12000 * (SPEEDS.opus / charsPerSec));
   return () => {
     cancelled = true;
     window.clearTimeout(timer);
@@ -236,7 +237,7 @@ function Player({ deck, charsPerSec }: { deck: Deck; charsPerSec: number }) {
     const t = window.setTimeout(() => {
       setPhase("build");
       startSlide(0);
-    }, 3200 * (SPEEDS.opus / charsPerSec));
+    }, 12000 * (SPEEDS.opus / charsPerSec));
     return () => {
       stop();
       window.clearTimeout(t);
@@ -269,7 +270,7 @@ function Player({ deck, charsPerSec }: { deck: Deck; charsPerSec: number }) {
         >
           <div ref={hostRef} style={{ width: W, height: H, position: "relative" }} />
         </div>
-        {phase === "setup" ? <SetupCard deck={deck} speed={charsPerSec} /> : null}
+        {phase === "setup" ? <ThinkingCard deck={deck} /> : null}
         <div ref={caretRef} className="live-build-caret" style={{ ["--lb-accent" as string]: accent, opacity: 0 }} />
         {sweep > 0 ? <div key={sweep} className="live-build-sweep" /> : null}
       </div>
@@ -360,31 +361,39 @@ function Thumb({ deck, html, shown, building }: { deck: Deck; html: string; show
   );
 }
 
-// Before slide 1 the model writes the deck's style: show its colours dropping
-// in, the font, and the title typing, so the first seconds are not blank.
-function SetupCard({ deck, speed }: { deck: Deck; speed: number }) {
-  const [typed, setTyped] = useState(0);
-  const title = deck.title;
+// A thinking summary like the ones the model streams, fed as the same
+// tail-600 windows the progress writes carry, about once a second.
+const FAKE_THINKING = `**Planning the deck structure**
+
+I'm laying out the deck as a short story: a cover, the contents, then one idea per slide. The palette stays warm, a deep gold for headings and a muted red for the step numbers, on an off-white ground so the text stays easy to read.
+
+**Designing the cover**
+
+The cover gets the title large and centred, with a thin gold rule above it and the presenter's name below. I'm keeping the dotted pattern from the template faint so it reads as texture, not noise.
+
+**Contents slide**
+
+Six numbered rows in rounded cards, each with a red circle for the number. Two columns would crowd the Arabic text, so it's one column at a comfortable size, with a picture placeholder on the side.
+
+**Exercise slides**
+
+Each exercise gets a question card and space below for the answer, so the teacher can reveal it during the lesson.`;
+
+function ThinkingCard({ deck }: { deck: Deck }) {
+  const [win, setWin] = useState<string | null>(null);
   useEffect(() => {
-    const per = (2200 * (SPEEDS.opus / speed)) / Math.max(1, title.length);
-    const id = window.setInterval(() => setTyped((n) => (n >= title.length ? n : n + 1)), per);
+    let at = 0;
+    const id = window.setInterval(() => {
+      at = Math.min(FAKE_THINKING.length, at + Math.round(rand(60, 160)));
+      const seen = FAKE_THINKING.slice(0, at);
+      setWin(seen.length > 600 ? `…${seen.slice(-600)}` : seen);
+    }, 1000);
     return () => window.clearInterval(id);
-  }, [title, speed]);
+  }, []);
   return (
-    <div className="live-build-setup" dir={deck.direction} style={{ background: deck.theme.background, color: deck.theme.text }}>
-      <div className="flex gap-3">
-        {deck.theme.palette.map((c, i) => (
-          <span key={c + i} className="live-build-swatch" style={{ background: c, animationDelay: `${i * 160}ms` }} />
-        ))}
-      </div>
-      <span className="live-build-specimen" style={{ fontFamily: `"${deck.theme.font.name}"` }}>
-        {deck.language === "ar" ? "أبجد" : "Aa"}
-        <small>{deck.theme.font.name}</small>
-      </span>
-      <p className="live-build-title" style={{ fontFamily: `"${deck.theme.font.name}"` }}>
-        {title.slice(0, typed)}
-        <span className="live-build-title-caret" style={{ background: deck.theme.palette[0] }} />
-      </p>
+    <div className="gen-thinking-screen absolute inset-0 z-[4] flex flex-col items-center justify-center gap-4 bg-[var(--tq-bg)] px-6 text-center">
+      <h1 className="text-[28px] font-bold">{deck.language === "ar" ? "جار تصميم عرضك…" : "Designing your presentation…"}</h1>
+      {win ? <DesignerNotes text={win} theme={deck.theme} label={deck.language === "ar" ? "ملاحظات المصمم" : "Designer notes"} /> : null}
     </div>
   );
 }

@@ -53,7 +53,8 @@ import { broadcastToProject } from "@/lib/realtime/server-broadcast";
 import { fanOutNotification } from "@/lib/notifications/server";
 import { classifyFontNames } from "@/lib/extract/fonts-pptx";
 import { expandWeightAxis, googleFontUrl } from "@/lib/brand/fonts";
-import { buildSlideHtml, extractLeadingStyleCss } from "@/lib/deck/scaffold";
+import { buildSlideHtml, canvasFrameCss, extractLeadingStyleCss } from "@/lib/deck/scaffold";
+import { liveSlideText, type LiveSlide } from "@/lib/deck/live-build/compose";
 import {
   frameSystemPrompt,
   frameSystemCss,
@@ -2757,6 +2758,14 @@ export const deckGenerate = inngest.createFunction(
       // stream sets up (chatPush/chatThinking helpers there).
       const genChat: GenChatEntry[] = [];
 
+      // LIVE BUILD (lib/deck/live-build): the slide the model is still
+      // writing, the last one it closed (in the same live form, so the studio
+      // can play it to its end), and the deck stylesheet they render with.
+      // Ride every progress write; the final manifest write drops them.
+      let liveSlide: LiveSlide | null = null;
+      let liveDone: LiveSlide | null = null;
+      let liveCss: string | null = null;
+
       const writeProgress = (
         stage: "thinking" | "designing" | "validating" | "saving",
         currentSlide: number,
@@ -2791,6 +2800,7 @@ export const deckGenerate = inngest.createFunction(
                 streamingDirection: streamDirection,
                 streamingLanguage: streamLanguage,
                 genChat: genChat.slice(),
+                ...(liveSlide || liveDone ? { liveSlide, liveDone, liveCss } : {}),
               } as never,
             },
           })
@@ -3076,6 +3086,38 @@ export const deckGenerate = inngest.createFunction(
         const carriedTables = new Map(
           (enhanceImages?.tables ?? []).map((t) => [t.tableId, t.spec] as const),
         );
+        // Live build: the same background fixes the finished slide gets, minus
+        // the empty-well fallbacks (a well still being written is not empty).
+        const liveDeclFix = (d: FrameSlideDecl): FrameSlideDecl => {
+          const fixed = dropNeverGeneratedBg(d);
+          applyPageBackdrop(fixed, projectId, carriedPageIds, null, carriedBackdropIds, null);
+          return fixed;
+        };
+        // Called at most once per progress write (it rescans the buffer).
+        const refreshLive = () => {
+          const open = splitter.getOpenSection();
+          if (open) {
+            const rawCss = extractLeadingStyleCss(splitter.getInterstitialHtml());
+            if (rawCss !== rawCssSeen) {
+              rawCssSeen = rawCss;
+              scopedStyle = scopeDeckCss(rawCss);
+            }
+          }
+          const html = open
+            ? liveSlideText({
+                section: open,
+                complete: false,
+                index: slides.length,
+                ctx: frameCtx,
+                canvas: SLIDE_DIMENSIONS[slideFormat],
+                fixDecl: liveDeclFix,
+              })
+            : null;
+          liveSlide = html ? { index: slides.length, html } : null;
+          if (scopedStyle) {
+            liveCss = `${frameCss}\n${scopedStyle}\n${canvasFrameCss(SLIDE_DIMENSIONS[slideFormat])}`;
+          }
+        };
         const ingestSlide = (rawParsed: ParsedSlide) => {
           // House style: no em/en dashes. Strip them in code before the slide
           // is framed, streamed or reviewed, so the Opus review never spends a
@@ -3284,6 +3326,17 @@ export const deckGenerate = inngest.createFunction(
           };
           slides.push(slide);
           streamingPreview.push(slide);
+          {
+            const html = liveSlideText({
+              section: parsed.html,
+              complete: true,
+              index: slides.length - 1,
+              ctx: frameCtx,
+              canvas: SLIDE_DIMENSIONS[slideFormat],
+              fixDecl: liveDeclFix,
+            });
+            liveDone = html ? { index: slides.length - 1, html } : null;
+          }
           chatPush({ role: "event", kind: "slide", n: slides.length });
           if (isImagesMode(data)) {
             dispatchImageWarm(
@@ -3449,9 +3502,12 @@ export const deckGenerate = inngest.createFunction(
           }
           for (const parsed of splitter.push(delta)) ingestSlide(parsed);
           const now = Date.now();
-          if (slides.length > 0 && now - lastWriteAt > 800) {
-            lastWriteAt = now;
-            void writeProgress("designing", slides.length);
+          if (now - lastWriteAt > 800) {
+            refreshLive();
+            if (slides.length > 0 || liveSlide) {
+              lastWriteAt = now;
+              void writeProgress("designing", slides.length);
+            }
           }
           if (
             jobId &&
@@ -3581,6 +3637,9 @@ export const deckGenerate = inngest.createFunction(
         }
         // Close a final section truncated mid-stream (no </section>).
         for (const parsed of splitter.flush()) ingestSlide(parsed);
+        // Nothing is being written any more: the live build plays out the
+        // last closed slide (liveDone) and stops.
+        liveSlide = null;
 
         usage.attempts += 1;
         usage.inputTokens += message.usage.input_tokens ?? 0;
