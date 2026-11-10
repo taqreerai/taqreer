@@ -5333,11 +5333,16 @@ export function DeckView({
                       </button>
                       {!unlockNudgeClosed ? (
                         <div className="unlock-nudge" role="status">
+                          {/* The top bar runs LTR; the card's words follow
+                              the page language. The card itself stays in the
+                              bar's direction so it and its arrow stay under
+                              the button. */}
+                          <div dir={dir} className="relative">
                           <button
                             type="button"
                             onClick={closeUnlockNudge}
                             aria-label={dict.components.creditGate.notNow}
-                            className="absolute end-2 top-2 flex text-foreground/50 hover:text-foreground"
+                            className="absolute -end-1.5 -top-1 flex text-foreground/50 hover:text-foreground"
                           >
                             <span className="material-symbols-outlined" style={{ fontSize: 16 }} aria-hidden>
                               close
@@ -5345,6 +5350,7 @@ export function DeckView({
                           </button>
                           <p className="pe-5 font-semibold">{dict.components.creditGate.unlockNudgeTitle}</p>
                           <p className="mt-1 text-foreground/70">{dict.components.creditGate.unlockNudgeBody}</p>
+                          </div>
                         </div>
                       ) : null}
                     </span>
