@@ -1427,12 +1427,11 @@ html.app-shell-scroll body {
   height: 10px;
   transform: rotate(45deg);
   background: var(--tq-surface);
+  /* Physical on purpose: the square's top-left corner becomes the upward
+     tip after the 45deg turn, in either direction. Logical borders flipped
+     it into a sideways chevron in Arabic. */
   border-top: 1px solid var(--tq-border-hairline);
-  border-inline-start: 1px solid var(--tq-border-hairline);
-}
-[dir="rtl"] .unlock-nudge::before {
-  border-inline-start: none;
-  border-inline-end: 1px solid var(--tq-border-hairline);
+  border-left: 1px solid var(--tq-border-hairline);
 }
 
 /* ─── Aura glow — the "Popular" pricing tier ─────────────────────────
