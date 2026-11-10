@@ -55,6 +55,7 @@ import { uploadFileToAnthropic } from "@/lib/anthropic/files";
 const SOURCE_FILES_BUCKET = "source-files";
 const PPT_MIME = "application/vnd.ms-powerpoint";
 const PPTX_MIME = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 // Payload the route emits. Keep in sync with POST /api/extract.
 type ExtractRequestedEvent = {
@@ -125,6 +126,12 @@ type ExtractCompletedOutput = {
    */
   sourcePath: string;
   sourceMime: string;
+  /**
+   * Word uploads only: the LibreOffice PDF of the file, stored beside it, so
+   * /create can carry the document's own pictures (the picture step reads
+   * PPTX and PDF only). Absent when the store failed.
+   */
+  picturesPdfPath?: string;
 };
 
 // Narrow `event.data` to `ExtractRequestedEvent`. Throws
@@ -296,6 +303,20 @@ async function runExtractionPipeline(args: {
           contentType: "application/pdf",
         });
 
+  // Word (owner, 2026-11-10): the picture step reads PPTX and PDF only, so a
+  // .docx carried no pictures (prod cmw88n3pl009i6u6d9u537pkr: 0 kept). The
+  // PDF converted above is stored beside the upload (same folder, same 7-day
+  // purge) for it. Best-effort: a failed store keeps today's behaviour.
+  let picturesPdfPath: string | undefined;
+  if (sourceMime === DOCX_MIME) {
+    const pdfPath = fileBucketPath.replace(/\.docx$/i, "") + ".pictures.pdf";
+    const { error: pdfError } = await admin.storage
+      .from(SOURCE_FILES_BUCKET)
+      .upload(pdfPath, ext.pdfBytes, { contentType: "application/pdf", upsert: true });
+    if (pdfError) console.warn("[extract] docx pictures pdf store failed:", pdfError.message);
+    else picturesPdfPath = pdfPath;
+  }
+
   return {
     anthropicFileId,
     fonts: ext.fonts,
@@ -311,6 +332,7 @@ async function runExtractionPipeline(args: {
     // Re-fetch keys for generation-time rasterization (transient).
     sourcePath,
     sourceMime,
+    ...(picturesPdfPath ? { picturesPdfPath } : {}),
   };
 }
 

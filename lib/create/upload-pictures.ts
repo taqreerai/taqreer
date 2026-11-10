@@ -32,12 +32,15 @@ export async function carryUploadPictures(projectId: string, anthropicFileId: st
     orderBy: { createdAt: "desc" },
     select: { outputJson: true },
   });
-  const out = (job?.outputJson ?? {}) as { sourcePath?: unknown; sourceMime?: unknown };
+  const out = (job?.outputJson ?? {}) as { sourcePath?: unknown; sourceMime?: unknown; picturesPdfPath?: unknown };
   if (typeof out.sourcePath !== "string" || typeof out.sourceMime !== "string") return [];
+  // A Word upload is read through the PDF stored at extraction
+  // (extract-source picturesPdfPath); without one it carries nothing.
+  const viaPdf = typeof out.picturesPdfPath === "string";
   const carried = await prepareCarriedPictures({
     projectId,
-    sourcePath: out.sourcePath,
-    sourceMime: out.sourceMime,
+    sourcePath: viaPdf ? (out.picturesPdfPath as string) : out.sourcePath,
+    sourceMime: viaPdf ? "application/pdf" : out.sourceMime,
     replace: true,
     cutPages: true,
   });
