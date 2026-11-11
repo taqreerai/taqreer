@@ -9,6 +9,8 @@ import { prisma } from "@/lib/prisma";
 import { resolveProjectAccess } from "@/lib/api/project-access";
 import { regenCreditGate } from "@/lib/api/regen-helpers";
 import { ensureFresh, regenPresetFor } from "@/lib/config/runtime-config";
+import { freeDeckUsed } from "@/lib/credits/free-deck";
+import { normalizePlan } from "@/lib/plan";
 
 function toJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value ?? null)) as Prisma.InputJsonValue;
@@ -67,6 +69,20 @@ export async function POST(
   // inputJson - including its credit-hold contract, which was priced on the
   // same quality this inherits. Filtering to succeeded would 400 the retry
   // of a first-ever generation and desync quality from the spread payload.
+  // One free deck per account (lib/credits/free-deck.ts): a free owner may
+  // Retry a failed or cancelled generation (its hold was released), but not
+  // generate a deck it already has a second time.
+  if (
+    project.user?.role !== "admin" &&
+    normalizePlan(project.user?.plan) === "free" &&
+    (await freeDeckUsed(project.userId))
+  ) {
+    return NextResponse.json(
+      { error: "free_deck_used", balance: 0, slideCap: null, minFlowTier: "plus", options: null },
+      { status: 402 },
+    );
+  }
+
   await ensureFresh();
   const eventPayload = {
     ...((latestJob.inputJson ?? {}) as Record<string, unknown>),

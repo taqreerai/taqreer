@@ -33,6 +33,7 @@ import {
 } from "@/lib/types/brief-limits";
 import { detectImageRegion, GULF_KHALEEJI_DESCRIPTOR } from "@/lib/geo/image-region";
 import { preflightGenerate } from "@/lib/credits/preflight";
+import { freeDeckUsed } from "@/lib/credits/free-deck";
 import type { Flow as CreditFlow, SlideEstimateInput } from "@/lib/credits/cost";
 import { pickAutoFont } from "@/lib/brand/auto-font";
 import {
@@ -997,6 +998,19 @@ export async function POST(request: Request) {
   await ensureFresh();
   const isFreeTrial =
     dbUser.role !== "admin" && normalizePlan(dbUser.plan) === "free";
+  // One free deck per account (2026-11-11, lib/credits/free-deck.ts).
+  if (isFreeTrial && (await freeDeckUsed(dbUser.id))) {
+    return NextResponse.json(
+      {
+        error: "free_deck_used",
+        balance: 0,
+        slideCap: null,
+        minFlowTier: "plus",
+        options: null,
+      },
+      { status: 402 },
+    );
+  }
   // At or below this many slides a deck is fully free (nothing to lock):
   // 5 slides, 3 posts for social. Above it the deck is a teaser that builds
   // up to 10 slides (3 posts) and keeps at least 3 locked (2026-11-07).

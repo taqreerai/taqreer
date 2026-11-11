@@ -23,6 +23,7 @@ export type CreditGatePayload = {
     | "preset_locked"
     | "images_locked"
     | "ai_edit_locked"
+    | "free_deck_used"
     | "slide_cap_exceeded";
   balance: number;
   slideCap: number | null;
@@ -45,6 +46,7 @@ export function isCreditGatePayload(data: unknown): data is CreditGatePayload {
     error === "preset_locked" ||
     error === "images_locked" ||
     error === "ai_edit_locked" ||
+    error === "free_deck_used" ||
     error === "slide_cap_exceeded"
   );
 }
@@ -110,6 +112,9 @@ export function CreditGateDialog({
     } else if (gate.error === "ai_edit_locked") {
       // AI edits after generation are a paid feature (2026-10-02).
       gateContext = aiEditGateContext(dict, normalizePlan(gate.minFlowTier ?? "plus"));
+    } else if (gate.error === "free_deck_used") {
+      // One free deck per account (2026-11-11, lib/credits/free-deck.ts).
+      gateContext = { title: t.freeDeckUsedTitle, body: `${t.freeDeckUsedBody} ${cta}`.trim(), icon: "slideshow" };
     } else if (gate.error === "images_locked") {
       gateContext = imagesGateContext(dict);
     } else {
