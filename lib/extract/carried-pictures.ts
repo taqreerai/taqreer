@@ -415,7 +415,11 @@ export async function prepareCarriedPictures(opts: {
       cls: backdropIds.has(a.assetId) ? ("backdrop" as const) : a.cls,
       ...(kinds.has(a.assetId) ? { kind: kinds.get(a.assetId) } : {}),
       // An animated picture is never swapped: a generated image cannot move.
-      ...(tags.get(mediaKeys.get(a.assetId) ?? "")?.swap && !(a.file.kind === "image" && a.file.animated) ? { swap: true } : {}),
+      // Replace-all swaps it anyway (owner, 2026-11-11, prod
+      // cmwcktwtd009n7m6dxlvw62mp: 8 tiny 1990s clip-art GIFs all stayed): the
+      // user asked for all-new pictures, and old animated clip-art is exactly
+      // what they meant.
+      ...(tags.get(mediaKeys.get(a.assetId) ?? "")?.swap && !(a.file.kind === "image" && a.file.animated && !opts.replace) ? { swap: true } : {}),
       ...(a.file.kind === "image" && a.file.animated ? { animated: true } : {}),
       ...(a.scan ? { scan: true } : {}),
       ...(roles.get(mediaKeys.get(a.assetId) ?? "") === "logo" ? { logo: true } : {}),
