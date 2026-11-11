@@ -116,11 +116,14 @@ export const TEASER_LOCKED_COUNT = 5;
 // the flow has no estimate of its own.
 // 2026-11-07 (owner decision): 10 free slides, always at least
 // TEASER_MIN_LOCKED locked, auto plans 15 (10 built + 5 locked). Was 5 / 10.
-export const TEASER_VISIBLE_COUNT = 10;
-export const TEASER_DEFAULT_TOTAL = 15;
+// 2026-11-11 (owner decision): back to 5 free slides for create, mimic and
+// datasheet (auto plans 10: 5 built + 5 locked); Enhance keeps up to
+// ENHANCE_TEASER_VISIBLE.
+export const TEASER_VISIBLE_COUNT = 5;
+export const ENHANCE_TEASER_VISIBLE = 10;
+export const TEASER_DEFAULT_TOTAL = 10;
 // The shortest plan a free create / mimic deck may have (picking "3 slides"
-// plans this many). Kept at the old 5 + 3 when the visible count went to 10,
-// so a short request is not padded to 13 slides.
+// plans this many): 5 built + TEASER_MIN_LOCKED.
 export const TEASER_MIN_TOTAL = 8;
 // At or below this many slides a free deck is fully free (nothing locked):
 // the old visible count, so short enhance files keep today's behaviour and a
@@ -140,7 +143,8 @@ export const SOCIAL_TEASER_DEFAULT_TOTAL = 7;
 
 /** How many slides / posts a free teaser builds for this flow. */
 export function teaserVisibleForFlow(flow: Flow): number {
-  return flow === "social" ? SOCIAL_TEASER_VISIBLE : TEASER_VISIBLE_COUNT;
+  if (flow === "social") return SOCIAL_TEASER_VISIBLE;
+  return flow === "enhance" ? ENHANCE_TEASER_VISIBLE : TEASER_VISIBLE_COUNT;
 }
 
 // A free deck always keeps at least this many slides / posts locked

@@ -70,7 +70,7 @@ import {
 import { seedFromExtraction } from "@/lib/create/seed-from-extraction";
 import { useCreditBalance, useSlideCap } from "@/lib/credits/store";
 import { normalizePlan } from "@/lib/plan";
-import { TEASER_FULLY_FREE_MAX, TEASER_VISIBLE_COUNT } from "@/lib/credits/cost";
+import { ENHANCE_TEASER_VISIBLE, TEASER_FULLY_FREE_MAX } from "@/lib/credits/cost";
 import posthog from "posthog-js";
 import { useIsGuest } from "@/components/app/GuestContext";
 import { GuestSignupDialog } from "@/components/create/GuestSignupDialog";
@@ -1205,7 +1205,7 @@ export default function EnhanceContentPage() {
   const trialPagesNote =
     stage === "ready" && freeTrial && !overCap && pageCount > TEASER_FULLY_FREE_MAX
       ? (pageCount > slideCap ? dict.flows.trialPagesNoteOver : dict.flows.trialPagesNote)
-          .replace("{visible}", String(TEASER_VISIBLE_COUNT))
+          .replace("{visible}", String(ENHANCE_TEASER_VISIBLE))
           .replace("{cap}", String(slideCap))
       : null;
   // A portrait PDF reads as a document (report, paper), not a slide deck.
@@ -1654,6 +1654,7 @@ export default function EnhanceContentPage() {
               quality={quality}
               onQualityChange={setQuality}
               slideCount={extracted?.pageCount ?? undefined}
+              teaserVisible={ENHANCE_TEASER_VISIBLE}
               imagesMode={imagesOn}
               disabled={generateDisabled}
               loading={generateLoading}

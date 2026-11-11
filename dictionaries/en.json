@@ -1825,7 +1825,7 @@
           "name": "Free",
           "description": "We design the first few slides of the deck",
           "credits": "{credits} credits to try the tool",
-          "features": ["Simple design", "Up to 10 slides per deck", "Editable PPTX + all formats", "All creation methods", "Custom brand identity", "Templates and styles", "AI edits after generation", "No watermark", "Full decks, nothing locked"],
+          "features": ["Simple design", "5 designed slides per deck (up to 10 on Enhance)", "Editable PPTX + all formats", "All creation methods", "Custom brand identity", "Templates and styles", "AI edits after generation", "No watermark", "Full decks, nothing locked"],
           "footnote": "Upgrade anytime",
           "cta": "Try it free"
         },
