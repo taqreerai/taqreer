@@ -239,6 +239,9 @@ export async function fillImage(opts: {
   name?: string | null;
   // Internal: an extra line the stock checks read with the prompt.
   checkNote?: string;
+  // The start of the slide's text (lib/images/slide-images.ts slideGist): a
+  // stock photo must suit what the slide says, not only match its query.
+  context?: string | null;
 }): Promise<GeneratedImageResult> {
   const tier = await projectImageTier(opts.projectId);
   const stock = opts.stock === true;
@@ -257,7 +260,10 @@ export async function fillImage(opts: {
       checkNote: `No person may be visible: the slide is about ${opts.name}, and nobody else may stand in for them.`,
     };
   }
-  const check = opts.checkNote ? `${opts.prompt}. ${opts.checkNote}` : opts.prompt;
+  const context = opts.context?.replace(/["<>]/g, "").trim().slice(0, 280);
+  const check =
+    (opts.checkNote ? `${opts.prompt}. ${opts.checkNote}` : opts.prompt) +
+    (context ? `. The slide's text: "${context}"` : "");
 
   if (tier === "paid") {
     if (!ref && !stock) {

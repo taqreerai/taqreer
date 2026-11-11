@@ -29,6 +29,7 @@ import { inngest } from "@/inngest/client";
 import { SlideManifestSchema } from "@/lib/schema/slide";
 import {
   scanGenImages,
+  slideGist,
   injectImgSrc,
   MAX_GENERATED_IMAGES,
   type GenImageAspect,
@@ -61,6 +62,8 @@ type ImageBox = {
   stock?: boolean;
   // data-genname: a real person / landmark looked up on Wikimedia Commons.
   name?: string | null;
+  // The start of the slide's text, for the stock photo check (slideGist).
+  context?: string;
   // sha256→12hex identity of `prompt` (+ ref when present -
   // genImageIdentityHash). Folds the identity into the storage path so this
   // reconcile adopts ONLY a warm image whose prompt AND reference match the
@@ -163,6 +166,7 @@ export const deckImagesGenerate = inngest.createFunction(
           seenGenids.add(marker.genid);
           collected.push({
             slideKey: slide.slideId,
+            context: slideGist(slide.html),
             ...marker,
             hash: genImageIdentityHash(marker.prompt, marker.ref),
           });
@@ -313,6 +317,7 @@ export const deckImagesGenerate = inngest.createFunction(
               // Deck order (free decks: AI only for the first few boxes).
               rank: boxes.findIndex((x) => x.genid === b.genid),
               audience: imageRegion,
+              context: b.context,
             });
             const url = await storeGeneratedImage({
               projectId,

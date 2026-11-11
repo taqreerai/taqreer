@@ -79,6 +79,7 @@ import { MissingToolError } from "@/lib/extract/missing-tool";
 import {
   scanGenImages,
   collectSeedableGenImages,
+  slideGist,
   neutralizeGenImages,
   stampProductRef,
   MAX_GENERATED_IMAGES,
@@ -900,16 +901,19 @@ function dispatchImageWarm(
   warmedKeys: Set<string>,
   warmedGenidsForCap: Set<string>,
   log: { warn: (message: string, metadata?: Record<string, unknown>) => void },
+  // The brief's imageRegion: a warmed stock photo of people must fit it.
+  audience: string | null,
 ): void {
   const events: {
     name: "deck.image.warm";
     data: {
       projectId: string;
       slideKey: string;
-      box: GenImageMarker & { hash: string; rank: number };
+      box: GenImageMarker & { hash: string; rank: number; context: string; audience: string | null };
       idemKey: string;
     };
   }[] = [];
+  const context = slideGist(slideHtml);
   const addedKeys: string[] = [];
   const addedGenids: string[] = [];
   for (const m of scanGenImages(slideHtml)) {
@@ -937,7 +941,7 @@ function dispatchImageWarm(
         projectId,
         slideKey: slideId,
         // Deck order of the box (lib/images/image-source.ts rank).
-        box: { ...m, hash, rank: [...warmedGenidsForCap].indexOf(m.genid) },
+        box: { ...m, hash, rank: [...warmedGenidsForCap].indexOf(m.genid), context, audience },
         idemKey: `${projectId}:${m.genid}:${hash}`,
       },
     });
@@ -3197,6 +3201,7 @@ export const deckGenerate = inngest.createFunction(
                   warmedKeys,
                   warmedGenidsForCap,
                   logger,
+                  (data.brief as { imageRegion?: string } | null)?.imageRegion ?? null,
                 );
               }
               return;
@@ -3346,6 +3351,7 @@ export const deckGenerate = inngest.createFunction(
               warmedKeys,
               warmedGenidsForCap,
               logger,
+              (data.brief as { imageRegion?: string } | null)?.imageRegion ?? null,
             );
           }
         };

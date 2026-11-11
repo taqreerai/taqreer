@@ -241,6 +241,21 @@ export function stampProductRef(html: string, url: string): string {
  * order, so the sets can't drift). Everything outside these sets is a
  * box no pipeline will ever fill.
  */
+/** The start of a slide's visible text (its headline first), for the stock
+ *  photo check to judge a photo against what the slide says (2026-11-11:
+ *  "warm living room sofa soft light" passed on a slide about tired parents,
+ *  with armed soldiers framed on the wall). "" when the slide has no text. */
+export function slideGist(html: string, max = 280): string {
+  return decodeEntities(
+    html
+      .replace(/<(style|script)\b[\s\S]*?<\/\1>/gi, " ")
+      .replace(/<[^>]+>/g, " "),
+  )
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
+}
+
 export function collectSeedableGenImages(
   slides: ReadonlyArray<{ slideId: string; html: string }>,
 ): Map<string, Set<string>> {

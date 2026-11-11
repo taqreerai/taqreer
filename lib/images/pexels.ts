@@ -90,6 +90,9 @@ async function checkResults(
         (broad
           ? `Pick a photo if it shows the same general subject or activity and would look right on this slide. Details such as nationality, city, clothing, mood or lighting may differ. `
           : `Pick a photo only if its main subject is clearly what the description asks for (a named flag, place, person or object must be that exact one). `) +
+        // 2026-11-11: armed soldiers framed on a wall passed on a parenting
+        // slide. Applies to the whole frame, not only the main subject.
+        `When the description quotes the slide's text, the photo must also suit what that slide says. Unless the description asks for it, refuse a photo that shows anywhere in it, a picture on a wall included: weapons, soldiers or military uniforms, alcohol, a place of worship or religious symbols, or political figures or slogans. ` +
         (audience ? audienceRule(audience) : "") +
         `Also say whether the description asks for a national flag, and if so its ISO 3166-1 alpha-2 country code.\n` +
         `Reply with ONLY one line, no explanation: <photo number or none>|<country code or none>`,

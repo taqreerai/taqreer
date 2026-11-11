@@ -46,6 +46,11 @@ type WarmBox = {
   stock?: boolean;
   // data-genname: a real person / landmark looked up on Wikimedia Commons.
   name?: string | null;
+  // Mid-stream warms (2026-11-11): the start of the slide's text and the
+  // brief's imageRegion, so a warmed stock photo passes the same checks as
+  // one filled at the end of the deck (the warm path used to skip both).
+  context?: string;
+  audience?: string | null;
   // sha256→12hex identity of `prompt` (+ ref when present) - lib/images/store
   // genImageIdentityHash. Folded into the storage path AND the idempotency
   // key so a drift's changed prompt (or a ref'd vs no-ref box) is a distinct
@@ -113,6 +118,8 @@ export const deckImageWarm = inngest.createFunction(
           stock: box.stock === true,
           name: box.name ?? null,
           rank: box.rank,
+          audience: box.audience ?? null,
+          context: box.context ?? null,
         });
         const url = await storeGeneratedImage({
           projectId,

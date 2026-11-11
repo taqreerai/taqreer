@@ -20,6 +20,7 @@ const LAYOUT_RULES = `LAYOUT VARIETY (required):
 const PICTURE_RULES = `PICTURES (required):
 - Put a picture on at least four slides of a ten-slide deck, and in that proportion for other sizes.
 - Unless the deck's image style is illustration, cartoon, 3D or flat art, make the pictures real photos: add data-gensource="stock" to each box, or data-bg-source="stock" on a background, with a short ENGLISH search query of 2 to 4 common words. Search for what a stock library really holds ("teacher in classroom", "team planning meeting"), not a detailed scene.
+- Each query names the slide's own point: the person, action or thing the slide talks about ("mother reading to child", "glass of water", "family walk in park"). Never only a mood, light or empty room ("quiet room", "soft light", "living room sofa").
 - Never use two pictures of the same kind of scene.
 - A picture about one specific real person or a named landmark: add data-genname="<exact English Wikipedia title>" (e.g. "Lionel Messi") to its box. Its stock query still shows their world WITHOUT any person ("football stadium night", "golden trophy"), never a stranger standing in for them.`;
 
@@ -28,7 +29,7 @@ const PEOPLE_RULE = "- Prefer people doing the slide's activity over empty rooms
 // Stock libraries hold few people from these audiences, and a wrong face reads
 // worse than a good object (2026-11-06, Saudi school deck).
 const audiencePeopleRule = (audience: string) =>
-  `- The audience is ${audience}. Search for objects, places, tools and hands at work rather than faces, and never for children. At most two pictures may need people: give those a normal image prompt, not a stock query.`;
+  `- The audience is ${audience}. Search for objects, places, tools and hands at work rather than faces, and never for children; the object or the hands still show the slide's point ("hands holding tea cup", "parent and child hands drawing"), never an empty room. At most two pictures may need people: give those a normal image prompt, not a stock query.`;
 
 // A post is read in a feed, so the deck rules (40 to 80 words a slide, teach on
 // every slide) would ruin it. prod 2026-11-05: three cards, three different
