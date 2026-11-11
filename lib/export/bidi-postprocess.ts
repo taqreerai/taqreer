@@ -1217,11 +1217,25 @@ export async function fixBiDiInPptxBlob(
   stats: BiDiPostprocessStats,
   gradientIntents?: GradientIntents,
   format: PostprocessFormat = "16:9",
+  // An Arabic deck (owner, 2026-11-11): the presentation itself is marked
+  // right-to-left (<p:presentation rtl="1">), so PowerPoint lays out its slide
+  // sorter and thumbnails right to left. Per-paragraph rtl never did that.
+  presentationRtl = false,
 ): Promise<Blob> {
   stats.invocations++;
 
   const buf = await blob.arrayBuffer();
   const zip = await JSZip.loadAsync(buf);
+
+  if (presentationRtl) {
+    const pres = await zip.file("ppt/presentation.xml")?.async("text");
+    if (pres) {
+      const fixed = pres.replace(/<p:presentation\b([^>]*)>/, (tag, attrs: string) =>
+        /\srtl="/.test(attrs) ? tag.replace(/\srtl="[^"]*"/, ' rtl="1"') : `<p:presentation${attrs} rtl="1">`,
+      );
+      if (fixed !== pres) zip.file("ppt/presentation.xml", fixed);
+    }
+  }
 
   const slidePaths = Object.keys(zip.files).filter((p) =>
     /^ppt\/slides\/slide\d+\.xml$/.test(p)

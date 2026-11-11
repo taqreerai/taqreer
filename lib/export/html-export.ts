@@ -925,7 +925,8 @@ export async function exportManifestAsPptx(
       JSZip as any,
       stats,
       intents,
-      slideFormat
+      slideFormat,
+      manifest.direction === "rtl",
     );
 
     // Free (image-slide) decks: quiet, invisible-on-screen credits (owner
