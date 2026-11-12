@@ -1564,7 +1564,7 @@
     "ready": "Ready",
     "removeFile2": "Remove file",
     "prepStage": { "uploading": "Uploading the file", "converting": "Converting the file", "extracting": "Extracting content", "finishing": "Finishing up", "preparing": "Preparing" },
-    "guestFileLost": "We couldn't restore the file you attached before signing up. Attach it again, then continue.", "extractErrors": { "uploadInterrupted": "The file didn't arrive complete. Attach it again, then continue.", "startFailed": "We couldn't start reading the file. Try again.",
+    "pptxEnhanceNote": "This file is already a presentation. Enhance keeps your slides and redesigns each one.", "pptxEnhanceSwitch": "Switch to Enhance", "pptxEnhanceKeep": "Keep creating", "guestFileLost": "We couldn't restore the file you attached before signing up. Attach it again, then continue.", "extractErrors": { "uploadInterrupted": "The file didn't arrive complete. Attach it again, then continue.", "startFailed": "We couldn't start reading the file. Try again.",
       "fileTooLarge": "The file is too large for the upload service right now. Compress it or split it, then try again.",
       "pdfEncrypted": "This PDF is password-protected. Remove the password, then upload it again.",
       "conversionFailed": "We couldn't convert this file. Make sure it opens correctly, then try again."

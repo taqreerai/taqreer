@@ -73,6 +73,7 @@ import { ApiError, apiError, useErrorText } from "@/lib/api/error-message";
 import { DECK_STYLES } from "@/lib/design-styles";
 import { AnimatePresence, motion } from "framer-motion";
 import { GenerateSplitButton } from "@/components/create/GenerateSplitButton";
+import { PillButton } from "@/components/create/PillButton";
 import { PersistentRow } from "@/components/brand/PersistentRow";
 import { AIImagesPanel } from "@/components/brand/AIImagesPanel";
 import { mentionsPictures } from "@/lib/images/mentions-pictures";
@@ -122,9 +123,11 @@ import {
   loadGuestDraft,
   saveGuestFiles,
   saveGuestSettings,
+  type EnhanceGuestSettings,
   type GuestDraftFiles,
   type GuestDraftSettings,
   readResumeMode,
+  resumePath,
 } from "@/lib/create/guest-draft";
 import { MAX_CONTENT_TEXT_CHARS } from "@/lib/types/brief-limits";
 import {
@@ -661,7 +664,35 @@ export default function CreatePage() {
     setContentAnthropicFileId(null);
     setFileLanguage(null);
     setContentFileStage(guest ? "idle" : "extracting");
+    setEnhanceNoteDismissed(false);
     setError("");
+  };
+  // A finished PowerPoint dropped on Create usually wanted Enhance (2026-11-12):
+  // offer the switch, carrying the same file over through the guest-draft
+  // store so it is not uploaded twice. PDFs are left alone (deck or document).
+  const [enhanceNoteDismissed, setEnhanceNoteDismissed] = useState(false);
+  const isPresentationFile = !!contentFile && /\.pptx?$/i.test(contentFile.name);
+  const [switchingToEnhance, setSwitchingToEnhance] = useState(false);
+  const switchToEnhance = async () => {
+    if (!contentFile || switchingToEnhance) return;
+    setSwitchingToEnhance(true);
+    const settings: EnhanceGuestSettings = {
+      step: 0,
+      instructions: "",
+      templateId: null,
+      designStyle: null,
+      lookTab: "templates",
+      colors: [],
+      colorsAuto: false,
+      fontMode: "google",
+      googleFamily: null,
+      uploadedFonts: [],
+      imagesMode: true,
+    };
+    saveGuestSettings("enhance", settings);
+    await saveGuestFiles("enhance", { content: contentFile, logo: null, fonts: {} });
+    posthog.capture("create_switch_to_enhance", { guest });
+    router.push(resumePath("enhance", locale, "restore"));
   };
   const removeContentFile = () => {
     setContentFile(null);
@@ -1368,6 +1399,38 @@ export default function CreatePage() {
                   onDrop={(f) => setContentFromInput(f)}
                   onRemove={removeContentFile}
                 />
+                {isPresentationFile && !enhanceNoteDismissed && !submitting ? (
+                  <div className="flex flex-col gap-2.5 rounded-xl border border-[var(--tq-border-hairline)] bg-overlay-soft p-3">
+                    <p className="flex items-start gap-2 text-xs leading-5 text-foreground/80">
+                      <span
+                        className="material-symbols-outlined shrink-0 text-foreground/60"
+                        style={{ fontSize: 16 }}
+                        aria-hidden
+                      >
+                        auto_awesome
+                      </span>
+                      {t.pptxEnhanceNote}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <PillButton
+                        variant="primary"
+                        size="sm"
+                        loading={switchingToEnhance}
+                        onClick={() => void switchToEnhance()}
+                      >
+                        {t.pptxEnhanceSwitch}
+                      </PillButton>
+                      <PillButton
+                        variant="ghost"
+                        size="sm"
+                        disabled={switchingToEnhance}
+                        onClick={() => setEnhanceNoteDismissed(true)}
+                      >
+                        {t.pptxEnhanceKeep}
+                      </PillButton>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </WizardCard>
 
