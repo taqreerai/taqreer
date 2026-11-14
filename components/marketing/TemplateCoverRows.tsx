@@ -81,10 +81,13 @@ export function TemplateCoverRows({
 }) {
   if (arabic.length === 0 && other.length === 0) return null;
   return (
-    // Full-bleed out of the max-w-7xl column (<main> clips the overflow);
+    // Full-bleed out of the max-w-7xl column (<main> clips the overflow).
+    // Equal negative margins on BOTH sides: a start-only margin is dropped
+    // as over-constrained under an RTL parent, which pushed the strip (and
+    // its left fade) off screen on /ar.
     // dir="ltr" keeps the drift directions the same in both locales.
     <div
-      className="mask-edges flex w-screen flex-col gap-4 overflow-hidden ms-[calc(50%-50vw)]"
+      className="mask-edges flex w-screen flex-col gap-4 overflow-hidden mx-[calc(50%-50vw)]"
       dir="ltr"
     >
       {arabic.length > 0 ? (
